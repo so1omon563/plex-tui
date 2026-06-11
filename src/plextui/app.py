@@ -268,10 +268,12 @@ class PlexTuiApp(App[None]):
         self.call_from_thread(show_choices)
 
     def populate_libraries(self, libraries: list[LibraryItem]) -> None:
-        view = self.query_one("#libraries", ListView)
-        view.clear()
-        for library in libraries:
-            view.append(LibraryRow(library))
+        self.replace_list_rows_async(
+            "#libraries",
+            [LibraryRow(library) for library in libraries],
+            0 if libraries else None,
+            "library-list",
+        )
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         row = event.item
@@ -287,14 +289,16 @@ class PlexTuiApp(App[None]):
             self.run_settings_action(row.action)
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
-        if event.list_view.id != "media":
+        if event.list_view.id not in {"libraries", "media"}:
             return
         row = event.item
         if row is not None and row not in list(event.list_view.children):
             return
         if row is not None and event.list_view.highlighted_child is not row:
             return
-        if isinstance(row, MediaRow):
+        if isinstance(row, LibraryRow):
+            mark_active_row(event.list_view, row)
+        elif isinstance(row, MediaRow):
             mark_active_row(event.list_view, row)
             self.show_media_details(row.media)
         elif isinstance(row, ServerRow):
@@ -370,9 +374,18 @@ class PlexTuiApp(App[None]):
             self.show_detail_text("No items")
 
     def replace_media_rows(self, rows: list[ListItem], selected_index: int | None = None) -> None:
+        self.replace_list_rows_async("#media", rows, selected_index, "media-list")
+
+    def replace_list_rows_async(
+        self,
+        selector: str,
+        rows: list[ListItem],
+        selected_index: int | None,
+        group: str,
+    ) -> None:
         self.run_worker(
-            self.replace_list_rows("#media", rows, selected_index),
-            group="media-list",
+            self.replace_list_rows(selector, rows, selected_index),
+            group=group,
             exclusive=True,
         )
 

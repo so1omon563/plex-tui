@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from plextui.app import BrowseState, PlexTuiApp
 from plextui.config import AppConfig
-from plextui.models import MediaItem
+from plextui.models import LibraryItem, MediaItem
 from plextui.player import StreamChoice
 
 
@@ -20,6 +20,10 @@ def test_picker_return_preserves_highlighted_media():
 
 def test_show_media_highlights_first_rebuilt_row():
     asyncio.run(run_show_media_highlight_check())
+
+
+def test_populate_libraries_highlights_first_rebuilt_row():
+    asyncio.run(run_library_highlight_check())
 
 
 async def run_picker_return_check():
@@ -62,3 +66,23 @@ async def run_show_media_highlight_check():
         assert row is not None
         assert row.has_class("active-row")
         assert row.media.title == "First"
+
+
+async def run_library_highlight_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        libraries = [
+            LibraryItem("Movies", "1", "movie", object()),
+            LibraryItem("TV", "2", "show", object()),
+        ]
+
+        app.populate_libraries(libraries)
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+
+        row = libraries_view.highlighted_child
+        assert row is not None
+        assert row.has_class("active-row")
+        assert row.library.title == "Movies"
