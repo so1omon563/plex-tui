@@ -153,6 +153,7 @@ def media_details(item: MediaItem) -> MediaDetails:
         kind=item.kind,
         facts=facts,
         metadata=metadata_fields(raw),
+        audio=audio_details(raw),
         subtitles=subtitle_details(raw),
         summary=str(getattr(raw, "summary", "") or ""),
         playable=item.playable,
@@ -178,6 +179,19 @@ def metadata_fields(raw: Any) -> list[tuple[str, str]]:
     return fields
 
 
+def audio_details(raw: Any) -> list[str]:
+    audio: list[str] = []
+    try:
+        if not hasattr(raw, "iterParts"):
+            return audio
+        for part in raw.iterParts():
+            for stream in part.audioStreams():
+                audio.append(stream_detail_label(stream, include_location=False))
+    except Exception:
+        return audio
+    return audio
+
+
 def subtitle_details(raw: Any) -> list[str]:
     subtitles: list[str] = []
     try:
@@ -185,22 +199,31 @@ def subtitle_details(raw: Any) -> list[str]:
             return subtitles
         for part in raw.iterParts():
             for stream in part.subtitleStreams():
-                label = getattr(stream, "displayTitle", None) or getattr(stream, "language", None) or "Unknown"
-                codec = getattr(stream, "codec", None)
-                flags = []
-                if getattr(stream, "selected", False):
-                    flags.append("selected")
-                if getattr(stream, "forced", False):
-                    flags.append("forced")
-                if getattr(stream, "hearingImpaired", False):
-                    flags.append("SDH")
-                values = [str(codec)] if codec else []
-                values.extend(flags)
-                extra = ", ".join(values)
-                subtitles.append(f"{label} ({extra})" if extra else str(label))
+                subtitles.append(stream_detail_label(stream, include_location=True))
     except Exception:
         return subtitles
     return subtitles
+
+
+def stream_detail_label(stream: Any, include_location: bool = False) -> str:
+    label = getattr(stream, "displayTitle", None) or getattr(stream, "language", None) or "Unknown"
+    values = []
+    codec = getattr(stream, "codec", None)
+    if codec:
+        values.append(str(codec))
+    channels = getattr(stream, "channels", None)
+    if channels:
+        values.append(f"{channels}ch")
+    if include_location:
+        values.append("external" if getattr(stream, "key", None) else "embedded")
+    if getattr(stream, "selected", False):
+        values.append("selected")
+    if getattr(stream, "forced", False):
+        values.append("forced")
+    if getattr(stream, "hearingImpaired", False):
+        values.append("SDH")
+    suffix = ", ".join(values)
+    return f"{label} ({suffix})" if suffix else str(label)
 
 
 def watched_state(raw: Any) -> str:

@@ -491,7 +491,7 @@ class PlexTuiApp(App[None]):
 
     def show_media_details(self, item: MediaItem) -> None:
         details = media_details(item)
-        self.show_detail_text(render_details(details))
+        self.show_detail_text(render_details(details, self.config))
         self.refresh_media_details(item)
 
     @work(thread=True, exclusive=True)
@@ -514,7 +514,7 @@ class PlexTuiApp(App[None]):
             row = self.query_one("#media", ListView).highlighted_child
             if isinstance(row, MediaRow) and row.media.key == item.key:
                 details = media_details(full_item)
-                self.show_detail_text(render_details(details))
+                self.show_detail_text(render_details(details, self.config))
 
         self.call_from_thread(update)
 
@@ -862,13 +862,29 @@ def format_offset(milliseconds: int) -> str:
     return f"{minutes}:{secs:02d}"
 
 
-def render_details(details: object) -> str:
+def render_details(details: object, config: AppConfig | None = None) -> str:
     lines = [getattr(details, "title"), ""]
 
     lines.append("Metadata")
     for label, value in getattr(details, "metadata"):
         lines.append(f"{label}: {value}")
     lines.append(f"Playable: {'yes' if getattr(details, 'playable') else 'no'}")
+
+    if config is not None:
+        lines.extend([
+            "",
+            "Preferences",
+            f"Audio preference: {preference_value(config.preferred_audio_language)}",
+            f"Subtitle mode: {subtitle_mode_value(config)}",
+            f"Subtitle language: {subtitle_language_value(config)}",
+        ])
+
+    lines.extend(["", "Audio"])
+    audio = getattr(details, "audio", [])
+    if audio:
+        lines.extend(f"- {track}" for track in audio)
+    else:
+        lines.append("None reported")
 
     lines.extend(["", "Subtitles"])
     subtitles = getattr(details, "subtitles")

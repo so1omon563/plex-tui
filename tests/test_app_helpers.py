@@ -24,14 +24,29 @@ def test_render_details_includes_subtitles_and_summary():
         kind="movie",
         facts=["movie"],
         metadata=[("Type", "movie")],
+        audio=["Japanese (aac, 2ch, selected)"],
         subtitles=["English (srt, selected)"],
         summary="Summary text",
         playable=True,
     )
 
-    rendered = render_details(details)
+    rendered = render_details(
+        details,
+        AppConfig(
+            base_url="http://plex",
+            token="token",
+            client_identifier="client-id",
+            preferred_audio_language="jpn",
+            preferred_subtitle_language="eng",
+            subtitle_mode="preferred",
+        ),
+    )
 
     assert "Metadata" in rendered
+    assert "Preferences" in rendered
+    assert "Audio preference: jpn" in rendered
+    assert "Subtitle mode: Preferred" in rendered
+    assert "- Japanese (aac, 2ch, selected)" in rendered
     assert "- English (srt, selected)" in rendered
     assert "Summary text" in rendered
 

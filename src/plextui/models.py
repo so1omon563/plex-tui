@@ -28,6 +28,7 @@ class MediaDetails:
     kind: str
     facts: list[str]
     metadata: list[tuple[str, str]]
+    audio: list[str]
     subtitles: list[str]
     summary: str
     playable: bool

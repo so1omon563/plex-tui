@@ -102,6 +102,10 @@ items fetches the next page automatically. You can also select the
 The settings view shows the active config and supports reconnect/reload,
 Plex relogin, and clearing or changing audio/subtitle preferences separately.
 
+The details pane shows metadata, saved audio/subtitle preferences, reported
+audio tracks, and reported subtitle tracks. Subtitle rows include external vs
+embedded when Plex exposes enough information.
+
 When playback starts, external subtitle streams reported by Plex are passed to
 `mpv` automatically. Items with embedded PGS/VOBSUB subtitles are direct-played
 from the original media part so `mpv` can see the subtitle tracks.

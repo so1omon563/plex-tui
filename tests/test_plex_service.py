@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from plextui.models import LibraryItem
-from plextui.plex_service import PlexService
+from plextui.models import LibraryItem, MediaItem
+from plextui.plex_service import PlexService, media_details
 
 
 class RawItem:
@@ -11,6 +11,42 @@ class RawItem:
 
     def getStreamURL(self):
         return "http://plex/movie"
+
+
+class AudioStream:
+    displayTitle = "Japanese"
+    codec = "aac"
+    channels = 2
+    selected = True
+
+
+class ExternalSubtitleStream:
+    displayTitle = "English"
+    codec = "srt"
+    key = "/library/streams/1"
+    selected = True
+
+
+class EmbeddedSubtitleStream:
+    displayTitle = "Signs"
+    codec = "vobsub"
+    key = None
+    forced = True
+
+
+class Part:
+    def audioStreams(self):
+        return [AudioStream()]
+
+    def subtitleStreams(self):
+        return [ExternalSubtitleStream(), EmbeddedSubtitleStream()]
+
+
+class DetailedRawItem(RawItem):
+    summary = "Summary"
+
+    def iterParts(self):
+        return [Part()]
 
 
 class RawPage(list):
@@ -85,3 +121,15 @@ def test_global_search_page_is_bounded_and_not_paged():
     assert not page.has_more
     assert empty_page.items == []
     assert empty_page.total == 25
+
+
+def test_media_details_include_audio_and_subtitle_locations():
+    item = MediaItem("Movie", "", "movie", "1", True, DetailedRawItem())
+
+    details = media_details(item)
+
+    assert details.audio == ["Japanese (aac, 2ch, selected)"]
+    assert details.subtitles == [
+        "English (srt, external, selected)",
+        "Signs (vobsub, embedded, forced)",
+    ]
