@@ -22,9 +22,9 @@
 
 ## Packaging & Distribution
 
-- Publish to PyPI after more tagged-release testing.
-- Add a Homebrew tap formula once PyPI or tagged source installs are stable.
-- Draft an Arch AUR package with `mpv` as an explicit dependency.
+- Configure PyPI Trusted Publishing and publish the first PyPI release.
+- Add a Homebrew tap formula once PyPI installs are stable.
+- Validate the draft Arch AUR `PKGBUILD` on an Arch system and publish if clean.
 - Consider standalone artifacts only after the app behavior stabilizes.
 
 ## Technical Follow-Up

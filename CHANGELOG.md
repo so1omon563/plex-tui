@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added GitHub Actions CI and PyPI Trusted Publishing workflow scaffolding.
+- Added draft Arch AUR packaging files and Homebrew packaging notes.
+
 ## 0.2.0 - 2026-06-11
 
 - Improved README structure and expanded the post-0.1.0 roadmap.

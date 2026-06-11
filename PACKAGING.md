@@ -12,17 +12,11 @@ pipx install .
 This keeps Python dependencies isolated while still exposing a normal command.
 Users must install `mpv` separately with their system package manager.
 
-Once pushed to GitHub, users can also install from:
+Users can also install from GitHub:
 
 ```bash
 pipx install "git+https://github.com/so1omon563/plex-tui.git"
-```
-
-Before the first push, configure the repository remote:
-
-```bash
-git remote add origin https://github.com/so1omon563/plex-tui.git
-git push -u origin main
+pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.2.0"
 ```
 
 For local package validation, test both source and wheel installs:
@@ -52,6 +46,17 @@ plex-tui --smoke
    It does not solve the external `mpv` dependency, so docs must keep calling
    that out explicitly.
 
+   The repository includes `.github/workflows/publish-pypi.yml` for PyPI Trusted
+   Publishing. Configure the PyPI project to trust:
+
+   - Owner: `so1omon563`
+   - Repository: `plex-tui`
+   - Workflow: `publish-pypi.yml`
+   - Environment: `pypi`
+
+   After that, publishing a GitHub Release from a `v*` tag builds and uploads
+   the package.
+
 2. **Homebrew tap**
 
    Add a Homebrew formula after PyPI packaging is stable. The formula can depend
@@ -70,6 +75,8 @@ plex-tui --smoke
    - Install from a tagged source archive or PyPI release.
    - Run `plex-tui --smoke` in the formula test.
 
+   See `packaging/homebrew/README.md` for the starting point.
+
 3. **Arch AUR**
 
    Add an AUR package for Arch users. This can depend on `mpv` and Python
@@ -82,6 +89,9 @@ plex-tui --smoke
    - Prefer system Python packages for `python-textual`, `python-pillow`,
      `python-plexapi`, and `python-platformdirs` when available.
    - Include a `check()` step that runs `plex-tui --smoke`.
+
+   See `packaging/aur/PKGBUILD` for the draft package and
+   `packaging/aur/README.md` for validation commands.
 
 4. **Standalone binaries**
 

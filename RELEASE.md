@@ -30,6 +30,8 @@ Validate package metadata:
 make check-package
 ```
 
+GitHub CI runs the same check target on pushes and pull requests.
+
 ## Install Test
 
 Test the package in an isolated command environment:
@@ -57,10 +59,22 @@ Before tagging a release:
 - Move `CHANGELOG.md` entries from `Unreleased` to the release date.
 - Confirm `README.md`, `PACKAGING.md`, and `config.example.toml` match current behavior.
 
-## Publish Later
+## GitHub Release
 
-When the project is tagged on `https://github.com/so1omon563/plex-tui` and has
-a package publishing account:
+Push the release commit and annotated tag:
+
+```bash
+git push --follow-tags
+```
+
+Then create a GitHub Release for the tag. If PyPI Trusted Publishing is
+configured for the `pypi` environment, publishing the GitHub Release triggers
+`.github/workflows/publish-pypi.yml`.
+
+## Manual PyPI Fallback
+
+Prefer Trusted Publishing. If it is not configured yet and a PyPI token is
+available, upload the validated artifacts manually:
 
 ```bash
 python -m twine upload dist/*
