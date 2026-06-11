@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
-from rich.columns import Columns
 from rich.console import Group
+from rich.table import Table
 from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
@@ -36,6 +36,10 @@ from .plex_service import DEFAULT_PAGE_SIZE, PlexService, media_details
 
 
 AUTO_LOAD_REMAINING_THRESHOLD = 10
+GRID_CARD_CONTENT_WIDTH = 20
+GRID_CARD_WIDTH = 23
+GRID_CARD_GAP = 2
+GRID_CARD_RENDER_WIDTH = GRID_CARD_WIDTH + GRID_CARD_GAP
 
 
 @dataclass
@@ -726,7 +730,7 @@ class PlexTuiApp(App[None]):
 
     def media_grid_geometry(self) -> tuple[int, int]:
         media_size = self.query_one("#main").size
-        columns = max(1, min(5, max(1, media_size.width - 4) // 24))
+        columns = max(1, min(5, max(1, media_size.width - 4) // GRID_CARD_RENDER_WIDTH))
         rows = max(1, min(4, max(1, media_size.height - 2) // 13))
         return columns, rows
 
@@ -1240,7 +1244,11 @@ def render_media_grid(
             render_media_grid_card(item, item.key == selected_key, config, artwork_overrides)
             for item in chunk
         ]
-        rows.append(Columns(cards, equal=True, expand=False, padding=(0, 2)))
+        row = Table.grid(padding=(0, 1))
+        for _ in cards:
+            row.add_column(width=GRID_CARD_WIDTH, no_wrap=True)
+        row.add_row(*cards)
+        rows.append(row)
     return Group(*rows)
 
 
@@ -1252,20 +1260,22 @@ def render_media_grid_card(
 ) -> object:
     marker = ">> " if selected else "   "
     title_style = "bold #e5a00d" if selected else "bold"
-    title = truncate_text(media.title, 20)
-    subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), 20)
+    title = truncate_text(media.title, GRID_CARD_CONTENT_WIDTH)
+    subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), GRID_CARD_CONTENT_WIDTH)
     artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
     if artwork is None:
         artwork = cached_card_artwork(media, config)
     if artwork is None:
         status = "poster" if media.artwork_path else "no poster"
         artwork = Text(f"[{status}]", style="dim")
+    border = "┏" + ("━" * (GRID_CARD_WIDTH - 2)) + "┓"
+    bottom_border = "┗" + ("━" * (GRID_CARD_WIDTH - 2)) + "┛"
     return Group(
-        Text("┏━━━━━━━━━━━━━━━━━━┓" if selected else "                  ", style="#e5a00d"),
+        Text(border if selected else " " * GRID_CARD_WIDTH, style="#e5a00d"),
         artwork,
         Text(f"{marker}{title}", style=title_style),
         Text(f"  {subtitle}", style="dim"),
-        Text("┗━━━━━━━━━━━━━━━━━━┛" if selected else "                  ", style="#e5a00d"),
+        Text(bottom_border if selected else " " * GRID_CARD_WIDTH, style="#e5a00d"),
     )
 
 
