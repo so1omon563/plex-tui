@@ -119,3 +119,7 @@ used.
 Playback resumes from Plex's saved position when available. While the app is
 running, playback position is reported back to Plex periodically and when
 playback stops.
+
+Playback diagnostics are written to the app config directory as `debug.log`.
+The log includes stream mode, selected tracks, and sanitized `mpv` launch
+arguments with Plex tokens redacted.

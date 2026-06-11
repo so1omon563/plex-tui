@@ -27,6 +27,10 @@ def config_path() -> Path:
     return Path(user_config_dir(APP_NAME)) / "config.toml"
 
 
+def debug_log_path() -> Path:
+    return Path(user_config_dir(APP_NAME)) / "debug.log"
+
+
 def load_config() -> AppConfig:
     data: dict[str, str] = {}
     path = config_path()

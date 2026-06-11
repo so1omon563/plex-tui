@@ -3,7 +3,25 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from plextui.player import ProgressMonitor, StreamChoice, play_with_mpv, preferred_audio_choice, preferred_subtitle_choice
+import pytest
+
+from plextui.player import (
+    PlayerError,
+    ProgressMonitor,
+    StreamChoice,
+    play_with_mpv,
+    preferred_audio_choice,
+    preferred_subtitle_choice,
+    log_debug,
+    sanitize_command,
+)
+
+
+@pytest.fixture(autouse=True)
+def debug_log_path(tmp_path, monkeypatch):
+    path = tmp_path / "debug.log"
+    monkeypatch.setattr("plextui.player.debug_log_path", lambda: path)
+    return path
 
 
 class Server:
@@ -75,7 +93,7 @@ class Item:
         self.timeline = (time, state)
 
 
-def test_playback_applies_selected_streams_and_resume_offset():
+def test_playback_applies_selected_streams_and_resume_offset(debug_log_path):
     item = Item()
     subtitle = Part().subtitleStreams()[0]
     audio = Part().audioStreams()[0]
@@ -93,9 +111,11 @@ def test_playback_applies_selected_streams_and_resume_offset():
 
     args = popen.call_args.args[0]
     assert handle.start_offset_ms == 65000
+    assert handle.command[0] == "mpv"
     assert "--start=65.000" in args
     assert "--sub-file=http://plex/library/streams/1" in args
     assert item.kwargs == {"audioStreamID": 42}
+    assert "launching mpv" in debug_log_path.read_text(encoding="utf-8")
 
 
 def test_subtitle_none_disables_subtitle_selection():
@@ -175,3 +195,62 @@ def test_preferred_choices_match_stream_language():
     assert disabled is not None
     assert disabled.stream_id == 0
     assert auto is None
+
+
+def test_sanitize_command_redacts_token_urls():
+    command = sanitize_command([
+        "mpv",
+        "--sub-file=http://plex/sub.srt?X-Plex-Token=secret&download=1",
+        "http://plex/video.mkv?token=secret&quality=10",
+    ])
+
+    assert command == [
+        "mpv",
+        "--sub-file=http://plex/sub.srt?X-Plex-Token=REDACTED&download=1",
+        "http://plex/video.mkv?token=REDACTED&quality=10",
+    ]
+
+
+def test_debug_log_redacts_token_text(debug_log_path):
+    log_debug("failed url=http://plex/video?X-Plex-Token=secret&other=1")
+
+    text = debug_log_path.read_text(encoding="utf-8")
+    assert "secret" not in text
+    assert "X-Plex-Token=REDACTED" in text
+
+
+def test_playback_errors_when_mpv_missing():
+    with patch("plextui.player.shutil.which", return_value=None):
+        try:
+            play_with_mpv(Item())
+        except PlayerError as exc:
+            assert "Install mpv" in str(exc)
+        else:
+            raise AssertionError("expected PlayerError")
+
+
+def test_playback_errors_on_empty_stream_url():
+    class EmptyUrlItem(Item):
+        def getStreamURL(self, **kwargs):
+            return ""
+
+    with patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"):
+        try:
+            play_with_mpv(EmptyUrlItem())
+        except PlayerError as exc:
+            assert "empty stream URL" in str(exc)
+        else:
+            raise AssertionError("expected PlayerError")
+
+
+def test_playback_errors_on_mpv_launch_failure():
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.subprocess.Popen", side_effect=OSError("boom")),
+    ):
+        try:
+            play_with_mpv(Item())
+        except PlayerError as exc:
+            assert "failed to launch mpv" in str(exc)
+        else:
+            raise AssertionError("expected PlayerError")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import json
+import re
 import shutil
 import signal
 import socket
@@ -12,6 +13,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from .config import debug_log_path
 
 
 class PlayerError(RuntimeError):
@@ -25,6 +29,7 @@ class PlayerHandle:
     stream_mode: str
     start_offset_ms: int
     socket_path: Path
+    command: list[str]
     monitor: "ProgressMonitor"
     process: subprocess.Popen[bytes]
 
@@ -46,7 +51,8 @@ def play_with_mpv(
     audio_choice: StreamChoice | None = None,
 ) -> PlayerHandle:
     if shutil.which("mpv") is None:
-        raise PlayerError("mpv was not found in PATH")
+        log_debug("playback error: mpv was not found in PATH")
+        raise PlayerError("mpv was not found in PATH. Install mpv and make sure it is available on PATH.")
 
     item = full_metadata(item)
     selected_subtitle = resolve_subtitle_choice(item, subtitle_choice)
@@ -63,7 +69,11 @@ def play_with_mpv(
     try:
         url = direct_url or item.getStreamURL(**stream_kwargs)
     except Exception as exc:
-        raise PlayerError(f"could not get stream URL: {exc}") from exc
+        log_debug(f"playback error: could not get stream URL: {exc}")
+        raise PlayerError(f"could not get stream URL from Plex: {exc}") from exc
+    if not url:
+        log_debug("playback error: Plex returned an empty stream URL")
+        raise PlayerError("Plex returned an empty stream URL")
 
     title = getattr(item, "title", "Plex")
     start_offset = resume_offset_ms(item)
@@ -79,14 +89,26 @@ def play_with_mpv(
     for subtitle in subtitles:
         args.append("--sub-file=" + subtitle)
     args.append(url)
-    process = subprocess.Popen(
-        args,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
-    subtitle_count = active_subtitle_count(item, selected_subtitle)
+    command = sanitize_command(args)
     stream_mode = "direct" if direct_url else "transcode"
+    log_debug(
+        "launching mpv: "
+        f"title={title!r} mode={stream_mode} "
+        f"audio={stream_debug_label(selected_audio)} "
+        f"subtitle={stream_debug_label(selected_subtitle)} "
+        f"args={command!r}"
+    )
+    try:
+        process = subprocess.Popen(
+            args,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError as exc:
+        log_debug(f"playback error: failed to launch mpv: {exc}; args={command!r}")
+        raise PlayerError(f"failed to launch mpv: {exc}") from exc
+    subtitle_count = active_subtitle_count(item, selected_subtitle)
     monitor = ProgressMonitor(item, process, socket_path, start_offset)
     monitor.start()
     return PlayerHandle(
@@ -95,6 +117,7 @@ def play_with_mpv(
         stream_mode=stream_mode,
         start_offset_ms=start_offset,
         socket_path=socket_path,
+        command=command,
         monitor=monitor,
         process=process,
     )
@@ -448,3 +471,52 @@ def stop_mpv(handle: PlayerHandle | None) -> None:
         return
     finally:
         cleanup_socket(handle.socket_path)
+
+
+def sanitize_command(args: list[str]) -> list[str]:
+    return [sanitize_arg(arg) for arg in args]
+
+
+def sanitize_arg(arg: str) -> str:
+    if arg.startswith("--sub-file="):
+        return "--sub-file=" + sanitize_url(arg.removeprefix("--sub-file="))
+    if "://" in arg:
+        return sanitize_url(arg)
+    return arg
+
+
+def sanitize_url(url: str) -> str:
+    parts = urlsplit(url)
+    if not parts.scheme or not parts.netloc:
+        return url
+    query = []
+    for key, value in parse_qsl(parts.query, keep_blank_values=True):
+        if key.lower() in {"token", "x-plex-token"}:
+            query.append((key, "REDACTED"))
+        else:
+            query.append((key, value))
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
+def stream_debug_label(stream: Any) -> str:
+    if stream is None:
+        return "auto"
+    if stream == 0:
+        return "none"
+    label = getattr(stream, "displayTitle", None) or getattr(stream, "language", None) or getattr(stream, "id", None)
+    return str(label or "unknown")
+
+
+def log_debug(message: str) -> None:
+    try:
+        path = debug_log_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(f"{timestamp} {redact_tokens(message)}\n")
+    except OSError:
+        return
+
+
+def redact_tokens(text: str) -> str:
+    return re.sub(r"(?i)(x-plex-token|token)=([^&\s]+)", r"\1=REDACTED", text)
