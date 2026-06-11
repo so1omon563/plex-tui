@@ -54,3 +54,6 @@ plex-tui
 - `enter`: open selected item
 - `p`: play selected playable item with `mpv`
 - `x`: stop launched `mpv`
+
+When playback starts, external subtitle streams reported by Plex are passed to
+`mpv` automatically.

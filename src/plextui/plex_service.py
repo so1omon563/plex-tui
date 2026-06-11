@@ -84,6 +84,7 @@ def media_details(item: MediaItem) -> MediaDetails:
         format_duration(getattr(raw, "duration", None)),
         watched_state(raw),
         episode_label(raw),
+        subtitle_label(raw),
         getattr(raw, "contentRating", None),
         rating_label(raw),
     ):
@@ -138,6 +139,21 @@ def rating_label(raw: Any) -> str:
         return f"Rating {float(rating):.1f}"
     except (TypeError, ValueError):
         return f"Rating {rating}"
+
+
+def subtitle_label(raw: Any) -> str:
+    count = 0
+    if hasattr(raw, "iterParts"):
+        try:
+            for part in raw.iterParts():
+                count += len([stream for stream in part.subtitleStreams() if getattr(stream, "key", None)])
+        except Exception:
+            return ""
+    if count == 1:
+        return "1 external subtitle"
+    if count > 1:
+        return f"{count} external subtitles"
+    return ""
 
 
 def format_duration(milliseconds: Any) -> str:

@@ -399,7 +399,12 @@ class PlexTuiApp(App[None]):
         except PlayerError as exc:
             self.show_error(str(exc))
             return
-        self.set_status(f"Playing {row.media.title}")
+        subtitle_text = (
+            f" with {self.player.subtitle_count} external subtitles"
+            if self.player.subtitle_count
+            else ""
+        )
+        self.set_status(f"Playing {row.media.title}{subtitle_text}")
 
     def action_stop_playback(self) -> None:
         if self.player is None or not self.player.active:
