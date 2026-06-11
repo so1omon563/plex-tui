@@ -27,7 +27,6 @@
 - Automate Homebrew tap updates after PyPI releases, preferably by opening a
   pull request in `so1omon563/homebrew-plex-tui` with the new formula URL,
   sha256, and Python resource updates.
-- Validate the draft Arch AUR `PKGBUILD` on an Arch system and publish if clean.
 - Consider standalone artifacts only after the app behavior stabilizes.
 
 ## Technical Follow-Up

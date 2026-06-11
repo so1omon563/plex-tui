@@ -60,6 +60,14 @@ The Homebrew formula installs `mpv` automatically.
 The first Homebrew install can take several minutes because native Python
 dependencies such as `pillow` are built from source.
 
+On Arch Linux, install from the AUR:
+
+```bash
+paru -S plex-tui
+```
+
+The AUR package depends on `mpv`.
+
 To install from GitHub instead:
 
 ```bash

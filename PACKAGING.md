@@ -99,19 +99,20 @@ plex-tui --smoke
 
 3. **Arch AUR**
 
-   Add an AUR package for Arch users. This can depend on `mpv` and Python
-   dependencies from Arch packages where practical.
+   An AUR package is available at
+   `https://aur.archlinux.org/packages/plex-tui`. It depends on `mpv` and
+   Python dependencies from Arch packages.
 
-   Package requirements:
+   Arch users can install with an AUR helper:
 
-   - `depends=('python' 'mpv' ...)`
-   - Use a tagged GitHub source archive for `plex-tui`.
-   - Prefer system Python packages for `python-textual`, `python-pillow`,
-     `python-plexapi`, and `python-platformdirs` when available.
-   - Include a `check()` step that runs `plex-tui --smoke`.
+   ```bash
+   paru -S plex-tui
+   ```
 
-   See `packaging/aur/PKGBUILD` for the draft package and
-   `packaging/aur/README.md` for validation commands.
+   The repository keeps `packaging/aur/PKGBUILD` and
+   `packaging/aur/.SRCINFO` as the source copy. The `AUR Package` GitHub
+   Actions workflow validates them with `makepkg --check`, `.SRCINFO` sync,
+   and `namcap`.
 
 4. **Standalone binaries**
 
