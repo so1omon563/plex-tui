@@ -61,6 +61,7 @@ GRID_DENSITY_SPECS = {
 }
 GRID_DETAIL_REFRESH_DELAY = 0.65
 LIST_DETAIL_REFRESH_DELAY = 0.35
+DETAIL_ARTWORK_REFRESH_DELAY = 0.55
 
 
 @dataclass
@@ -413,6 +414,7 @@ class PlexTuiApp(App[None]):
     applying_config_theme: bool
     detail_refresh_token: int
     detail_refresh_timer: Timer | None
+    detail_artwork_timer: Timer | None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -455,6 +457,7 @@ class PlexTuiApp(App[None]):
         self.applying_config_theme = False
         self.detail_refresh_token = 0
         self.detail_refresh_timer = None
+        self.detail_artwork_timer = None
         try:
             self.config = load_config()
             self.apply_config_theme()
@@ -890,6 +893,12 @@ class PlexTuiApp(App[None]):
         if self.detail_refresh_timer is not None:
             self.detail_refresh_timer.stop()
             self.detail_refresh_timer = None
+        self.cancel_media_detail_artwork_refresh()
+
+    def cancel_media_detail_artwork_refresh(self) -> None:
+        if self.detail_artwork_timer is not None:
+            self.detail_artwork_timer.stop()
+            self.detail_artwork_timer = None
 
     def start_media_detail_refresh(self, item: MediaItem, token: int) -> None:
         self.detail_refresh_timer = None
@@ -931,22 +940,66 @@ class PlexTuiApp(App[None]):
 
         self.call_from_thread(update_text)
 
+        self.call_from_thread(self.schedule_media_detail_artwork_refresh, full_item, details, token)
+
+    def schedule_media_detail_artwork_refresh(self, full_item: MediaItem, details: object, token: int) -> None:
+        self.cancel_media_detail_artwork_refresh()
+        if token != self.detail_refresh_token:
+            return
+        if not artwork_enabled(self.config) or not getattr(details, "artwork_path", ""):
+            return
+        detail_size = self.detail_artwork_size() if detail_artwork_enabled(self.config) else None
+        include_card_artwork = self.media_grid_visible()
+        if detail_size is None and not include_card_artwork:
+            return
+        self.detail_artwork_timer = self.set_timer(
+            DETAIL_ARTWORK_REFRESH_DELAY,
+            lambda: self.start_media_detail_artwork_refresh(full_item, details, token, detail_size, include_card_artwork),
+            name="detail-artwork-refresh",
+        )
+
+    def start_media_detail_artwork_refresh(
+        self,
+        full_item: MediaItem,
+        details: object,
+        token: int,
+        detail_size: tuple[int, int] | None,
+        include_card_artwork: bool,
+    ) -> None:
+        self.detail_artwork_timer = None
+        if token != self.detail_refresh_token:
+            write_performance_log("detail_artwork_skipped", time.perf_counter(), f"title={full_item.title!r} reason=stale")
+            return
+        self.fetch_media_detail_artwork(full_item, details, token, detail_size, include_card_artwork)
+
+    @work(thread=True, exclusive=True)
+    def fetch_media_detail_artwork(
+        self,
+        full_item: MediaItem,
+        details: object,
+        token: int,
+        detail_size: tuple[int, int] | None,
+        include_card_artwork: bool,
+    ) -> None:
         artwork = None
         card_artwork = None
-        if artwork_enabled(self.config) and details.artwork_path:
-            artwork_started = time.perf_counter()
-            try:
-                data = fetch_artwork(full_item.raw, details.artwork_path, self.config)
-                if detail_artwork_enabled(self.config):
-                    width, height = self.detail_artwork_size()
-                    artwork = (
-                        render_protocol_artwork(data, self.config.artwork_renderer, width=width, max_height=height)
-                        or render_artwork(data, width=width, max_height=height)
-                    )
+        artwork_started = time.perf_counter()
+        if token != self.detail_refresh_token:
+            write_performance_log("detail_artwork_skipped", artwork_started, f"title={full_item.title!r} reason=stale")
+            return
+        try:
+            data = fetch_artwork(full_item.raw, getattr(details, "artwork_path"), self.config)
+            if detail_size is not None:
+                width, height = detail_size
+                artwork = (
+                    render_protocol_artwork(data, self.config.artwork_renderer, width=width, max_height=height)
+                    or render_artwork(data, width=width, max_height=height)
+                )
+            if include_card_artwork:
                 card_artwork = render_card_artwork(data, self.config)
-            except Exception:
-                artwork = None
-            write_performance_log("detail_artwork", artwork_started, f"title={item.title!r} path={details.artwork_path!r}")
+        except Exception:
+            artwork = None
+        write_performance_log("detail_artwork", artwork_started, f"title={full_item.title!r} path={getattr(details, 'artwork_path', '')!r}")
         if not artwork and not card_artwork:
             return
 
@@ -954,12 +1007,12 @@ class PlexTuiApp(App[None]):
             if token != self.detail_refresh_token:
                 return
             selected = self.selected_media()
-            if selected is not None and selected.key == item.key:
+            if selected is not None and selected.key == full_item.key:
                 if artwork is not None:
                     self.show_detail_text(render_detail_content(details, self.config, artwork, raw=full_item.raw))
                 grid = self.query_one("#media-grid", MediaGrid)
                 if self.media_grid_visible() and card_artwork is not None:
-                    grid.set_artwork(item.key, card_artwork)
+                    grid.set_artwork(full_item.key, card_artwork)
 
         self.call_from_thread(update_artwork)
 

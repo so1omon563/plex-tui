@@ -20,6 +20,7 @@
 - Made Tab navigation cycle explicitly through Libraries, Media, and Details panes.
 - Added a short idle debounce for list detail reloads to reduce detail-pane churn during fast row movement.
 - Increased the list detail debounce to further reduce repeated artwork loads during row navigation.
+- Split detail text refresh from detail artwork loading so artwork waits for a longer stable selection window.
 
 ## 0.2.0 - 2026-06-11
 
