@@ -30,6 +30,10 @@ def test_show_media_highlights_first_rebuilt_row():
     asyncio.run(run_show_media_highlight_check())
 
 
+def test_focus_actions_mark_active_pane():
+    asyncio.run(run_focus_pane_check())
+
+
 def test_populate_libraries_highlights_first_rebuilt_row():
     asyncio.run(run_library_highlight_check())
 
@@ -177,6 +181,26 @@ async def run_show_media_highlight_check():
         assert row is not None
         assert row.has_class("active-row")
         assert row.media.title == "First"
+
+
+async def run_focus_pane_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
+        app.show_media("Movies", [MediaItem("First", "", "movie", "1", True, Raw())])
+        await pilot.pause(0.2)
+
+        app.action_focus_libraries()
+        await pilot.pause(0.1)
+        assert app.query_one("#sidebar").has_class("focused-pane")
+        assert not app.query_one("#main").has_class("focused-pane")
+
+        app.action_focus_media()
+        await pilot.pause(0.1)
+        assert app.query_one("#main").has_class("focused-pane")
+        assert not app.query_one("#sidebar").has_class("focused-pane")
 
 
 async def run_library_highlight_check():

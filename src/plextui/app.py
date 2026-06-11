@@ -13,6 +13,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual import events
 from textual.message import Message
 from textual.reactive import reactive
 from textual.timer import Timer
@@ -291,9 +292,19 @@ class PlexTuiApp(App[None]):
         border: solid $accent;
     }
 
+    #sidebar.focused-pane {
+        border: heavy $accent;
+        background: $boost;
+    }
+
     #main {
         width: 1fr;
         border: solid $primary;
+    }
+
+    #main.focused-pane {
+        border: heavy $primary;
+        background: $boost;
     }
 
     #details {
@@ -314,6 +325,15 @@ class PlexTuiApp(App[None]):
     .pane-title {
         text-style: bold;
         padding: 0 1;
+    }
+
+    .focused-pane > .pane-title {
+        background: $accent;
+        color: $text;
+    }
+
+    #main.focused-pane > .pane-title {
+        background: $primary;
     }
 
     #detail-content {
@@ -439,6 +459,23 @@ class PlexTuiApp(App[None]):
         self.query_one("#media-grid-scroll", VerticalScroll).display = False
         self.set_interval(1.0, self.check_player_status)
         self.load_server()
+
+    def on_focus(self, event: events.Focus) -> None:
+        self.update_focus_pane()
+
+    def on_blur(self, event: events.Blur) -> None:
+        self.update_focus_pane()
+
+    def update_focus_pane(self) -> None:
+        focused_id = getattr(self.focused, "id", "")
+        self.set_focus_pane(
+            sidebar=focused_id == "libraries",
+            main=focused_id in {"media", "media-grid", "search"},
+        )
+
+    def set_focus_pane(self, *, sidebar: bool = False, main: bool = False) -> None:
+        self.query_one("#sidebar").set_class(sidebar, "focused-pane")
+        self.query_one("#main").set_class(main, "focused-pane")
 
     def apply_config_theme(self) -> None:
         if self.config.theme not in self.available_themes:
@@ -662,8 +699,10 @@ class PlexTuiApp(App[None]):
     def focus_media_browser(self) -> None:
         if self.media_grid_visible():
             self.query_one("#media-grid", MediaGrid).focus()
+            self.set_focus_pane(main=True)
             return
         self.query_one("#media", ListView).focus()
+        self.set_focus_pane(main=True)
 
     def media_grid_visible(self) -> bool:
         return bool(self.query_one("#media-grid-scroll", VerticalScroll).display)
@@ -926,6 +965,7 @@ class PlexTuiApp(App[None]):
         search.value = ""
         search.display = True
         search.focus()
+        self.set_focus_pane(main=True)
 
     def action_focus_global_search(self) -> None:
         self.search_global = True
@@ -935,9 +975,11 @@ class PlexTuiApp(App[None]):
         search.value = ""
         search.display = True
         search.focus()
+        self.set_focus_pane(main=True)
 
     def action_focus_libraries(self) -> None:
         self.query_one("#libraries", ListView).focus()
+        self.set_focus_pane(sidebar=True)
         self.set_status("Focus moved to libraries")
 
     def action_focus_media(self) -> None:
@@ -982,7 +1024,7 @@ class PlexTuiApp(App[None]):
 
         next_items = grid.visible_page_items(page_offset=1)
         if next_items:
-            self.start_grid_prefetch(next_items, "next", delay=0.75)
+            self.start_grid_prefetch(next_items, "next", delay=0.2)
 
     def start_grid_prefetch(self, items: list[MediaItem], page_label: str, delay: float = 0.0) -> None:
         started = time.perf_counter()
@@ -1020,7 +1062,9 @@ class PlexTuiApp(App[None]):
                     continue
                 try:
                     data = fetch_artwork(item.raw, item.artwork_path, self.config)
-                    rendered[item.key] = render_card_artwork(data, self.config)
+                    artwork = render_card_artwork(data, self.config)
+                    rendered[item.key] = artwork
+                    self.call_from_thread(self.apply_grid_artwork, item.key, artwork)
                 except Exception:
                     continue
 
@@ -1032,19 +1076,15 @@ class PlexTuiApp(App[None]):
             )
         finally:
             self.active_grid_prefetch_pages.discard(page_key)
-        if not rendered:
+
+    def apply_grid_artwork(self, media_key: str, artwork: object) -> None:
+        grid = self.query_one("#media-grid", MediaGrid)
+        if not grid.is_mounted:
             return
-
-        def update() -> None:
-            grid = self.query_one("#media-grid", MediaGrid)
-            if not grid.is_mounted:
-                return
-            grid.artwork.update(rendered)
-            visible_keys = {item.key for item in grid.visible_page_items()}
-            if visible_keys.intersection(rendered):
-                grid.refresh_grid()
-
-        self.call_from_thread(update)
+        grid.artwork[media_key] = artwork
+        visible_keys = {item.key for item in grid.visible_page_items()}
+        if media_key in visible_keys:
+            grid.refresh_grid()
 
     def action_show_settings(self, selected_action: str | None = None) -> None:
         self.help_visible = False

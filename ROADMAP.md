@@ -3,6 +3,7 @@
 ## App UX
 
 - Keep measuring real library browsing, especially any remaining grid latency after the prefetch/rendering and idle-detail passes.
+- Continue tuning focus and selection affordances based on real terminal themes.
 - Improve the settings screen beyond action rows:
   - richer inline controls for grouped playback, artwork, browsing, and account actions
   - consider dedicated edit widgets for toggles, numeric values, and option sets
