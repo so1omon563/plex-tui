@@ -83,6 +83,10 @@ def test_grid_detail_refresh_waits_for_idle_selection():
     asyncio.run(run_grid_detail_refresh_idle_check())
 
 
+def test_list_detail_refresh_waits_for_short_idle_selection():
+    asyncio.run(run_list_detail_refresh_idle_check())
+
+
 def test_search_state_adds_load_more_row():
     asyncio.run(run_search_load_more_row_check())
 
@@ -502,6 +506,33 @@ async def run_grid_detail_refresh_idle_check():
 
         app.show_media_details(items[2])
         await pilot.pause(0.8)
+        assert refreshed == ["Movie 2"]
+
+
+async def run_list_detail_refresh_idle_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="list")
+        items = [
+            MediaItem(f"Movie {index}", "", "movie", str(index), True, Raw())
+            for index in range(3)
+        ]
+        refreshed = []
+
+        def capture_refresh(item, token):
+            refreshed.append(item.title)
+
+        app.refresh_media_details = capture_refresh
+        app.show_browse_state(BrowseState("Movies", items))
+        await pilot.pause(0.1)
+
+        app.show_media_details(items[1])
+        await pilot.pause(0.1)
+        assert refreshed == []
+
+        app.show_media_details(items[2])
+        await pilot.pause(0.3)
         assert refreshed == ["Movie 2"]
 
 

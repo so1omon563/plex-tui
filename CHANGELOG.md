@@ -18,6 +18,7 @@
 - Added an explicit `[FOCUS]` marker to the active pane title.
 - Kept focus markers in sync when using Tab navigation and refocused the visible browser after list/grid view changes.
 - Made Tab navigation cycle explicitly through Libraries, Media, and Details panes.
+- Added a short idle debounce for list detail reloads to reduce detail-pane churn during fast row movement.
 
 ## 0.2.0 - 2026-06-11
 

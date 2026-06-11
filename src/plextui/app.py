@@ -59,6 +59,8 @@ GRID_DENSITY_SPECS = {
     "comfortable": {"width": 23, "content_width": 20, "art_width": 18, "art_height": 9, "height": 12, "max_columns": 5},
     "large": {"width": 29, "content_width": 26, "art_width": 24, "art_height": 12, "height": 15, "max_columns": 4},
 }
+GRID_DETAIL_REFRESH_DELAY = 0.65
+LIST_DETAIL_REFRESH_DELAY = 0.2
 
 
 @dataclass
@@ -870,7 +872,7 @@ class PlexTuiApp(App[None]):
         token = self.detail_refresh_token
         details = media_details(item)
         self.show_detail_text(render_detail_content(details, self.config, raw=item.raw))
-        delay = 0.65 if self.media_grid_visible() else 0.0
+        delay = GRID_DETAIL_REFRESH_DELAY if self.media_grid_visible() else LIST_DETAIL_REFRESH_DELAY
         self.schedule_media_detail_refresh(item, token, delay)
 
     def schedule_media_detail_refresh(self, item: MediaItem, token: int, delay: float = 0.0) -> None:
