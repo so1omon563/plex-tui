@@ -2,6 +2,20 @@
 
 A small Python/Textual Plex TUI prototype.
 
+## Requirements
+
+- Python 3.11 or newer
+- `mpv` available on `PATH`
+
+plex-tui uses Plex for browsing/control, but playback is launched through
+`mpv`. Browsing works without `mpv`, but pressing `p` to play media requires it.
+
+On macOS with Homebrew:
+
+```bash
+brew install mpv
+```
+
 ## Setup
 
 ```bash
