@@ -10,6 +10,7 @@
 - Published the Arch AUR package and updated install documentation.
 - Added Arch AUR packaging files and Homebrew packaging notes.
 - Refreshed documentation for current install, packaging, and release workflows.
+- Added a Settings diagnostics action for recent `debug.log` output and playback error details with log context.
 
 ## 0.2.0 - 2026-06-11
 

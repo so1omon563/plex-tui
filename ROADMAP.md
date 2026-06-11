@@ -10,7 +10,7 @@
   - tune density presets across narrow and wide terminals
   - consider separate poster-size controls if density presets are not enough
 - Improve playback diagnostics:
-  - surface more actionable excerpts from `debug.log`
+  - add more targeted playback troubleshooting hints for common `mpv` failures
   - consider a compact active-playback footer once more player state is available
 
 ## Packaging & Distribution

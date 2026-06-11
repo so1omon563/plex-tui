@@ -20,12 +20,15 @@ from plextui.app import (
     next_media_view,
     next_mpv_window_size,
     playback_exit_status,
+    recent_debug_log_lines,
     render_audio_playback_preference,
+    render_debug_log_details,
     render_details,
     render_help,
     render_media_grid_card,
     render_picker_details,
     render_playback_details,
+    render_playback_error_details,
     render_settings,
     render_playback_status,
     render_subtitle_playback_preference,
@@ -138,6 +141,7 @@ def test_render_settings_includes_stream_preferences():
     assert "mpv Window Size: Default" in rendered
     assert "Page Size: 250" in rendered
     assert "Auto-load Threshold: 25" in rendered
+    assert "Show recent debug log" in rendered
     assert subtitle_preference_value(config) == "eng"
 
 
@@ -166,6 +170,7 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "Page Size: set custom value..." in labels
     assert "Auto-load Threshold: 20  [-5]" in labels
     assert "Auto-load Threshold: set custom value..." in labels
+    assert "Show recent debug log" in labels
 
 
 def test_detail_artwork_mode_defaults_to_list_only():
@@ -250,6 +255,55 @@ def test_render_playback_details_includes_streams_and_diagnostics():
     assert "Audio: Japanese" in rendered
     assert "Subtitles: English" in rendered
     assert "Debug log:" in rendered
+
+
+def test_recent_debug_log_lines_handles_missing_empty_and_tail(tmp_path):
+    missing = tmp_path / "missing.log"
+    assert recent_debug_log_lines(missing) == []
+
+    log = tmp_path / "debug.log"
+    log.write_text("", encoding="utf-8")
+    assert recent_debug_log_lines(log) == []
+
+    log.write_text("\n".join(f"line {index}" for index in range(5)), encoding="utf-8")
+    assert recent_debug_log_lines(log, max_lines=2) == ["line 3", "line 4"]
+    assert recent_debug_log_lines(log, max_lines=0) == []
+
+
+def test_render_debug_log_details_reports_recent_entries(tmp_path):
+    log = tmp_path / "debug.log"
+    log.write_text("first\nsecond\nthird\n", encoding="utf-8")
+
+    rendered = render_debug_log_details(log, max_lines=2)
+
+    assert "Recent Debug Log" in rendered
+    assert f"Path: {log}" in rendered
+    assert "Last 2 lines" in rendered
+    assert "first" not in rendered
+    assert "second" in rendered
+    assert "third" in rendered
+
+
+def test_render_debug_log_details_handles_missing_log(tmp_path):
+    log = tmp_path / "debug.log"
+
+    rendered = render_debug_log_details(log)
+
+    assert "No debug log entries yet." in rendered
+    assert f"Path: {log}" in rendered
+
+
+def test_render_playback_error_details_includes_recent_debug_log(tmp_path):
+    log = tmp_path / "debug.log"
+    log.write_text("launching mpv\nplayback error: failed\n", encoding="utf-8")
+
+    rendered = render_playback_error_details("failed to launch mpv", log, max_lines=1)
+
+    assert "Playback Error" in rendered
+    assert "failed to launch mpv" in rendered
+    assert f"Debug log: {log}" in rendered
+    assert "launching mpv" not in rendered
+    assert "playback error: failed" in rendered
 
 
 def test_effective_stream_preferences_report_found_missing_and_none():

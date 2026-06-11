@@ -13,7 +13,7 @@ from plextui.app import (
 )
 from plextui.config import AppConfig
 from plextui.models import LibraryItem, MediaItem
-from plextui.player import StreamChoice
+from plextui.player import PlayerError, StreamChoice
 from plextui.plex_service import MediaPage
 
 
@@ -77,6 +77,14 @@ def test_load_more_media_appends_search_page():
 
 def test_settings_actions_update_preferences():
     asyncio.run(run_settings_action_check())
+
+
+def test_settings_recent_debug_log_action_shows_tail(tmp_path):
+    asyncio.run(run_settings_recent_debug_log_check(tmp_path))
+
+
+def test_playback_error_shows_recent_debug_log(tmp_path):
+    asyncio.run(run_playback_error_check(tmp_path))
 
 
 def test_quick_preference_actions_update_config():
@@ -449,6 +457,50 @@ async def run_settings_action_check():
             assert app.config.grid_density == "large"
 
         assert save_config.call_count == 11
+
+
+async def run_settings_recent_debug_log_check(tmp_path):
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        log = tmp_path / "debug.log"
+        log.write_text("first\nsecond\nthird\n", encoding="utf-8")
+
+        with patch("plextui.app.debug_log_path", return_value=log):
+            app.action_show_settings()
+            app.run_settings_action("show_recent_debug_log")
+        await pilot.pause(0.2)
+
+        details = app.query_one("#detail-content").content
+        assert "Recent Debug Log" in details
+        assert f"Path: {log}" in details
+        assert "first" in details
+        assert "third" in details
+
+
+async def run_playback_error_check(tmp_path):
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.show_media("Movies", [MediaItem("Broken Movie", "", "movie", "1", True, Raw())])
+        await pilot.pause(0.2)
+        log = tmp_path / "debug.log"
+        log.write_text("launching mpv\nplayback error: mpv missing\n", encoding="utf-8")
+
+        with (
+            patch("plextui.app.debug_log_path", return_value=log),
+            patch("plextui.app.play_with_mpv", side_effect=PlayerError("mpv missing")),
+        ):
+            app.action_play_selected()
+        await pilot.pause(0.2)
+
+        assert app.query_one("#media-title").content == "Playback Error"
+        details = app.query_one("#detail-content").content
+        assert "mpv missing" in details
+        assert f"Debug log: {log}" in details
+        assert "playback error: mpv missing" in details
 
 
 async def run_quick_preference_action_check():

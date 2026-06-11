@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any
 
 from rich.console import Group
@@ -1159,6 +1160,11 @@ class PlexTuiApp(App[None]):
             self.show_detail_text(f"Debug log\n\n{path}\n\nSet PLEX_TUI_PERF_LOG=1 before launch to include browsing performance timings.")
             self.set_status(f"Debug log: {path}")
             return
+        if action == "show_recent_debug_log":
+            path = debug_log_path()
+            self.show_detail_text(render_debug_log_details(path))
+            self.set_status(f"Recent debug log: {path}")
+            return
         if action == "artwork_renderer_block":
             if self.update_preferences(artwork_renderer="block"):
                 self.refresh_settings_after_change(action, "Artwork renderer", "Block")
@@ -1503,7 +1509,7 @@ class PlexTuiApp(App[None]):
                 window_size=self.config.mpv_window_size,
             )
         except PlayerError as exc:
-            self.show_error(str(exc))
+            self.show_playback_error(str(exc))
             return
         self.detail_refresh_token += 1
         self.show_detail_text(
@@ -1560,6 +1566,15 @@ class PlexTuiApp(App[None]):
         view.clear()
         view.append(ListItem(Label(f"{text}\n{config_hint}")))
         self.show_detail_text(config_hint)
+
+    def show_playback_error(self, text: str) -> None:
+        path = debug_log_path()
+        self.set_status(f"Playback error: {text}. Debug log: {path}")
+        self.query_one("#media-title", Static).update("Playback Error")
+        view = self.show_media_list()
+        view.clear()
+        view.append(ListItem(Label(f"{text}\nDebug log: {path}")))
+        self.show_detail_text(render_playback_error_details(text, path))
 
 
 def format_offset(milliseconds: int) -> str:
@@ -1804,6 +1819,7 @@ def settings_rows(config: AppConfig) -> list[ListItem]:
         SettingsValueRow(f"Client ID: {config.client_identifier or 'not set'}"),
         SettingsValueRow(f"Theme: {config.theme}"),
         SettingsActionRow("Show debug log path", "show_debug_log"),
+        SettingsActionRow("Show recent debug log", "show_recent_debug_log"),
     ]
 
 
@@ -1850,6 +1866,7 @@ def render_settings(config: AppConfig) -> str:
         f"Debug Log: {debug_log_path()}",
         f"Client ID: {config.client_identifier or 'not set'}",
         f"Theme: {config.theme}",
+        "Show recent debug log",
     ]
     return "\n".join(lines)
 
@@ -2141,6 +2158,56 @@ def render_playback_details(
         "Diagnostics",
         f"Debug log: {debug_log_path()}",
     ]
+    return "\n".join(lines)
+
+
+def recent_debug_log_lines(path: Path, max_lines: int = 20) -> list[str]:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return []
+    except (OSError, UnicodeDecodeError):
+        return ["Unable to read debug log."]
+    if max_lines <= 0:
+        return []
+    return lines[-max_lines:]
+
+
+def render_debug_log_details(path: Path, max_lines: int = 20) -> str:
+    lines = [
+        "Recent Debug Log",
+        "",
+        f"Path: {path}",
+        "",
+        f"Last {max_lines} lines",
+    ]
+    recent = recent_debug_log_lines(path, max_lines)
+    if recent:
+        lines.extend(recent)
+    else:
+        lines.append("No debug log entries yet.")
+    lines.extend([
+        "",
+        "Set PLEX_TUI_PERF_LOG=1 before launch to include browsing performance timings.",
+    ])
+    return "\n".join(lines)
+
+
+def render_playback_error_details(error: str, path: Path, max_lines: int = 12) -> str:
+    lines = [
+        "Playback Error",
+        "",
+        error,
+        "",
+        f"Debug log: {path}",
+        "",
+        "Recent Debug Log",
+    ]
+    recent = recent_debug_log_lines(path, max_lines)
+    if recent:
+        lines.extend(recent)
+    else:
+        lines.append("No debug log entries yet.")
     return "\n".join(lines)
 
 
