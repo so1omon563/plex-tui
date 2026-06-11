@@ -53,3 +53,4 @@ plex-tui
 - `escape`: clear search / go back
 - `enter`: open selected item
 - `p`: play selected playable item with `mpv`
+- `x`: stop launched `mpv`

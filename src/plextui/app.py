@@ -13,7 +13,7 @@ from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, St
 from .auth import LoginSession, ServerChoice, save_server_choice
 from .config import AppConfig, config_path, load_config
 from .models import LibraryItem, MediaItem
-from .player import PlayerError, play_with_mpv
+from .player import PlayerError, PlayerHandle, play_with_mpv, stop_mpv
 from .plex_service import PlexService, media_details
 
 
@@ -108,6 +108,7 @@ class PlexTuiApp(App[None]):
         Binding("m", "focus_media", "Media"),
         Binding("escape", "back_or_clear", "Back"),
         Binding("p", "play_selected", "Play"),
+        Binding("x", "stop_playback", "Stop"),
     ]
 
     service: reactive[PlexService | None] = reactive(None)
@@ -117,6 +118,7 @@ class PlexTuiApp(App[None]):
     login_session: LoginSession | None
     pending_account_token: str
     search_global: bool
+    player: PlayerHandle | None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -139,6 +141,7 @@ class PlexTuiApp(App[None]):
         self.login_session = None
         self.pending_account_token = ""
         self.search_global = False
+        self.player = None
         self.query_one("#search", Input).display = False
         self.load_server()
 
@@ -391,11 +394,22 @@ class PlexTuiApp(App[None]):
             self.set_status("Selected item is not directly playable")
             return
         try:
-            play_with_mpv(row.media.raw)
+            stop_mpv(self.player)
+            self.player = play_with_mpv(row.media.raw)
         except PlayerError as exc:
             self.show_error(str(exc))
             return
         self.set_status(f"Playing {row.media.title}")
+
+    def action_stop_playback(self) -> None:
+        if self.player is None or not self.player.active:
+            self.set_status("Nothing is playing")
+            self.player = None
+            return
+        title = self.player.title
+        stop_mpv(self.player)
+        self.player = None
+        self.set_status(f"Stopped {title}")
 
     def action_reload(self) -> None:
         self.load_server()
