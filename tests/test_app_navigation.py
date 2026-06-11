@@ -10,6 +10,7 @@ from plextui.app import (
     BrowseState,
     LoadMoreRow,
     PlexTuiApp,
+    grid_artwork_cache_key,
     render_loaded_status,
     should_auto_load_more,
 )
@@ -88,6 +89,26 @@ def test_grid_prefetch_schedules_once_per_visible_page():
 
 def test_grid_prefetch_queues_while_active_with_current_priority():
     asyncio.run(run_grid_prefetch_queue_check())
+
+
+def test_grid_prefetch_reuses_rendered_artwork_cache():
+    app = PlexTuiApp()
+    app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+    app.active_grid_prefetch_pages = {("1",)}
+    app.prefetched_grid_pages = set()
+    app.pending_grid_prefetches = []
+    item = MediaItem("Movie", "", "movie", "1", True, Raw(), artwork_path="/thumb")
+    app.rendered_grid_artwork_cache = {grid_artwork_cache_key(item, app.config): "rendered-art"}
+    applied = []
+    app.call_from_thread = lambda callback, *args: callback(*args)
+    app.apply_grid_artworks = lambda artwork_by_key: applied.append(artwork_by_key)
+    app.render_grid_prefetch_item = lambda *args: (_ for _ in ()).throw(AssertionError("cache miss"))
+
+    PlexTuiApp.prefetch_grid_items.__wrapped__(app, [item], ("1",), "current")
+
+    assert applied == [{"1": "rendered-art"}]
+    assert ("1",) in app.prefetched_grid_pages
+    assert not app.active_grid_prefetch_pages
 
 
 def test_grid_detail_refresh_waits_for_idle_selection():

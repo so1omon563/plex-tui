@@ -414,6 +414,7 @@ class PlexTuiApp(App[None]):
     prefetched_grid_pages: set[tuple[str, ...]]
     active_grid_prefetch_pages: set[tuple[str, ...]]
     pending_grid_prefetches: list[tuple[list[MediaItem], tuple[str, ...], str, float]]
+    rendered_grid_artwork_cache: dict[tuple[str, str], object]
     last_grid_prefetch_page: tuple[str, ...]
     applying_config_theme: bool
     detail_refresh_token: int
@@ -459,6 +460,7 @@ class PlexTuiApp(App[None]):
         self.prefetched_grid_pages = set()
         self.active_grid_prefetch_pages = set()
         self.pending_grid_prefetches = []
+        self.rendered_grid_artwork_cache = {}
         self.last_grid_prefetch_page = ()
         self.applying_config_theme = False
         self.detail_refresh_token = 0
@@ -550,6 +552,7 @@ class PlexTuiApp(App[None]):
         def update() -> None:
             self.service = service
             self.detail_cache = {}
+            self.rendered_grid_artwork_cache = {}
             self.apply_config_theme()
             self.title = f"plex-tui - {service.friendly_name}"
             self.set_status(f"Connected to {service.friendly_name}")
@@ -1009,6 +1012,7 @@ class PlexTuiApp(App[None]):
                 )
             if include_card_artwork:
                 card_artwork = render_card_artwork(data, self.config)
+                self.rendered_grid_artwork_cache[grid_artwork_cache_key(full_item, self.config)] = card_artwork
         except Exception:
             artwork = None
         write_performance_log("detail_artwork", artwork_started, f"title={full_item.title!r} path={getattr(details, 'artwork_path', '')!r}")
@@ -1208,32 +1212,45 @@ class PlexTuiApp(App[None]):
         fetch_ms = 0.0
         render_ms = 0.0
         cached_count = 0
+        rendered_cache_hits = 0
         try:
             prefetch_items = [item for item in items if item.artwork_path]
             width, height = card_artwork_pixel_size(self.config)
             cached_count = sum(
                 1 for item in prefetch_items if artwork_is_cached(item.artwork_path, self.config, width=width, height=height)
             )
-            with ThreadPoolExecutor(max_workers=min(GRID_PREFETCH_WORKERS, max(1, len(prefetch_items)))) as executor:
-                futures = [
-                    executor.submit(self.render_grid_prefetch_item, item, width, height)
-                    for item in prefetch_items
-                ]
-                for future in as_completed(futures):
-                    try:
-                        item, artwork, item_fetch_ms, item_render_ms = future.result()
-                    except Exception:
-                        continue
-                    fetch_ms += item_fetch_ms
-                    render_ms += item_render_ms
-                    rendered[item.key] = artwork
-                    self.call_from_thread(self.apply_grid_artwork, item.key, artwork)
+            pending_items = []
+            for item in prefetch_items:
+                cache_key = grid_artwork_cache_key(item, self.config)
+                artwork = self.rendered_grid_artwork_cache.get(cache_key)
+                if artwork is None:
+                    pending_items.append(item)
+                    continue
+                rendered_cache_hits += 1
+                rendered[item.key] = artwork
+            if pending_items:
+                with ThreadPoolExecutor(max_workers=min(GRID_PREFETCH_WORKERS, len(pending_items))) as executor:
+                    futures = [
+                        executor.submit(self.render_grid_prefetch_item, item, width, height)
+                        for item in pending_items
+                    ]
+                    for future in as_completed(futures):
+                        try:
+                            item, artwork, item_fetch_ms, item_render_ms = future.result()
+                        except Exception:
+                            continue
+                        fetch_ms += item_fetch_ms
+                        render_ms += item_render_ms
+                        self.rendered_grid_artwork_cache[grid_artwork_cache_key(item, self.config)] = artwork
+                        rendered[item.key] = artwork
+            if rendered:
+                self.call_from_thread(self.apply_grid_artworks, rendered)
 
             self.prefetched_grid_pages.add(page_key)
             write_performance_log(
                 "grid_prefetch",
                 started,
-                f"page={page_label} items={len(items)} rendered={len(rendered)} cached={cached_count} fetch={fetch_ms:.1f}ms render={render_ms:.1f}ms workers={GRID_PREFETCH_WORKERS}",
+                f"page={page_label} items={len(items)} rendered={len(rendered)} cached={cached_count} rendered_cached={rendered_cache_hits} fetch={fetch_ms:.1f}ms render={render_ms:.1f}ms workers={GRID_PREFETCH_WORKERS}",
             )
         finally:
             self.active_grid_prefetch_pages.discard(page_key)
@@ -1249,12 +1266,15 @@ class PlexTuiApp(App[None]):
         return item, artwork, fetch_ms, render_ms
 
     def apply_grid_artwork(self, media_key: str, artwork: object) -> None:
+        self.apply_grid_artworks({media_key: artwork})
+
+    def apply_grid_artworks(self, artwork_by_key: dict[str, object]) -> None:
         grid = self.query_one("#media-grid", MediaGrid)
         if not grid.is_mounted:
             return
-        grid.artwork[media_key] = artwork
+        grid.artwork.update(artwork_by_key)
         visible_keys = {item.key for item in grid.visible_page_items()}
-        if media_key in visible_keys:
+        if visible_keys.intersection(artwork_by_key):
             grid.refresh_grid()
 
     def action_show_settings(self, selected_action: str | None = None) -> None:
@@ -1974,6 +1994,10 @@ def render_card_artwork(data: bytes, config: AppConfig) -> object:
 def card_artwork_pixel_size(config: AppConfig) -> tuple[int, int]:
     spec = grid_density_spec(config)
     return int(spec["art_width"]) * 8, int(spec["art_height"]) * 16
+
+
+def grid_artwork_cache_key(item: MediaItem, config: AppConfig) -> tuple[str, str]:
+    return item.artwork_path, config.grid_density
 
 
 def grid_density_spec(config: AppConfig | None) -> dict[str, int]:
