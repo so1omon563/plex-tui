@@ -54,19 +54,23 @@ plex-tui
 - `escape`: clear search / go back
 - `enter`: open selected item
 - `p`: play selected playable item with `mpv`
-- `a`: choose audio track for the next playback
-- `s`: choose subtitle track for the next playback
+- `a`: choose and save an audio preference
+- `s`: choose and save a subtitle preference
 - `x`: stop launched `mpv`
 
 Search results are navigable views. Press `escape` from results or opened
 children to return to the previous list.
 
 The settings view shows the active config and supports reconnect/reload,
-Plex relogin, and clearing selected audio/subtitle tracks.
+Plex relogin, and clearing audio/subtitle preferences.
 
 When playback starts, external subtitle streams reported by Plex are passed to
 `mpv` automatically. Items with embedded PGS/VOBSUB subtitles are direct-played
 from the original media part so `mpv` can see the subtitle tracks.
+
+Audio and subtitle picker choices are saved as language preferences. On future
+playback, plex-tui resolves those preferences against the selected media item's
+available tracks.
 
 Playback resumes from Plex's saved position when available. While the app is
 running, playback position is reported back to Plex periodically and when
