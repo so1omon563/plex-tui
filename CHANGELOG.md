@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 - Unreleased
+## 0.1.0 - 2026-06-11
 
 - Added Plex PIN login and server selection.
 - Added library browsing with paged loading and automatic loading near the end of the list.
