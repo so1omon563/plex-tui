@@ -56,6 +56,9 @@ plex-tui
 - `p`: play selected playable item with `mpv`
 - `x`: stop launched `mpv`
 
+Search results are navigable views. Press `escape` from results or opened
+children to return to the previous list.
+
 When playback starts, external subtitle streams reported by Plex are passed to
 `mpv` automatically. Items with embedded PGS/VOBSUB subtitles are direct-played
 from the original media part so `mpv` can see the subtitle tracks.

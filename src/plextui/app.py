@@ -22,6 +22,7 @@ class BrowseState:
     title: str
     items: list[MediaItem]
     selected_library: LibraryItem | None = None
+    search: bool = False
 
 
 class LibraryRow(ListItem):
@@ -385,7 +386,9 @@ class PlexTuiApp(App[None]):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "search":
-            self.run_search(event.value.strip(), self.search_global)
+            query = event.value.strip()
+            event.input.display = False
+            self.run_search(query, self.search_global)
 
     @work(thread=True)
     def run_search(self, query: str, global_search: bool = False) -> None:
@@ -402,6 +405,9 @@ class PlexTuiApp(App[None]):
 
         def update() -> None:
             title = f"Global search: {query}" if global_search else f"Search: {query}"
+            if self.browsing_stack and self.browsing_stack[-1].search:
+                self.browsing_stack.pop()
+            self.browsing_stack.append(BrowseState(title, items, None if global_search else self.selected_library, search=True))
             self.show_media(title, items)
             self.query_one("#media", ListView).focus()
             self.set_status(f"{len(items)} results in {scope}")
