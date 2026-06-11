@@ -128,6 +128,11 @@ class PlexTuiApp(App[None]):
     #detail-scroll {
         height: 1fr;
     }
+
+    .active-row {
+        background: $accent;
+        color: $text;
+    }
     """
 
     BINDINGS = [
@@ -290,9 +295,13 @@ class PlexTuiApp(App[None]):
         if row is not None and event.list_view.highlighted_child is not row:
             return
         if isinstance(row, MediaRow):
+            mark_active_row(event.list_view, row)
             self.show_media_details(row.media)
         elif isinstance(row, ServerRow):
+            mark_active_row(event.list_view, row)
             self.show_detail_text(f"{row.choice.name}\n\n{row.choice.uri}\n\nSource: {row.choice.source}")
+        elif isinstance(row, StreamRow) or isinstance(row, SettingsActionRow):
+            mark_active_row(event.list_view, row)
         elif row is None and not list(event.list_view.children):
             self.show_detail_text("Select an item")
 
@@ -352,16 +361,28 @@ class PlexTuiApp(App[None]):
 
     def show_media(self, title: str, items: list[MediaItem], selected_key: str | None = None) -> None:
         self.query_one("#media-title", Static).update(title)
-        view = self.query_one("#media", ListView)
-        view.clear()
-        for item in items:
-            view.append(MediaRow(item))
         if items:
             selected_index = selected_media_index(items, selected_key)
-            view.index = selected_index
+            self.replace_media_rows([MediaRow(item) for item in items], selected_index)
             self.show_media_details(items[selected_index])
         else:
+            self.replace_media_rows([])
             self.show_detail_text("No items")
+
+    def replace_media_rows(self, rows: list[ListItem], selected_index: int | None = None) -> None:
+        self.run_worker(
+            self.replace_list_rows("#media", rows, selected_index),
+            group="media-list",
+            exclusive=True,
+        )
+
+    async def replace_list_rows(self, selector: str, rows: list[ListItem], selected_index: int | None = None) -> None:
+        view = self.query_one(selector, ListView)
+        await view.clear()
+        if rows:
+            await view.extend(rows)
+        if selected_index is not None and rows:
+            set_list_index(view, selected_index)
 
     def show_media_details(self, item: MediaItem) -> None:
         details = media_details(item)
@@ -496,12 +517,12 @@ class PlexTuiApp(App[None]):
             self.picker_media_key = media.key
             picker_title = "Subtitle Tracks" if stream_type == "subtitle" else "Audio Tracks"
             self.query_one("#media-title", Static).update(f"{picker_title}: {media.title}")
+            rows = [
+                StreamRow(choice, stream_type, stream_choice_matches(choice, current_choice))
+                for choice in choices
+            ]
+            self.replace_media_rows(rows, current_index if choices else None)
             view = self.query_one("#media", ListView)
-            view.clear()
-            for choice in choices:
-                view.append(StreamRow(choice, stream_type, stream_choice_matches(choice, current_choice)))
-            if choices:
-                view.index = current_index
             view.focus()
             self.show_detail_text(render_picker_details(stream_type, current_choice, self.config))
             self.set_status(f"Choose {stream_type} track")
@@ -785,6 +806,21 @@ def selected_stream_index(choices: list[StreamChoice], selected_choice: StreamCh
         if stream_choice_matches(choice, selected_choice):
             return index
     return 0
+
+
+def set_list_index(view: ListView, index: int) -> None:
+    view.index = None
+    view.index = index
+    children = list(view.children)
+    if 0 <= index < len(children) and isinstance(children[index], ListItem):
+        mark_active_row(view, children[index])
+        view.call_after_refresh(mark_active_row, view, children[index])
+
+
+def mark_active_row(view: ListView, active_row: ListItem) -> None:
+    for child in view.children:
+        if isinstance(child, ListItem):
+            child.set_class(child is active_row, "active-row")
 
 
 def stream_choice_matches(choice: StreamChoice, selected_choice: StreamChoice | None) -> bool:

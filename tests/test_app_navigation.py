@@ -18,6 +18,10 @@ def test_picker_return_preserves_highlighted_media():
     asyncio.run(run_picker_return_check())
 
 
+def test_show_media_highlights_first_rebuilt_row():
+    asyncio.run(run_show_media_highlight_check())
+
+
 async def run_picker_return_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
@@ -37,3 +41,24 @@ async def run_picker_return_check():
 
         assert app.query_one("#media-title").content == "Movies"
         assert app.query_one("#detail-content").content.splitlines()[0] == "Second"
+
+
+async def run_show_media_highlight_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        items = [
+            MediaItem("First", "", "movie", "1", True, Raw()),
+            MediaItem("Second", "", "movie", "2", True, Raw()),
+        ]
+
+        app.show_media("Movies", items)
+        media = app.query_one("#media")
+        media.focus()
+        await pilot.pause(0.2)
+
+        row = media.highlighted_child
+        assert row is not None
+        assert row.has_class("active-row")
+        assert row.media.title == "First"
