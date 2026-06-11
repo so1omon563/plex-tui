@@ -97,6 +97,10 @@ def test_cached_grid_prefetch_hydrates_visible_artwork():
     asyncio.run(run_cached_grid_prefetch_hydration_check())
 
 
+def test_cold_grid_prefetch_applies_visible_artwork():
+    asyncio.run(run_cold_grid_prefetch_application_check())
+
+
 def test_grid_prefetch_queues_while_active_with_current_priority():
     asyncio.run(run_grid_prefetch_queue_check())
 
@@ -735,6 +739,29 @@ async def run_cached_grid_prefetch_hydration_check():
             assert grid.artwork[item.key] == f"art-{item.key}"
 
 
+async def run_cold_grid_prefetch_application_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        app.rendered_grid_artwork_cache = {}
+        items = [
+            MediaItem(f"Movie {index}", "", "movie", str(index), True, Raw(), artwork_path=f"/thumb/{index}")
+            for index in range(6)
+        ]
+
+        def render_item(item, width, height):
+            return item, f"art-{item.key}", 1.0, 1.0
+
+        app.render_grid_prefetch_item = render_item
+        app.show_browse_state(BrowseState("Movies", items))
+        await pilot.pause(0.5)
+
+        grid = app.query_one("#media-grid")
+        for item in grid.visible_page_items():
+            assert grid.artwork[item.key] == f"art-{item.key}"
+
+
 async def run_grid_prefetch_queue_check():
     app = PlexTuiApp()
     async with app.run_test(size=(110, 32)) as pilot:
@@ -759,14 +786,8 @@ async def run_grid_prefetch_queue_check():
         app.start_grid_prefetch(next_items, "next", delay=0.2)
         app.start_grid_prefetch(current_items, "current")
 
-        assert scheduled == []
-        assert [pending[2] for pending in app.pending_grid_prefetches] == ["current", "next"]
-
-        app.active_grid_prefetch_pages.clear()
-        app.drain_grid_prefetch_queue()
-
-        assert scheduled[0][2] == "current"
-        assert scheduled[0][0] == tuple(item.key for item in current_items)
+        assert scheduled == [(tuple(item.key for item in current_items), tuple(item.key for item in current_items), "current", 0.0)]
+        assert [pending[2] for pending in app.pending_grid_prefetches] == ["next"]
 
         app.active_grid_prefetch_pages.clear()
         app.drain_grid_prefetch_queue()

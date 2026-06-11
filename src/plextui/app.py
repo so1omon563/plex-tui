@@ -1201,7 +1201,7 @@ class PlexTuiApp(App[None]):
             self.apply_cached_grid_artwork(items)
             write_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=cached items={len(items)}")
             return
-        if self.active_grid_prefetch_pages:
+        if self.active_grid_prefetch_pages and page_label != "current":
             self.queue_grid_prefetch(items, page_key, page_label, delay)
             write_performance_log("grid_prefetch_queued", started, f"page={page_label} items={len(items)}")
             return
@@ -1361,7 +1361,13 @@ class PlexTuiApp(App[None]):
             return
         grid.artwork.update(artwork_by_key)
         visible_keys = {item.key for item in grid.visible_page_items()}
-        if visible_keys.intersection(artwork_by_key):
+        visible_applied = visible_keys.intersection(artwork_by_key)
+        write_performance_log(
+            "grid_artwork_applied",
+            time.perf_counter(),
+            f"items={len(artwork_by_key)} visible={len(visible_applied)}",
+        )
+        if visible_applied:
             grid.refresh_grid()
 
     def action_show_settings(self, selected_action: str | None = None) -> None:
