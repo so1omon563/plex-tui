@@ -13,6 +13,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.css.query import NoMatches
 from textual import events
 from textual.message import Message
 from textual.reactive import reactive
@@ -1017,8 +1018,11 @@ class PlexTuiApp(App[None]):
         self.call_from_thread(update_artwork)
 
     def show_detail_text(self, content: Any) -> None:
-        self.query_one("#detail-content", Static).update(content)
-        self.query_one("#detail-scroll", VerticalScroll).scroll_home(animate=False)
+        try:
+            self.query_one("#detail-content", Static).update(content)
+            self.query_one("#detail-scroll", VerticalScroll).scroll_home(animate=False)
+        except NoMatches:
+            return
 
     def detail_artwork_size(self) -> tuple[int, int]:
         pane_width = self.query_one("#details").size.width
@@ -1745,7 +1749,10 @@ class PlexTuiApp(App[None]):
         self.set_status(event.text)
 
     def set_status(self, text: str) -> None:
-        self.query_one("#status", Static).update(text)
+        try:
+            self.query_one("#status", Static).update(text)
+        except NoMatches:
+            return
 
     def show_error(self, text: str) -> None:
         config_hint = f"Config: {config_path()}"

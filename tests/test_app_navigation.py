@@ -4,6 +4,8 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 from plextui.app import (
     BrowseState,
     LoadMoreRow,
@@ -20,6 +22,11 @@ from plextui.plex_service import MediaPage
 class Raw:
     TYPE = "movie"
     title = "Raw"
+
+
+@pytest.fixture(autouse=True)
+def disable_startup_server_load(monkeypatch):
+    monkeypatch.setattr(PlexTuiApp, "load_server", lambda self: None)
 
 
 def test_picker_return_preserves_highlighted_media():
@@ -545,6 +552,7 @@ async def run_detail_artwork_idle_check():
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
         app.config = AppConfig("http://plex", "token", "client-id", media_view="list")
+        app.show_media_list()
         app.detail_refresh_token = 1
         full_item = MediaItem("Movie", "", "movie", "1", True, Raw(), artwork_path="/thumb")
         details = SimpleNamespace(artwork_path="/thumb")
@@ -553,13 +561,22 @@ async def run_detail_artwork_idle_check():
         def capture_artwork(item, details, token, detail_size, include_card_artwork):
             refreshed.append((item.title, token, detail_size, include_card_artwork))
 
-        app.fetch_media_detail_artwork = capture_artwork
-        app.schedule_media_detail_artwork_refresh(full_item, details, token=1)
-        await pilot.pause(0.3)
-        assert refreshed == []
+        callbacks = []
 
-        await pilot.pause(0.4)
-        assert refreshed
+        def capture_timer(delay, callback, name=""):
+            callbacks.append((delay, callback, name))
+            return SimpleNamespace(stop=lambda: None)
+
+        app.fetch_media_detail_artwork = capture_artwork
+        with patch.object(app, "set_timer", capture_timer):
+            app.schedule_media_detail_artwork_refresh(full_item, details, token=1)
+
+        assert refreshed == []
+        assert callbacks
+        assert callbacks[0][0] > 0
+        assert callbacks[0][2] == "detail-artwork-refresh"
+
+        callbacks[0][1]()
         assert refreshed[0][0] == "Movie"
         assert refreshed[0][1] == 1
         assert refreshed[0][2] is not None
