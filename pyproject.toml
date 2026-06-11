@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "plex-tui"
+version = "0.1.0"
+description = "A small standalone Plex terminal UI."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "plexapi>=4.15",
+  "platformdirs>=4.2",
+  "textual>=0.86",
+]
+
+[project.scripts]
+plex-tui = "plextui.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/plextui"]
