@@ -24,7 +24,10 @@ class LoginSession:
     def start(self, timeout: int = 300) -> str:
         self.pin_login.run(timeout=timeout)
         url = self.pin_login.oauthUrl()
-        webbrowser.open(url)
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
         return url
 
     def wait(self) -> tuple[str, list[ServerChoice]]:

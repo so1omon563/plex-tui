@@ -10,10 +10,20 @@ A small Python/Textual Plex TUI prototype.
 plex-tui uses Plex for browsing/control, but playback is launched through
 `mpv`. Browsing works without `mpv`, but pressing `p` to play media requires it.
 
-On macOS with Homebrew:
+Install `mpv` with your platform package manager:
 
 ```bash
+# macOS with Homebrew
 brew install mpv
+
+# Debian / Ubuntu
+sudo apt install mpv
+
+# Fedora
+sudo dnf install mpv
+
+# Arch Linux / Manjaro
+sudo pacman -S mpv
 ```
 
 ## Setup
@@ -26,9 +36,10 @@ make install-dev
 ```
 
 On first run, `plex-tui` will start a Plex browser login and then ask which server
-connection to save.
+connection to save. If the browser cannot be opened, such as over SSH or on a
+headless Linux machine, use the Plex login URL shown in the terminal.
 
-You can also create a config file manually:
+You can also create a config file manually. On macOS:
 
 ```bash
 mkdir -p "$HOME/Library/Application Support/plex-tui"
@@ -47,7 +58,12 @@ export PLEX_TUI_BASE_URL="http://127.0.0.1:32400"
 export PLEX_TUI_TOKEN="your-plex-token"
 ```
 
-On Linux, the config path is usually `~/.config/plex-tui/config.toml`.
+On Linux, the config path is usually `~/.config/plex-tui/config.toml`:
+
+```bash
+mkdir -p "$HOME/.config/plex-tui"
+$EDITOR "$HOME/.config/plex-tui/config.toml"
+```
 
 Run:
 
