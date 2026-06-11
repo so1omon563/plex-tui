@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0 - Unreleased
+
+- Improved README structure and expanded the post-0.1.0 roadmap.
+
 ## 0.1.0 - 2026-06-11
 
 - Added Plex PIN login and server selection.

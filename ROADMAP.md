@@ -1,11 +1,38 @@
 # Roadmap
 
-## Next Backlog
+## Immediate Post-0.1.0
 
-- Iterate on artwork UX now that grid artwork is usable:
-  - Tune grid card sizing, spacing, and poster dimensions across narrow and wide terminals.
-  - Add a more polished selected-card treatment that does not rely on heavy borders.
-  - Consider a configurable poster size or density mode for grid view.
-  - Revisit native terminal image support, especially Kitty, behind a safe opt-in path.
-- Improve packaging and local development workflow after the first GitHub push.
-- Consider direct text entry for advanced settings that do not fit simple cycles.
+- Validate a fresh install from the `v0.1.0` tag on macOS:
+  - `pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.1.0"`
+  - `plex-tui --smoke`
+  - real browsing and playback session
+- Add screenshots or an animated terminal capture to the README.
+- Collect rough edges from real library browsing, especially grid view latency and artwork rendering.
+
+## App UX
+
+- Improve the settings screen beyond action rows:
+  - direct text entry for advanced values
+  - clearer grouping for playback, artwork, browsing, and account actions
+  - safer confirmation for destructive preference resets
+- Iterate on artwork/grid presentation:
+  - tune card size, spacing, and poster dimensions across terminal sizes
+  - replace the heavy selected-card border with a cleaner selection treatment
+  - consider configurable grid density or poster size
+- Improve playback status:
+  - clearer current `mpv` state
+  - better reporting when Plex/default stream choices are used
+  - more visible playback errors from `debug.log`
+
+## Packaging & Distribution
+
+- Publish to PyPI after more tagged-release testing.
+- Add a Homebrew tap formula once PyPI or tagged source installs are stable.
+- Draft an Arch AUR package with `mpv` as an explicit dependency.
+- Consider standalone artifacts only after the app behavior stabilizes.
+
+## Technical Follow-Up
+
+- Keep profiling grid browsing with `PLEX_TUI_PERF_LOG=1`.
+- Revisit native terminal image support, especially Kitty, behind a safe opt-in path.
+- Add focused regression tests for any real-world Plex media edge cases discovered during use.

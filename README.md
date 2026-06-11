@@ -1,19 +1,22 @@
 # plex-tui
 
-A small Python/Textual Plex TUI prototype.
+A standalone Python/Textual terminal UI for browsing Plex and launching playback
+through `mpv`.
+
+plex-tui is currently an early release. It supports Plex login, server
+selection, paged library browsing, search, list/grid views, stream preferences,
+terminal poster artwork, and playback progress reporting.
 
 ## Requirements
 
 - Python 3.11 or newer
 - `mpv` available on `PATH`
-
-plex-tui uses Plex for browsing/control, but playback is launched through
-`mpv`. Browsing works without `mpv`, but pressing `p` to play media requires it.
+- A Plex account/server
 
 Install `mpv` with your platform package manager:
 
 ```bash
-# macOS with Homebrew
+# macOS
 brew install mpv
 
 # Debian / Ubuntu
@@ -26,193 +29,142 @@ sudo dnf install mpv
 sudo pacman -S mpv
 ```
 
-## Setup
+## Install
+
+The recommended install path is `pipx`:
 
 ```bash
-cd ~/plex-tui
-python3 -m venv .venv
-source .venv/bin/activate
-make install-dev
-```
-
-On first run, `plex-tui` will start a Plex browser login and then ask which server
-connection to save. If the browser cannot be opened, such as over SSH or on a
-headless Linux machine, use the Plex login URL shown in the terminal.
-
-You can also create a config file manually. On macOS:
-
-```bash
-mkdir -p "$HOME/Library/Application Support/plex-tui"
-$EDITOR "$HOME/Library/Application Support/plex-tui/config.toml"
-```
-
-```toml
-base_url = "http://127.0.0.1:32400"
-token = "your-plex-token"
-```
-
-Or use environment variables:
-
-```bash
-export PLEX_TUI_BASE_URL="http://127.0.0.1:32400"
-export PLEX_TUI_TOKEN="your-plex-token"
-```
-
-On Linux, the config path is usually `~/.config/plex-tui/config.toml`:
-
-```bash
-mkdir -p "$HOME/.config/plex-tui"
-$EDITOR "$HOME/.config/plex-tui/config.toml"
-```
-
-Run:
-
-```bash
-make run
-```
-
-Or run the installed console command directly:
-
-```bash
+pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.1.0"
+plex-tui --smoke
 plex-tui
+```
+
+Useful CLI checks:
+
+```bash
 plex-tui --version
 plex-tui --config-path
 plex-tui --debug-log-path
 plex-tui --smoke
 ```
 
+For local development:
+
+```bash
+git clone https://github.com/so1omon563/plex-tui.git
+cd plex-tui
+python3 -m venv .venv
+source .venv/bin/activate
+make install-dev
+make run
+```
+
+## First Run & Configuration
+
+On first run, plex-tui starts a Plex browser login and asks which server
+connection to save. If a browser cannot be opened, use the login URL shown in
+the terminal.
+
+You can also configure a server manually. macOS config path:
+
+```bash
+mkdir -p "$HOME/Library/Application Support/plex-tui"
+$EDITOR "$HOME/Library/Application Support/plex-tui/config.toml"
+```
+
+Linux config path:
+
+```bash
+mkdir -p "$HOME/.config/plex-tui"
+$EDITOR "$HOME/.config/plex-tui/config.toml"
+```
+
+Minimal config:
+
+```toml
+base_url = "http://127.0.0.1:32400"
+token = "your-plex-token"
+```
+
+Environment variables also work:
+
+```bash
+export PLEX_TUI_BASE_URL="http://127.0.0.1:32400"
+export PLEX_TUI_TOKEN="your-plex-token"
+```
+
+See `config.example.toml` for optional settings.
+
+## Key Bindings
+
+| Key | Action |
+| --- | --- |
+| `q` | Quit |
+| `r` | Reload Plex connection |
+| `/` | Search current library |
+| `g` | Search all libraries |
+| `?` | Show help |
+| `tab` / `shift+tab` | Move focus |
+| `l` | Focus libraries |
+| `m` | Focus media |
+| `v` | Toggle list/grid view |
+| `pageup` / `pagedown` | Move one page in grid view |
+| `,` | Show settings |
+| `escape` | Clear search, go back, or close current view |
+| `enter` | Open selected item |
+| `p` | Play selected item with `mpv` |
+| `a` / `s` | Choose audio / subtitle preference |
+| `A` / `S` | Clear audio preference / cycle subtitle mode |
+| `x` | Stop launched `mpv` |
+
+## Features
+
+- Plex PIN login and server selection.
+- Paged library browsing with automatic loading near the end of loaded items.
+- Current-library search and bounded global search.
+- List view plus grid view with terminal poster artwork.
+- External subtitle support and direct playback for embedded PGS/VOBSUB tracks.
+- Audio and subtitle pickers with saved language preferences.
+- Plex resume support and playback progress reporting.
+- Settings screen for stream preferences, artwork modes, page size, auto-load
+  threshold, media view, and `mpv` window size.
+
+## Artwork
+
+Poster artwork renders as portable colored block art, so it works in ordinary
+terminals without Kitty, iTerm2, or Sixel support. Native terminal image output
+is disabled for now because Kitty protocol rendering conflicts with Textual's
+screen renderer in practice.
+
+Grid view prefetches artwork for the visible page immediately and the next page
+after selection settles. The artwork cache is bounded and stored in the app
+cache directory shown in Settings.
+
+## Diagnostics
+
+Playback diagnostics are written to `debug.log` in the app config directory.
+Tokens are redacted from logged `mpv` arguments.
+
+Enable browsing performance timings before launch:
+
+```bash
+PLEX_TUI_PERF_LOG=1 plex-tui
+```
+
 ## Development
 
-Common local commands:
+Common commands:
 
 ```bash
-make smoke
-make test
-make compile
-make check
+make smoke          # app construction and helper sanity check
+make test           # pytest suite
+make compile        # compile src and tests
+make check-package  # build and validate package metadata
+make check          # smoke, tests, compile, package validation
 ```
 
-`make smoke` checks imports, app construction, bindings, config path resolution,
-and a small helper self-check without connecting to Plex.
+Packaging and release docs:
 
-`make check` runs smoke tests, unit tests, compile checks, builds package
-artifacts, and validates package metadata.
-
-To try the package in an isolated command environment:
-
-```bash
-pipx install ~/plex-tui
-plex-tui --smoke
-```
-
-Or install directly from the GitHub repository:
-
-```bash
-pipx install "git+https://github.com/so1omon563/plex-tui.git"
-plex-tui --smoke
-```
-
-During local development, reinstall the `pipx` copy after changes:
-
-```bash
-pipx reinstall ~/plex-tui
-```
-
-Release and packaging notes:
-
-- `RELEASE.md`: local validation, build, install-test, and release checklist.
 - `PACKAGING.md`: PyPI/pipx, Homebrew, AUR, and standalone packaging options.
-
-## Keys
-
-- `q`: quit
-- `r`: reload
-- `/`: search current library
-- `g`: search all libraries
-- `?`: show help
-- `tab` / `shift+tab`: move keyboard focus
-- `l`: move keyboard focus to the libraries list
-- `m`: move keyboard focus to the media list
-- `v`: toggle media list/grid view
-- `pageup` / `pagedown`: move one page in grid view
-- `,`: show settings
-- `escape`: clear search / go back
-- `enter`: open selected item
-- `p`: play selected playable item with `mpv`
-- `a`: choose and save an audio preference
-- `s`: choose and save a subtitle preference
-- `A`: clear saved audio preference
-- `S`: cycle subtitle mode
-- `x`: stop launched `mpv`
-
-The status line shows context-sensitive hints for the highlighted row and
-reports when launched `mpv` playback ends or exits with an error code. When
-playback exits, the selected item details refresh so updated Plex progress is
-visible without manually reloading.
-
-Search results are navigable views. Press `escape` from results or opened
-children to return to the previous list. Current-library search results page
-like library browsing. Global search is bounded to avoid unbounded hub results
-from Plex.
-
-Top-level library views load in pages. Navigating near the end of the loaded
-items fetches the next page automatically. You can also select the
-`Load more...` row and press `enter`. Page size and auto-load threshold are
-configurable and shown in Settings. Defaults are tuned for responsive browsing:
-40 items per page and auto-load when selection reaches the final 10 loaded
-items.
-
-Set `PLEX_TUI_PERF_LOG=1` before launching to write browsing, grid rendering,
-detail refresh, and artwork prefetch timings to the debug log shown in
-Settings.
-
-The settings view shows the active config and supports reconnect/reload,
-Plex relogin, clearing or changing audio/subtitle preferences separately,
-artwork on/off, artwork renderer selection, details artwork mode, media
-list/grid view mode, mpv window size, page size, auto-load threshold, and debug
-log visibility. Theme changes made through Textual's command palette are saved
-and restored on restart.
-
-The details pane shows metadata, saved audio/subtitle preferences, reported
-audio tracks, and reported subtitle tracks. Subtitle rows include external vs
-embedded when Plex exposes enough information. Media rows and details also show
-watched/resume progress when Plex reports it. Details also show effective
-playback choices, including when a saved audio/subtitle language falls back to
-Plex/default because no matching stream is available.
-
-The details pane can render Plex poster artwork as portable colored block art
-when a poster is available. By default, details artwork is shown in list view
-and hidden in grid view. This works in ordinary color terminals and does not
-require Kitty, iTerm2, or Sixel image protocol support. Downloaded artwork is
-cached in the app cache directory shown in Settings.
-
-List view keeps the browser compact and shows selected poster artwork in the
-details pane. Grid view uses arrow-key card selection in a dedicated grid
-surface. Page up/down moves by one grid page, and the status line shows the
-current item, grid page, and loaded count. Cards use cached artwork immediately
-and update selected posters after their artwork is fetched. Grid view prefetches
-artwork for the visible grid page immediately and the next grid page after
-selection settles. The artwork cache is pruned to stay bounded.
-
-Native terminal image output is disabled for now because Kitty image protocols
-conflict with Textual's screen renderer in practice. `artwork_renderer =
-"kitty"` and `artwork_renderer = "auto"` currently fall back to colored block
-art.
-
-When playback starts, external subtitle streams reported by Plex are passed to
-`mpv` automatically. Items with embedded PGS/VOBSUB subtitles are direct-played
-from the original media part so `mpv` can see the subtitle tracks.
-
-Audio and subtitle picker choices are saved as language preferences. On future
-playback, plex-tui resolves those preferences against the selected media item's
-available tracks. Playback status includes the resolved audio/subtitle choice,
-or notes when a preferred language was not found and Plex/default behavior was
-used.
-
-Playback resumes from Plex's saved position when available. While the app is
-running, playback position is reported back to Plex periodically and when
-playback stops.
-
-Playback diagnostics are written to the app config directory as `debug.log`.
-The log includes stream mode, selected tracks, and sanitized `mpv` launch
-arguments with Plex tokens redacted.
+- `RELEASE.md`: release validation and tagging checklist.
+- `ROADMAP.md`: planned follow-up work.
