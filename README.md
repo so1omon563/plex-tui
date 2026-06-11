@@ -54,6 +54,7 @@ plex-tui
 - `escape`: clear search / go back
 - `enter`: open selected item
 - `p`: play selected playable item with `mpv`
+- `s`: choose subtitle track for the next playback
 - `x`: stop launched `mpv`
 
 Search results are navigable views. Press `escape` from results or opened

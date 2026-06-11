@@ -33,17 +33,32 @@ class PlayerHandle:
         return self.process.poll() is None
 
 
-def play_with_mpv(item: Any) -> PlayerHandle:
+@dataclass(frozen=True)
+class StreamChoice:
+    stream_id: int | None
+    label: str
+    stream: Any = None
+
+
+def play_with_mpv(
+    item: Any,
+    subtitle_choice: StreamChoice | None = None,
+    audio_choice: StreamChoice | None = None,
+) -> PlayerHandle:
     if shutil.which("mpv") is None:
         raise PlayerError("mpv was not found in PATH")
 
     item = full_metadata(item)
-    subtitles = external_subtitle_urls(item)
+    selected_subtitle = resolve_subtitle_choice(item, subtitle_choice)
+    selected_audio = resolve_audio_choice(item, audio_choice)
+    subtitles = external_subtitle_urls(item, selected_subtitle)
     stream_kwargs = {}
-    direct_url = direct_play_url(item)
-    fallback_subtitle_id = selected_subtitle_stream_id(item) if not subtitles and not direct_url else None
+    direct_url = direct_play_url(item, selected_subtitle)
+    fallback_subtitle_id = selected_subtitle_stream_id(item, selected_subtitle) if not subtitles and not direct_url else None
     if fallback_subtitle_id is not None:
         stream_kwargs["subtitleStreamID"] = fallback_subtitle_id
+    if selected_audio is not None:
+        stream_kwargs["audioStreamID"] = getattr(selected_audio, "id", selected_audio)
 
     try:
         url = direct_url or item.getStreamURL(**stream_kwargs)
@@ -69,7 +84,7 @@ def play_with_mpv(item: Any) -> PlayerHandle:
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
-    subtitle_count = len(subtitle_streams(item))
+    subtitle_count = active_subtitle_count(item, selected_subtitle)
     stream_mode = "direct" if direct_url else "transcode"
     monitor = ProgressMonitor(item, process, socket_path, start_offset)
     monitor.start()
@@ -187,10 +202,28 @@ def full_metadata(item: Any) -> Any:
         return item
 
 
-def external_subtitle_urls(item: Any) -> list[str]:
+def resolve_subtitle_choice(item: Any, choice: StreamChoice | None) -> Any:
+    if choice is None:
+        return None
+    if choice.stream_id == 0:
+        return 0
+    return choice.stream
+
+
+def resolve_audio_choice(item: Any, choice: StreamChoice | None) -> Any:
+    if choice is None:
+        return None
+    return choice.stream
+
+
+def external_subtitle_urls(item: Any, selected_subtitle: Any = None) -> list[str]:
     urls: list[str] = []
+    if selected_subtitle == 0:
+        return urls
     for part in iter_parts(item):
         for stream in part.subtitleStreams():
+            if selected_subtitle is not None and stream is not selected_subtitle:
+                continue
             key = getattr(stream, "key", None)
             if not key:
                 continue
@@ -201,8 +234,8 @@ def external_subtitle_urls(item: Any) -> list[str]:
     return urls
 
 
-def direct_play_url(item: Any) -> str | None:
-    if not has_embedded_subtitles(item):
+def direct_play_url(item: Any, selected_subtitle: Any = None) -> str | None:
+    if not has_embedded_subtitles(item, selected_subtitle):
         return None
     parts = iter_parts(item)
     if not parts:
@@ -215,16 +248,24 @@ def direct_play_url(item: Any) -> str | None:
     return server.url(key, includeToken=True)
 
 
-def has_embedded_subtitles(item: Any) -> bool:
+def has_embedded_subtitles(item: Any, selected_subtitle: Any = None) -> bool:
+    if selected_subtitle == 0:
+        return False
     embedded_codecs = {"pgs", "vobsub", "idx"}
     for stream in subtitle_streams(item):
+        if selected_subtitle is not None and stream is not selected_subtitle:
+            continue
         codec = str(getattr(stream, "codec", "")).lower()
         if codec in embedded_codecs and not getattr(stream, "key", None):
             return True
     return False
 
 
-def selected_subtitle_stream_id(item: Any) -> int | None:
+def selected_subtitle_stream_id(item: Any, selected_subtitle: Any = None) -> int | None:
+    if selected_subtitle == 0:
+        return 0
+    if selected_subtitle is not None:
+        return getattr(selected_subtitle, "id", None)
     streams = subtitle_streams(item)
     selected = [stream for stream in streams if getattr(stream, "selected", False)]
     candidates = selected or preferred_subtitle_streams(streams)
@@ -248,6 +289,52 @@ def subtitle_streams(item: Any) -> list[Any]:
     for part in iter_parts(item):
         streams.extend(part.subtitleStreams())
     return streams
+
+
+def active_subtitle_count(item: Any, selected_subtitle: Any = None) -> int:
+    if selected_subtitle == 0:
+        return 0
+    if selected_subtitle is not None:
+        return 1
+    return len(subtitle_streams(item))
+
+
+def audio_streams(item: Any) -> list[Any]:
+    streams: list[Any] = []
+    for part in iter_parts(item):
+        streams.extend(part.audioStreams())
+    return streams
+
+
+def subtitle_choices(item: Any) -> list[StreamChoice]:
+    item = full_metadata(item)
+    choices = [StreamChoice(None, "Auto"), StreamChoice(0, "None")]
+    choices.extend(StreamChoice(getattr(stream, "id", None), stream_label(stream), stream) for stream in subtitle_streams(item))
+    return choices
+
+
+def audio_choices(item: Any) -> list[StreamChoice]:
+    item = full_metadata(item)
+    return [StreamChoice(getattr(stream, "id", None), stream_label(stream), stream) for stream in audio_streams(item)]
+
+
+def stream_label(stream: Any) -> str:
+    label = getattr(stream, "displayTitle", None) or getattr(stream, "language", None) or "Unknown"
+    codec = getattr(stream, "codec", None)
+    flags = []
+    if getattr(stream, "selected", False):
+        flags.append("selected")
+    if getattr(stream, "forced", False):
+        flags.append("forced")
+    if getattr(stream, "hearingImpaired", False):
+        flags.append("SDH")
+    channels = getattr(stream, "channels", None)
+    if channels:
+        flags.append(f"{channels}ch")
+    values = [str(codec)] if codec else []
+    values.extend(flags)
+    suffix = ", ".join(values)
+    return f"{label} ({suffix})" if suffix else str(label)
 
 
 def iter_parts(item: Any) -> list[Any]:
