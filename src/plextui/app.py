@@ -996,18 +996,28 @@ class PlexTuiApp(App[None]):
 
         self.call_from_thread(update)
 
-    def action_show_settings(self) -> None:
+    def action_show_settings(self, selected_action: str | None = None) -> None:
         self.help_visible = False
         self.picker_visible = False
         self.settings_visible = True
         self.query_one("#media-title", Static).update("Settings")
         view = self.show_media_list()
         view.clear()
-        for row in settings_rows(self.config):
+        selected_index = 0
+        rows = settings_rows(self.config)
+        for index, row in enumerate(rows):
+            if selected_action and isinstance(row, SettingsActionRow) and row.action == selected_action:
+                selected_index = index
             view.append(row)
         self.show_detail_text(render_settings(self.config))
         view.focus()
+        set_list_index(view, selected_index)
         self.set_status("Settings")
+
+    def refresh_settings_after_change(self, action: str, label: str, value: str) -> None:
+        self.action_show_settings(selected_action=action)
+        self.show_detail_text(f"Changed\n\n{label}: {value}\n\nSettings saved.")
+        self.set_status(f"{label}: {value}")
 
     def action_show_help(self) -> None:
         self.help_visible = True
@@ -1049,41 +1059,35 @@ class PlexTuiApp(App[None]):
                 subtitle_mode="auto",
             ):
                 return
-            self.action_show_settings()
-            self.set_status("Cleared audio/subtitle preferences")
+            self.refresh_settings_after_change(action, "Audio/subtitle preferences", "Plex/default")
             return
         if action == "clear_audio":
             self.pending_confirmation_action = ""
             if self.update_preferences(preferred_audio_language=""):
-                self.action_show_settings()
-                self.set_status("Cleared audio preference")
+                self.refresh_settings_after_change(action, "Audio preference", "Plex/default")
             return
         if action == "subtitle_auto":
             if self.update_preferences(preferred_subtitle_language="", subtitle_mode="auto"):
-                self.action_show_settings()
-                self.set_status("Subtitle preference: Auto")
+                self.refresh_settings_after_change(action, "Subtitle preference", "Auto")
             return
         if action == "subtitle_none":
             if self.update_preferences(preferred_subtitle_language="", subtitle_mode="none"):
-                self.action_show_settings()
-                self.set_status("Subtitle preference: None")
+                self.refresh_settings_after_change(action, "Subtitle preference", "None")
             return
         if action == "clear_subtitle":
             self.pending_confirmation_action = ""
             if self.update_preferences(preferred_subtitle_language="", subtitle_mode="auto"):
-                self.action_show_settings()
-                self.set_status("Cleared subtitle preference")
+                self.refresh_settings_after_change(action, "Subtitle preference", "Auto")
             return
         if action == "toggle_artwork":
             next_mode = "off" if self.config.artwork_mode == "on" else "on"
             if self.update_preferences(artwork_mode=next_mode):
-                self.set_status(f"Artwork: {artwork_mode_value(self.config)}")
+                self.refresh_settings_after_change(action, "Artwork", artwork_mode_value(self.config))
             return
         if action == "cycle_detail_artwork":
             next_mode = next_detail_artwork_mode(self.config.detail_artwork_mode)
             if self.update_preferences(detail_artwork_mode=next_mode):
-                self.action_show_settings()
-                self.set_status(f"Details artwork: {detail_artwork_mode_value(self.config)}")
+                self.refresh_settings_after_change(action, "Details artwork", detail_artwork_mode_value(self.config))
             return
         if action == "toggle_media_view":
             self.action_toggle_media_view()
@@ -1091,12 +1095,7 @@ class PlexTuiApp(App[None]):
         if action == "cycle_grid_density":
             next_density = next_grid_density(self.config.grid_density)
             if self.update_preferences(grid_density=next_density):
-                self.action_show_settings()
-                if self.browsing_stack and self.config.media_view == "grid":
-                    selected = self.selected_media()
-                    selected_key = selected.key if selected is not None else None
-                    self.show_browse_state(self.browsing_stack[-1], selected_key=selected_key)
-                self.set_status(f"Grid density: {grid_density_value(self.config)}")
+                self.refresh_settings_after_change(action, "Grid density", grid_density_value(self.config))
             return
         if action == "cycle_mpv_window_size":
             self.action_cycle_mpv_window_size()
@@ -1106,8 +1105,7 @@ class PlexTuiApp(App[None]):
             return
         if action == "reset_mpv_window_size":
             if self.update_preferences(mpv_window_size=""):
-                self.action_show_settings()
-                self.set_status("mpv window size: Default")
+                self.refresh_settings_after_change(action, "mpv window size", "Default")
             return
         if action == "increase_page_size":
             if self.update_numeric_preference("page_size", 10, MIN_PAGE_SIZE, MAX_PAGE_SIZE):
@@ -1119,8 +1117,7 @@ class PlexTuiApp(App[None]):
             return
         if action == "reset_page_size":
             if self.update_preferences(page_size=DEFAULT_PAGE_SIZE):
-                self.action_show_settings()
-                self.set_status(f"Page size: {self.config.page_size}")
+                self.refresh_settings_after_change(action, "Page size", str(self.config.page_size))
             return
         if action == "set_page_size":
             self.prompt_numeric_setting(
@@ -1142,8 +1139,7 @@ class PlexTuiApp(App[None]):
             return
         if action == "reset_auto_load_threshold":
             if self.update_preferences(auto_load_threshold=DEFAULT_AUTO_LOAD_THRESHOLD):
-                self.action_show_settings()
-                self.set_status(f"Auto-load threshold: {self.config.auto_load_threshold}")
+                self.refresh_settings_after_change(action, "Auto-load threshold", str(self.config.auto_load_threshold))
             return
         if action == "set_auto_load_threshold":
             self.prompt_numeric_setting(
@@ -1162,15 +1158,15 @@ class PlexTuiApp(App[None]):
             return
         if action == "artwork_renderer_block":
             if self.update_preferences(artwork_renderer="block"):
-                self.set_status("Artwork renderer: block")
+                self.refresh_settings_after_change(action, "Artwork renderer", "Block")
             return
         if action == "artwork_renderer_auto":
             if self.update_preferences(artwork_renderer="auto"):
-                self.set_status("Artwork renderer: auto")
+                self.refresh_settings_after_change(action, "Artwork renderer", "Auto")
             return
         if action == "artwork_renderer_kitty":
             if self.update_preferences(artwork_renderer="kitty"):
-                self.set_status("Artwork renderer: Kitty")
+                self.refresh_settings_after_change(action, "Artwork renderer", "Kitty")
             return
         self.set_status(f"Unknown settings action: {action}")
 
@@ -1288,7 +1284,8 @@ class PlexTuiApp(App[None]):
             return True
         if not self.update_preferences(**{name: value}):
             return False
-        self.action_show_settings()
+        label = numeric_setting_label(name)
+        self.refresh_settings_after_change(numeric_step_action(name, step), label, str(value))
         return True
 
     def prompt_mpv_window_size(self) -> None:
@@ -1310,8 +1307,7 @@ class PlexTuiApp(App[None]):
         if not self.update_preferences(mpv_window_size=size):
             return
         self.input_mode = ""
-        self.action_show_settings()
-        self.set_status(f"mpv window size: {mpv_window_size_value(self.config)}")
+        self.refresh_settings_after_change("set_mpv_window_size", "mpv window size", mpv_window_size_value(self.config))
 
     def prompt_numeric_setting(
         self,
@@ -1357,8 +1353,7 @@ class PlexTuiApp(App[None]):
         if not self.update_preferences(**{name: parsed}):
             return
         self.input_mode = ""
-        self.action_show_settings()
-        self.set_status(f"{label}: {parsed}")
+        self.refresh_settings_after_change(f"set_{name}", label, str(parsed))
 
     def current_stream_choice(
         self,
@@ -1938,6 +1933,19 @@ def settings_action_label(action: str) -> str:
         "clear_subtitle": "Clear subtitle preference",
     }
     return labels.get(action, action)
+
+
+def numeric_setting_label(name: str) -> str:
+    if name == "auto_load_threshold":
+        return "Auto-load threshold"
+    if name == "page_size":
+        return "Page size"
+    return name
+
+
+def numeric_step_action(name: str, step: int) -> str:
+    prefix = "increase" if step > 0 else "decrease"
+    return f"{prefix}_{name}"
 
 
 def render_loaded_status(title: str, loaded: int, total: int | None, has_more: bool) -> str:
