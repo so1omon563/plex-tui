@@ -6,7 +6,7 @@ from io import BytesIO
 from PIL import Image
 
 from plextui import artwork
-from plextui.artwork import add_token, artwork_url, prune_artwork_cache, render_artwork, render_protocol_artwork
+from plextui.artwork import add_token, artwork_url, cached_artwork_path, prune_artwork_cache, render_artwork, render_protocol_artwork
 from plextui.config import AppConfig
 
 
@@ -32,6 +32,27 @@ def test_artwork_url_prefers_plexapi_server_url():
     assert artwork_url(RawItem(), "/library/metadata/1/thumb", config) == (
         "http://plex/library/metadata/1/thumb?X-Plex-Token=server-token"
     )
+
+
+def test_artwork_url_can_request_transcoded_size():
+    config = AppConfig(base_url="http://plex", token="token", client_identifier="client")
+
+    url = artwork_url(RawItem(), "/library/metadata/1/thumb", config, width=144, height=144)
+
+    assert url.startswith("http://plex/photo/:/transcode?")
+    assert "width=144" in url
+    assert "height=144" in url
+    assert "url=%2Flibrary%2Fmetadata%2F1%2Fthumb" in url
+    assert "X-Plex-Token=token" in url
+
+
+def test_artwork_cache_key_includes_requested_size():
+    config = AppConfig(base_url="http://plex", token="token", client_identifier="client")
+
+    original = cached_artwork_path("/library/metadata/1/thumb", config)
+    resized = cached_artwork_path("/library/metadata/1/thumb", config, width=144, height=144)
+
+    assert original != resized
 
 
 def test_render_artwork_returns_halfcell_text():

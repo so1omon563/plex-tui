@@ -19,12 +19,12 @@ ARTWORK_CACHE_LIMIT_BYTES = 100 * 1024 * 1024
 NATIVE_IMAGE_ENV = "PLEX_TUI_ENABLE_NATIVE_IMAGES"
 
 
-def fetch_artwork(raw: Any, path: str, config: AppConfig) -> bytes:
-    cached = cached_artwork_path(path, config)
+def fetch_artwork(raw: Any, path: str, config: AppConfig, width: int | None = None, height: int | None = None) -> bytes:
+    cached = cached_artwork_path(path, config, width, height)
     if cached.exists():
         return cached.read_bytes()
 
-    url = artwork_url(raw, path, config)
+    url = artwork_url(raw, path, config, width, height)
     request = Request(url, headers={"User-Agent": "plex-tui"})
     with urlopen(request, timeout=10) as response:
         status = getattr(response, "status", 200)
@@ -40,7 +40,10 @@ def fetch_artwork(raw: Any, path: str, config: AppConfig) -> bytes:
     return data
 
 
-def artwork_url(raw: Any, path: str, config: AppConfig) -> str:
+def artwork_url(raw: Any, path: str, config: AppConfig, width: int | None = None, height: int | None = None) -> str:
+    if width is not None and height is not None:
+        return transcode_artwork_url(path, config, width, height)
+
     server = getattr(raw, "_server", None)
     if server is not None and hasattr(server, "url"):
         try:
@@ -55,6 +58,18 @@ def artwork_url(raw: Any, path: str, config: AppConfig) -> str:
     return add_token(url, config.token)
 
 
+def transcode_artwork_url(path: str, config: AppConfig, width: int, height: int) -> str:
+    base_url = config.base_url.rstrip("/")
+    query = urlencode({
+        "width": max(1, width),
+        "height": max(1, height),
+        "minSize": 1,
+        "upscale": 1,
+        "url": path,
+    })
+    return add_token(f"{base_url}/photo/:/transcode?{query}", config.token)
+
+
 def add_token(url: str, token: str) -> str:
     if not token:
         return url
@@ -65,8 +80,11 @@ def add_token(url: str, token: str) -> str:
     return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
 
 
-def cached_artwork_path(path: str, config: AppConfig) -> Path:
-    key = hashlib.sha256(f"{config.base_url}\0{path}".encode("utf-8")).hexdigest()
+def cached_artwork_path(path: str, config: AppConfig, width: int | None = None, height: int | None = None) -> Path:
+    source = f"{config.base_url}\0{path}"
+    if width is not None or height is not None:
+        source = f"{source}\0{width or ''}x{height or ''}"
+    key = hashlib.sha256(source.encode("utf-8")).hexdigest()
     return cache_path() / "artwork" / f"{key}.img"
 
 

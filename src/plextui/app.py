@@ -1203,13 +1203,20 @@ class PlexTuiApp(App[None]):
             time.sleep(delay)
 
         rendered: dict[str, object] = {}
+        fetch_ms = 0.0
+        render_ms = 0.0
         try:
             for item in items:
                 if not item.artwork_path:
                     continue
                 try:
-                    data = fetch_artwork(item.raw, item.artwork_path, self.config)
+                    width, height = card_artwork_pixel_size(self.config)
+                    fetch_started = time.perf_counter()
+                    data = fetch_artwork(item.raw, item.artwork_path, self.config, width=width, height=height)
+                    fetch_ms += (time.perf_counter() - fetch_started) * 1000
+                    render_started = time.perf_counter()
                     artwork = render_card_artwork(data, self.config)
+                    render_ms += (time.perf_counter() - render_started) * 1000
                     rendered[item.key] = artwork
                     self.call_from_thread(self.apply_grid_artwork, item.key, artwork)
                 except Exception:
@@ -1219,7 +1226,7 @@ class PlexTuiApp(App[None]):
             write_performance_log(
                 "grid_prefetch",
                 started,
-                f"page={page_label} items={len(items)} rendered={len(rendered)}",
+                f"page={page_label} items={len(items)} rendered={len(rendered)} fetch={fetch_ms:.1f}ms render={render_ms:.1f}ms",
             )
         finally:
             self.active_grid_prefetch_pages.discard(page_key)
@@ -1946,6 +1953,11 @@ def render_media_grid_card(
 def render_card_artwork(data: bytes, config: AppConfig) -> object:
     spec = grid_density_spec(config)
     return render_artwork(data, width=int(spec["art_width"]), max_height=int(spec["art_height"]))
+
+
+def card_artwork_pixel_size(config: AppConfig) -> tuple[int, int]:
+    spec = grid_density_spec(config)
+    return int(spec["art_width"]) * 8, int(spec["art_height"]) * 16
 
 
 def grid_density_spec(config: AppConfig | None) -> dict[str, int]:
