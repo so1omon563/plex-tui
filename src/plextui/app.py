@@ -243,11 +243,13 @@ class PlexTuiApp(App[None]):
         if event.list_view.id != "media":
             return
         row = event.item
+        if row is not None and row not in list(event.list_view.children):
+            return
         if isinstance(row, MediaRow):
             self.show_media_details(row.media)
         elif isinstance(row, ServerRow):
             self.show_detail_text(f"{row.choice.name}\n\n{row.choice.uri}\n\nSource: {row.choice.source}")
-        elif row is None:
+        elif row is None and not list(event.list_view.children):
             self.show_detail_text("Select an item")
 
     def choose_server(self, choice: ServerChoice) -> None:
