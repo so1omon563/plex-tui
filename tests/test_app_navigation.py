@@ -98,6 +98,38 @@ def test_detail_artwork_refresh_waits_for_stable_selection():
     asyncio.run(run_detail_artwork_idle_check())
 
 
+def test_detail_refresh_reuses_cached_reload():
+    app = PlexTuiApp()
+    app.config = AppConfig("http://plex", "token", "client-id", media_view="list")
+    app.detail_cache = {}
+    app.detail_refresh_token = 1
+
+    class ReloadableRaw(Raw):
+        reload_count = 0
+
+        def reload(self):
+            self.reload_count += 1
+            return self
+
+    raw = ReloadableRaw()
+    item = MediaItem("Movie", "", "movie", "1", True, raw)
+    applied = []
+    app.call_from_thread = lambda callback, *args: callback(*args)
+    app.apply_media_details = lambda full_item, token: applied.append((full_item.key, token))
+
+    PlexTuiApp.refresh_media_details.__wrapped__(app, item, 1)
+
+    assert raw.reload_count == 1
+    assert app.detail_cache["1"].raw is raw
+    assert applied == [("1", 1)]
+
+    app.detail_refresh_token = 2
+    PlexTuiApp.refresh_media_details.__wrapped__(app, item, 2)
+
+    assert raw.reload_count == 1
+    assert applied == [("1", 1), ("1", 2)]
+
+
 def test_search_state_adds_load_more_row():
     asyncio.run(run_search_load_more_row_check())
 

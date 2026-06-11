@@ -416,6 +416,7 @@ class PlexTuiApp(App[None]):
     detail_refresh_token: int
     detail_refresh_timer: Timer | None
     detail_artwork_timer: Timer | None
+    detail_cache: dict[str, MediaItem]
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -459,6 +460,7 @@ class PlexTuiApp(App[None]):
         self.detail_refresh_token = 0
         self.detail_refresh_timer = None
         self.detail_artwork_timer = None
+        self.detail_cache = {}
         try:
             self.config = load_config()
             self.apply_config_theme()
@@ -543,6 +545,7 @@ class PlexTuiApp(App[None]):
 
         def update() -> None:
             self.service = service
+            self.detail_cache = {}
             self.apply_config_theme()
             self.title = f"plex-tui - {service.friendly_name}"
             self.set_status(f"Connected to {service.friendly_name}")
@@ -914,6 +917,11 @@ class PlexTuiApp(App[None]):
         if token != self.detail_refresh_token:
             write_performance_log("detail_refresh_skipped", started, f"title={item.title!r} reason=stale")
             return
+        cached_item = self.detail_cache.get(item.key)
+        if cached_item is not None:
+            write_performance_log("detail_cache_hit", started, f"title={item.title!r}")
+            self.call_from_thread(self.apply_media_details, cached_item, token)
+            return
         if not hasattr(item.raw, "reload"):
             return
         try:
@@ -928,20 +936,19 @@ class PlexTuiApp(App[None]):
             )
         except Exception:
             return
+        self.detail_cache[item.key] = full_item
         write_performance_log("detail_reload", started, f"title={item.title!r}")
 
+        self.call_from_thread(self.apply_media_details, full_item, token)
+
+    def apply_media_details(self, full_item: MediaItem, token: int) -> None:
         details = media_details(full_item)
-
-        def update_text() -> None:
-            if token != self.detail_refresh_token:
-                return
-            selected = self.selected_media()
-            if selected is not None and selected.key == item.key:
-                self.show_detail_text(render_detail_content(details, self.config, raw=full_item.raw))
-
-        self.call_from_thread(update_text)
-
-        self.call_from_thread(self.schedule_media_detail_artwork_refresh, full_item, details, token)
+        if token != self.detail_refresh_token:
+            return
+        selected = self.selected_media()
+        if selected is not None and selected.key == full_item.key:
+            self.show_detail_text(render_detail_content(details, self.config, raw=full_item.raw))
+            self.schedule_media_detail_artwork_refresh(full_item, details, token)
 
     def schedule_media_detail_artwork_refresh(self, full_item: MediaItem, details: object, token: int) -> None:
         self.cancel_media_detail_artwork_refresh()
