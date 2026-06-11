@@ -8,15 +8,18 @@ from plextui.app import (
     MediaRow,
     context_hint,
     detail_artwork_enabled,
+    effective_stream_preference_rows,
     format_offset,
     media_row,
     media_rows,
     next_detail_artwork_mode,
     next_media_view,
+    next_mpv_window_size,
     playback_exit_status,
     render_audio_playback_preference,
     render_details,
     render_help,
+    render_picker_details,
     render_settings,
     render_subtitle_playback_preference,
     subtitle_preference_value,
@@ -116,6 +119,7 @@ def test_render_settings_includes_stream_preferences():
     assert "Details Artwork: List only" in rendered
     assert "Media View: List" in rendered
     assert "Theme: textual-light" in rendered
+    assert "mpv Window Size: Default" in rendered
     assert subtitle_preference_value(config) == "eng"
 
 
@@ -146,6 +150,67 @@ def test_render_playback_preference_status():
     assert render_subtitle_playback_preference(config, None) == "subtitles eng not found, Plex/default"
     assert render_audio_playback_preference(config, StreamChoice(1, "Japanese")) == "audio Japanese"
     assert render_subtitle_playback_preference(config, StreamChoice(2, "English")) == "subtitles English"
+
+
+def test_effective_stream_preferences_report_found_missing_and_none():
+    class Stream:
+        def __init__(self, stream_id, label, language_code):
+            self.id = stream_id
+            self.displayTitle = label
+            self.languageCode = language_code
+
+    class Part:
+        def audioStreams(self):
+            return [Stream(1, "Japanese", "jpn")]
+
+        def subtitleStreams(self):
+            return [Stream(2, "English", "eng")]
+
+    class Raw:
+        def iterParts(self):
+            return [Part()]
+
+    found = AppConfig("http://plex", "token", "client", preferred_audio_language="jpn", preferred_subtitle_language="eng", subtitle_mode="preferred")
+    missing = AppConfig("http://plex", "token", "client", preferred_audio_language="spa", preferred_subtitle_language="fre", subtitle_mode="preferred")
+    none = AppConfig("http://plex", "token", "client", subtitle_mode="none")
+
+    assert effective_stream_preference_rows(Raw(), found) == [("Audio", "Japanese"), ("Subtitles", "English")]
+    assert effective_stream_preference_rows(Raw(), missing) == [
+        ("Audio", "spa not found, Plex/default"),
+        ("Subtitles", "fre not found, Plex/default"),
+    ]
+    assert effective_stream_preference_rows(Raw(), none) == [("Audio", "Plex/default"), ("Subtitles", "none")]
+
+
+def test_render_details_includes_effective_playback_rows():
+    details = MediaDetails(
+        title="Title",
+        kind="movie",
+        facts=["movie"],
+        metadata=[],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=True,
+    )
+
+    rendered = render_details(details, AppConfig("http://plex", "token", "client", subtitle_mode="none"), object())
+
+    assert "Effective Playback" in rendered
+    assert "Subtitles: none" in rendered
+
+
+def test_picker_details_explain_global_save():
+    rendered = render_picker_details("audio", StreamChoice(1, "Japanese"), AppConfig("http://plex", "token", "client"))
+
+    assert "Current Selection" in rendered
+    assert "Enter saves the highlighted track as the global preference" in rendered
+
+
+def test_mpv_window_size_cycles_common_values():
+    assert next_mpv_window_size("") == "1280x720"
+    assert next_mpv_window_size("1280x720") == "1600x900"
+    assert next_mpv_window_size("80%") == ""
 
 
 def test_render_subtitle_none_playback_status():

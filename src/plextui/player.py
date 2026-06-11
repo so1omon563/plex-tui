@@ -49,6 +49,7 @@ def play_with_mpv(
     item: Any,
     subtitle_choice: StreamChoice | None = None,
     audio_choice: StreamChoice | None = None,
+    window_size: str = "",
 ) -> PlayerHandle:
     if shutil.which("mpv") is None:
         log_debug("playback error: mpv was not found in PATH")
@@ -85,6 +86,8 @@ def play_with_mpv(
     ]
     if start_offset:
         args.append(f"--start={start_offset / 1000:.3f}")
+    if window_size:
+        args.append(f"--autofit={window_size}")
     args.extend(direct_track_args(direct_url, item, selected_audio, selected_subtitle))
     for subtitle in subtitles:
         args.append("--sub-file=" + subtitle)

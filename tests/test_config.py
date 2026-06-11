@@ -26,6 +26,7 @@ def test_config_example_parses_and_uses_known_fields():
         "preferred_audio_language",
         "preferred_subtitle_language",
         "subtitle_mode",
+        "mpv_window_size",
         "artwork_mode",
         "artwork_renderer",
         "detail_artwork_mode",
@@ -46,6 +47,7 @@ def test_invalid_subtitle_mode_logs_and_normalizes(tmp_path, monkeypatch):
             'token = "token"',
             'client_identifier = "client"',
             'subtitle_mode = "bad"',
+            'mpv_window_size = "huge"',
             "",
         ]),
         encoding="utf-8",
@@ -56,7 +58,10 @@ def test_invalid_subtitle_mode_logs_and_normalizes(tmp_path, monkeypatch):
     loaded = config.load_config()
 
     assert loaded.subtitle_mode == "auto"
-    assert "invalid subtitle_mode" in debug_file.read_text(encoding="utf-8")
+    assert loaded.mpv_window_size == ""
+    log = debug_file.read_text(encoding="utf-8")
+    assert "invalid subtitle_mode" in log
+    assert "invalid mpv_window_size" in log
 
 
 def test_invalid_artwork_settings_log_and_normalize(tmp_path, monkeypatch):
@@ -101,6 +106,18 @@ def test_theme_round_trips_through_config(tmp_path, monkeypatch):
 
     assert loaded.theme == "textual-light"
     assert 'theme = "textual-light"' in config_file.read_text(encoding="utf-8")
+
+
+def test_mpv_window_size_round_trips_through_config(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    monkeypatch.setattr(config, "config_path", lambda: config_file)
+
+    saved = config.AppConfig("http://plex", "token", "client", mpv_window_size="1280x720")
+    config.save_config(saved)
+    loaded = config.load_config()
+
+    assert loaded.mpv_window_size == "1280x720"
+    assert 'mpv_window_size = "1280x720"' in config_file.read_text(encoding="utf-8")
 
 
 def test_deprecated_poster_view_normalizes_to_list(tmp_path, monkeypatch):

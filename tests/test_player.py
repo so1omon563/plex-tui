@@ -118,6 +118,20 @@ def test_playback_applies_selected_streams_and_resume_offset(debug_log_path):
     assert "launching mpv" in debug_log_path.read_text(encoding="utf-8")
 
 
+def test_playback_applies_configured_mpv_window_size():
+    item = Item()
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        play_with_mpv(item, window_size="1280x720")
+
+    args = popen.call_args.args[0]
+    assert "--autofit=1280x720" in args
+
+
 def test_subtitle_none_disables_subtitle_selection():
     item = Item()
 

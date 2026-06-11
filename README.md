@@ -120,6 +120,8 @@ pipx reinstall ~/plex-tui
 - `p`: play selected playable item with `mpv`
 - `a`: choose and save an audio preference
 - `s`: choose and save a subtitle preference
+- `A`: clear saved audio preference
+- `S`: cycle subtitle mode
 - `x`: stop launched `mpv`
 
 The status line shows context-sensitive hints for the highlighted row and
@@ -139,13 +141,15 @@ items fetches the next page automatically. You can also select the
 The settings view shows the active config and supports reconnect/reload,
 Plex relogin, clearing or changing audio/subtitle preferences separately,
 artwork on/off, artwork renderer selection, details artwork mode, and media
-list/grid view mode. Theme changes made through Textual's command palette are
-saved and restored on restart.
+list/grid view mode, and mpv window size. Theme changes made through Textual's
+command palette are saved and restored on restart.
 
 The details pane shows metadata, saved audio/subtitle preferences, reported
 audio tracks, and reported subtitle tracks. Subtitle rows include external vs
 embedded when Plex exposes enough information. Media rows and details also show
-watched/resume progress when Plex reports it.
+watched/resume progress when Plex reports it. Details also show effective
+playback choices, including when a saved audio/subtitle language falls back to
+Plex/default because no matching stream is available.
 
 The details pane can render Plex poster artwork as portable colored block art
 when a poster is available. By default, details artwork is shown in list view

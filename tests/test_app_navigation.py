@@ -71,6 +71,10 @@ def test_settings_actions_update_preferences():
     asyncio.run(run_settings_action_check())
 
 
+def test_quick_preference_actions_update_config():
+    asyncio.run(run_quick_preference_action_check())
+
+
 def test_help_view_returns_to_media_on_escape():
     asyncio.run(run_help_back_check())
 
@@ -366,6 +370,31 @@ async def run_settings_action_check():
             assert app.config.subtitle_mode == "auto"
 
         assert save_config.call_count == 3
+
+
+async def run_quick_preference_action_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig(
+            "http://plex",
+            "token",
+            "client-id",
+            preferred_audio_language="jpn",
+            subtitle_mode="auto",
+        )
+
+        with patch("plextui.app.save_config") as save_config:
+            app.action_clear_audio_preference()
+            assert app.config.preferred_audio_language == ""
+            app.action_cycle_subtitle_mode()
+            assert app.config.subtitle_mode == "none"
+            app.action_cycle_subtitle_mode()
+            assert app.config.subtitle_mode == "auto"
+            app.action_cycle_mpv_window_size()
+            assert app.config.mpv_window_size == "1280x720"
+
+        assert save_config.call_count == 4
 
 
 async def run_help_back_check():

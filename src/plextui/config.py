@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tomllib
 import uuid
 from dataclasses import dataclass
@@ -26,6 +27,7 @@ class AppConfig:
     detail_artwork_mode: str = "list_only"
     media_view: str = "list"
     theme: str = "textual-dark"
+    mpv_window_size: str = ""
 
 
 def config_path() -> Path:
@@ -78,6 +80,10 @@ def load_config() -> AppConfig:
         write_debug_log(f"invalid media_view {media_view!r}; using 'list'")
         media_view = "list"
     theme = data.get("theme", "textual-dark")
+    mpv_window_size = data.get("mpv_window_size", "")
+    if mpv_window_size and not valid_mpv_window_size(mpv_window_size):
+        write_debug_log(f"invalid mpv_window_size {mpv_window_size!r}; using default")
+        mpv_window_size = ""
     return AppConfig(
         base_url=base_url.strip(),
         token=token.strip(),
@@ -91,6 +97,7 @@ def load_config() -> AppConfig:
         detail_artwork_mode=detail_artwork_mode.strip(),
         media_view=media_view.strip(),
         theme=theme.strip() or "textual-dark",
+        mpv_window_size=mpv_window_size.strip(),
     )
 
 
@@ -120,7 +127,13 @@ def save_config(config: AppConfig) -> None:
         lines.append(f'media_view = "{_toml_escape(config.media_view)}"')
     if config.theme != "textual-dark":
         lines.append(f'theme = "{_toml_escape(config.theme)}"')
+    if config.mpv_window_size:
+        lines.append(f'mpv_window_size = "{_toml_escape(config.mpv_window_size)}"')
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def valid_mpv_window_size(value: str) -> bool:
+    return bool(re.fullmatch(r"(?:\d{2,5}x\d{2,5}|\d{1,3}%x\d{1,3}%|\d{1,3}%)", value.strip()))
 
 
 def _toml_escape(value: str) -> str:

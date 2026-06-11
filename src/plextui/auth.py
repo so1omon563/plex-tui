@@ -71,6 +71,7 @@ def save_server_choice(config: AppConfig, account_token: str, choice: ServerChoi
         detail_artwork_mode=config.detail_artwork_mode,
         media_view=config.media_view,
         theme=config.theme,
+        mpv_window_size=config.mpv_window_size,
     )
     save_config(saved)
     return saved

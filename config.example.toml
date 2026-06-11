@@ -14,6 +14,8 @@ client_identifier = "plex-tui-your-stable-client-id"
 # preferred_subtitle_language = "eng"
 # subtitle_mode can be "auto", "none", or "preferred".
 # subtitle_mode = "preferred"
+# Optional mpv window size passed as --autofit. Examples: "1280x720", "80%".
+# mpv_window_size = "1280x720"
 
 # Optional artwork settings.
 # artwork_mode can be "on" or "off".

@@ -303,6 +303,8 @@ class PlexTuiApp(App[None]):
         Binding("p", "play_selected", "Play"),
         Binding("a", "audio_picker", "Audio"),
         Binding("s", "subtitle_picker", "Subtitles"),
+        Binding("A", "clear_audio_preference", "Clear audio"),
+        Binding("S", "cycle_subtitle_mode", "Sub mode"),
         Binding("x", "stop_playback", "Stop"),
     ]
 
@@ -716,7 +718,7 @@ class PlexTuiApp(App[None]):
 
     def show_media_details(self, item: MediaItem) -> None:
         details = media_details(item)
-        self.show_detail_text(render_detail_content(details, self.config))
+        self.show_detail_text(render_detail_content(details, self.config, raw=item.raw))
         self.refresh_media_details(item)
 
     @work(thread=True, exclusive=True)
@@ -741,7 +743,7 @@ class PlexTuiApp(App[None]):
         def update_text() -> None:
             selected = self.selected_media()
             if selected is not None and selected.key == item.key:
-                self.show_detail_text(render_detail_content(details, self.config))
+                self.show_detail_text(render_detail_content(details, self.config, raw=full_item.raw))
 
         self.call_from_thread(update_text)
 
@@ -766,7 +768,7 @@ class PlexTuiApp(App[None]):
             selected = self.selected_media()
             if selected is not None and selected.key == item.key:
                 if artwork is not None:
-                    self.show_detail_text(render_detail_content(details, self.config, artwork))
+                    self.show_detail_text(render_detail_content(details, self.config, artwork, raw=full_item.raw))
                 grid = self.query_one("#media-grid", MediaGrid)
                 if self.media_grid_visible() and card_artwork is not None:
                     grid.set_artwork(item.key, card_artwork)
@@ -889,6 +891,7 @@ class PlexTuiApp(App[None]):
         view.append(SettingsActionRow("Toggle artwork on/off", "toggle_artwork"))
         view.append(SettingsActionRow("Cycle details artwork", "cycle_detail_artwork"))
         view.append(SettingsActionRow("Cycle media view", "toggle_media_view"))
+        view.append(SettingsActionRow("Cycle mpv window size", "cycle_mpv_window_size"))
         view.append(SettingsActionRow("Set artwork renderer: block", "artwork_renderer_block"))
         view.append(SettingsActionRow("Set artwork renderer: auto", "artwork_renderer_auto"))
         view.append(SettingsActionRow("Set artwork renderer: Kitty", "artwork_renderer_kitty"))
@@ -960,6 +963,9 @@ class PlexTuiApp(App[None]):
         if action == "toggle_media_view":
             self.action_toggle_media_view()
             return
+        if action == "cycle_mpv_window_size":
+            self.action_cycle_mpv_window_size()
+            return
         if action == "artwork_renderer_block":
             if self.update_preferences(artwork_renderer="block"):
                 self.set_status("Artwork renderer: block")
@@ -987,6 +993,25 @@ class PlexTuiApp(App[None]):
             self.set_status("Select playable media before choosing audio")
             return
         self.open_stream_picker(media, "audio")
+
+    def action_clear_audio_preference(self) -> None:
+        if self.update_preferences(preferred_audio_language=""):
+            self.set_status("Cleared audio preference")
+
+    def action_cycle_subtitle_mode(self) -> None:
+        if self.config.subtitle_mode == "auto":
+            changes = {"preferred_subtitle_language": "", "subtitle_mode": "none"}
+        else:
+            changes = {"preferred_subtitle_language": "", "subtitle_mode": "auto"}
+        if self.update_preferences(**changes):
+            self.set_status(f"Subtitle preference: {subtitle_preference_value(self.config)}")
+
+    def action_cycle_mpv_window_size(self) -> None:
+        next_size = next_mpv_window_size(self.config.mpv_window_size)
+        if self.update_preferences(mpv_window_size=next_size):
+            if self.settings_visible:
+                self.action_show_settings()
+            self.set_status(f"mpv window size: {mpv_window_size_value(self.config)}")
 
     @work(thread=True)
     def open_stream_picker(self, media: MediaItem, stream_type: str) -> None:
@@ -1174,6 +1199,7 @@ class PlexTuiApp(App[None]):
                 media.raw,
                 subtitle_choice=subtitle_choice,
                 audio_choice=audio_choice,
+                window_size=self.config.mpv_window_size,
             )
         except PlayerError as exc:
             self.show_error(str(exc))
@@ -1249,7 +1275,7 @@ def format_offset(milliseconds: int) -> str:
     return f"{minutes}:{secs:02d}"
 
 
-def render_details(details: object, config: AppConfig | None = None) -> str:
+def render_details(details: object, config: AppConfig | None = None, raw: object | None = None) -> str:
     lines = [getattr(details, "title"), ""]
 
     lines.append("Metadata")
@@ -1266,6 +1292,11 @@ def render_details(details: object, config: AppConfig | None = None) -> str:
             f"Subtitle mode: {subtitle_mode_value(config)}",
             f"Subtitle language: {subtitle_language_value(config)}",
         ])
+        if raw is not None:
+            effective = effective_stream_preference_rows(raw, config)
+            if effective:
+                lines.extend(["", "Effective Playback"])
+                lines.extend(f"{label}: {value}" for label, value in effective)
 
     lines.extend(["", "Audio"])
     audio = getattr(details, "audio", [])
@@ -1288,8 +1319,13 @@ def render_details(details: object, config: AppConfig | None = None) -> str:
     return "\n".join(lines)
 
 
-def render_detail_content(details: object, config: AppConfig | None = None, artwork: object | None = None) -> object:
-    text = render_details(details, config)
+def render_detail_content(
+    details: object,
+    config: AppConfig | None = None,
+    artwork: object | None = None,
+    raw: object | None = None,
+) -> object:
+    text = render_details(details, config, raw)
     if artwork is None:
         return text
     return Group(artwork, Text(""), text)
@@ -1419,6 +1455,7 @@ def config_rows(config: AppConfig) -> list[tuple[str, str]]:
         ("Details Artwork", detail_artwork_mode_value(config)),
         ("Media View", media_view_value(config)),
         ("Theme", config.theme),
+        ("mpv Window Size", mpv_window_size_value(config)),
     ]
 
 
@@ -1439,6 +1476,7 @@ def render_settings(config: AppConfig) -> str:
         "Toggle artwork on/off",
         "Cycle details artwork",
         "Cycle media view",
+        "Cycle mpv window size",
         "Set artwork renderer: block",
         "Set artwork renderer: auto",
         "Set artwork renderer: Kitty",
@@ -1468,6 +1506,8 @@ def render_help() -> str:
         "Streams",
         "a: choose and save audio preference",
         "s: choose and save subtitle preference",
+        "A: clear audio preference",
+        "S: cycle subtitle mode",
         "",
         "Settings",
         ",: show settings",
@@ -1535,7 +1575,11 @@ def render_picker_details(stream_type: str, current_choice: StreamChoice | None,
         lines.append(f"Audio: {preference_value(config.preferred_audio_language)}")
     else:
         lines.append(f"Subtitles: {subtitle_preference_value(config)}")
-    lines.extend(["", "Press Enter to save a preference for future playback."])
+    lines.extend([
+        "",
+        "Enter saves the highlighted track as the global preference for future playback.",
+        "Escape returns without changing the saved preference.",
+    ])
     return "\n".join(lines)
 
 
@@ -1603,6 +1647,19 @@ def next_media_view(media_view: str) -> str:
     return "grid" if media_view == "list" else "list"
 
 
+def mpv_window_size_value(config: AppConfig) -> str:
+    return config.mpv_window_size or "Default"
+
+
+def next_mpv_window_size(value: str) -> str:
+    sizes = ["", "1280x720", "1600x900", "1920x1080", "80%"]
+    try:
+        index = sizes.index(value)
+    except ValueError:
+        return ""
+    return sizes[(index + 1) % len(sizes)]
+
+
 def render_playback_preferences(
     config: AppConfig,
     audio_choice: StreamChoice | None,
@@ -1612,6 +1669,19 @@ def render_playback_preferences(
         render_audio_playback_preference(config, audio_choice),
         render_subtitle_playback_preference(config, subtitle_choice),
     ])
+
+
+def effective_stream_preference_rows(raw: object, config: AppConfig) -> list[tuple[str, str]]:
+    audio_choice = preferred_audio_choice(raw, config.preferred_audio_language)
+    subtitle_choice = preferred_subtitle_choice(
+        raw,
+        config.preferred_subtitle_language,
+        config.subtitle_mode,
+    )
+    return [
+        ("Audio", render_audio_playback_preference(config, audio_choice).removeprefix("audio ")),
+        ("Subtitles", render_subtitle_playback_preference(config, subtitle_choice).removeprefix("subtitles ")),
+    ]
 
 
 def playback_exit_status(player: PlayerHandle) -> str | None:
