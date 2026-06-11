@@ -75,13 +75,15 @@ plex-tui --smoke
 
 2. **Homebrew tap**
 
-   Add a Homebrew formula after PyPI packaging is stable. The formula can depend
-   on `mpv` and install the Python package through a virtualenv.
+   A Homebrew tap is available at `so1omon563/homebrew-plex-tui`. The formula
+   depends on `mpv` and installs the Python package through a Homebrew-managed
+   virtualenv.
 
-   This would give macOS users a single command:
+   macOS users can install with:
 
    ```bash
-   brew install <tap>/plex-tui
+   brew tap so1omon563/plex-tui
+   brew install plex-tui
    ```
 
    Formula requirements:
@@ -91,7 +93,9 @@ plex-tui --smoke
    - Install from a tagged source archive or PyPI release.
    - Run `plex-tui --smoke` in the formula test.
 
-   See `packaging/homebrew/README.md` for the starting point.
+   The strict source build validates cleanly, but the first install can take
+   several minutes because native Python resources such as `pillow` are built
+   from source.
 
 3. **Arch AUR**
 

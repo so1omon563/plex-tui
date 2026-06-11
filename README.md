@@ -49,6 +49,15 @@ plex-tui --smoke
 plex-tui
 ```
 
+On macOS, you can also install with Homebrew:
+
+```bash
+brew tap so1omon563/plex-tui
+brew install plex-tui
+```
+
+The Homebrew formula installs `mpv` automatically.
+
 To install from GitHub instead:
 
 ```bash

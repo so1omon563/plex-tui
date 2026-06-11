@@ -22,7 +22,6 @@
 
 ## Packaging & Distribution
 
-- Add a Homebrew tap formula once PyPI installs are stable.
 - Validate the draft Arch AUR `PKGBUILD` on an Arch system and publish if clean.
 - Consider standalone artifacts only after the app behavior stabilizes.
 
