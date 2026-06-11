@@ -101,6 +101,7 @@ class PlexTuiApp(App[None]):
         Binding("q", "quit", "Quit"),
         Binding("r", "reload", "Reload"),
         Binding("/", "focus_search", "Search"),
+        Binding("g", "focus_global_search", "Global"),
         Binding("tab", "focus_next", "Next"),
         Binding("shift+tab", "focus_previous", "Prev"),
         Binding("l", "focus_libraries", "Libraries"),
@@ -115,6 +116,7 @@ class PlexTuiApp(App[None]):
     config: AppConfig
     login_session: LoginSession | None
     pending_account_token: str
+    search_global: bool
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -136,6 +138,7 @@ class PlexTuiApp(App[None]):
         self.browsing_stack = []
         self.login_session = None
         self.pending_account_token = ""
+        self.search_global = False
         self.query_one("#search", Input).display = False
         self.load_server()
 
@@ -313,7 +316,18 @@ class PlexTuiApp(App[None]):
         self.query_one("#detail-content", Static).update(text)
 
     def action_focus_search(self) -> None:
+        self.search_global = False
         search = self.query_one("#search", Input)
+        search.placeholder = "Search current library"
+        search.value = ""
+        search.display = True
+        search.focus()
+
+    def action_focus_global_search(self) -> None:
+        self.search_global = True
+        search = self.query_one("#search", Input)
+        search.placeholder = "Search all libraries"
+        search.value = ""
         search.display = True
         search.focus()
 
@@ -327,23 +341,26 @@ class PlexTuiApp(App[None]):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "search":
-            self.run_search(event.value.strip())
+            self.run_search(event.value.strip(), self.search_global)
 
     @work(thread=True)
-    def run_search(self, query: str) -> None:
+    def run_search(self, query: str, global_search: bool = False) -> None:
         if self.service is None or not query:
             return
-        self.post_message(StatusChanged(f"Searching for {query}..."))
+        scope = "all libraries" if global_search else "current library"
+        self.post_message(StatusChanged(f"Searching {scope} for {query}..."))
         try:
-            items = self.service.search(query, self.selected_library)
+            library = None if global_search else self.selected_library
+            items = self.service.search(query, library)
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return
 
         def update() -> None:
-            self.show_media(f"Search: {query}", items)
+            title = f"Global search: {query}" if global_search else f"Search: {query}"
+            self.show_media(title, items)
             self.query_one("#media", ListView).focus()
-            self.set_status(f"{len(items)} results")
+            self.set_status(f"{len(items)} results in {scope}")
 
         self.call_from_thread(update)
 

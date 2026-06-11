@@ -45,7 +45,8 @@ plex-tui
 
 - `q`: quit
 - `r`: reload
-- `/`: focus search
+- `/`: search current library
+- `g`: search all libraries
 - `tab` / `shift+tab`: move focus
 - `l`: focus libraries
 - `m`: focus media
