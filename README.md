@@ -61,6 +61,9 @@ plex-tui
 Search results are navigable views. Press `escape` from results or opened
 children to return to the previous list.
 
+The settings view shows the active config and supports reconnect/reload,
+Plex relogin, and clearing selected audio/subtitle tracks.
+
 When playback starts, external subtitle streams reported by Plex are passed to
 `mpv` automatically. Items with embedded PGS/VOBSUB subtitles are direct-played
 from the original media part so `mpv` can see the subtitle tracks.

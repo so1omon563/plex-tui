@@ -52,6 +52,12 @@ class StreamRow(ListItem):
         self.stream_type = stream_type
 
 
+class SettingsActionRow(ListItem):
+    def __init__(self, label: str, action: str) -> None:
+        super().__init__(Label(label))
+        self.action = action
+
+
 class StatusChanged(Message):
     def __init__(self, text: str) -> None:
         self.text = text
@@ -255,6 +261,8 @@ class PlexTuiApp(App[None]):
             self.choose_server(row.choice)
         elif isinstance(row, StreamRow):
             self.choose_stream(row.choice, row.stream_type)
+        elif isinstance(row, SettingsActionRow):
+            self.run_settings_action(row.action)
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         if event.list_view.id != "media":
@@ -400,9 +408,31 @@ class PlexTuiApp(App[None]):
         view.clear()
         for label, value in config_rows(self.config):
             view.append(ListItem(Label(f"{label}: {value}")))
+        view.append(ListItem(Label("")))
+        view.append(SettingsActionRow("Reconnect / reload libraries", "reload"))
+        view.append(SettingsActionRow("Relogin with Plex", "relogin"))
+        view.append(SettingsActionRow("Clear selected audio/subtitle tracks", "clear_tracks"))
         self.show_detail_text(render_settings(self.config))
         view.focus()
         self.set_status("Settings")
+
+    def run_settings_action(self, action: str) -> None:
+        if action == "reload":
+            self.settings_visible = False
+            self.load_server()
+            return
+        if action == "relogin":
+            self.settings_visible = False
+            self.selected_audio = None
+            self.selected_subtitle = None
+            self.begin_login()
+            return
+        if action == "clear_tracks":
+            self.selected_audio = None
+            self.selected_subtitle = None
+            self.set_status("Cleared selected audio/subtitle tracks")
+            return
+        self.set_status(f"Unknown settings action: {action}")
 
     def action_subtitle_picker(self) -> None:
         row = self.query_one("#media", ListView).highlighted_child
@@ -618,4 +648,11 @@ def render_settings(config: AppConfig) -> str:
     lines = ["Settings", ""]
     for label, value in config_rows(config):
         lines.append(f"{label}: {value}")
+    lines.extend([
+        "",
+        "Actions",
+        "Reconnect / reload libraries",
+        "Relogin with Plex",
+        "Clear selected audio/subtitle tracks",
+    ])
     return "\n".join(lines)
