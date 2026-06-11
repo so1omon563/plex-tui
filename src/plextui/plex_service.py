@@ -65,6 +65,32 @@ class PlexService:
     def library_items(self, library: LibraryItem) -> list[MediaItem]:
         return self.library_page(library, 0, DEFAULT_PAGE_SIZE).items
 
+    def search_page(
+        self,
+        query: str,
+        library: LibraryItem | None = None,
+        start: int = 0,
+        size: int = DEFAULT_PAGE_SIZE,
+    ) -> MediaPage:
+        if library is not None:
+            raw_items = library.raw.search(
+                query,
+                maxresults=size,
+                container_start=start,
+                container_size=size,
+            )
+            items = [to_media_item(item) for item in raw_items]
+            total = getattr(raw_items, "totalSize", None)
+            if total is None:
+                total = start + len(items)
+            return MediaPage(items=items, start=start, total=int(total))
+
+        if start:
+            return MediaPage(items=[], start=start, total=start)
+        raw_items = self.server.search(query, limit=size)
+        items = [to_media_item(item) for item in raw_items]
+        return MediaPage(items=items, start=0, total=len(items))
+
     def children(self, item: MediaItem) -> list[MediaItem]:
         raw = item.raw
         if hasattr(raw, "seasons"):
@@ -76,11 +102,9 @@ class PlexService:
         return []
 
     def search(self, query: str, library: LibraryItem | None = None) -> list[MediaItem]:
-        source: Iterable[Any]
         if library is not None:
-            source = library.raw.search(query)
-        else:
-            source = self.server.search(query)
+            return self.search_page(query, library, 0, DEFAULT_PAGE_SIZE).items
+        source: Iterable[Any] = self.server.search(query, limit=DEFAULT_PAGE_SIZE)
         return [to_media_item(item) for item in source]
 
 

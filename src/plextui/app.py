@@ -39,12 +39,18 @@ class BrowseState:
     items: list[MediaItem]
     selected_library: LibraryItem | None = None
     search: bool = False
+    search_query: str = ""
+    global_search: bool = False
     next_start: int = 0
     total: int | None = None
 
     @property
     def has_more(self) -> bool:
-        return self.total is not None and self.next_start < self.total and self.selected_library is not None and not self.search
+        if self.total is None or self.next_start >= self.total:
+            return False
+        if self.search:
+            return bool(self.search_query and self.selected_library is not None and not self.global_search)
+        return self.selected_library is not None
 
 
 class LibraryRow(ListItem):
@@ -325,7 +331,7 @@ class PlexTuiApp(App[None]):
             self.maybe_auto_load_more(row.media)
         elif isinstance(row, LoadMoreRow):
             mark_active_row(event.list_view, row)
-            self.show_detail_text("Load the next page of items from this library.")
+            self.show_detail_text("Load the next page of items.")
         elif isinstance(row, ServerRow):
             mark_active_row(event.list_view, row)
             self.show_detail_text(f"{row.choice.name}\n\n{row.choice.uri}\n\nSource: {row.choice.source}")
@@ -387,13 +393,16 @@ class PlexTuiApp(App[None]):
         state = self.browsing_stack[-1]
         if self.loading_more:
             return
-        if not state.has_more or state.selected_library is None:
+        if not state.has_more:
             self.call_from_thread(self.set_status, "No more items to load")
             return
         self.loading_more = True
         self.post_message(StatusChanged(f"Loading more {state.title}..."))
         try:
-            page = self.service.library_page(state.selected_library, state.next_start, DEFAULT_PAGE_SIZE)
+            if state.search:
+                page = self.service.search_page(state.search_query, state.selected_library, state.next_start, DEFAULT_PAGE_SIZE)
+            else:
+                page = self.service.library_page(state.selected_library, state.next_start, DEFAULT_PAGE_SIZE)
         except Exception as exc:
             self.loading_more = False
             self.call_from_thread(self.show_error, str(exc))
@@ -696,7 +705,7 @@ class PlexTuiApp(App[None]):
         self.post_message(StatusChanged(f"Searching {scope} for {query}..."))
         try:
             library = None if global_search else self.selected_library
-            items = self.service.search(query, library)
+            page = self.service.search_page(query, library, 0, DEFAULT_PAGE_SIZE)
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return
@@ -705,10 +714,20 @@ class PlexTuiApp(App[None]):
             title = f"Global search: {query}" if global_search else f"Search: {query}"
             if self.browsing_stack and self.browsing_stack[-1].search:
                 self.browsing_stack.pop()
-            self.browsing_stack.append(BrowseState(title, items, None if global_search else self.selected_library, search=True))
-            self.show_media(title, items)
+            state = BrowseState(
+                title,
+                page.items,
+                None if global_search else self.selected_library,
+                search=True,
+                search_query=query,
+                global_search=global_search,
+                next_start=page.next_start,
+                total=page.total,
+            )
+            self.browsing_stack.append(state)
+            self.show_browse_state(state)
             self.query_one("#media", ListView).focus()
-            self.set_status(f"{len(items)} results in {scope}")
+            self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more))
 
         self.call_from_thread(update)
 

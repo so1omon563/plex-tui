@@ -44,6 +44,14 @@ def test_load_more_media_can_preserve_selected_row():
     asyncio.run(run_load_more_media_preserve_selection_check())
 
 
+def test_search_state_adds_load_more_row():
+    asyncio.run(run_search_load_more_row_check())
+
+
+def test_load_more_media_appends_search_page():
+    asyncio.run(run_load_more_search_check())
+
+
 def test_should_auto_load_more_near_end_only():
     library = LibraryItem("Movies", "1", "movie", object())
     items = [
@@ -144,9 +152,14 @@ class FakePagedService:
     def __init__(self, page: MediaPage) -> None:
         self.page = page
         self.calls = []
+        self.search_calls = []
 
     def library_page(self, library: LibraryItem, start: int, size: int) -> MediaPage:
         self.calls.append((library, start, size))
+        return self.page
+
+    def search_page(self, query: str, library: LibraryItem | None, start: int, size: int) -> MediaPage:
+        self.search_calls.append((query, library, start, size))
         return self.page
 
 
@@ -190,3 +203,62 @@ async def run_load_more_media_preserve_selection_check():
         row = app.query_one("#media").highlighted_child
         assert row is not None
         assert row.media.title == "Second"
+
+
+async def run_search_load_more_row_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        library = LibraryItem("Movies", "1", "movie", object())
+        items = [
+            MediaItem("First", "", "movie", "1", True, Raw()),
+            MediaItem("Second", "", "movie", "2", True, Raw()),
+        ]
+        state = BrowseState(
+            "Search: first",
+            items,
+            library,
+            search=True,
+            search_query="first",
+            next_start=2,
+            total=5,
+        )
+
+        app.show_browse_state(state)
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert len(rows) == 3
+        assert isinstance(rows[-1], LoadMoreRow)
+
+
+async def run_load_more_search_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        library = LibraryItem("Movies", "1", "movie", object())
+        first = MediaItem("First", "", "movie", "1", True, Raw())
+        second = MediaItem("Second", "", "movie", "2", True, Raw())
+        page = MediaPage([second], start=1, total=3)
+        service = FakePagedService(page)
+        app.service = service
+        app.browsing_stack = [
+            BrowseState(
+                "Search: first",
+                [first],
+                library,
+                search=True,
+                search_query="first",
+                next_start=1,
+                total=3,
+            )
+        ]
+
+        app.load_more_media(selected_key="1")
+        await pilot.pause(0.5)
+
+        state = app.browsing_stack[-1]
+        assert service.search_calls == [("first", library, 1, 100)]
+        assert [item.title for item in state.items] == ["First", "Second"]
+        assert state.next_start == 2
+        assert state.has_more

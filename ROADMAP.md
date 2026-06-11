@@ -2,5 +2,5 @@
 
 ## Next Backlog
 
-- Continue library browsing performance polish: tune page size and evaluate paged search.
+- Continue browsing performance polish: tune page size.
 - Improve packaging and local development workflow.

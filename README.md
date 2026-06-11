@@ -59,7 +59,9 @@ plex-tui
 - `x`: stop launched `mpv`
 
 Search results are navigable views. Press `escape` from results or opened
-children to return to the previous list.
+children to return to the previous list. Current-library search results page
+like library browsing. Global search is bounded to avoid unbounded hub results
+from Plex.
 
 Top-level library views load in pages. Navigating near the end of the loaded
 items fetches the next page automatically. You can also select the
