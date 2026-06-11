@@ -89,6 +89,14 @@ def test_grid_prefetch_schedules_once_per_visible_page():
     asyncio.run(run_grid_prefetch_schedule_check())
 
 
+def test_grid_prefetch_schedules_loaded_pages_ahead():
+    asyncio.run(run_grid_prefetch_pages_ahead_check())
+
+
+def test_cached_grid_prefetch_hydrates_visible_artwork():
+    asyncio.run(run_cached_grid_prefetch_hydration_check())
+
+
 def test_grid_prefetch_queues_while_active_with_current_priority():
     asyncio.run(run_grid_prefetch_queue_check())
 
@@ -677,6 +685,53 @@ async def run_grid_prefetch_schedule_check():
         app.schedule_grid_prefetch(grid)
         await pilot.pause(0.2)
         assert len(scheduled) > initial_schedule_count
+
+
+async def run_grid_prefetch_pages_ahead_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        items = [
+            MediaItem(f"Movie {index}", "", "movie", str(index), True, Raw(), artwork_path=f"/thumb/{index}")
+            for index in range(40)
+        ]
+        scheduled = []
+
+        def capture_prefetch(items, page_key, page_label, delay=0.0):
+            scheduled.append((tuple(item.key for item in items), page_label, delay))
+            app.prefetched_grid_pages.add(page_key)
+            app.active_grid_prefetch_pages.discard(page_key)
+
+        app.prefetch_grid_items = capture_prefetch
+        app.show_browse_state(BrowseState("Movies", items))
+        await pilot.pause(0.2)
+
+        assert [entry[1] for entry in scheduled[:4]] == ["current", "next-1", "next-2", "next-3"]
+        assert [entry[2] for entry in scheduled[:4]] == [0.0, 0.2, 0.4, 0.6000000000000001]
+
+
+async def run_cached_grid_prefetch_hydration_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        items = [
+            MediaItem(f"Movie {index}", "", "movie", str(index), True, Raw(), artwork_path=f"/thumb/{index}")
+            for index in range(6)
+        ]
+        page_key = tuple(item.key for item in items)
+        app.prefetched_grid_pages.add(page_key)
+        app.rendered_grid_artwork_cache = {
+            grid_artwork_cache_key(item, app.config): f"art-{item.key}"
+            for item in items
+        }
+        app.show_browse_state(BrowseState("Movies", items))
+        await pilot.pause(0.2)
+
+        grid = app.query_one("#media-grid")
+        visible_items = grid.visible_page_items()
+        assert grid.artwork == {item.key: f"art-{item.key}" for item in visible_items}
 
 
 async def run_grid_prefetch_queue_check():

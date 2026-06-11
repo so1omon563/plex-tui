@@ -65,6 +65,7 @@ GRID_DETAIL_REFRESH_DELAY = 0.65
 LIST_DETAIL_REFRESH_DELAY = 0.35
 DETAIL_ARTWORK_REFRESH_DELAY = 0.55
 GRID_PREFETCH_WORKERS = 3
+GRID_PREFETCH_PAGES_AHEAD = 3
 
 
 @dataclass
@@ -1165,6 +1166,7 @@ class PlexTuiApp(App[None]):
         if not artwork_enabled(self.config):
             return
         current_items = grid.visible_page_items()
+        self.hydrate_grid_artwork_from_cache(grid, current_items)
         current_key = grid_page_key(current_items)
         selected = grid.selected_media
         if selected is not None:
@@ -1175,9 +1177,11 @@ class PlexTuiApp(App[None]):
         else:
             write_performance_log("grid_prefetch_skipped", time.perf_counter(), "page=current reason=same-page")
 
-        next_items = grid.visible_page_items(page_offset=1)
-        if next_items:
-            self.start_grid_prefetch(next_items, "next", delay=0.2)
+        for page_offset in range(1, GRID_PREFETCH_PAGES_AHEAD + 1):
+            next_items = grid.visible_page_items(page_offset=page_offset)
+            if not next_items:
+                break
+            self.start_grid_prefetch(next_items, f"next-{page_offset}", delay=0.2 * page_offset)
 
     def start_grid_prefetch(
         self,
@@ -1194,6 +1198,7 @@ class PlexTuiApp(App[None]):
             write_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=in-flight items={len(items)}")
             return
         if page_key in self.prefetched_grid_pages:
+            self.apply_cached_grid_artwork(items)
             write_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=cached items={len(items)}")
             return
         if self.active_grid_prefetch_pages:
@@ -1227,6 +1232,7 @@ class PlexTuiApp(App[None]):
         while self.pending_grid_prefetches:
             items, page_key, page_label, delay = self.pending_grid_prefetches.pop(0)
             if page_key in self.prefetched_grid_pages:
+                self.apply_cached_grid_artwork(items)
                 write_performance_log("grid_prefetch_skipped", time.perf_counter(), f"page={page_label} reason=cached items={len(items)}")
                 continue
             self.active_grid_prefetch_pages.add(page_key)
@@ -1322,8 +1328,35 @@ class PlexTuiApp(App[None]):
     def apply_grid_artwork(self, media_key: str, artwork: object) -> None:
         self.apply_grid_artworks({media_key: artwork})
 
+    def apply_cached_grid_artwork(self, items: list[MediaItem]) -> None:
+        try:
+            grid = self.query_one("#media-grid", MediaGrid)
+        except NoMatches:
+            return
+        self.hydrate_grid_artwork_from_cache(grid, items)
+
+    def hydrate_grid_artwork_from_cache(self, grid: MediaGrid, items: list[MediaItem]) -> None:
+        if not artwork_enabled(self.config):
+            return
+        artwork_by_key = {}
+        for item in items:
+            if not item.artwork_path or item.key in grid.artwork:
+                continue
+            artwork = self.rendered_grid_artwork_cache.get(grid_artwork_cache_key(item, self.config))
+            if artwork is not None:
+                artwork_by_key[item.key] = artwork
+        if artwork_by_key:
+            grid.artwork.update(artwork_by_key)
+            visible_keys = {item.key for item in grid.visible_page_items()}
+            if visible_keys.intersection(artwork_by_key):
+                grid.refresh_grid()
+            write_performance_log("grid_artwork_hydrated", time.perf_counter(), f"items={len(artwork_by_key)}")
+
     def apply_grid_artworks(self, artwork_by_key: dict[str, object]) -> None:
-        grid = self.query_one("#media-grid", MediaGrid)
+        try:
+            grid = self.query_one("#media-grid", MediaGrid)
+        except NoMatches:
+            return
         if not grid.is_mounted:
             return
         grid.artwork.update(artwork_by_key)
