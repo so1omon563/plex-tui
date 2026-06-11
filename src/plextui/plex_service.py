@@ -143,16 +143,16 @@ def rating_label(raw: Any) -> str:
 
 def subtitle_label(raw: Any) -> str:
     count = 0
-    if hasattr(raw, "iterParts"):
-        try:
+    try:
+        if hasattr(raw, "iterParts"):
             for part in raw.iterParts():
-                count += len([stream for stream in part.subtitleStreams() if getattr(stream, "key", None)])
-        except Exception:
-            return ""
+                count += len(part.subtitleStreams())
+    except Exception:
+        return ""
     if count == 1:
-        return "1 external subtitle"
+        return "1 subtitle"
     if count > 1:
-        return f"{count} external subtitles"
+        return f"{count} subtitles"
     return ""
 
 

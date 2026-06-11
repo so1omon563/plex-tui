@@ -27,13 +27,19 @@ def play_with_mpv(item: Any) -> PlayerHandle:
     if shutil.which("mpv") is None:
         raise PlayerError("mpv was not found in PATH")
 
+    item = full_metadata(item)
+    subtitles = external_subtitle_urls(item)
+    stream_kwargs = {}
+    fallback_subtitle_id = selected_subtitle_stream_id(item) if not subtitles else None
+    if fallback_subtitle_id is not None:
+        stream_kwargs["subtitleStreamID"] = fallback_subtitle_id
+
     try:
-        url = item.getStreamURL()
+        url = item.getStreamURL(**stream_kwargs)
     except Exception as exc:
         raise PlayerError(f"could not get stream URL: {exc}") from exc
 
     title = getattr(item, "title", "Plex")
-    subtitles = external_subtitle_urls(item)
     args = ["mpv", "--force-media-title=" + title]
     for subtitle in subtitles:
         args.append("--sub-file=" + subtitle)
@@ -44,7 +50,17 @@ def play_with_mpv(item: Any) -> PlayerHandle:
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
-    return PlayerHandle(title=title, subtitle_count=len(subtitles), process=process)
+    subtitle_count = len(subtitles) + (1 if fallback_subtitle_id is not None else 0)
+    return PlayerHandle(title=title, subtitle_count=subtitle_count, process=process)
+
+
+def full_metadata(item: Any) -> Any:
+    if not hasattr(item, "reload"):
+        return item
+    try:
+        return item.reload()
+    except Exception:
+        return item
 
 
 def external_subtitle_urls(item: Any) -> list[str]:
@@ -59,6 +75,32 @@ def external_subtitle_urls(item: Any) -> list[str]:
                 continue
             urls.append(server.url(key, includeToken=True))
     return urls
+
+
+def selected_subtitle_stream_id(item: Any) -> int | None:
+    streams = subtitle_streams(item)
+    selected = [stream for stream in streams if getattr(stream, "selected", False)]
+    candidates = selected or preferred_subtitle_streams(streams)
+    if not candidates:
+        return None
+    return getattr(candidates[0], "id", None)
+
+
+def preferred_subtitle_streams(streams: list[Any]) -> list[Any]:
+    preferred_codecs = {"srt", "ass", "ssa", "vtt", "idx", "sub"}
+    preferred = [
+        stream
+        for stream in streams
+        if str(getattr(stream, "codec", "")).lower() in preferred_codecs
+    ]
+    return preferred or streams
+
+
+def subtitle_streams(item: Any) -> list[Any]:
+    streams: list[Any] = []
+    for part in iter_parts(item):
+        streams.extend(part.subtitleStreams())
+    return streams
 
 
 def iter_parts(item: Any) -> list[Any]:
