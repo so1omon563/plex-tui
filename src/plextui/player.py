@@ -16,6 +16,7 @@ class PlayerError(RuntimeError):
 class PlayerHandle:
     title: str
     subtitle_count: int
+    stream_mode: str
     process: subprocess.Popen[bytes]
 
     @property
@@ -30,12 +31,13 @@ def play_with_mpv(item: Any) -> PlayerHandle:
     item = full_metadata(item)
     subtitles = external_subtitle_urls(item)
     stream_kwargs = {}
-    fallback_subtitle_id = selected_subtitle_stream_id(item) if not subtitles else None
+    direct_url = direct_play_url(item)
+    fallback_subtitle_id = selected_subtitle_stream_id(item) if not subtitles and not direct_url else None
     if fallback_subtitle_id is not None:
         stream_kwargs["subtitleStreamID"] = fallback_subtitle_id
 
     try:
-        url = item.getStreamURL(**stream_kwargs)
+        url = direct_url or item.getStreamURL(**stream_kwargs)
     except Exception as exc:
         raise PlayerError(f"could not get stream URL: {exc}") from exc
 
@@ -50,8 +52,9 @@ def play_with_mpv(item: Any) -> PlayerHandle:
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
-    subtitle_count = len(subtitles) + (1 if fallback_subtitle_id is not None else 0)
-    return PlayerHandle(title=title, subtitle_count=subtitle_count, process=process)
+    subtitle_count = len(subtitle_streams(item))
+    stream_mode = "direct" if direct_url else "transcode"
+    return PlayerHandle(title=title, subtitle_count=subtitle_count, stream_mode=stream_mode, process=process)
 
 
 def full_metadata(item: Any) -> Any:
@@ -75,6 +78,29 @@ def external_subtitle_urls(item: Any) -> list[str]:
                 continue
             urls.append(server.url(key, includeToken=True))
     return urls
+
+
+def direct_play_url(item: Any) -> str | None:
+    if not has_embedded_subtitles(item):
+        return None
+    parts = iter_parts(item)
+    if not parts:
+        return None
+    part = parts[0]
+    key = getattr(part, "key", None)
+    server = getattr(part, "_server", None)
+    if not key or server is None:
+        return None
+    return server.url(key, includeToken=True)
+
+
+def has_embedded_subtitles(item: Any) -> bool:
+    embedded_codecs = {"pgs", "vobsub", "idx"}
+    for stream in subtitle_streams(item):
+        codec = str(getattr(stream, "codec", "")).lower()
+        if codec in embedded_codecs and not getattr(stream, "key", None):
+            return True
+    return False
 
 
 def selected_subtitle_stream_id(item: Any) -> int | None:

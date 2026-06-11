@@ -56,4 +56,5 @@ plex-tui
 - `x`: stop launched `mpv`
 
 When playback starts, external subtitle streams reported by Plex are passed to
-`mpv` automatically.
+`mpv` automatically. Items with embedded PGS/VOBSUB subtitles are direct-played
+from the original media part so `mpv` can see the subtitle tracks.

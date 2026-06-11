@@ -314,6 +314,35 @@ class PlexTuiApp(App[None]):
             lines.extend(["", details.summary])
         lines.extend(["", "Playable: yes" if details.playable else "Playable: no"])
         self.show_detail_text("\n".join(lines))
+        self.refresh_media_details(item)
+
+    @work(thread=True, exclusive=True)
+    def refresh_media_details(self, item: MediaItem) -> None:
+        if not hasattr(item.raw, "reload"):
+            return
+        try:
+            full_item = MediaItem(
+                title=item.title,
+                subtitle=item.subtitle,
+                kind=item.kind,
+                key=item.key,
+                playable=item.playable,
+                raw=item.raw.reload(),
+            )
+        except Exception:
+            return
+
+        def update() -> None:
+            row = self.query_one("#media", ListView).highlighted_child
+            if isinstance(row, MediaRow) and row.media.key == item.key:
+                details = media_details(full_item)
+                lines = [details.title, "", "  ".join(details.facts)]
+                if details.summary:
+                    lines.extend(["", details.summary])
+                lines.extend(["", "Playable: yes" if details.playable else "Playable: no"])
+                self.show_detail_text("\n".join(lines))
+
+        self.call_from_thread(update)
 
     def show_detail_text(self, text: str) -> None:
         self.query_one("#detail-content", Static).update(text)
@@ -400,11 +429,11 @@ class PlexTuiApp(App[None]):
             self.show_error(str(exc))
             return
         subtitle_text = (
-            f" with {self.player.subtitle_count} external subtitles"
+            f" with {self.player.subtitle_count} subtitles"
             if self.player.subtitle_count
             else ""
         )
-        self.set_status(f"Playing {row.media.title}{subtitle_text}")
+        self.set_status(f"Playing {row.media.title}{subtitle_text} ({self.player.stream_mode})")
 
     def action_stop_playback(self) -> None:
         if self.player is None or not self.player.active:
