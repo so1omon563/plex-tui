@@ -32,7 +32,7 @@ from .player import (
     stream_language_label,
     subtitle_choices,
 )
-from .plex_service import DEFAULT_PAGE_SIZE, PlexService, media_details
+from .plex_service import DEFAULT_PAGE_SIZE, PlexService, media_details, row_progress_marker
 
 
 AUTO_LOAD_REMAINING_THRESHOLD = 10
@@ -73,7 +73,10 @@ class MediaRow(ListItem):
     def __init__(self, media: MediaItem) -> None:
         marker = ">" if not media.playable else " "
         subtitle = f" [{media.kind}] {media.subtitle}".rstrip()
-        super().__init__(Label(f"{marker} {media.title}{subtitle}"))
+        progress = row_progress_marker(media.raw)
+        progress_text = f" {progress}" if progress else ""
+        self.label_text = f"{marker} {media.title}{subtitle}{progress_text}"
+        super().__init__(Label(self.label_text))
         self.media = media
 
 
@@ -1194,7 +1197,10 @@ class PlexTuiApp(App[None]):
         status = playback_exit_status(self.player)
         if status is None:
             return
+        selected = self.selected_media()
         self.player = None
+        if selected is not None:
+            self.show_media_details(selected)
         self.set_status(status)
 
     def action_stop_playback(self) -> None:

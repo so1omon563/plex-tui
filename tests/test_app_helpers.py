@@ -195,6 +195,16 @@ def test_media_rows_returns_list_rows():
     assert next_media_view("grid") == "list"
 
 
+def test_media_row_includes_progress_marker():
+    class PartialRaw:
+        viewOffset = 65000
+        duration = 600000
+
+    row = MediaRow(MediaItem("Movie", "2024", "movie", "1", True, PartialRaw()))
+
+    assert "[resume 1m]" in row.label_text
+
+
 def test_media_grid_tracks_selection_and_visible_page():
     items = [
         MediaItem(f"Movie {index}", "2024", "movie", str(index), True, object(), artwork_path="/thumb")

@@ -396,6 +396,12 @@ async def run_completed_player_status_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        item = MediaItem("Movie", "", "movie", "1", True, Raw())
+        app.show_media("Movies", [item])
+        await pilot.pause(0.2)
+        refreshed = []
+        app.show_media_details = refreshed.append
         app.player = SimpleNamespace(title="Movie", process=SimpleNamespace(poll=lambda: 0))
 
         app.check_player_status()
@@ -403,3 +409,4 @@ async def run_completed_player_status_check():
 
         assert app.player is None
         assert app.query_one("#status").content == "Playback ended: Movie"
+        assert refreshed == [item]

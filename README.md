@@ -123,7 +123,9 @@ pipx reinstall ~/plex-tui
 - `x`: stop launched `mpv`
 
 The status line shows context-sensitive hints for the highlighted row and
-reports when launched `mpv` playback ends or exits with an error code.
+reports when launched `mpv` playback ends or exits with an error code. When
+playback exits, the selected item details refresh so updated Plex progress is
+visible without manually reloading.
 
 Search results are navigable views. Press `escape` from results or opened
 children to return to the previous list. Current-library search results page
@@ -142,7 +144,8 @@ saved and restored on restart.
 
 The details pane shows metadata, saved audio/subtitle preferences, reported
 audio tracks, and reported subtitle tracks. Subtitle rows include external vs
-embedded when Plex exposes enough information.
+embedded when Plex exposes enough information. Media rows and details also show
+watched/resume progress when Plex reports it.
 
 The details pane can render Plex poster artwork as portable colored block art
 when a poster is available. By default, details artwork is shown in list view

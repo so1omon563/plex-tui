@@ -177,6 +177,7 @@ def metadata_fields(raw: Any) -> list[tuple[str, str]]:
         ("Year", getattr(raw, "year", None)),
         ("Duration", format_duration(getattr(raw, "duration", None))),
         ("Status", watched_state(raw)),
+        ("Progress", progress_label(raw)),
         ("Episode", episode_label(raw)),
         ("Content Rating", getattr(raw, "contentRating", None)),
         ("Rating", rating_label(raw).replace("Rating ", "")),
@@ -240,6 +241,8 @@ def watched_state(raw: Any) -> str:
     view_count = getattr(raw, "viewCount", None)
     if view_count:
         return "watched"
+    if resume_offset(raw):
+        return "in progress"
     if hasattr(raw, "isWatched"):
         try:
             value = raw.isWatched() if callable(raw.isWatched) else raw.isWatched
@@ -247,6 +250,50 @@ def watched_state(raw: Any) -> str:
         except Exception:
             return ""
     return ""
+
+
+def progress_label(raw: Any) -> str:
+    offset = resume_offset(raw)
+    if not offset:
+        return ""
+    duration = duration_ms(raw)
+    if duration:
+        percent = min(99, max(1, round(offset / duration * 100)))
+        return f"{format_position(offset)} / {format_position(duration)} ({percent}%)"
+    return f"Resume at {format_position(offset)}"
+
+
+def row_progress_marker(raw: Any) -> str:
+    state = watched_state(raw)
+    if state == "watched":
+        return "[watched]"
+    if state == "in progress":
+        label = progress_label(raw)
+        return f"[resume {format_position(resume_offset(raw))}]" if label else "[resume]"
+    return ""
+
+
+def resume_offset(raw: Any) -> int:
+    try:
+        return max(0, int(getattr(raw, "viewOffset", 0) or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def duration_ms(raw: Any) -> int:
+    try:
+        return max(0, int(getattr(raw, "duration", 0) or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def format_position(milliseconds: int) -> str:
+    seconds = max(0, milliseconds // 1000)
+    hours, remainder = divmod(seconds, 3600)
+    minutes, _ = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m"
+    return f"{minutes}m"
 
 
 def episode_label(raw: Any) -> str:

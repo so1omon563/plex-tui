@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from plextui.models import LibraryItem, MediaItem
-from plextui.plex_service import PlexService, media_details
+from plextui.plex_service import PlexService, media_details, progress_label, row_progress_marker, watched_state
 
 
 class RawItem:
@@ -47,6 +47,8 @@ class DetailedRawItem(RawItem):
     grandparentThumb = "/library/metadata/show/thumb"
     parentThumb = "/library/metadata/season/thumb"
     thumb = "/library/metadata/movie/thumb"
+    duration = 600000
+    viewOffset = 120000
 
     def iterParts(self):
         return [Part()]
@@ -131,9 +133,37 @@ def test_media_details_include_audio_and_subtitle_locations():
 
     details = media_details(item)
 
+    assert ("Status", "in progress") in details.metadata
+    assert ("Progress", "2m / 10m (20%)") in details.metadata
     assert details.audio == ["Japanese (aac, 2ch, selected)"]
     assert details.subtitles == [
         "English (srt, external, selected)",
         "Signs (vobsub, embedded, forced)",
     ]
     assert details.artwork_path == "/library/metadata/show/thumb"
+
+
+def test_progress_helpers_report_watched_resume_and_unwatched():
+    class Watched(RawItem):
+        viewCount = 1
+        duration = 600000
+        viewOffset = 0
+
+    class Partial(RawItem):
+        duration = 600000
+        viewOffset = 65000
+
+    class Unwatched(RawItem):
+        duration = 600000
+        viewOffset = 0
+
+        def isWatched(self):
+            return False
+
+    assert watched_state(Watched()) == "watched"
+    assert row_progress_marker(Watched()) == "[watched]"
+    assert watched_state(Partial()) == "in progress"
+    assert progress_label(Partial()) == "1m / 10m (11%)"
+    assert row_progress_marker(Partial()) == "[resume 1m]"
+    assert watched_state(Unwatched()) == "unwatched"
+    assert row_progress_marker(Unwatched()) == ""
