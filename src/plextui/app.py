@@ -1205,6 +1205,9 @@ class PlexTuiApp(App[None]):
         else:
             write_performance_log("grid_prefetch_skipped", time.perf_counter(), "page=current reason=same-page-loaded")
 
+        if current_key in self.active_grid_prefetch_pages:
+            return
+
         for page_offset in range(1, GRID_PREFETCH_PAGES_AHEAD + 1):
             next_items = grid.visible_page_items(page_offset=page_offset)
             if not next_items:
@@ -1230,8 +1233,8 @@ class PlexTuiApp(App[None]):
             write_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=cached items={len(items)}")
             return
         if self.active_grid_prefetch_pages and page_label != "current":
-            self.queue_grid_prefetch(items, page_key, page_label, delay)
-            write_performance_log("grid_prefetch_queued", started, f"page={page_label} items={len(items)}")
+            if self.queue_grid_prefetch(items, page_key, page_label, delay):
+                write_performance_log("grid_prefetch_queued", started, f"page={page_label} items={len(items)}")
             return
         self.active_grid_prefetch_pages.add(page_key)
         self.prefetch_grid_items(items, page_key, page_label, delay)
@@ -1242,17 +1245,20 @@ class PlexTuiApp(App[None]):
         page_key: tuple[str, ...],
         page_label: str,
         delay: float = 0.0,
-    ) -> None:
-        self.pending_grid_prefetches = [
-            pending
-            for pending in self.pending_grid_prefetches
-            if pending[1] != page_key and pending[2] != page_label
-        ]
+    ) -> bool:
         pending = (items, page_key, page_label, delay)
+        if pending in self.pending_grid_prefetches:
+            return False
+        self.pending_grid_prefetches = [
+            queued
+            for queued in self.pending_grid_prefetches
+            if queued[1] != page_key and queued[2] != page_label
+        ]
         if page_label == "current":
             self.pending_grid_prefetches.insert(0, pending)
         else:
             self.pending_grid_prefetches.append(pending)
+        return True
 
     def drain_grid_prefetch_queue(self) -> None:
         if self.active_grid_prefetch_pages:

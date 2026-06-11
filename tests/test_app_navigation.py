@@ -114,6 +114,14 @@ def test_grid_prefetch_queues_while_active_with_current_priority():
     asyncio.run(run_grid_prefetch_queue_check())
 
 
+def test_grid_prefetch_ignores_duplicate_pending_pages():
+    asyncio.run(run_grid_prefetch_duplicate_pending_check())
+
+
+def test_grid_prefetch_skips_lookahead_while_current_in_flight():
+    asyncio.run(run_grid_prefetch_current_in_flight_check())
+
+
 def test_grid_prefetch_prioritizes_selected_card_without_changing_page_key():
     asyncio.run(run_grid_prefetch_selected_priority_check())
 
@@ -864,6 +872,43 @@ async def run_grid_prefetch_queue_check():
 
         assert scheduled[1][2] == "next"
         assert scheduled[1][0] == tuple(item.key for item in next_items)
+
+
+async def run_grid_prefetch_duplicate_pending_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        items = [
+            MediaItem(f"Next {index}", "", "movie", f"n{index}", True, Raw(), artwork_path=f"/next/{index}")
+            for index in range(3)
+        ]
+
+        app.active_grid_prefetch_pages.add(("active",))
+        app.start_grid_prefetch(items, "next-1")
+        app.start_grid_prefetch(items, "next-1")
+
+        assert [pending[2] for pending in app.pending_grid_prefetches] == ["next-1"]
+
+
+async def run_grid_prefetch_current_in_flight_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        items = [
+            MediaItem(f"Movie {index}", "", "movie", str(index), True, Raw(), artwork_path=f"/thumb/{index}")
+            for index in range(24)
+        ]
+        grid = app.show_media_grid()
+        grid.set_items(items, 0, app.config, columns=3, rows=2)
+        current_key = grid_page_key(grid.visible_page_items())
+        app.active_grid_prefetch_pages.add(current_key)
+        app.pending_grid_prefetches = []
+
+        app.schedule_grid_prefetch(grid)
+
+        assert app.pending_grid_prefetches == []
 
 
 async def run_grid_prefetch_selected_priority_check():
