@@ -999,23 +999,55 @@ class PlexTuiApp(App[None]):
         artwork = None
         card_artwork = None
         artwork_started = time.perf_counter()
+        detail_fetch_ms = 0.0
+        detail_render_ms = 0.0
+        card_fetch_ms = 0.0
+        card_render_ms = 0.0
+        card_cache_hit = False
         if token != self.detail_refresh_token:
             write_performance_log("detail_artwork_skipped", artwork_started, f"title={full_item.title!r} reason=stale")
             return
         try:
-            data = fetch_artwork(full_item.raw, getattr(details, "artwork_path"), self.config)
+            artwork_path = getattr(details, "artwork_path")
             if detail_size is not None:
                 width, height = detail_size
+                detail_fetch_started = time.perf_counter()
+                data = fetch_artwork(full_item.raw, artwork_path, self.config, width=width, height=height * 2)
+                detail_fetch_ms = (time.perf_counter() - detail_fetch_started) * 1000
+                detail_render_started = time.perf_counter()
                 artwork = (
                     render_protocol_artwork(data, self.config.artwork_renderer, width=width, max_height=height)
                     or render_artwork(data, width=width, max_height=height)
                 )
+                detail_render_ms = (time.perf_counter() - detail_render_started) * 1000
             if include_card_artwork:
-                card_artwork = render_card_artwork(data, self.config)
-                self.rendered_grid_artwork_cache[grid_artwork_cache_key(full_item, self.config)] = card_artwork
+                card_cache_key = grid_artwork_cache_key(full_item, self.config)
+                card_artwork = self.rendered_grid_artwork_cache.get(card_cache_key)
+                if card_artwork is not None:
+                    card_cache_hit = True
+                else:
+                    card_width, card_height = card_artwork_pixel_size(self.config)
+                    card_fetch_started = time.perf_counter()
+                    card_data = fetch_artwork(
+                        full_item.raw,
+                        artwork_path,
+                        self.config,
+                        width=card_width,
+                        height=card_height,
+                    )
+                    card_fetch_ms = (time.perf_counter() - card_fetch_started) * 1000
+                    card_render_started = time.perf_counter()
+                    card_artwork = render_card_artwork(card_data, self.config)
+                    card_render_ms = (time.perf_counter() - card_render_started) * 1000
+                    self.rendered_grid_artwork_cache[card_cache_key] = card_artwork
         except Exception:
             artwork = None
-        write_performance_log("detail_artwork", artwork_started, f"title={full_item.title!r} path={getattr(details, 'artwork_path', '')!r}")
+            card_artwork = None
+        write_performance_log(
+            "detail_artwork",
+            artwork_started,
+            f"title={full_item.title!r} path={getattr(details, 'artwork_path', '')!r} detail_fetch={detail_fetch_ms:.1f}ms detail_render={detail_render_ms:.1f}ms card_fetch={card_fetch_ms:.1f}ms card_render={card_render_ms:.1f}ms card_cached={int(card_cache_hit)}",
+        )
         if not artwork and not card_artwork:
             return
 
