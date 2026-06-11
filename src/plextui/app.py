@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, replace
@@ -21,6 +23,7 @@ from textual.reactive import reactive
 from textual.timer import Timer
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 
+from . import __version__
 from .artwork import artwork_is_cached, fetch_artwork, render_artwork, render_protocol_artwork
 from .auth import LoginSession, ServerChoice, save_server_choice
 from .config import (
@@ -1600,6 +1603,10 @@ class PlexTuiApp(App[None]):
             self.show_detail_text(render_debug_log_details(path))
             self.set_status(f"Recent debug log: {path}")
             return
+        if action == "show_app_diagnostics":
+            self.show_detail_text(render_app_diagnostics(self.config, detect_mpv()))
+            self.set_status("App diagnostics")
+            return
         if action == "artwork_renderer_block":
             if self.update_preferences(artwork_renderer="block"):
                 self.refresh_settings_after_change(action, "Artwork renderer", "Block")
@@ -2283,6 +2290,7 @@ def settings_rows(config: AppConfig) -> list[ListItem]:
         SettingsValueRow(f"Theme: {config.theme}"),
         SettingsActionRow("Show debug log path", "show_debug_log"),
         SettingsActionRow("Show recent debug log", "show_recent_debug_log"),
+        SettingsActionRow("Show app diagnostics", "show_app_diagnostics"),
     ]
 
 
@@ -2331,6 +2339,7 @@ def render_settings(config: AppConfig) -> str:
         f"Client ID: {config.client_identifier or 'not set'}",
         f"Theme: {config.theme}",
         "Show recent debug log",
+        "Show app diagnostics",
     ]
     return "\n".join(lines)
 
@@ -2502,6 +2511,8 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         return f"Current auto-load threshold: {config.auto_load_threshold}"
     if "grid_prefetch_pages" in action:
         return f"Current grid prefetch pages: {config.grid_prefetch_pages}"
+    if action == "show_app_diagnostics":
+        return f"Version: {__version__}"
     if action.startswith("show_"):
         return f"Debug log: {debug_log_path()}"
     return ""
@@ -2542,6 +2553,8 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to show the debug log path."
     if action == "show_recent_debug_log":
         return "Press Enter to show the most recent debug log lines."
+    if action == "show_app_diagnostics":
+        return "Press Enter to show version, paths, playback, artwork, and browsing diagnostics."
     return "Press Enter to run this action."
 
 
@@ -2582,6 +2595,7 @@ def settings_action_label(action: str) -> str:
         "reset_grid_prefetch_pages": f"Grid Prefetch Pages: reset to {DEFAULT_GRID_PREFETCH_PAGES}",
         "show_debug_log": "Show debug log path",
         "show_recent_debug_log": "Show recent debug log",
+        "show_app_diagnostics": "Show app diagnostics",
     }
     return labels.get(action, action)
 
@@ -2832,6 +2846,70 @@ def render_debug_log_details(path: Path, max_lines: int = 20) -> str:
         "",
         "Set PLEX_TUI_PERF_LOG=1 before launch to include browsing performance timings.",
     ])
+    return "\n".join(lines)
+
+
+def detect_mpv() -> tuple[str, str]:
+    path = shutil.which("mpv")
+    if path is None:
+        return "missing", "mpv was not found on PATH"
+    try:
+        result = subprocess.run(
+            [path, "--version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return path, f"version check failed: {exc}"
+    first_line = (result.stdout or result.stderr).splitlines()
+    version = first_line[0].strip() if first_line else "version unknown"
+    return path, version
+
+
+def render_app_diagnostics(config: AppConfig, mpv_info: tuple[str, str]) -> str:
+    mpv_path, mpv_version = mpv_info
+    lines = [
+        "App Diagnostics",
+        "",
+        "Application",
+        f"Version: {__version__}",
+        f"Theme: {config.theme}",
+        "",
+        "Paths",
+        f"Config: {config_path()}",
+        f"Cache: {cache_path()}",
+        f"Debug log: {debug_log_path()}",
+        "",
+        "Plex",
+        f"Server: {config.base_url or 'not set'}",
+        f"Server token: {'saved' if config.token else 'not set'}",
+        f"Account token: {'saved' if config.account_token else 'not set'}",
+        f"Client ID: {config.client_identifier or 'not set'}",
+        "",
+        "Playback",
+        f"mpv: {mpv_path}",
+        f"mpv version: {mpv_version}",
+        f"mpv window size: {mpv_window_size_value(config)}",
+        "",
+        "Streams",
+        f"Audio preference: {preference_value(config.preferred_audio_language)}",
+        f"Subtitle mode: {subtitle_mode_value(config)}",
+        f"Subtitle language: {subtitle_language_value(config)}",
+        "",
+        "Artwork",
+        f"Artwork: {artwork_mode_value(config)}",
+        f"Renderer: {artwork_renderer_value(config)}",
+        f"Details artwork: {detail_artwork_mode_value(config)}",
+        "",
+        "Browsing",
+        f"Media view: {media_view_value(config)}",
+        f"Grid density: {grid_density_value(config)}",
+        f"Page size: {config.page_size}",
+        f"Auto-load threshold: {config.auto_load_threshold}",
+        f"Grid prefetch pages: {config.grid_prefetch_pages}",
+    ]
     return "\n".join(lines)
 
 

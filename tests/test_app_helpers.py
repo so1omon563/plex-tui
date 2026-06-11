@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+from subprocess import CompletedProcess, TimeoutExpired
 from types import SimpleNamespace
 
 from PIL import Image
@@ -14,6 +15,7 @@ from plextui.app import (
     MediaRow,
     card_artwork_pixel_size,
     context_hint,
+    detect_mpv,
     detail_artwork_enabled,
     effective_stream_preference_rows,
     format_offset,
@@ -30,6 +32,7 @@ from plextui.app import (
     recent_debug_log_lines,
     render_audio_playback_preference,
     render_card_artwork,
+    render_app_diagnostics,
     render_debug_log_details,
     render_details,
     render_help,
@@ -155,6 +158,7 @@ def test_render_settings_includes_stream_preferences():
     assert "Auto-load Threshold: 25" in rendered
     assert "Grid Prefetch Pages: 4" in rendered
     assert "Show recent debug log" in rendered
+    assert "Show app diagnostics" in rendered
     assert subtitle_preference_value(config) == "eng"
 
 
@@ -187,6 +191,7 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "Grid Prefetch Pages: 4 +1  [step]" in labels
     assert "Grid Prefetch Pages: set custom value...  [input]" in labels
     assert "Show recent debug log  [show]" in labels
+    assert "Show app diagnostics  [show]" in labels
 
 
 def test_settings_row_details_describe_action_types():
@@ -333,6 +338,60 @@ def test_render_debug_log_details_handles_missing_log(tmp_path):
 
     assert "No debug log entries yet." in rendered
     assert f"Path: {log}" in rendered
+
+
+def test_render_app_diagnostics_summarizes_runtime_state(monkeypatch, tmp_path):
+    monkeypatch.setattr("plextui.app.config_path", lambda: tmp_path / "config.toml")
+    monkeypatch.setattr("plextui.app.cache_path", lambda: tmp_path / "cache")
+    monkeypatch.setattr("plextui.app.debug_log_path", lambda: tmp_path / "debug.log")
+    config = AppConfig(
+        "http://plex",
+        "token",
+        "client-id",
+        account_token="account-token",
+        preferred_audio_language="jpn",
+        subtitle_mode="none",
+        artwork_renderer="block",
+        grid_density="large",
+        page_size=80,
+        auto_load_threshold=20,
+        grid_prefetch_pages=4,
+        mpv_window_size="1280x720",
+    )
+
+    rendered = render_app_diagnostics(config, ("/usr/bin/mpv", "mpv 0.40.0"))
+
+    assert "App Diagnostics" in rendered
+    assert "Version:" in rendered
+    assert f"Config: {tmp_path / 'config.toml'}" in rendered
+    assert "Server token: saved" in rendered
+    assert "Account token: saved" in rendered
+    assert "mpv: /usr/bin/mpv" in rendered
+    assert "mpv version: mpv 0.40.0" in rendered
+    assert "Audio preference: jpn" in rendered
+    assert "Subtitle mode: None" in rendered
+    assert "Grid density: Large" in rendered
+    assert "Grid prefetch pages: 4" in rendered
+
+
+def test_detect_mpv_reports_missing_found_and_failed(monkeypatch):
+    monkeypatch.setattr("plextui.app.shutil.which", lambda command: None)
+    assert detect_mpv() == ("missing", "mpv was not found on PATH")
+
+    monkeypatch.setattr("plextui.app.shutil.which", lambda command: "/usr/bin/mpv")
+    monkeypatch.setattr(
+        "plextui.app.subprocess.run",
+        lambda *args, **kwargs: CompletedProcess(args[0], 0, stdout="mpv 0.40.0\nCopyright", stderr=""),
+    )
+    assert detect_mpv() == ("/usr/bin/mpv", "mpv 0.40.0")
+
+    def timeout(*args, **kwargs):
+        raise TimeoutExpired(args[0], 2)
+
+    monkeypatch.setattr("plextui.app.subprocess.run", timeout)
+    path, message = detect_mpv()
+    assert path == "/usr/bin/mpv"
+    assert "version check failed" in message
 
 
 def test_render_playback_error_details_includes_recent_debug_log(tmp_path):

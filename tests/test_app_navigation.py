@@ -333,6 +333,10 @@ def test_settings_recent_debug_log_action_shows_tail(tmp_path):
     asyncio.run(run_settings_recent_debug_log_check(tmp_path))
 
 
+def test_settings_app_diagnostics_action_shows_runtime_summary():
+    asyncio.run(run_settings_app_diagnostics_check())
+
+
 def test_playback_error_shows_recent_debug_log(tmp_path):
     asyncio.run(run_playback_error_check(tmp_path))
 
@@ -1210,6 +1214,26 @@ async def run_settings_recent_debug_log_check(tmp_path):
         assert f"Path: {log}" in details
         assert "first" in details
         assert "third" in details
+
+
+async def run_settings_app_diagnostics_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+
+        with patch("plextui.app.detect_mpv", return_value=("/usr/bin/mpv", "mpv 0.40.0")):
+            app.action_show_settings()
+            await pilot.pause(0.2)
+            app.run_settings_action("show_app_diagnostics")
+        await pilot.pause(0.2)
+
+        details = app.query_one("#detail-content").content
+        assert "App Diagnostics" in details
+        assert "Version:" in details
+        assert "Server token: saved" in details
+        assert "mpv: /usr/bin/mpv" in details
+        assert "mpv version: mpv 0.40.0" in details
 
 
 async def run_playback_error_check(tmp_path):

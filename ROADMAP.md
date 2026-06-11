@@ -17,6 +17,8 @@
 
 ## Packaging & Distribution
 
+- Integrate shared tagging/release actions when available, then add a
+  non-destructive release verification target around them.
 - Improve Homebrew install time; the current formula works but builds native
   Python resources such as `pillow` from source.
 - Automate Homebrew tap updates after PyPI releases, preferably by opening a

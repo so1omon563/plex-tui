@@ -186,6 +186,8 @@ available, and the details pane shows the effective playback choices.
 - Settings screen for stream preferences, artwork modes, grid density, page
   size, auto-load threshold, grid artwork prefetching, media view, and `mpv`
   window size.
+- App diagnostics view for version, paths, `mpv`, Plex connection, artwork, and
+  browsing settings.
 
 ## Artwork
 
@@ -205,6 +207,8 @@ Settings.
 
 Playback diagnostics are written to `debug.log` in the app config directory.
 Tokens are redacted from logged `mpv` arguments.
+The Settings diagnostics section can show the debug log path, recent log lines,
+and an app diagnostics summary for support reports.
 
 Useful paths:
 
