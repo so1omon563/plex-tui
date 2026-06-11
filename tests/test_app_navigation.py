@@ -71,6 +71,10 @@ def test_grid_prefetch_schedules_once_per_visible_page():
     asyncio.run(run_grid_prefetch_schedule_check())
 
 
+def test_grid_detail_refresh_waits_for_idle_selection():
+    asyncio.run(run_grid_detail_refresh_idle_check())
+
+
 def test_search_state_adds_load_more_row():
     asyncio.run(run_search_load_more_row_check())
 
@@ -395,6 +399,33 @@ async def run_grid_prefetch_schedule_check():
         app.schedule_grid_prefetch(grid)
         await pilot.pause(0.2)
         assert len(scheduled) > initial_schedule_count
+
+
+async def run_grid_detail_refresh_idle_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        items = [
+            MediaItem(f"Movie {index}", "", "movie", str(index), True, Raw())
+            for index in range(3)
+        ]
+        refreshed = []
+
+        def capture_refresh(item, token):
+            refreshed.append(item.title)
+
+        app.refresh_media_details = capture_refresh
+        app.show_browse_state(BrowseState("Movies", items))
+        await pilot.pause(0.2)
+
+        app.show_media_details(items[1])
+        await pilot.pause(0.2)
+        assert refreshed == []
+
+        app.show_media_details(items[2])
+        await pilot.pause(0.8)
+        assert refreshed == ["Movie 2"]
 
 
 async def run_search_load_more_row_check():

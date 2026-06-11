@@ -15,6 +15,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.message import Message
 from textual.reactive import reactive
+from textual.timer import Timer
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 
 from .artwork import artwork_is_cached, fetch_artwork, render_artwork, render_protocol_artwork
@@ -386,6 +387,7 @@ class PlexTuiApp(App[None]):
     last_grid_prefetch_page: tuple[str, ...]
     applying_config_theme: bool
     detail_refresh_token: int
+    detail_refresh_timer: Timer | None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -427,6 +429,7 @@ class PlexTuiApp(App[None]):
         self.last_grid_prefetch_page = ()
         self.applying_config_theme = False
         self.detail_refresh_token = 0
+        self.detail_refresh_timer = None
         try:
             self.config = load_config()
             self.apply_config_theme()
@@ -809,13 +812,34 @@ class PlexTuiApp(App[None]):
         details = media_details(item)
         self.show_detail_text(render_detail_content(details, self.config, raw=item.raw))
         delay = 0.65 if self.media_grid_visible() else 0.0
-        self.refresh_media_details(item, token, delay)
+        self.schedule_media_detail_refresh(item, token, delay)
+
+    def schedule_media_detail_refresh(self, item: MediaItem, token: int, delay: float = 0.0) -> None:
+        self.cancel_media_detail_refresh()
+        if delay:
+            self.detail_refresh_timer = self.set_timer(
+                delay,
+                lambda: self.start_media_detail_refresh(item, token),
+                name="detail-refresh",
+            )
+            return
+        self.start_media_detail_refresh(item, token)
+
+    def cancel_media_detail_refresh(self) -> None:
+        if self.detail_refresh_timer is not None:
+            self.detail_refresh_timer.stop()
+            self.detail_refresh_timer = None
+
+    def start_media_detail_refresh(self, item: MediaItem, token: int) -> None:
+        self.detail_refresh_timer = None
+        if token != self.detail_refresh_token:
+            write_performance_log("detail_refresh_skipped", time.perf_counter(), f"title={item.title!r} reason=stale")
+            return
+        self.refresh_media_details(item, token)
 
     @work(thread=True, exclusive=True)
-    def refresh_media_details(self, item: MediaItem, token: int, delay: float = 0.0) -> None:
+    def refresh_media_details(self, item: MediaItem, token: int) -> None:
         started = time.perf_counter()
-        if delay:
-            time.sleep(delay)
         if token != self.detail_refresh_token:
             write_performance_log("detail_refresh_skipped", started, f"title={item.title!r} reason=stale")
             return
@@ -1537,6 +1561,7 @@ class PlexTuiApp(App[None]):
             self.show_playback_error(str(exc))
             return
         self.detail_refresh_token += 1
+        self.cancel_media_detail_refresh()
         self.show_detail_text(
             render_playback_details(media.title, self.player, self.config, audio_choice, subtitle_choice)
         )
@@ -1593,6 +1618,8 @@ class PlexTuiApp(App[None]):
         self.show_detail_text(config_hint)
 
     def show_playback_error(self, text: str) -> None:
+        self.detail_refresh_token += 1
+        self.cancel_media_detail_refresh()
         path = debug_log_path()
         self.set_status(f"Playback error: {text}. Debug log: {path}")
         self.query_one("#media-title", Static).update("Playback Error")

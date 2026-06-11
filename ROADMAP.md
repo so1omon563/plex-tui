@@ -2,7 +2,7 @@
 
 ## App UX
 
-- Keep measuring real library browsing, especially any remaining grid latency after the prefetch/rendering pass.
+- Keep measuring real library browsing, especially any remaining grid latency after the prefetch/rendering and idle-detail passes.
 - Improve the settings screen beyond action rows:
   - richer inline controls for grouped playback, artwork, browsing, and account actions
   - consider dedicated edit widgets for toggles, numeric values, and option sets

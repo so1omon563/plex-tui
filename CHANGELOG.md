@@ -13,6 +13,7 @@
 - Added a Settings diagnostics action for recent `debug.log` output and playback error details with log context.
 - Clarified Settings rows with action-type tags and per-row detail-pane guidance.
 - Improved grid browsing smoothness by debouncing detail reloads, throttling artwork prefetch, and avoiding cached-artwork rendering during selection redraws.
+- Made grid detail reloads idle-aware so rapid selection movement no longer starts stale Plex reload workers.
 
 ## 0.2.0 - 2026-06-11
 
