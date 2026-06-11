@@ -11,7 +11,7 @@ from textual.reactive import reactive
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 
 from .auth import LoginSession, ServerChoice, save_server_choice
-from .config import AppConfig, config_path, load_config, save_config
+from .config import AppConfig, config_path, debug_log_path, load_config, save_config
 from .models import LibraryItem, MediaItem
 from .player import (
     PlayerError,
@@ -924,6 +924,7 @@ def render_details(details: object, config: AppConfig | None = None) -> str:
 def config_rows(config: AppConfig) -> list[tuple[str, str]]:
     return [
         ("Config Path", str(config_path())),
+        ("Debug Log", str(debug_log_path())),
         ("Base URL", config.base_url or "not set"),
         ("Server Token", "saved" if config.token else "not set"),
         ("Account Token", "saved" if config.account_token else "not set"),
@@ -978,6 +979,10 @@ def render_help() -> str:
         "r: reconnect / reload libraries",
         "?: show help",
         "q: quit",
+        "",
+        "Paths",
+        f"Config: {config_path()}",
+        f"Debug log: {debug_log_path()}",
     ])
 
 

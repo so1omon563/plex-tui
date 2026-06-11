@@ -47,6 +47,7 @@ def load_config() -> AppConfig:
     preferred_subtitle_language = data.get("preferred_subtitle_language", "")
     subtitle_mode = data.get("subtitle_mode", "auto")
     if subtitle_mode not in {"auto", "none", "preferred"}:
+        write_debug_log(f"invalid subtitle_mode {subtitle_mode!r}; using 'auto'")
         subtitle_mode = "auto"
     return AppConfig(
         base_url=base_url.strip(),
@@ -80,3 +81,13 @@ def save_config(config: AppConfig) -> None:
 
 def _toml_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def write_debug_log(message: str) -> None:
+    try:
+        path = debug_log_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(f"{message}\n")
+    except OSError:
+        return

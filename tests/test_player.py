@@ -20,7 +20,7 @@ from plextui.player import (
 @pytest.fixture(autouse=True)
 def debug_log_path(tmp_path, monkeypatch):
     path = tmp_path / "debug.log"
-    monkeypatch.setattr("plextui.player.debug_log_path", lambda: path)
+    monkeypatch.setattr("plextui.config.debug_log_path", lambda: path)
     return path
 
 

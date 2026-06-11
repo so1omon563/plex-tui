@@ -68,6 +68,7 @@ def test_render_settings_hides_tokens():
     assert "secret" not in rendered
     assert "Server Token: saved" in rendered
     assert "Account Token: saved" in rendered
+    assert "Debug Log:" in rendered
 
 
 def test_render_settings_includes_stream_preferences():
@@ -124,6 +125,8 @@ def test_render_help_groups_key_bindings():
     assert "Playback" in rendered
     assert "Streams" in rendered
     assert "Settings" in rendered
+    assert "Paths" in rendered
+    assert "Debug log:" in rendered
     assert "?: show help" in rendered
 
 

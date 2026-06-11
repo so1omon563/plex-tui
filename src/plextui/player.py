@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from .config import debug_log_path
+from .config import write_debug_log
 
 
 class PlayerError(RuntimeError):
@@ -508,14 +508,8 @@ def stream_debug_label(stream: Any) -> str:
 
 
 def log_debug(message: str) -> None:
-    try:
-        path = debug_log_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        with path.open("a", encoding="utf-8") as fh:
-            fh.write(f"{timestamp} {redact_tokens(message)}\n")
-    except OSError:
-        return
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    write_debug_log(f"{timestamp} {redact_tokens(message)}")
 
 
 def redact_tokens(text: str) -> str:
