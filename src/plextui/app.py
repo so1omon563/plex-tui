@@ -60,7 +60,7 @@ GRID_DENSITY_SPECS = {
     "large": {"width": 29, "content_width": 26, "art_width": 24, "art_height": 12, "height": 15, "max_columns": 4},
 }
 GRID_DETAIL_REFRESH_DELAY = 0.65
-LIST_DETAIL_REFRESH_DELAY = 0.2
+LIST_DETAIL_REFRESH_DELAY = 0.35
 
 
 @dataclass

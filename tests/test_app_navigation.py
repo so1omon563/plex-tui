@@ -528,11 +528,11 @@ async def run_list_detail_refresh_idle_check():
         await pilot.pause(0.1)
 
         app.show_media_details(items[1])
-        await pilot.pause(0.1)
+        await pilot.pause(0.2)
         assert refreshed == []
 
         app.show_media_details(items[2])
-        await pilot.pause(0.3)
+        await pilot.pause(0.45)
         assert refreshed == ["Movie 2"]
 
 

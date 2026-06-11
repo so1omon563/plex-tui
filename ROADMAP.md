@@ -3,6 +3,7 @@
 ## App UX
 
 - Keep measuring real library browsing, especially any remaining list/grid latency after the prefetch/rendering and idle-detail passes.
+- Split detail text refresh from detail artwork loading so artwork can wait for a longer stable selection window.
 - Continue tuning focus and selection affordances based on real terminal themes.
 - Improve the settings screen beyond action rows:
   - richer inline controls for grouped playback, artwork, browsing, and account actions
