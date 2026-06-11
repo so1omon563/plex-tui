@@ -75,6 +75,7 @@ def play_with_mpv(
     ]
     if start_offset:
         args.append(f"--start={start_offset / 1000:.3f}")
+    args.extend(direct_track_args(direct_url, item, selected_audio, selected_subtitle))
     for subtitle in subtitles:
         args.append("--sub-file=" + subtitle)
     args.append(url)
@@ -272,6 +273,35 @@ def selected_subtitle_stream_id(item: Any, selected_subtitle: Any = None) -> int
     if not candidates:
         return None
     return getattr(candidates[0], "id", None)
+
+
+def direct_track_args(
+    direct_url: str | None,
+    item: Any,
+    selected_audio: Any = None,
+    selected_subtitle: Any = None,
+) -> list[str]:
+    if not direct_url:
+        return []
+    args: list[str] = []
+    if selected_audio is not None:
+        track_id = mpv_track_id(audio_streams(item), selected_audio)
+        if track_id is not None:
+            args.append(f"--aid={track_id}")
+    if selected_subtitle == 0:
+        args.append("--sid=no")
+    elif selected_subtitle is not None:
+        track_id = mpv_track_id(subtitle_streams(item), selected_subtitle)
+        if track_id is not None:
+            args.append(f"--sid={track_id}")
+    return args
+
+
+def mpv_track_id(streams: list[Any], selected_stream: Any) -> int | None:
+    for index, stream in enumerate(streams, start=1):
+        if same_stream(stream, selected_stream):
+            return index
+    return None
 
 
 def preferred_subtitle_streams(streams: list[Any]) -> list[Any]:

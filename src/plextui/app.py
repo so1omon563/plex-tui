@@ -143,6 +143,7 @@ class PlexTuiApp(App[None]):
     picker_visible: bool
     selected_subtitle: StreamChoice | None
     selected_audio: StreamChoice | None
+    picker_media_key: str | None
     player: PlayerHandle | None
 
     def compose(self) -> ComposeResult:
@@ -171,6 +172,7 @@ class PlexTuiApp(App[None]):
         self.picker_visible = False
         self.selected_subtitle = None
         self.selected_audio = None
+        self.picker_media_key = None
         self.player = None
         self.query_one("#search", Input).display = False
         self.load_server()
@@ -270,6 +272,8 @@ class PlexTuiApp(App[None]):
         row = event.item
         if row is not None and row not in list(event.list_view.children):
             return
+        if row is not None and event.list_view.highlighted_child is not row:
+            return
         if isinstance(row, MediaRow):
             self.show_media_details(row.media)
         elif isinstance(row, ServerRow):
@@ -331,15 +335,16 @@ class PlexTuiApp(App[None]):
 
         self.call_from_thread(update)
 
-    def show_media(self, title: str, items: list[MediaItem]) -> None:
+    def show_media(self, title: str, items: list[MediaItem], selected_key: str | None = None) -> None:
         self.query_one("#media-title", Static).update(title)
         view = self.query_one("#media", ListView)
         view.clear()
         for item in items:
             view.append(MediaRow(item))
         if items:
-            view.index = 0
-            self.show_media_details(items[0])
+            selected_index = selected_media_index(items, selected_key)
+            view.index = selected_index
+            self.show_media_details(items[selected_index])
         else:
             self.show_detail_text("No items")
 
@@ -460,6 +465,7 @@ class PlexTuiApp(App[None]):
         def update() -> None:
             self.picker_visible = True
             self.settings_visible = False
+            self.picker_media_key = media.key
             self.query_one("#media-title", Static).update("Subtitle Tracks" if stream_type == "subtitle" else "Audio Tracks")
             view = self.query_one("#media", ListView)
             view.clear()
@@ -481,7 +487,8 @@ class PlexTuiApp(App[None]):
         self.picker_visible = False
         if self.browsing_stack:
             state = self.browsing_stack[-1]
-            self.show_media(state.title, state.items)
+            self.show_media(state.title, state.items, selected_key=self.picker_media_key)
+        self.picker_media_key = None
         self.query_one("#media", ListView).focus()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -528,9 +535,11 @@ class PlexTuiApp(App[None]):
         if self.settings_visible or self.picker_visible:
             self.settings_visible = False
             self.picker_visible = False
+            selected_key = self.picker_media_key
+            self.picker_media_key = None
             if self.browsing_stack:
                 state = self.browsing_stack[-1]
-                self.show_media(state.title, state.items)
+                self.show_media(state.title, state.items, selected_key=selected_key)
             self.query_one("#media", ListView).focus()
             return
 
@@ -656,3 +665,12 @@ def render_settings(config: AppConfig) -> str:
         "Clear selected audio/subtitle tracks",
     ])
     return "\n".join(lines)
+
+
+def selected_media_index(items: list[MediaItem], selected_key: str | None) -> int:
+    if selected_key is None:
+        return 0
+    for index, item in enumerate(items):
+        if item.key == selected_key:
+            return index
+    return 0

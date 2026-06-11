@@ -19,6 +19,7 @@ class Proc:
 class SubtitleStream:
     key = "/library/streams/1"
     id = 1
+    index = 2
     selected = False
     codec = "srt"
     displayTitle = "English"
@@ -28,6 +29,7 @@ class SubtitleStream:
 class AudioStream:
     key = None
     id = 42
+    index = 1
     selected = False
     codec = "aac"
     displayTitle = "Japanese"
@@ -117,3 +119,38 @@ def test_progress_monitor_reports_progress_and_timeline():
 
     assert item.progress == (123000, "playing")
     assert item.timeline == (123000, "playing")
+
+
+def test_direct_play_gets_mpv_track_hints_for_embedded_streams():
+    class EmbeddedSubtitle(SubtitleStream):
+        key = None
+        codec = "vobsub"
+        index = 3
+
+    class EmbeddedPart(Part):
+        def subtitleStreams(self):
+            return [EmbeddedSubtitle()]
+
+    class EmbeddedItem(Item):
+        def iterParts(self):
+            return [EmbeddedPart()]
+
+    item = EmbeddedItem()
+    subtitle = EmbeddedPart().subtitleStreams()[0]
+    audio = EmbeddedPart().audioStreams()[0]
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        handle = play_with_mpv(
+            item,
+            subtitle_choice=StreamChoice(1, "English", subtitle),
+            audio_choice=StreamChoice(42, "Japanese", audio),
+        )
+
+    args = popen.call_args.args[0]
+    assert handle.stream_mode == "direct"
+    assert "--aid=1" in args
+    assert "--sid=1" in args
