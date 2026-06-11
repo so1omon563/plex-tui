@@ -289,6 +289,7 @@ def test_media_grid_tracks_selection_and_visible_page():
     assert grid.selected_media.key == "3"
     assert grid.artwork["3"] == "art"
     assert [item.key for item in grid.visible_page_items()] == ["0", "1", "2", "3"]
+    assert [item.key for item in grid.visible_page_items(page_offset=1)] == ["4"]
 
     grid.set_selected_index(4)
 

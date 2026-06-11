@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass, replace
 from typing import Any
@@ -153,13 +154,16 @@ class MediaGrid(Static):
         self.refresh_grid()
 
     @property
-    def page_start(self) -> int:
-        page_size = max(1, self.columns * self.rows)
-        return (self.selected_index // page_size) * page_size
+    def page_size(self) -> int:
+        return max(1, self.columns * self.rows)
 
-    def visible_page_items(self, rows: int | None = None) -> list[MediaItem]:
+    @property
+    def page_start(self) -> int:
+        return (self.selected_index // self.page_size) * self.page_size
+
+    def visible_page_items(self, rows: int | None = None, page_offset: int = 0) -> list[MediaItem]:
         page_size = max(1, self.columns * (rows or self.rows))
-        start = (self.selected_index // page_size) * page_size
+        start = ((self.selected_index // page_size) + page_offset) * page_size
         return self.items[start:start + page_size]
 
     def refresh_grid(self) -> None:
@@ -168,7 +172,9 @@ class MediaGrid(Static):
             return
         selected = self.selected_media
         selected_key = selected.key if selected is not None else self.items[0].key
+        started = time.perf_counter()
         self.update(render_media_grid(self.visible_page_items(), selected_key, self.config, self.columns, self.artwork))
+        write_performance_log("grid_render", started, f"items={len(self.visible_page_items())} columns={self.columns}")
 
     def scroll_selected_visible(self) -> None:
         if not self.is_mounted:
@@ -339,6 +345,7 @@ class PlexTuiApp(App[None]):
     prefetched_grid_pages: set[tuple[str, ...]]
     applying_config_theme: bool
     detail_refresh_token: int
+    grid_prefetch_token: int
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -376,6 +383,7 @@ class PlexTuiApp(App[None]):
         self.prefetched_grid_pages = set()
         self.applying_config_theme = False
         self.detail_refresh_token = 0
+        self.grid_prefetch_token = 0
         try:
             self.config = load_config()
             self.apply_config_theme()
@@ -537,7 +545,7 @@ class PlexTuiApp(App[None]):
     def on_media_grid_highlighted(self, event: MediaGrid.Highlighted) -> None:
         self.show_media_details(event.media)
         if isinstance(event.control, MediaGrid):
-            self.prefetch_grid_page(event.control)
+            self.schedule_grid_prefetch(event.control)
             self.set_status(context_hint(event.control))
         self.maybe_auto_load_more(event.media)
 
@@ -558,11 +566,17 @@ class PlexTuiApp(App[None]):
         if self.service is None:
             return
         self.post_message(StatusChanged(f"Loading {library.title}..."))
+        started = time.perf_counter()
         try:
             page = self.service.library_page(library, 0, self.config.page_size)
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return
+        write_performance_log(
+            "library_page",
+            started,
+            f"title={library.title!r} start=0 size={self.config.page_size} items={len(page.items)} total={page.total}",
+        )
 
         def update() -> None:
             self.selected_library = library
@@ -631,6 +645,7 @@ class PlexTuiApp(App[None]):
             return
         self.loading_more = True
         self.post_message(StatusChanged(f"Loading more {state.title}..."))
+        started = time.perf_counter()
         try:
             if state.search:
                 page = self.service.search_page(state.search_query, state.selected_library, state.next_start, self.config.page_size)
@@ -640,6 +655,11 @@ class PlexTuiApp(App[None]):
             self.loading_more = False
             self.call_from_thread(self.show_error, str(exc))
             return
+        write_performance_log(
+            "load_more_page",
+            started,
+            f"title={state.title!r} start={state.next_start} size={self.config.page_size} items={len(page.items)} total={page.total}",
+        )
 
         def update() -> None:
             first_new_key = page.items[0].key if page.items else None
@@ -688,12 +708,13 @@ class PlexTuiApp(App[None]):
     def show_browse_state(self, state: BrowseState, selected_key: str | None = None) -> None:
         self.query_one("#media-title", Static).update(state.title)
         if state.items:
+            started = time.perf_counter()
             selected_index = selected_media_index(state.items, selected_key)
             if self.config.media_view == "grid":
                 grid = self.show_media_grid()
                 columns, rows = self.media_grid_geometry()
                 grid.set_items(state.items, selected_index, self.config, columns, rows)
-                self.prefetch_grid_page(grid)
+                self.schedule_grid_prefetch(grid)
             else:
                 self.show_media_list()
                 rows, selected_row_index = media_rows(state.items, self.config, selected_index)
@@ -701,6 +722,11 @@ class PlexTuiApp(App[None]):
                     rows.append(LoadMoreRow(len(state.items), state.total))
                 self.replace_media_rows(rows, selected_row_index)
             self.show_media_details(state.items[selected_index])
+            write_performance_log(
+                "browse_render",
+                started,
+                f"title={state.title!r} view={self.config.media_view} items={len(state.items)} selected={selected_index}",
+            )
         else:
             self.show_media_list()
             self.replace_media_rows([])
@@ -740,9 +766,11 @@ class PlexTuiApp(App[None]):
 
     @work(thread=True, exclusive=True)
     def refresh_media_details(self, item: MediaItem, token: int, delay: float = 0.0) -> None:
+        started = time.perf_counter()
         if delay:
             time.sleep(delay)
         if token != self.detail_refresh_token:
+            write_performance_log("detail_refresh_skipped", started, f"title={item.title!r} reason=stale")
             return
         if not hasattr(item.raw, "reload"):
             return
@@ -758,6 +786,7 @@ class PlexTuiApp(App[None]):
             )
         except Exception:
             return
+        write_performance_log("detail_reload", started, f"title={item.title!r}")
 
         details = media_details(full_item)
 
@@ -773,6 +802,7 @@ class PlexTuiApp(App[None]):
         artwork = None
         card_artwork = None
         if artwork_enabled(self.config) and details.artwork_path:
+            artwork_started = time.perf_counter()
             try:
                 data = fetch_artwork(full_item.raw, details.artwork_path, self.config)
                 if detail_artwork_enabled(self.config):
@@ -784,6 +814,7 @@ class PlexTuiApp(App[None]):
                 card_artwork = render_artwork(data, width=18, max_height=9)
             except Exception:
                 artwork = None
+            write_performance_log("detail_artwork", artwork_started, f"title={item.title!r} path={details.artwork_path!r}")
         if not artwork and not card_artwork:
             return
 
@@ -864,13 +895,35 @@ class PlexTuiApp(App[None]):
         if self.media_grid_visible():
             grid.move_selection(direction)
 
-    @work(thread=True)
-    def prefetch_grid_page(self, grid: MediaGrid) -> None:
+    def schedule_grid_prefetch(self, grid: MediaGrid) -> None:
         if not artwork_enabled(self.config):
             return
-        items = grid.visible_page_items()
+        self.grid_prefetch_token += 1
+        token = self.grid_prefetch_token
+        self.prefetch_grid_items(grid.visible_page_items(), token, "current")
+        next_items = grid.visible_page_items(page_offset=1)
+        if next_items:
+            self.prefetch_grid_items(next_items, token, "next", delay=0.5)
+
+    @work(thread=True)
+    def prefetch_grid_items(
+        self,
+        items: list[MediaItem],
+        token: int,
+        page_label: str,
+        delay: float = 0.0,
+    ) -> None:
+        if not artwork_enabled(self.config):
+            return
+        started = time.perf_counter()
+        if delay:
+            time.sleep(delay)
+        if token != self.grid_prefetch_token:
+            write_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=stale")
+            return
         page_key = tuple(item.key for item in items)
         if page_key in self.prefetched_grid_pages:
+            write_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=cached items={len(items)}")
             return
         self.prefetched_grid_pages.add(page_key)
 
@@ -884,10 +937,16 @@ class PlexTuiApp(App[None]):
             except Exception:
                 continue
 
+        write_performance_log(
+            "grid_prefetch",
+            started,
+            f"page={page_label} items={len(items)} rendered={len(rendered)}",
+        )
         if not rendered:
             return
 
         def update() -> None:
+            grid = self.query_one("#media-grid", MediaGrid)
             if not grid.is_mounted:
                 return
             grid.artwork.update(rendered)
@@ -1145,12 +1204,18 @@ class PlexTuiApp(App[None]):
             return
         scope = "all libraries" if global_search else "current library"
         self.post_message(StatusChanged(f"Searching {scope} for {query}..."))
+        started = time.perf_counter()
         try:
             library = None if global_search else self.selected_library
             page = self.service.search_page(query, library, 0, self.config.page_size)
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return
+        write_performance_log(
+            "search_page",
+            started,
+            f"query={query!r} global={global_search} size={self.config.page_size} items={len(page.items)} total={page.total}",
+        )
 
         def update() -> None:
             title = f"Global search: {query}" if global_search else f"Search: {query}"
@@ -1785,3 +1850,11 @@ def selected_media_index(items: list[MediaItem], selected_key: str | None) -> in
         if item.key == selected_key:
             return index
     return 0
+
+
+def write_performance_log(event: str, started: float, detail: str = "") -> None:
+    if os.environ.get("PLEX_TUI_PERF_LOG") != "1":
+        return
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    suffix = f" {detail}" if detail else ""
+    write_debug_log(f"perf {event} {elapsed_ms:.1f}ms{suffix}")

@@ -153,8 +153,12 @@ Top-level library views load in pages. Navigating near the end of the loaded
 items fetches the next page automatically. You can also select the
 `Load more...` row and press `enter`. Page size and auto-load threshold are
 configurable and shown in Settings. Defaults are tuned for responsive browsing:
-60 items per page and auto-load when selection reaches the final 15 loaded
+40 items per page and auto-load when selection reaches the final 10 loaded
 items.
+
+Set `PLEX_TUI_PERF_LOG=1` before launching to write browsing, grid rendering,
+detail refresh, and artwork prefetch timings to the debug log shown in
+Settings.
 
 The settings view shows the active config and supports reconnect/reload,
 Plex relogin, clearing or changing audio/subtitle preferences separately,
@@ -179,7 +183,8 @@ List view keeps the browser compact and shows selected poster artwork in the
 details pane. Grid view uses arrow-key card selection in a dedicated grid
 surface. Cards use cached artwork immediately and update selected posters after
 their artwork is fetched. Grid view prefetches artwork for the visible grid
-page only, and the artwork cache is pruned to stay bounded.
+page immediately and the next grid page after selection settles. The artwork
+cache is pruned to stay bounded.
 
 Native terminal image output is disabled for now because Kitty image protocols
 conflict with Textual's screen renderer in practice. `artwork_renderer =
