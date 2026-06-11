@@ -81,7 +81,7 @@ example.
 
 ```bash
 pipx install "git+https://github.com/so1omon563/plex-tui.git"
-pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.2.0"
+pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.2.1"
 ```
 
 Use this path for testing `main` before a tagged/PyPI release.

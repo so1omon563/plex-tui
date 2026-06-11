@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.1 - 2026-06-11
+
 - Added GitHub Actions CI and PyPI Trusted Publishing workflow scaffolding.
 - Added a manual TestPyPI Trusted Publishing workflow.
 - Published `plex-tui` to PyPI and updated install documentation.
