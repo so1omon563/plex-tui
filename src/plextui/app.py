@@ -14,7 +14,7 @@ from .auth import LoginSession, ServerChoice, save_server_choice
 from .config import AppConfig, config_path, load_config
 from .models import LibraryItem, MediaItem
 from .player import PlayerError, play_with_mpv
-from .plex_service import PlexService
+from .plex_service import PlexService, media_details
 
 
 @dataclass
@@ -70,6 +70,11 @@ class PlexTuiApp(App[None]):
         border: solid $primary;
     }
 
+    #details {
+        width: 42;
+        border: solid $secondary;
+    }
+
     #search {
         margin: 0 1;
     }
@@ -83,6 +88,12 @@ class PlexTuiApp(App[None]):
     .pane-title {
         text-style: bold;
         padding: 0 1;
+    }
+
+    #detail-content {
+        padding: 0 1;
+        width: 1fr;
+        height: 1fr;
     }
     """
 
@@ -111,6 +122,9 @@ class PlexTuiApp(App[None]):
                 yield Static("Media", id="media-title", classes="pane-title")
                 yield Input(placeholder="Search current library", id="search")
                 yield ListView(id="media")
+            with Vertical(id="details"):
+                yield Static("Details", classes="pane-title")
+                yield Static("Select an item", id="detail-content")
         yield Static("", id="status")
         yield Footer()
 
@@ -164,6 +178,7 @@ class PlexTuiApp(App[None]):
             view.append(ListItem(Label("A Plex login page was opened in your browser.")))
             view.append(ListItem(Label("If it did not open, use this URL:")))
             view.append(ListItem(Label(url)))
+            self.show_detail_text("Complete login in your browser.")
             self.set_status("Waiting for Plex login...")
 
         self.call_from_thread(show_url)
@@ -185,6 +200,7 @@ class PlexTuiApp(App[None]):
             for choice in choices:
                 view.append(ServerRow(choice))
             view.focus()
+            self.show_detail_text("Choose the connection you want this app to use.")
             self.set_status("Select a Plex server connection and press Enter")
 
         self.call_from_thread(show_choices)
@@ -203,6 +219,17 @@ class PlexTuiApp(App[None]):
             self.open_media(row.media)
         elif isinstance(row, ServerRow):
             self.choose_server(row.choice)
+
+    def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
+        if event.list_view.id != "media":
+            return
+        row = event.item
+        if isinstance(row, MediaRow):
+            self.show_media_details(row.media)
+        elif isinstance(row, ServerRow):
+            self.show_detail_text(f"{row.choice.name}\n\n{row.choice.uri}\n\nSource: {row.choice.source}")
+        elif row is None:
+            self.show_detail_text("Select an item")
 
     def choose_server(self, choice: ServerChoice) -> None:
         try:
@@ -262,6 +289,22 @@ class PlexTuiApp(App[None]):
         view.clear()
         for item in items:
             view.append(MediaRow(item))
+        if items:
+            view.index = 0
+            self.show_media_details(items[0])
+        else:
+            self.show_detail_text("No items")
+
+    def show_media_details(self, item: MediaItem) -> None:
+        details = media_details(item)
+        lines = [details.title, "", "  ".join(details.facts)]
+        if details.summary:
+            lines.extend(["", details.summary])
+        lines.extend(["", "Playable: yes" if details.playable else "Playable: no"])
+        self.show_detail_text("\n".join(lines))
+
+    def show_detail_text(self, text: str) -> None:
+        self.query_one("#detail-content", Static).update(text)
 
     def action_focus_search(self) -> None:
         search = self.query_one("#search", Input)
@@ -340,3 +383,4 @@ class PlexTuiApp(App[None]):
         self.query_one("#media-title", Static).update("Error")
         self.query_one("#media", ListView).clear()
         self.query_one("#media", ListView).append(ListItem(Label(f"{text}\n{config_hint}")))
+        self.show_detail_text(config_hint)

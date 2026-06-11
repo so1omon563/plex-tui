@@ -20,3 +20,12 @@ class MediaItem:
     key: str
     playable: bool
     raw: Any
+
+
+@dataclass(frozen=True)
+class MediaDetails:
+    title: str
+    kind: str
+    facts: list[str]
+    summary: str
+    playable: bool
