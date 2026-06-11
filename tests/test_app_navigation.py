@@ -8,7 +8,6 @@ from plextui.app import (
     LoadMoreRow,
     PlexTuiApp,
     render_loaded_status,
-    selected_media_from_row,
     should_auto_load_more,
 )
 from plextui.config import AppConfig
@@ -49,6 +48,10 @@ def test_load_more_media_appends_next_page():
 
 def test_load_more_media_can_preserve_selected_row():
     asyncio.run(run_load_more_media_preserve_selection_check())
+
+
+def test_grid_browse_state_preserves_selected_media():
+    asyncio.run(run_grid_browse_state_preserve_selection_check())
 
 
 def test_search_state_adds_load_more_row():
@@ -204,6 +207,7 @@ async def run_load_more_media_preserve_selection_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
         library = LibraryItem("Movies", "1", "movie", object())
         first = MediaItem("First", "", "movie", "1", True, Raw())
         second = MediaItem("Second", "", "movie", "2", True, Raw())
@@ -215,17 +219,44 @@ async def run_load_more_media_preserve_selection_check():
         app.load_more_media(selected_key="2")
         await pilot.pause(0.5)
 
-        row = app.query_one("#media").highlighted_child
-        assert row is not None
-        selected = selected_media_from_row(row)
+        selected = app.selected_media()
         assert selected is not None
         assert selected.title == "Second"
+
+
+async def run_grid_browse_state_preserve_selection_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        items = [
+            MediaItem("First", "", "movie", "1", True, Raw()),
+            MediaItem("Second", "", "movie", "2", True, Raw()),
+            MediaItem("Third", "", "movie", "3", True, Raw()),
+        ]
+        state = BrowseState("Movies", items)
+
+        app.show_browse_state(state, selected_key="2")
+        await pilot.pause(0.2)
+
+        grid = app.query_one("#media-grid")
+        assert grid.display
+        assert grid.selected_media is not None
+        assert grid.selected_media.title == "Second"
+
+        grid.focus()
+        await pilot.press("right")
+        await pilot.pause(0.2)
+
+        assert grid.selected_media is not None
+        assert grid.selected_media.title == "Third"
 
 
 async def run_search_load_more_row_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
         library = LibraryItem("Movies", "1", "movie", object())
         items = [
             MediaItem("First", "", "movie", "1", True, Raw()),

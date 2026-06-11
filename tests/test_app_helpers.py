@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from plextui.app import (
     LoadMoreRow,
-    MediaGridRow,
+    MediaGrid,
     MediaRow,
     context_hint,
     format_offset,
@@ -142,7 +142,7 @@ def test_render_help_groups_key_bindings():
     assert "?: show help" in rendered
 
 
-def test_media_rows_can_group_grid_view():
+def test_media_rows_returns_list_rows():
     items = [
         MediaItem(f"Movie {index}", "2024", "movie", str(index), True, object(), artwork_path="/thumb")
         for index in range(5)
@@ -154,24 +154,37 @@ def test_media_rows_can_group_grid_view():
         media_view="grid",
     )
 
-    rows, selected_row = media_rows(items, config, selected_index=3, grid_columns=2, grid_rows=2)
+    rows, selected_row = media_rows(items, config, selected_index=3)
 
-    assert len(rows) == 2
-    assert selected_row == 0
-    assert isinstance(rows[0], MediaGridRow)
-    assert rows[0].selected_media.key == "3"
-    assert len(rows[0].items) == 4
-    rows[0].set_artwork("3", "art", config)
-    assert rows[0].artwork["3"] == "art"
+    assert len(rows) == 5
+    assert selected_row == 3
+    assert isinstance(rows[0], MediaRow)
     assert next_media_view("list") == "grid"
     assert next_media_view("grid") == "list"
 
 
+def test_media_grid_tracks_selection_and_visible_page():
+    items = [
+        MediaItem(f"Movie {index}", "2024", "movie", str(index), True, object(), artwork_path="/thumb")
+        for index in range(5)
+    ]
+    config = AppConfig("http://plex", "token", "client", media_view="grid")
+    grid = MediaGrid()
+
+    grid.set_items(items, selected_index=3, config=config, columns=2)
+    grid.set_artwork("3", "art")
+
+    assert grid.selected_media is not None
+    assert grid.selected_media.key == "3"
+    assert grid.artwork["3"] == "art"
+    assert [item.key for item in grid.visible_page_items(rows=2)] == ["0", "1", "2", "3"]
+
+
 def test_context_hints_for_media_and_load_more():
     playable = MediaItem("Movie", "", "movie", "1", True, object())
+    grid = MediaGrid()
+    grid.set_items([playable], selected_index=0, config=AppConfig("http://plex", "token", "client"), columns=1)
 
     assert context_hint(MediaRow(playable)) == "Enter selects item / p plays / a audio / s subtitles"
-    assert context_hint(MediaGridRow([playable], playable.key, AppConfig("http://plex", "token", "client"), 1)) == (
-        "Left/right selects card / up/down pages / p plays / a audio / s subtitles"
-    )
+    assert context_hint(grid) == "Arrows select card / p plays / a audio / s subtitles"
     assert context_hint(LoadMoreRow(100, 200)) == "Enter loads next page"
