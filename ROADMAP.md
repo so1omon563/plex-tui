@@ -27,6 +27,6 @@
 ## Technical Follow-Up
 
 - Keep profiling grid browsing with `PLEX_TUI_PERF_LOG=1`.
-- Revisit artwork logging volume after another round of real-library testing.
+- Revisit whether verbose `PLEX_TUI_ARTWORK_LOG=1` should expose more structured artwork counters.
 - Revisit native terminal image support, especially Kitty, behind a safe opt-in path.
 - Add focused regression tests for any real-world Plex media edge cases discovered during use.

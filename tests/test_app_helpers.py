@@ -43,6 +43,8 @@ from plextui.app import (
     render_subtitle_playback_preference,
     settings_rows,
     subtitle_preference_value,
+    write_artwork_performance_log,
+    write_performance_log,
 )
 from plextui.config import AppConfig
 from plextui.models import MediaDetails, MediaItem
@@ -480,7 +482,33 @@ def test_render_help_groups_key_bindings():
     assert "Debug log:" in rendered
     assert "v: toggle list/grid view" in rendered
     assert "left/right: move across grid cards" in rendered
+    assert "PLEX_TUI_ARTWORK_LOG=1" in rendered
     assert "?: show help" in rendered
+
+
+def test_performance_log_requires_perf_env(monkeypatch):
+    messages = []
+    monkeypatch.delenv("PLEX_TUI_PERF_LOG", raising=False)
+    monkeypatch.setattr("plextui.app.write_debug_log", messages.append)
+
+    write_performance_log("event", 0.0, "detail")
+
+    assert messages == []
+
+
+def test_artwork_performance_log_requires_artwork_env(monkeypatch):
+    messages = []
+    monkeypatch.setenv("PLEX_TUI_PERF_LOG", "1")
+    monkeypatch.delenv("PLEX_TUI_ARTWORK_LOG", raising=False)
+    monkeypatch.setattr("plextui.app.write_debug_log", messages.append)
+
+    write_artwork_performance_log("grid_render", 0.0, "items=1")
+    assert messages == []
+
+    monkeypatch.setenv("PLEX_TUI_ARTWORK_LOG", "1")
+    write_artwork_performance_log("grid_render", 0.0, "items=1")
+    assert len(messages) == 1
+    assert "perf grid_render" in messages[0]
 
 
 def test_media_rows_returns_list_rows():

@@ -219,6 +219,13 @@ Enable browsing performance timings before launch:
 PLEX_TUI_PERF_LOG=1 plex-tui
 ```
 
+Verbose grid artwork internals are quieter by default. Include them only when
+debugging poster loading:
+
+```bash
+PLEX_TUI_PERF_LOG=1 PLEX_TUI_ARTWORK_LOG=1 plex-tui
+```
+
 ## Development
 
 Common commands:

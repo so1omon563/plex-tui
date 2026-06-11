@@ -210,7 +210,7 @@ class MediaGrid(Static):
         poster_count = sum(1 for item in visible_items if item.artwork_path)
         started = time.perf_counter()
         self.update(render_media_grid(visible_items, selected_key, self.config, self.columns, self.artwork))
-        write_performance_log(
+        write_artwork_performance_log(
             "grid_render",
             started,
             f"items={len(visible_items)} posters={poster_count} loaded={loaded_count} columns={self.columns} page={','.join(item.key for item in visible_items)}",
@@ -1205,7 +1205,7 @@ class PlexTuiApp(App[None]):
             self.last_grid_prefetch_page = current_key
             self.start_grid_prefetch(current_items, "current", page_key=current_key)
         else:
-            write_performance_log("grid_prefetch_skipped", time.perf_counter(), "page=current reason=same-page-loaded")
+            write_artwork_performance_log("grid_prefetch_skipped", time.perf_counter(), "page=current reason=same-page-loaded")
 
         if current_key in self.active_grid_prefetch_pages:
             return
@@ -1228,15 +1228,15 @@ class PlexTuiApp(App[None]):
         if not page_key:
             return
         if page_key in self.active_grid_prefetch_pages:
-            write_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=in-flight items={len(items)}")
+            write_artwork_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=in-flight items={len(items)}")
             return
         if page_key in self.prefetched_grid_pages:
             self.apply_cached_grid_artwork(items)
-            write_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=cached items={len(items)}")
+            write_artwork_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=cached items={len(items)}")
             return
         if self.active_grid_prefetch_pages and page_label != "current":
             if self.queue_grid_prefetch(items, page_key, page_label, delay):
-                write_performance_log("grid_prefetch_queued", started, f"page={page_label} items={len(items)}")
+                write_artwork_performance_log("grid_prefetch_queued", started, f"page={page_label} items={len(items)}")
             return
         self.active_grid_prefetch_pages.add(page_key)
         self.prefetch_grid_items(items, page_key, page_label, delay)
@@ -1269,7 +1269,7 @@ class PlexTuiApp(App[None]):
             items, page_key, page_label, delay = self.pending_grid_prefetches.pop(0)
             if page_key in self.prefetched_grid_pages:
                 self.apply_cached_grid_artwork(items)
-                write_performance_log("grid_prefetch_skipped", time.perf_counter(), f"page={page_label} reason=cached items={len(items)}")
+                write_artwork_performance_log("grid_prefetch_skipped", time.perf_counter(), f"page={page_label} reason=cached items={len(items)}")
                 continue
             self.active_grid_prefetch_pages.add(page_key)
             self.prefetch_grid_items(items, page_key, page_label, delay)
@@ -1386,7 +1386,7 @@ class PlexTuiApp(App[None]):
             visible_keys = {item.key for item in grid.visible_page_items()}
             if visible_keys.intersection(artwork_by_key):
                 grid.refresh_grid()
-            write_performance_log("grid_artwork_hydrated", time.perf_counter(), f"items={len(artwork_by_key)}")
+            write_artwork_performance_log("grid_artwork_hydrated", time.perf_counter(), f"items={len(artwork_by_key)}")
 
     def apply_grid_artworks(self, artwork_by_key: dict[str, object]) -> None:
         try:
@@ -1398,7 +1398,7 @@ class PlexTuiApp(App[None]):
         grid.artwork.update(artwork_by_key)
         visible_keys = {item.key for item in grid.visible_page_items()}
         visible_applied = visible_keys.intersection(artwork_by_key)
-        write_performance_log(
+        write_artwork_performance_log(
             "grid_artwork_applied",
             time.perf_counter(),
             f"items={len(artwork_by_key)} visible={len(visible_applied)}",
@@ -1588,7 +1588,11 @@ class PlexTuiApp(App[None]):
             return
         if action == "show_debug_log":
             path = debug_log_path()
-            self.show_detail_text(f"Debug log\n\n{path}\n\nSet PLEX_TUI_PERF_LOG=1 before launch to include browsing performance timings.")
+            self.show_detail_text(
+                f"Debug log\n\n{path}\n\n"
+                "Set PLEX_TUI_PERF_LOG=1 before launch to include browsing performance timings.\n"
+                "Set PLEX_TUI_ARTWORK_LOG=1 as well to include verbose grid artwork internals."
+            )
             self.set_status(f"Debug log: {path}")
             return
         if action == "show_recent_debug_log":
@@ -2361,6 +2365,7 @@ def render_help() -> str:
         ",: show settings",
         "r: reconnect / reload libraries",
         "PLEX_TUI_PERF_LOG=1: write browsing timings to the debug log",
+        "PLEX_TUI_ARTWORK_LOG=1: include verbose grid artwork internals",
         "?: show help",
         "q: quit",
         "",
@@ -2950,3 +2955,9 @@ def write_performance_log(event: str, started: float, detail: str = "") -> None:
     elapsed_ms = (time.perf_counter() - started) * 1000
     suffix = f" {detail}" if detail else ""
     write_debug_log(f"perf {event} {elapsed_ms:.1f}ms{suffix}")
+
+
+def write_artwork_performance_log(event: str, started: float, detail: str = "") -> None:
+    if os.environ.get("PLEX_TUI_ARTWORK_LOG") != "1":
+        return
+    write_performance_log(event, started, detail)
