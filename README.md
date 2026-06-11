@@ -151,12 +151,10 @@ poster cards. Grid view groups cards into rows and supports left/right movement
 within the highlighted row. Cards use cached artwork immediately and update
 selected posters after their artwork is fetched.
 
-Native terminal image output is not enabled by default because terminal image
-protocols can conflict with Textual's screen renderer. `artwork_renderer =
-"kitty"` and `artwork_renderer = "auto"` still fall back to colored block art
-unless `PLEX_TUI_ENABLE_NATIVE_IMAGES=1` is set. Treat that env var as
-experimental. The Kitty path uses Unicode placeholders so image positions can
-follow Textual's normal cell layout.
+Native terminal image output is disabled for now because Kitty image protocols
+conflict with Textual's screen renderer in practice. `artwork_renderer =
+"kitty"` and `artwork_renderer = "auto"` currently fall back to colored block
+art.
 
 When playback starts, external subtitle streams reported by Plex are passed to
 `mpv` automatically. Items with embedded PGS/VOBSUB subtitles are direct-played

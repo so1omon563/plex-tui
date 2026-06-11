@@ -177,6 +177,8 @@ def test_media_rows_can_group_grid_view():
     assert selected_row == 1
     assert isinstance(rows[1], MediaGridRow)
     assert rows[1].selected_media.key == "3"
+    rows[1].set_artwork("3", "art", config)
+    assert rows[1].artwork["3"] == "art"
     assert next_media_view("list") == "poster"
     assert next_media_view("poster") == "grid"
     assert next_media_view("grid") == "list"

@@ -91,7 +91,8 @@ class MediaGridRow(ListItem):
     def __init__(self, items: list[MediaItem], selected_key: str | None, config: AppConfig) -> None:
         self.items = items
         self.selected_key = selected_key if selected_key in {item.key for item in items} else items[0].key
-        self.grid = Static(render_media_grid(self.items, self.selected_key, config))
+        self.artwork: dict[str, object] = {}
+        self.grid = Static(render_media_grid(self.items, self.selected_key, config, self.artwork))
         ListItem.__init__(self, self.grid)
 
     @property
@@ -103,7 +104,11 @@ class MediaGridRow(ListItem):
 
     def set_selected_key(self, selected_key: str, config: AppConfig) -> None:
         self.selected_key = selected_key
-        self.grid.update(render_media_grid(self.items, self.selected_key, config))
+        self.grid.update(render_media_grid(self.items, self.selected_key, config, self.artwork))
+
+    def set_artwork(self, media_key: str, artwork: object, config: AppConfig) -> None:
+        self.artwork[media_key] = artwork
+        self.grid.update(render_media_grid(self.items, self.selected_key, config, self.artwork))
 
 
 class LoadMoreRow(ListItem):
@@ -600,6 +605,8 @@ class PlexTuiApp(App[None]):
                 self.show_detail_text(render_detail_content(details, self.config, artwork))
                 if isinstance(row, MediaCardRow) and card_artwork is not None:
                     row.set_artwork(card_artwork)
+                elif isinstance(row, MediaGridRow) and card_artwork is not None:
+                    row.set_artwork(item.key, card_artwork, self.config)
 
         self.call_from_thread(update_artwork)
 
@@ -614,7 +621,7 @@ class PlexTuiApp(App[None]):
 
     def media_grid_columns(self) -> int:
         main_width = self.query_one("#main").size.width
-        return max(1, min(5, max(1, main_width - 4) // 24))
+        return max(1, min(8, max(1, main_width - 4) // 14))
 
     def action_focus_search(self) -> None:
         self.search_global = False
@@ -1130,17 +1137,32 @@ def render_media_card(media: MediaItem, artwork: object | None = None) -> object
     return Group(artwork, title, subtitle)
 
 
-def render_media_grid(items: list[MediaItem], selected_key: str, config: AppConfig) -> object:
-    cards = [render_media_grid_card(item, item.key == selected_key, config) for item in items]
-    return Columns(cards, equal=True, expand=False, padding=(0, 2))
+def render_media_grid(
+    items: list[MediaItem],
+    selected_key: str,
+    config: AppConfig,
+    artwork_overrides: dict[str, object] | None = None,
+) -> object:
+    cards = [
+        render_media_grid_card(item, item.key == selected_key, config, artwork_overrides)
+        for item in items
+    ]
+    return Columns(cards, equal=True, expand=False, padding=(0, 1))
 
 
-def render_media_grid_card(media: MediaItem, selected: bool, config: AppConfig) -> object:
+def render_media_grid_card(
+    media: MediaItem,
+    selected: bool,
+    config: AppConfig,
+    artwork_overrides: dict[str, object] | None = None,
+) -> object:
     marker = "> " if selected else "  "
     title_style = "bold reverse" if selected else "bold"
-    title = truncate_text(media.title, 20)
-    subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), 20)
-    artwork = cached_card_artwork(media, config)
+    title = truncate_text(media.title, 12)
+    subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), 12)
+    artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
+    if artwork is None:
+        artwork = cached_card_artwork(media, config)
     if artwork is None:
         status = "poster" if media.artwork_path else "no poster"
         artwork = Text(f"[{status}]", style="dim")
@@ -1155,7 +1177,7 @@ def cached_card_artwork(media: MediaItem, config: AppConfig) -> object | None:
     if not artwork_enabled(config) or not media.artwork_path or not artwork_is_cached(media.artwork_path, config):
         return None
     try:
-        return render_artwork(fetch_artwork(media.raw, media.artwork_path, config), width=10, max_height=5)
+        return render_artwork(fetch_artwork(media.raw, media.artwork_path, config), width=8, max_height=4)
     except Exception:
         return None
 
