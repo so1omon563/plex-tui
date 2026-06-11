@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Added GitHub Actions CI and PyPI Trusted Publishing workflow scaffolding.
+- Added a manual TestPyPI Trusted Publishing workflow.
 - Added draft Arch AUR packaging files and Homebrew packaging notes.
 
 ## 0.2.0 - 2026-06-11

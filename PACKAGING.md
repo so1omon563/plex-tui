@@ -57,6 +57,23 @@ plex-tui --smoke
    After that, publishing a GitHub Release from a `v*` tag builds and uploads
    the package.
 
+   TestPyPI uses a separate trusted publisher and a manual workflow:
+
+   - Owner: `so1omon563`
+   - Repository: `plex-tui`
+   - Workflow: `publish-testpypi.yml`
+   - Environment: `testpypi`
+
+   Run the TestPyPI workflow from GitHub Actions before the real PyPI release.
+   Install tests from TestPyPI need PyPI as an extra dependency index:
+
+   ```bash
+   python -m pip install \
+     --index-url https://test.pypi.org/simple/ \
+     --extra-index-url https://pypi.org/simple/ \
+     plex-tui
+   ```
+
 2. **Homebrew tap**
 
    Add a Homebrew formula after PyPI packaging is stable. The formula can depend

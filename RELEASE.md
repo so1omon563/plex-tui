@@ -50,6 +50,22 @@ plex-tui --version
 plex-tui --smoke
 ```
 
+## TestPyPI
+
+Before publishing to PyPI, run the `Publish to TestPyPI` workflow manually from
+GitHub Actions. Then test installation with PyPI available for dependencies:
+
+```bash
+python -m venv /tmp/plex-tui-testpypi
+/tmp/plex-tui-testpypi/bin/python -m pip install --upgrade pip
+/tmp/plex-tui-testpypi/bin/python -m pip install \
+  --index-url https://test.pypi.org/simple/ \
+  --extra-index-url https://pypi.org/simple/ \
+  plex-tui
+/tmp/plex-tui-testpypi/bin/plex-tui --version
+/tmp/plex-tui-testpypi/bin/plex-tui --smoke
+```
+
 ## Versioning
 
 Before tagging a release:
