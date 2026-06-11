@@ -8,7 +8,7 @@ A small Python/Textual Plex TUI prototype.
 cd ~/plex-tui
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e .
+make install-dev
 ```
 
 On first run, `plex-tui` will start a Plex browser login and then ask which server
@@ -38,7 +38,39 @@ On Linux, the config path is usually `~/.config/plex-tui/config.toml`.
 Run:
 
 ```bash
+make run
+```
+
+Or run the installed console command directly:
+
+```bash
 plex-tui
+```
+
+## Development
+
+Common local commands:
+
+```bash
+make smoke
+make test
+make compile
+```
+
+`make smoke` checks imports, app construction, bindings, config path resolution,
+and a small helper self-check without connecting to Plex.
+
+To try the package in an isolated command environment:
+
+```bash
+pipx install ~/plex-tui
+plex-tui
+```
+
+During local development, reinstall the `pipx` copy after changes:
+
+```bash
+pipx reinstall ~/plex-tui
 ```
 
 ## Keys
