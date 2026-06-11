@@ -110,6 +110,7 @@ class PlexTuiApp(App[None]):
         Binding("shift+tab", "focus_previous", "Prev"),
         Binding("l", "focus_libraries", "Focus libraries"),
         Binding("m", "focus_media", "Focus media list"),
+        Binding("comma", "show_settings", "Settings"),
         Binding("escape", "back_or_clear", "Back"),
         Binding("p", "play_selected", "Play"),
         Binding("x", "stop_playback", "Stop"),
@@ -122,6 +123,7 @@ class PlexTuiApp(App[None]):
     login_session: LoginSession | None
     pending_account_token: str
     search_global: bool
+    settings_visible: bool
     player: PlayerHandle | None
 
     def compose(self) -> ComposeResult:
@@ -146,6 +148,7 @@ class PlexTuiApp(App[None]):
         self.login_session = None
         self.pending_account_token = ""
         self.search_global = False
+        self.settings_visible = False
         self.player = None
         self.query_one("#search", Input).display = False
         self.load_server()
@@ -369,6 +372,17 @@ class PlexTuiApp(App[None]):
         self.query_one("#media", ListView).focus()
         self.set_status("Focus moved to media list")
 
+    def action_show_settings(self) -> None:
+        self.settings_visible = True
+        self.query_one("#media-title", Static).update("Settings")
+        view = self.query_one("#media", ListView)
+        view.clear()
+        for label, value in config_rows(self.config):
+            view.append(ListItem(Label(f"{label}: {value}")))
+        self.show_detail_text(render_settings(self.config))
+        view.focus()
+        self.set_status("Settings")
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "search":
             self.run_search(event.value.strip(), self.search_global)
@@ -399,6 +413,14 @@ class PlexTuiApp(App[None]):
         if search.display:
             search.value = ""
             search.display = False
+            if self.browsing_stack:
+                state = self.browsing_stack[-1]
+                self.show_media(state.title, state.items)
+            self.query_one("#media", ListView).focus()
+            return
+
+        if self.settings_visible:
+            self.settings_visible = False
             if self.browsing_stack:
                 state = self.browsing_stack[-1]
                 self.show_media(state.title, state.items)
@@ -498,4 +520,21 @@ def render_details(details: object) -> str:
     if summary:
         lines.extend(["", "Summary", summary])
 
+    return "\n".join(lines)
+
+
+def config_rows(config: AppConfig) -> list[tuple[str, str]]:
+    return [
+        ("Config Path", str(config_path())),
+        ("Base URL", config.base_url or "not set"),
+        ("Server Token", "saved" if config.token else "not set"),
+        ("Account Token", "saved" if config.account_token else "not set"),
+        ("Client ID", config.client_identifier or "not set"),
+    ]
+
+
+def render_settings(config: AppConfig) -> str:
+    lines = ["Settings", ""]
+    for label, value in config_rows(config):
+        lines.append(f"{label}: {value}")
     return "\n".join(lines)

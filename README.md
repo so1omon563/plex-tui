@@ -50,6 +50,7 @@ plex-tui
 - `tab` / `shift+tab`: move keyboard focus
 - `l`: move keyboard focus to the libraries list
 - `m`: move keyboard focus to the media list
+- `,`: show settings
 - `escape`: clear search / go back
 - `enter`: open selected item
 - `p`: play selected playable item with `mpv`
