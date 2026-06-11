@@ -1,20 +1,33 @@
 # Homebrew Packaging
 
-Homebrew packaging should come after PyPI publishing is working. The formula can
-then install `plex-tui` into a virtualenv and declare the external player:
+The published Homebrew tap lives in a separate repository:
 
-```ruby
-depends_on "mpv"
-depends_on "python@3.13"
+```text
+https://github.com/so1omon563/homebrew-plex-tui
 ```
 
-Expected formula checks:
+Users install with:
 
-```ruby
-test do
-  assert_match "plex-tui", shell_output("#{bin}/plex-tui --version")
-  assert_match "plex-tui smoke ok", shell_output("#{bin}/plex-tui --smoke")
-end
+```bash
+brew tap so1omon563/plex-tui
+brew install plex-tui
 ```
 
-Use a tap such as `so1omon563/homebrew-plex-tui` once the PyPI package exists.
+The formula installs `plex-tui` into a Homebrew-managed virtualenv and declares
+`mpv` as a dependency.
+
+## Maintenance
+
+For each `plex-tui` release:
+
+1. Update the formula URL and sha256 for the new PyPI sdist.
+2. Refresh Python resource blocks if dependencies changed.
+3. Run:
+
+   ```bash
+   brew test so1omon563/plex-tui/plex-tui
+   brew audit --strict --online so1omon563/plex-tui/plex-tui
+   ```
+
+The current formula is correct but slow on first install because native Python
+resources such as `pillow` are built from source.

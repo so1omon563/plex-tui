@@ -1,15 +1,8 @@
 # Roadmap
 
-## Immediate Post-0.2.0
-
-- Validate a fresh install from PyPI on macOS and Linux:
-  - `pipx install plex-tui`
-  - `plex-tui --smoke`
-  - real browsing and playback session
-- Collect rough edges from real library browsing, especially grid view latency and artwork rendering.
-
 ## App UX
 
+- Collect rough edges from real library browsing, especially grid view latency and artwork rendering.
 - Improve the settings screen beyond action rows:
   - richer row controls for grouped playback, artwork, browsing, and account actions
   - clearer visual affordances for confirmation-required actions

@@ -1,139 +1,102 @@
-# Packaging Options
+# Packaging
 
-## Current Target
+plex-tui is distributed through PyPI, a Homebrew tap, and the Arch AUR. The
+source repository remains the canonical place for versioning, release notes,
+and validation.
 
-The current package is published on PyPI as a standard Python project with a
-`plex-tui` console script. The recommended install path is:
+## Supported Channels
+
+### PyPI
+
+Recommended cross-platform install:
 
 ```bash
 pipx install plex-tui
 ```
 
-This keeps Python dependencies isolated while still exposing a normal command.
-Users must install `mpv` separately with their system package manager.
+PyPI publishing uses GitHub Actions Trusted Publishing:
 
-Users can also install from GitHub or a local checkout:
+- Workflow: `.github/workflows/publish-pypi.yml`
+- PyPI environment: `pypi`
+- Trigger: GitHub Release publication, or manual workflow dispatch with a ref
+
+TestPyPI uses a separate manual workflow:
+
+- Workflow: `.github/workflows/publish-testpypi.yml`
+- TestPyPI environment: `testpypi`
+
+Install tests from TestPyPI need PyPI as a dependency fallback:
 
 ```bash
-pipx install "git+https://github.com/so1omon563/plex-tui.git"
-pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.2.0"
-pipx install .
+python -m pip install \
+  --index-url https://test.pypi.org/simple/ \
+  --extra-index-url https://pypi.org/simple/ \
+  plex-tui
 ```
 
-For local package validation, test both source and wheel installs:
+### Homebrew
+
+Tap repository:
+
+```text
+https://github.com/so1omon563/homebrew-plex-tui
+```
+
+User install:
 
 ```bash
-pipx install --force .
-plex-tui --version
-plex-tui --smoke
-python -m build
-pipx install --force dist/plex_tui-*.whl
-plex-tui --version
-plex-tui --smoke
+brew tap so1omon563/plex-tui
+brew install plex-tui
 ```
 
-## Recommended Path
+The formula depends on `mpv` and `python@3.13`, then installs the Python app in
+a Homebrew-managed virtualenv. The first install can take several minutes
+because native Python resources such as `pillow` are built from source.
 
-1. **PyPI + pipx**
+Validation commands:
 
-   The Python package is published to PyPI. Users install with:
+```bash
+brew test so1omon563/plex-tui/plex-tui
+brew audit --strict --online so1omon563/plex-tui/plex-tui
+```
 
-   ```bash
-   pipx install plex-tui
-   ```
+### Arch AUR
 
-   This is the lowest-maintenance distribution path for Python/Textual apps.
-   It does not solve the external `mpv` dependency, so docs must keep calling
-   that out explicitly.
+AUR package:
 
-   The repository includes `.github/workflows/publish-pypi.yml` for PyPI Trusted
-   Publishing. The PyPI project trusts:
+```text
+https://aur.archlinux.org/packages/plex-tui
+```
 
-   - Owner: `so1omon563`
-   - Repository: `plex-tui`
-   - Workflow: `publish-pypi.yml`
-   - Environment: `pypi`
+User install:
 
-   Publishing a GitHub Release from a `v*` tag builds and uploads the package.
+```bash
+paru -S plex-tui
+```
 
-   TestPyPI uses a separate trusted publisher and a manual workflow:
+The source copy for AUR metadata lives in `packaging/aur/`. The package uses
+Arch system dependencies, including `mpv`, `python-textual`, `python-pillow`,
+`python-plexapi`, `python-platformdirs`, and `python-rich`.
 
-   - Owner: `so1omon563`
-   - Repository: `plex-tui`
-   - Workflow: `publish-testpypi.yml`
-   - Environment: `testpypi`
+Validation is handled by `.github/workflows/aur.yml`, which runs inside
+`archlinux:base-devel` and checks:
 
-   Run the TestPyPI workflow from GitHub Actions before the real PyPI release.
-   Install tests from TestPyPI need PyPI as an extra dependency index:
+- `makepkg --clean --syncdeps --noconfirm --check`
+- `.SRCINFO` is in sync with `PKGBUILD`
+- `namcap PKGBUILD ./*.pkg.tar.*`
 
-   ```bash
-   python -m pip install \
-     --index-url https://test.pypi.org/simple/ \
-     --extra-index-url https://pypi.org/simple/ \
-     plex-tui
-   ```
+## Release Maintenance
 
-2. **Homebrew tap**
+For each new app release:
 
-   A Homebrew tap is available at `so1omon563/homebrew-plex-tui`. The formula
-   depends on `mpv` and installs the Python package through a Homebrew-managed
-   virtualenv.
+1. Publish and validate PyPI.
+2. Update the Homebrew tap formula URL/hash and Python resources.
+3. Update `packaging/aur/PKGBUILD` and `packaging/aur/.SRCINFO`.
+4. Run packaging validation workflows.
+5. Push the AUR package repo update after the workflow passes.
 
-   macOS users can install with:
+## Known Follow-Up
 
-   ```bash
-   brew tap so1omon563/plex-tui
-   brew install plex-tui
-   ```
-
-   Formula requirements:
-
-   - Depend on `python@3.13` or the current Homebrew Python.
-   - Depend on `mpv`.
-   - Install from a tagged source archive or PyPI release.
-   - Run `plex-tui --smoke` in the formula test.
-
-   The strict source build validates cleanly, but the first install can take
-   several minutes because native Python resources such as `pillow` are built
-   from source.
-
-3. **Arch AUR**
-
-   An AUR package is available at
-   `https://aur.archlinux.org/packages/plex-tui`. It depends on `mpv` and
-   Python dependencies from Arch packages.
-
-   Arch users can install with an AUR helper:
-
-   ```bash
-   paru -S plex-tui
-   ```
-
-   The repository keeps `packaging/aur/PKGBUILD` and
-   `packaging/aur/.SRCINFO` as the source copy. The `AUR Package` GitHub
-   Actions workflow validates them with `makepkg --check`, `.SRCINFO` sync,
-   and `namcap`.
-
-4. **Standalone binaries**
-
-   Consider PyInstaller or Shiv/Pex only after the app behavior stabilizes.
-   Standalone artifacts are convenient but add CI and platform complexity.
-   They still cannot bundle every user's `mpv` setup cleanly, so they do not
-   remove the external player dependency.
-
-## Not Recommended Yet
-
-- System distro packages before the app has tagged releases.
-- Bundling `mpv` into the Python package.
-- Native image protocol support as a packaging requirement.
-
-## Packaging Requirements
-
-Every distribution path should preserve:
-
-- `plex-tui` command name.
-- Python 3.11+ support.
-- MIT license metadata.
-- Clear external `mpv` dependency.
-- Config paths based on `platformdirs`.
-- Smoke/test/build checks from `RELEASE.md`.
+- Automate Homebrew tap updates after PyPI publishing.
+- Investigate faster Homebrew installs without compromising formula quality.
+- Consider standalone artifacts only after the app behavior stabilizes.

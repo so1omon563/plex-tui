@@ -11,6 +11,9 @@ through `mpv`.
   - `player.py`: `mpv` launch, stream selection, and playback diagnostics.
   - `config.py`, `auth.py`, `artwork.py`, `models.py`: supporting modules.
 - `tests/`: pytest suite, split by app helpers/navigation and service modules.
+- `.github/workflows/`: CI plus PyPI/TestPyPI/AUR validation workflows.
+- `packaging/`: Homebrew and AUR maintenance notes; `packaging/aur/` contains
+  the source copy of `PKGBUILD` and `.SRCINFO`.
 - `README.md`, `PACKAGING.md`, `RELEASE.md`, `ROADMAP.md`: user and release docs.
 - `config.example.toml`: example user configuration.
 
@@ -59,6 +62,8 @@ make smoke
 ```
 
 For packaging or metadata changes, also run `make check-package` or `make check`.
+For AUR package changes, run the `AUR Package` workflow or validate with
+`makepkg` on Arch.
 
 ## Commit & Pull Request Guidelines
 

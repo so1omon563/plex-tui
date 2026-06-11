@@ -3,9 +3,9 @@
 A standalone Python/Textual terminal UI for browsing Plex and launching playback
 through `mpv`.
 
-plex-tui is currently an early release. It supports Plex login, server
-selection, paged library browsing, search, list/grid views, stream preferences,
-terminal poster artwork, and playback progress reporting.
+plex-tui is an early release. It supports Plex login, server selection, paged
+library browsing, search, list/grid views, stream preferences, terminal poster
+artwork, and playback progress reporting.
 
 ## Screenshots
 
@@ -23,7 +23,8 @@ terminal poster artwork, and playback progress reporting.
 - `mpv` available on `PATH`
 - A Plex account/server
 
-Install `mpv` with your platform package manager:
+When installing with PyPI or from GitHub, install `mpv` with your platform
+package manager:
 
 ```bash
 # macOS
@@ -39,9 +40,9 @@ sudo dnf install mpv
 sudo pacman -S mpv
 ```
 
-## Install
+## Installation
 
-The recommended install path is `pipx` from PyPI:
+### PyPI
 
 ```bash
 pipx install plex-tui
@@ -49,31 +50,41 @@ plex-tui --smoke
 plex-tui
 ```
 
-On macOS, you can also install with Homebrew:
+This is the recommended cross-platform install path. It keeps Python
+dependencies isolated, but you still need to install `mpv` separately.
+If `pipx` is not installed, install it with your platform package manager first
+or follow the pipx installation guide.
+
+### Homebrew
 
 ```bash
 brew tap so1omon563/plex-tui
 brew install plex-tui
+plex-tui --smoke
 ```
 
-The Homebrew formula installs `mpv` automatically.
-The first Homebrew install can take several minutes because native Python
-dependencies such as `pillow` are built from source.
+The Homebrew formula installs `mpv` automatically. The first install can take
+several minutes because native Python dependencies such as `pillow` are built
+from source.
 
-On Arch Linux, install from the AUR:
+### Arch Linux
 
 ```bash
 paru -S plex-tui
+plex-tui --smoke
 ```
 
-The AUR package depends on `mpv`.
+The AUR package depends on `mpv`. Any AUR helper can be used; `paru` is only an
+example.
 
-To install from GitHub instead:
+### GitHub
 
 ```bash
 pipx install "git+https://github.com/so1omon563/plex-tui.git"
 pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.2.0"
 ```
+
+Use this path for testing `main` before a tagged/PyPI release.
 
 Useful CLI checks:
 
@@ -100,6 +111,9 @@ make run
 On first run, plex-tui starts a Plex browser login and asks which server
 connection to save. If a browser cannot be opened, use the login URL shown in
 the terminal.
+
+The login flow writes a config file with the selected server URL and token. Use
+the Settings screen or `plex-tui --config-path` to find the active file.
 
 You can also configure a server manually. macOS config path:
 
@@ -130,6 +144,13 @@ export PLEX_TUI_TOKEN="your-plex-token"
 ```
 
 See `config.example.toml` for optional settings.
+
+## Playback
+
+Playback is launched through `mpv`; plex-tui does not embed a video player.
+While playback is active, Plex progress is updated in the background. Saved
+audio/subtitle language preferences are applied when matching streams are
+available, and the details pane shows the effective playback choices.
 
 ## Key Bindings
 
@@ -181,6 +202,13 @@ directory shown in Settings.
 
 Playback diagnostics are written to `debug.log` in the app config directory.
 Tokens are redacted from logged `mpv` arguments.
+
+Useful paths:
+
+```bash
+plex-tui --config-path
+plex-tui --debug-log-path
+```
 
 Enable browsing performance timings before launch:
 

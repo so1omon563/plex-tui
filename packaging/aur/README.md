@@ -1,20 +1,41 @@
 # Arch AUR Packaging
 
-This directory contains a draft `PKGBUILD` for `plex-tui`.
+The published AUR package is:
 
-Before submitting to the AUR:
-
-```bash
-makepkg --clean --syncdeps --check
-makepkg --printsrcinfo > .SRCINFO
-namcap PKGBUILD plex-tui-*.pkg.tar.*
+```text
+https://aur.archlinux.org/packages/plex-tui
 ```
 
-The repository also includes an `AUR Package` GitHub Actions workflow that runs
-the same build/check path inside an `archlinux:base-devel` container and checks
-that `.SRCINFO` matches `PKGBUILD`.
+This directory keeps the source copy of the package metadata:
+
+- `PKGBUILD`
+- `.SRCINFO`
+
+## Validation
+
+The `AUR Package` GitHub Actions workflow validates the package inside an
+`archlinux:base-devel` container. It runs:
+
+```bash
+makepkg --clean --syncdeps --noconfirm --check
+makepkg --printsrcinfo
+namcap PKGBUILD ./*.pkg.tar.*
+```
+
+The workflow also verifies that committed `.SRCINFO` matches `PKGBUILD`.
+
+## Publishing
+
+After the workflow passes, copy `PKGBUILD` and `.SRCINFO` into the AUR checkout
+and push:
+
+```bash
+cp packaging/aur/PKGBUILD /path/to/aur-plex-tui/PKGBUILD
+cp packaging/aur/.SRCINFO /path/to/aur-plex-tui/.SRCINFO
+cd /path/to/aur-plex-tui
+git add PKGBUILD .SRCINFO
+git commit -m "Update to X.Y.Z-1"
+git push
+```
 
 The package depends on `mpv` because playback is delegated to the system player.
-If any Python dependency is unavailable in the official repositories, depend on
-the matching AUR package or use PyPI packaging only until the dependency path is
-clear.
