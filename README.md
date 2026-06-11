@@ -61,8 +61,9 @@ plex-tui
 Search results are navigable views. Press `escape` from results or opened
 children to return to the previous list.
 
-Top-level library views load in pages. Select the `Load more...` row and press
-`enter` to fetch the next page.
+Top-level library views load in pages. Navigating near the end of the loaded
+items fetches the next page automatically. You can also select the
+`Load more...` row and press `enter`.
 
 The settings view shows the active config and supports reconnect/reload,
 Plex relogin, and clearing audio/subtitle preferences.

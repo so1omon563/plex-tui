@@ -30,6 +30,9 @@ from .player import (
 from .plex_service import DEFAULT_PAGE_SIZE, PlexService, media_details
 
 
+AUTO_LOAD_REMAINING_THRESHOLD = 10
+
+
 @dataclass
 class BrowseState:
     title: str
@@ -176,6 +179,8 @@ class PlexTuiApp(App[None]):
     selected_subtitle: StreamChoice | None
     selected_audio: StreamChoice | None
     picker_media_key: str | None
+    loading_more: bool
+    suppress_auto_load: bool
     player: PlayerHandle | None
 
     def compose(self) -> ComposeResult:
@@ -205,6 +210,8 @@ class PlexTuiApp(App[None]):
         self.selected_subtitle = None
         self.selected_audio = None
         self.picker_media_key = None
+        self.loading_more = False
+        self.suppress_auto_load = False
         self.player = None
         self.query_one("#search", Input).display = False
         self.load_server()
@@ -315,6 +322,7 @@ class PlexTuiApp(App[None]):
         elif isinstance(row, MediaRow):
             mark_active_row(event.list_view, row)
             self.show_media_details(row.media)
+            self.maybe_auto_load_more(row.media)
         elif isinstance(row, LoadMoreRow):
             mark_active_row(event.list_view, row)
             self.show_detail_text("Load the next page of items from this library.")
@@ -362,18 +370,32 @@ class PlexTuiApp(App[None]):
 
         self.call_from_thread(update)
 
+    def maybe_auto_load_more(self, media: MediaItem) -> None:
+        if self.suppress_auto_load:
+            self.suppress_auto_load = False
+            return
+        if self.settings_visible or self.picker_visible or self.loading_more or not self.browsing_stack:
+            return
+        state = self.browsing_stack[-1]
+        if should_auto_load_more(state, media.key, AUTO_LOAD_REMAINING_THRESHOLD):
+            self.load_more_media(selected_key=media.key)
+
     @work(thread=True, exclusive=True)
-    def load_more_media(self) -> None:
+    def load_more_media(self, selected_key: str | None = None) -> None:
         if self.service is None or not self.browsing_stack:
             return
         state = self.browsing_stack[-1]
+        if self.loading_more:
+            return
         if not state.has_more or state.selected_library is None:
             self.call_from_thread(self.set_status, "No more items to load")
             return
+        self.loading_more = True
         self.post_message(StatusChanged(f"Loading more {state.title}..."))
         try:
             page = self.service.library_page(state.selected_library, state.next_start, DEFAULT_PAGE_SIZE)
         except Exception as exc:
+            self.loading_more = False
             self.call_from_thread(self.show_error, str(exc))
             return
 
@@ -382,7 +404,9 @@ class PlexTuiApp(App[None]):
             state.items.extend(page.items)
             state.next_start = page.next_start
             state.total = page.total
-            self.show_browse_state(state, selected_key=first_new_key)
+            self.loading_more = False
+            self.suppress_auto_load = True
+            self.show_browse_state(state, selected_key=selected_key or first_new_key)
             self.query_one("#media", ListView).focus()
             self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more))
 
@@ -846,6 +870,18 @@ def render_loaded_status(title: str, loaded: int, total: int | None, has_more: b
     if has_more:
         return f"{title}: {loaded} of {total} items loaded"
     return f"{title}: {loaded} items"
+
+
+def should_auto_load_more(state: BrowseState, selected_key: str, threshold: int) -> bool:
+    if not state.has_more:
+        return False
+    if threshold <= 0:
+        return False
+    start_index = max(0, len(state.items) - threshold)
+    for index, item in enumerate(state.items):
+        if item.key == selected_key:
+            return index >= start_index
+    return False
 
 
 def render_picker_details(stream_type: str, current_choice: StreamChoice | None, config: AppConfig) -> str:

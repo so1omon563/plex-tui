@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import patch
 
-from plextui.app import BrowseState, LoadMoreRow, PlexTuiApp, render_loaded_status
+from plextui.app import BrowseState, LoadMoreRow, PlexTuiApp, render_loaded_status, should_auto_load_more
 from plextui.config import AppConfig
 from plextui.models import LibraryItem, MediaItem
 from plextui.player import StreamChoice
@@ -38,6 +38,24 @@ def test_render_loaded_status():
 
 def test_load_more_media_appends_next_page():
     asyncio.run(run_load_more_media_check())
+
+
+def test_load_more_media_can_preserve_selected_row():
+    asyncio.run(run_load_more_media_preserve_selection_check())
+
+
+def test_should_auto_load_more_near_end_only():
+    library = LibraryItem("Movies", "1", "movie", object())
+    items = [
+        MediaItem(str(index), "", "movie", str(index), True, Raw())
+        for index in range(20)
+    ]
+    state = BrowseState("Movies", items, library, next_start=20, total=30)
+
+    assert not should_auto_load_more(state, "8", threshold=10)
+    assert should_auto_load_more(state, "10", threshold=10)
+    assert should_auto_load_more(state, "19", threshold=10)
+    assert not should_auto_load_more(BrowseState("Movies", items), "19", threshold=10)
 
 
 async def run_picker_return_check():
@@ -152,3 +170,23 @@ async def run_load_more_media_check():
         assert [item.title for item in state.items] == ["First", "Second"]
         assert state.next_start == 2
         assert state.has_more
+
+
+async def run_load_more_media_preserve_selection_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        library = LibraryItem("Movies", "1", "movie", object())
+        first = MediaItem("First", "", "movie", "1", True, Raw())
+        second = MediaItem("Second", "", "movie", "2", True, Raw())
+        third = MediaItem("Third", "", "movie", "3", True, Raw())
+        page = MediaPage([third], start=2, total=4)
+        app.service = FakePagedService(page)
+        app.browsing_stack = [BrowseState("Movies", [first, second], library, next_start=2, total=4)]
+
+        app.load_more_media(selected_key="2")
+        await pilot.pause(0.5)
+
+        row = app.query_one("#media").highlighted_child
+        assert row is not None
+        assert row.media.title == "Second"
