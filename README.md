@@ -47,9 +47,9 @@ plex-tui
 - `r`: reload
 - `/`: search current library
 - `g`: search all libraries
-- `tab` / `shift+tab`: move focus
-- `l`: focus libraries
-- `m`: focus media
+- `tab` / `shift+tab`: move keyboard focus
+- `l`: move keyboard focus to the libraries list
+- `m`: move keyboard focus to the media list
 - `escape`: clear search / go back
 - `enter`: open selected item
 - `p`: play selected playable item with `mpv`

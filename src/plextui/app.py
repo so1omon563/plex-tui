@@ -104,8 +104,8 @@ class PlexTuiApp(App[None]):
         Binding("g", "focus_global_search", "Global"),
         Binding("tab", "focus_next", "Next"),
         Binding("shift+tab", "focus_previous", "Prev"),
-        Binding("l", "focus_libraries", "Libraries"),
-        Binding("m", "focus_media", "Media"),
+        Binding("l", "focus_libraries", "Focus libraries"),
+        Binding("m", "focus_media", "Focus media list"),
         Binding("escape", "back_or_clear", "Back"),
         Binding("p", "play_selected", "Play"),
         Binding("x", "stop_playback", "Stop"),
@@ -336,11 +336,11 @@ class PlexTuiApp(App[None]):
 
     def action_focus_libraries(self) -> None:
         self.query_one("#libraries", ListView).focus()
-        self.set_status("Libraries")
+        self.set_status("Focus moved to libraries")
 
     def action_focus_media(self) -> None:
         self.query_one("#media", ListView).focus()
-        self.set_status("Media")
+        self.set_status("Focus moved to media list")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "search":
