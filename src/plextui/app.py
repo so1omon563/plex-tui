@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -63,6 +64,7 @@ GRID_DENSITY_SPECS = {
 GRID_DETAIL_REFRESH_DELAY = 0.65
 LIST_DETAIL_REFRESH_DELAY = 0.35
 DETAIL_ARTWORK_REFRESH_DELAY = 0.55
+GRID_PREFETCH_WORKERS = 3
 
 
 @dataclass
@@ -1205,32 +1207,46 @@ class PlexTuiApp(App[None]):
         rendered: dict[str, object] = {}
         fetch_ms = 0.0
         render_ms = 0.0
+        cached_count = 0
         try:
-            for item in items:
-                if not item.artwork_path:
-                    continue
-                try:
-                    width, height = card_artwork_pixel_size(self.config)
-                    fetch_started = time.perf_counter()
-                    data = fetch_artwork(item.raw, item.artwork_path, self.config, width=width, height=height)
-                    fetch_ms += (time.perf_counter() - fetch_started) * 1000
-                    render_started = time.perf_counter()
-                    artwork = render_card_artwork(data, self.config)
-                    render_ms += (time.perf_counter() - render_started) * 1000
+            prefetch_items = [item for item in items if item.artwork_path]
+            width, height = card_artwork_pixel_size(self.config)
+            cached_count = sum(
+                1 for item in prefetch_items if artwork_is_cached(item.artwork_path, self.config, width=width, height=height)
+            )
+            with ThreadPoolExecutor(max_workers=min(GRID_PREFETCH_WORKERS, max(1, len(prefetch_items)))) as executor:
+                futures = [
+                    executor.submit(self.render_grid_prefetch_item, item, width, height)
+                    for item in prefetch_items
+                ]
+                for future in as_completed(futures):
+                    try:
+                        item, artwork, item_fetch_ms, item_render_ms = future.result()
+                    except Exception:
+                        continue
+                    fetch_ms += item_fetch_ms
+                    render_ms += item_render_ms
                     rendered[item.key] = artwork
                     self.call_from_thread(self.apply_grid_artwork, item.key, artwork)
-                except Exception:
-                    continue
 
             self.prefetched_grid_pages.add(page_key)
             write_performance_log(
                 "grid_prefetch",
                 started,
-                f"page={page_label} items={len(items)} rendered={len(rendered)} fetch={fetch_ms:.1f}ms render={render_ms:.1f}ms",
+                f"page={page_label} items={len(items)} rendered={len(rendered)} cached={cached_count} fetch={fetch_ms:.1f}ms render={render_ms:.1f}ms workers={GRID_PREFETCH_WORKERS}",
             )
         finally:
             self.active_grid_prefetch_pages.discard(page_key)
             self.call_from_thread(self.drain_grid_prefetch_queue)
+
+    def render_grid_prefetch_item(self, item: MediaItem, width: int, height: int) -> tuple[MediaItem, object, float, float]:
+        fetch_started = time.perf_counter()
+        data = fetch_artwork(item.raw, item.artwork_path, self.config, width=width, height=height)
+        fetch_ms = (time.perf_counter() - fetch_started) * 1000
+        render_started = time.perf_counter()
+        artwork = render_card_artwork(data, self.config)
+        render_ms = (time.perf_counter() - render_started) * 1000
+        return item, artwork, fetch_ms, render_ms
 
     def apply_grid_artwork(self, media_key: str, artwork: object) -> None:
         grid = self.query_one("#media-grid", MediaGrid)

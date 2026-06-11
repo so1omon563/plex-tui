@@ -88,8 +88,8 @@ def cached_artwork_path(path: str, config: AppConfig, width: int | None = None, 
     return cache_path() / "artwork" / f"{key}.img"
 
 
-def artwork_is_cached(path: str, config: AppConfig) -> bool:
-    return cached_artwork_path(path, config).exists()
+def artwork_is_cached(path: str, config: AppConfig, width: int | None = None, height: int | None = None) -> bool:
+    return cached_artwork_path(path, config, width, height).exists()
 
 
 def prune_artwork_cache(limit_bytes: int = ARTWORK_CACHE_LIMIT_BYTES) -> None:
