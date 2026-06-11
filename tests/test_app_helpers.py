@@ -12,6 +12,7 @@ from plextui.app import (
     effective_stream_preference_rows,
     format_offset,
     grid_card_width,
+    grid_page_key,
     grid_status,
     media_row,
     media_rows,
@@ -490,6 +491,7 @@ def test_media_grid_tracks_selection_and_visible_page():
     assert grid.artwork["3"] == "art"
     assert [item.key for item in grid.visible_page_items()] == ["0", "1", "2", "3"]
     assert [item.key for item in grid.visible_page_items(page_offset=1)] == ["4"]
+    assert grid_page_key(grid.visible_page_items()) == ("0", "1", "2", "3")
 
     grid.set_selected_index(4)
 

@@ -67,6 +67,10 @@ def test_grid_selection_pages_visible_cards():
     asyncio.run(run_grid_selection_page_check())
 
 
+def test_grid_prefetch_schedules_once_per_visible_page():
+    asyncio.run(run_grid_prefetch_schedule_check())
+
+
 def test_search_state_adds_load_more_row():
     asyncio.run(run_search_load_more_row_check())
 
@@ -353,6 +357,44 @@ async def run_grid_selection_page_check():
         next_page = [item.key for item in grid.visible_page_items()]
         assert next_page != first_page
         assert "30" in next_page
+
+
+async def run_grid_prefetch_schedule_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        items = [
+            MediaItem(f"Movie {index}", "", "movie", str(index), True, Raw(), artwork_path=f"/thumb/{index}")
+            for index in range(20)
+        ]
+        scheduled = []
+
+        def capture_prefetch(items, page_key, page_label, delay=0.0):
+            scheduled.append((tuple(item.key for item in items), page_key, page_label, delay))
+            app.prefetched_grid_pages.add(page_key)
+            app.active_grid_prefetch_pages.discard(page_key)
+
+        app.prefetch_grid_items = capture_prefetch
+        app.show_browse_state(BrowseState("Movies", items))
+        await pilot.pause(0.2)
+
+        grid = app.query_one("#media-grid")
+        first_page = tuple(item.key for item in grid.visible_page_items())
+        assert scheduled[0][0] == first_page
+        assert scheduled[0][1] == first_page
+        assert scheduled[0][2] == "current"
+        initial_schedule_count = len(scheduled)
+
+        grid.set_selected_index(1)
+        app.schedule_grid_prefetch(grid)
+        await pilot.pause(0.2)
+        assert len(scheduled) == initial_schedule_count
+
+        grid.set_selected_index(grid.page_size)
+        app.schedule_grid_prefetch(grid)
+        await pilot.pause(0.2)
+        assert len(scheduled) > initial_schedule_count
 
 
 async def run_search_load_more_row_check():

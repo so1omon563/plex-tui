@@ -382,9 +382,10 @@ class PlexTuiApp(App[None]):
     suppress_auto_load: bool
     player: PlayerHandle | None
     prefetched_grid_pages: set[tuple[str, ...]]
+    active_grid_prefetch_pages: set[tuple[str, ...]]
+    last_grid_prefetch_page: tuple[str, ...]
     applying_config_theme: bool
     detail_refresh_token: int
-    grid_prefetch_token: int
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -422,9 +423,10 @@ class PlexTuiApp(App[None]):
         self.suppress_auto_load = False
         self.player = None
         self.prefetched_grid_pages = set()
+        self.active_grid_prefetch_pages = set()
+        self.last_grid_prefetch_page = ()
         self.applying_config_theme = False
         self.detail_refresh_token = 0
-        self.grid_prefetch_token = 0
         try:
             self.config = load_config()
             self.apply_config_theme()
@@ -806,7 +808,7 @@ class PlexTuiApp(App[None]):
         token = self.detail_refresh_token
         details = media_details(item)
         self.show_detail_text(render_detail_content(details, self.config, raw=item.raw))
-        delay = 0.35 if self.media_grid_visible() else 0.0
+        delay = 0.65 if self.media_grid_visible() else 0.0
         self.refresh_media_details(item, token, delay)
 
     @work(thread=True, exclusive=True)
@@ -946,50 +948,66 @@ class PlexTuiApp(App[None]):
     def schedule_grid_prefetch(self, grid: MediaGrid) -> None:
         if not artwork_enabled(self.config):
             return
-        self.grid_prefetch_token += 1
-        token = self.grid_prefetch_token
-        self.prefetch_grid_items(grid.visible_page_items(), token, "current")
+        current_items = grid.visible_page_items()
+        current_key = grid_page_key(current_items)
+        if current_key != self.last_grid_prefetch_page:
+            self.last_grid_prefetch_page = current_key
+            self.start_grid_prefetch(current_items, "current")
+        else:
+            write_performance_log("grid_prefetch_skipped", time.perf_counter(), "page=current reason=same-page")
+
         next_items = grid.visible_page_items(page_offset=1)
         if next_items:
-            self.prefetch_grid_items(next_items, token, "next", delay=0.5)
+            self.start_grid_prefetch(next_items, "next", delay=0.75)
+
+    def start_grid_prefetch(self, items: list[MediaItem], page_label: str, delay: float = 0.0) -> None:
+        started = time.perf_counter()
+        page_key = grid_page_key(items)
+        if not page_key:
+            return
+        if page_key in self.active_grid_prefetch_pages:
+            write_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=in-flight items={len(items)}")
+            return
+        if page_key in self.prefetched_grid_pages:
+            write_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=cached items={len(items)}")
+            return
+        self.active_grid_prefetch_pages.add(page_key)
+        self.prefetch_grid_items(items, page_key, page_label, delay)
 
     @work(thread=True)
     def prefetch_grid_items(
         self,
         items: list[MediaItem],
-        token: int,
+        page_key: tuple[str, ...],
         page_label: str,
         delay: float = 0.0,
     ) -> None:
         if not artwork_enabled(self.config):
+            self.active_grid_prefetch_pages.discard(page_key)
             return
         started = time.perf_counter()
         if delay:
             time.sleep(delay)
-        if token != self.grid_prefetch_token:
-            write_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=stale")
-            return
-        page_key = tuple(item.key for item in items)
-        if page_key in self.prefetched_grid_pages:
-            write_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=cached items={len(items)}")
-            return
-        self.prefetched_grid_pages.add(page_key)
 
         rendered: dict[str, object] = {}
-        for item in items:
-            if not item.artwork_path:
-                continue
-            try:
-                data = fetch_artwork(item.raw, item.artwork_path, self.config)
-                rendered[item.key] = render_card_artwork(data, self.config)
-            except Exception:
-                continue
+        try:
+            for item in items:
+                if not item.artwork_path:
+                    continue
+                try:
+                    data = fetch_artwork(item.raw, item.artwork_path, self.config)
+                    rendered[item.key] = render_card_artwork(data, self.config)
+                except Exception:
+                    continue
 
-        write_performance_log(
-            "grid_prefetch",
-            started,
-            f"page={page_label} items={len(items)} rendered={len(rendered)}",
-        )
+            self.prefetched_grid_pages.add(page_key)
+            write_performance_log(
+                "grid_prefetch",
+                started,
+                f"page={page_label} items={len(items)} rendered={len(rendered)}",
+            )
+        finally:
+            self.active_grid_prefetch_pages.discard(page_key)
         if not rendered:
             return
 
@@ -998,7 +1016,9 @@ class PlexTuiApp(App[None]):
             if not grid.is_mounted:
                 return
             grid.artwork.update(rendered)
-            grid.refresh_grid()
+            visible_keys = {item.key for item in grid.visible_page_items()}
+            if visible_keys.intersection(rendered):
+                grid.refresh_grid()
 
         self.call_from_thread(update)
 
@@ -1694,8 +1714,6 @@ def render_media_grid_card(
     subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), content_width)
     artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
     if artwork is None:
-        artwork = cached_card_artwork(media, config)
-    if artwork is None:
         status = "poster" if media.artwork_path else "no poster"
         artwork = Text(f"[{status}]", style="dim")
     footer = "selected" if selected else ""
@@ -1705,15 +1723,6 @@ def render_media_grid_card(
         Text(f"  {subtitle}", style="dim"),
         Text(f"  {footer}", style="#e5a00d" if selected else "dim"),
     )
-
-
-def cached_card_artwork(media: MediaItem, config: AppConfig) -> object | None:
-    if not artwork_enabled(config) or not media.artwork_path or not artwork_is_cached(media.artwork_path, config):
-        return None
-    try:
-        return render_card_artwork(fetch_artwork(media.raw, media.artwork_path, config), config)
-    except Exception:
-        return None
 
 
 def render_card_artwork(data: bytes, config: AppConfig) -> object:
@@ -2149,6 +2158,10 @@ def grid_status(grid: MediaGrid, state: BrowseState | None) -> str:
     selected = min(grid.selected_index + 1, total_loaded)
     total_text = f"{total_loaded} loaded" if total_available is None else f"{total_loaded} of {total_available} loaded"
     return f"{context_hint(grid)} / item {selected} / page {current_page} of {page_count} / {total_text}"
+
+
+def grid_page_key(items: list[MediaItem]) -> tuple[str, ...]:
+    return tuple(item.key for item in items)
 
 
 def should_auto_load_more(state: BrowseState, selected_key: str, threshold: int) -> bool:
