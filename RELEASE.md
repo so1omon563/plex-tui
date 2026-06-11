@@ -50,6 +50,7 @@ plex-tui
 
 Before tagging a release:
 
+- Confirm the Git remote points to `https://github.com/so1omon563/plex-tui`.
 - Update `version` in `pyproject.toml`.
 - Move `CHANGELOG.md` entries from `Unreleased` to the release date.
 - Confirm `README.md`, `PACKAGING.md`, and `config.example.toml` match current behavior.

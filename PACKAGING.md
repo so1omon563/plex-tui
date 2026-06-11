@@ -18,6 +18,23 @@ Once pushed to GitHub, users can also install from:
 pipx install "git+https://github.com/so1omon563/plex-tui.git"
 ```
 
+Before the first push, configure the repository remote:
+
+```bash
+git remote add origin https://github.com/so1omon563/plex-tui.git
+git push -u origin main
+```
+
+For local package validation, test both source and wheel installs:
+
+```bash
+pipx install --force .
+pipx runpip plex-tui show plex-tui
+python -m build
+pipx install --force dist/plex_tui-*.whl
+pipx runpip plex-tui show plex-tui
+```
+
 ## Recommended Path
 
 1. **PyPI + pipx**
@@ -44,10 +61,25 @@ pipx install "git+https://github.com/so1omon563/plex-tui.git"
    brew install <tap>/plex-tui
    ```
 
+   Formula requirements:
+
+   - Depend on `python@3.13` or the current Homebrew Python.
+   - Depend on `mpv`.
+   - Install from a tagged source archive or PyPI release.
+   - Run `python -m plextui.smoke` in the formula test.
+
 3. **Arch AUR**
 
    Add an AUR package for Arch users. This can depend on `mpv` and Python
    dependencies from Arch packages where practical.
+
+   Package requirements:
+
+   - `depends=('python' 'mpv' ...)`
+   - Use a tagged GitHub source archive for `plex-tui`.
+   - Prefer system Python packages for `python-textual`, `python-pillow`,
+     `python-plexapi`, and `python-platformdirs` when available.
+   - Include a `check()` step that runs the smoke test.
 
 4. **Standalone binaries**
 

@@ -129,6 +129,7 @@ Release and packaging notes:
 - `l`: move keyboard focus to the libraries list
 - `m`: move keyboard focus to the media list
 - `v`: toggle media list/grid view
+- `pageup` / `pagedown`: move one page in grid view
 - `,`: show settings
 - `escape`: clear search / go back
 - `enter`: open selected item
@@ -162,9 +163,10 @@ Settings.
 
 The settings view shows the active config and supports reconnect/reload,
 Plex relogin, clearing or changing audio/subtitle preferences separately,
-artwork on/off, artwork renderer selection, details artwork mode, and media
-list/grid view mode, and mpv window size. Theme changes made through Textual's
-command palette are saved and restored on restart.
+artwork on/off, artwork renderer selection, details artwork mode, media
+list/grid view mode, mpv window size, page size, auto-load threshold, and debug
+log visibility. Theme changes made through Textual's command palette are saved
+and restored on restart.
 
 The details pane shows metadata, saved audio/subtitle preferences, reported
 audio tracks, and reported subtitle tracks. Subtitle rows include external vs
@@ -181,10 +183,11 @@ cached in the app cache directory shown in Settings.
 
 List view keeps the browser compact and shows selected poster artwork in the
 details pane. Grid view uses arrow-key card selection in a dedicated grid
-surface. Cards use cached artwork immediately and update selected posters after
-their artwork is fetched. Grid view prefetches artwork for the visible grid
-page immediately and the next grid page after selection settles. The artwork
-cache is pruned to stay bounded.
+surface. Page up/down moves by one grid page, and the status line shows the
+current item, grid page, and loaded count. Cards use cached artwork immediately
+and update selected posters after their artwork is fetched. Grid view prefetches
+artwork for the visible grid page immediately and the next grid page after
+selection settles. The artwork cache is pruned to stay bounded.
 
 Native terminal image output is disabled for now because Kitty image protocols
 conflict with Textual's screen renderer in practice. `artwork_renderer =

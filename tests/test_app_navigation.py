@@ -413,8 +413,22 @@ async def run_settings_action_check():
             assert app.config.preferred_subtitle_language == ""
             app.run_settings_action("subtitle_auto")
             assert app.config.subtitle_mode == "auto"
+            app.run_settings_action("increase_page_size")
+            assert app.config.page_size == 50
+            app.run_settings_action("decrease_page_size")
+            assert app.config.page_size == 40
+            app.run_settings_action("reset_page_size")
+            assert app.config.page_size == 40
+            app.run_settings_action("increase_auto_load_threshold")
+            assert app.config.auto_load_threshold == 15
+            app.run_settings_action("decrease_auto_load_threshold")
+            assert app.config.auto_load_threshold == 10
+            app.run_settings_action("reset_auto_load_threshold")
+            assert app.config.auto_load_threshold == 10
+            app.run_settings_action("reset_mpv_window_size")
+            assert app.config.mpv_window_size == ""
 
-        assert save_config.call_count == 3
+        assert save_config.call_count == 10
 
 
 async def run_quick_preference_action_check():

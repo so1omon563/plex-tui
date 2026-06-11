@@ -18,7 +18,21 @@ from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, St
 
 from .artwork import artwork_is_cached, fetch_artwork, render_artwork, render_protocol_artwork
 from .auth import LoginSession, ServerChoice, save_server_choice
-from .config import AppConfig, cache_path, config_path, debug_log_path, load_config, save_config, write_debug_log
+from .config import (
+    DEFAULT_AUTO_LOAD_THRESHOLD,
+    DEFAULT_PAGE_SIZE,
+    MAX_AUTO_LOAD_THRESHOLD,
+    MAX_PAGE_SIZE,
+    MIN_AUTO_LOAD_THRESHOLD,
+    MIN_PAGE_SIZE,
+    AppConfig,
+    cache_path,
+    config_path,
+    debug_log_path,
+    load_config,
+    save_config,
+    write_debug_log,
+)
 from .models import LibraryItem, MediaItem
 from .player import (
     PlayerError,
@@ -197,6 +211,12 @@ class MediaGrid(Static):
             event.stop()
         elif event.key == "down":
             self.move_selection(self.columns)
+            event.stop()
+        elif event.key in {"pageup", "page_up"}:
+            self.move_selection(-self.page_size)
+            event.stop()
+        elif event.key in {"pagedown", "page_down"}:
+            self.move_selection(self.page_size)
             event.stop()
         elif event.key == "enter":
             selected = self.selected_media
@@ -546,7 +566,7 @@ class PlexTuiApp(App[None]):
         self.show_media_details(event.media)
         if isinstance(event.control, MediaGrid):
             self.schedule_grid_prefetch(event.control)
-            self.set_status(context_hint(event.control))
+            self.set_status(grid_status(event.control, self.browsing_stack[-1] if self.browsing_stack else None))
         self.maybe_auto_load_more(event.media)
 
     def on_media_grid_selected(self, event: MediaGrid.Selected) -> None:
@@ -975,6 +995,14 @@ class PlexTuiApp(App[None]):
         view.append(SettingsActionRow("Cycle details artwork", "cycle_detail_artwork"))
         view.append(SettingsActionRow("Cycle media view", "toggle_media_view"))
         view.append(SettingsActionRow("Cycle mpv window size", "cycle_mpv_window_size"))
+        view.append(SettingsActionRow("Reset mpv window size", "reset_mpv_window_size"))
+        view.append(SettingsActionRow("Increase page size", "increase_page_size"))
+        view.append(SettingsActionRow("Decrease page size", "decrease_page_size"))
+        view.append(SettingsActionRow("Reset page size", "reset_page_size"))
+        view.append(SettingsActionRow("Increase auto-load threshold", "increase_auto_load_threshold"))
+        view.append(SettingsActionRow("Decrease auto-load threshold", "decrease_auto_load_threshold"))
+        view.append(SettingsActionRow("Reset auto-load threshold", "reset_auto_load_threshold"))
+        view.append(SettingsActionRow("Show debug log path", "show_debug_log"))
         view.append(SettingsActionRow("Set artwork renderer: block", "artwork_renderer_block"))
         view.append(SettingsActionRow("Set artwork renderer: auto", "artwork_renderer_auto"))
         view.append(SettingsActionRow("Set artwork renderer: Kitty", "artwork_renderer_kitty"))
@@ -1048,6 +1076,42 @@ class PlexTuiApp(App[None]):
             return
         if action == "cycle_mpv_window_size":
             self.action_cycle_mpv_window_size()
+            return
+        if action == "reset_mpv_window_size":
+            if self.update_preferences(mpv_window_size=""):
+                self.action_show_settings()
+                self.set_status("mpv window size: Default")
+            return
+        if action == "increase_page_size":
+            if self.update_numeric_preference("page_size", 10, MIN_PAGE_SIZE, MAX_PAGE_SIZE):
+                self.set_status(f"Page size: {self.config.page_size}")
+            return
+        if action == "decrease_page_size":
+            if self.update_numeric_preference("page_size", -10, MIN_PAGE_SIZE, MAX_PAGE_SIZE):
+                self.set_status(f"Page size: {self.config.page_size}")
+            return
+        if action == "reset_page_size":
+            if self.update_preferences(page_size=DEFAULT_PAGE_SIZE):
+                self.action_show_settings()
+                self.set_status(f"Page size: {self.config.page_size}")
+            return
+        if action == "increase_auto_load_threshold":
+            if self.update_numeric_preference("auto_load_threshold", 5, MIN_AUTO_LOAD_THRESHOLD, MAX_AUTO_LOAD_THRESHOLD):
+                self.set_status(f"Auto-load threshold: {self.config.auto_load_threshold}")
+            return
+        if action == "decrease_auto_load_threshold":
+            if self.update_numeric_preference("auto_load_threshold", -5, MIN_AUTO_LOAD_THRESHOLD, MAX_AUTO_LOAD_THRESHOLD):
+                self.set_status(f"Auto-load threshold: {self.config.auto_load_threshold}")
+            return
+        if action == "reset_auto_load_threshold":
+            if self.update_preferences(auto_load_threshold=DEFAULT_AUTO_LOAD_THRESHOLD):
+                self.action_show_settings()
+                self.set_status(f"Auto-load threshold: {self.config.auto_load_threshold}")
+            return
+        if action == "show_debug_log":
+            path = debug_log_path()
+            self.show_detail_text(f"Debug log\n\n{path}\n\nSet PLEX_TUI_PERF_LOG=1 before launch to include browsing performance timings.")
+            self.set_status(f"Debug log: {path}")
             return
         if action == "artwork_renderer_block":
             if self.update_preferences(artwork_renderer="block"):
@@ -1160,13 +1224,24 @@ class PlexTuiApp(App[None]):
             )
         save_config(self.config)
 
-    def update_preferences(self, **changes: str) -> bool:
+    def update_preferences(self, **changes: object) -> bool:
         self.config = replace(self.config, **changes)
         try:
             save_config(self.config)
         except OSError as exc:
             self.show_error(f"failed to save preference: {exc}")
             return False
+        return True
+
+    def update_numeric_preference(self, name: str, step: int, minimum: int, maximum: int) -> bool:
+        current = int(getattr(self.config, name))
+        value = min(maximum, max(minimum, current + step))
+        if value == current:
+            self.action_show_settings()
+            return True
+        if not self.update_preferences(**{name: value}):
+            return False
+        self.action_show_settings()
         return True
 
     def current_stream_choice(
@@ -1568,6 +1643,14 @@ def render_settings(config: AppConfig) -> str:
         "Cycle details artwork",
         "Cycle media view",
         "Cycle mpv window size",
+        "Reset mpv window size",
+        "Increase page size",
+        "Decrease page size",
+        "Reset page size",
+        "Increase auto-load threshold",
+        "Decrease auto-load threshold",
+        "Reset auto-load threshold",
+        "Show debug log path",
         "Set artwork renderer: block",
         "Set artwork renderer: auto",
         "Set artwork renderer: Kitty",
@@ -1585,6 +1668,7 @@ def render_help() -> str:
         "m: focus media list",
         "v: toggle list/grid view",
         "left/right: move across grid cards",
+        "pageup/pagedown: move one grid page",
         "",
         "Search",
         "/: search current library",
@@ -1603,6 +1687,7 @@ def render_help() -> str:
         "Settings",
         ",: show settings",
         "r: reconnect / reload libraries",
+        "PLEX_TUI_PERF_LOG=1: write browsing timings to the debug log",
         "?: show help",
         "q: quit",
         "",
@@ -1624,8 +1709,8 @@ def context_hint(row: object) -> str:
     if isinstance(row, MediaGrid):
         media = row.selected_media
         if media is not None and media.playable:
-            return "Arrows select card / p plays / a audio / s subtitles"
-        return "Arrows select card / Enter opens item"
+            return "Arrows/page select card / p plays / a audio / s subtitles"
+        return "Arrows/page select card / Enter opens item"
     if isinstance(row, ServerRow):
         return "Enter selects server"
     if isinstance(row, StreamRow):
@@ -1641,6 +1726,16 @@ def render_loaded_status(title: str, loaded: int, total: int | None, has_more: b
     if has_more:
         return f"{title}: {loaded} of {total} items loaded"
     return f"{title}: {loaded} items"
+
+
+def grid_status(grid: MediaGrid, state: BrowseState | None) -> str:
+    total_loaded = len(grid.items)
+    total_available = state.total if state is not None else None
+    page_count = max(1, (total_loaded + grid.page_size - 1) // grid.page_size)
+    current_page = min(page_count, (grid.selected_index // grid.page_size) + 1)
+    selected = min(grid.selected_index + 1, total_loaded)
+    total_text = f"{total_loaded} loaded" if total_available is None else f"{total_loaded} of {total_available} loaded"
+    return f"{context_hint(grid)} / item {selected} / page {current_page} of {page_count} / {total_text}"
 
 
 def should_auto_load_more(state: BrowseState, selected_key: str, threshold: int) -> bool:

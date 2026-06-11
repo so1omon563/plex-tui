@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from plextui.app import (
+    BrowseState,
     LoadMoreRow,
     MediaGrid,
     MediaRow,
@@ -10,6 +11,7 @@ from plextui.app import (
     detail_artwork_enabled,
     effective_stream_preference_rows,
     format_offset,
+    grid_status,
     media_row,
     media_rows,
     next_detail_artwork_mode,
@@ -296,11 +298,26 @@ def test_media_grid_tracks_selection_and_visible_page():
     assert [item.key for item in grid.visible_page_items()] == ["4"]
 
 
+def test_media_grid_page_status_counts_loaded_items():
+    items = [
+        MediaItem(f"Movie {index}", "2024", "movie", str(index), True, object(), artwork_path="/thumb")
+        for index in range(12)
+    ]
+    config = AppConfig("http://plex", "token", "client", media_view="grid")
+    grid = MediaGrid()
+    grid.set_items(items, selected_index=7, config=config, columns=2, rows=2)
+    state = BrowseState("Movies", items, total=30)
+
+    assert "item 8" in grid_status(grid, state)
+    assert "page 2 of 3" in grid_status(grid, state)
+    assert "12 of 30 loaded" in grid_status(grid, state)
+
+
 def test_context_hints_for_media_and_load_more():
     playable = MediaItem("Movie", "", "movie", "1", True, object())
     grid = MediaGrid()
     grid.set_items([playable], selected_index=0, config=AppConfig("http://plex", "token", "client"), columns=1)
 
     assert context_hint(MediaRow(playable)) == "Enter selects item / p plays / a audio / s subtitles"
-    assert context_hint(grid) == "Arrows select card / p plays / a audio / s subtitles"
+    assert context_hint(grid) == "Arrows/page select card / p plays / a audio / s subtitles"
     assert context_hint(LoadMoreRow(100, 200)) == "Enter loads next page"
