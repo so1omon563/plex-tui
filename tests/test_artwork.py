@@ -67,3 +67,5 @@ def test_render_protocol_artwork_can_emit_kitty_sequence_when_enabled(monkeypatc
     output = console.export_text(styles=False)
     assert "\x1b_G" in output
     assert "a=T" in output
+    assert "U=1" in output
+    assert "\U0010eeee" in output

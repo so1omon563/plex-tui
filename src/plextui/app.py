@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
+from rich.columns import Columns
 from rich.console import Group
 from rich.text import Text
 from textual import work
@@ -84,6 +85,25 @@ class MediaCardRow(MediaRow):
 
     def set_artwork(self, artwork: object) -> None:
         self.card.update(render_media_card(self.media, artwork))
+
+
+class MediaGridRow(ListItem):
+    def __init__(self, items: list[MediaItem], selected_key: str | None, config: AppConfig) -> None:
+        self.items = items
+        self.selected_key = selected_key if selected_key in {item.key for item in items} else items[0].key
+        self.grid = Static(render_media_grid(self.items, self.selected_key, config))
+        ListItem.__init__(self, self.grid)
+
+    @property
+    def selected_media(self) -> MediaItem:
+        for item in self.items:
+            if item.key == self.selected_key:
+                return item
+        return self.items[0]
+
+    def set_selected_key(self, selected_key: str, config: AppConfig) -> None:
+        self.selected_key = selected_key
+        self.grid.update(render_media_grid(self.items, self.selected_key, config))
 
 
 class LoadMoreRow(ListItem):
@@ -186,6 +206,8 @@ class PlexTuiApp(App[None]):
         Binding("l", "focus_libraries", "Focus libraries"),
         Binding("m", "focus_media", "Focus media list"),
         Binding("v", "toggle_media_view", "View"),
+        Binding("left", "grid_left", "Left"),
+        Binding("right", "grid_right", "Right"),
         Binding("comma", "show_settings", "Settings"),
         Binding("escape", "back_or_clear", "Back"),
         Binding("p", "play_selected", "Play"),
@@ -329,6 +351,8 @@ class PlexTuiApp(App[None]):
             self.open_library(row.library)
         elif isinstance(row, MediaRow):
             self.open_media(row.media)
+        elif isinstance(row, MediaGridRow):
+            self.open_media(row.selected_media)
         elif isinstance(row, LoadMoreRow):
             self.load_more_media()
         elif isinstance(row, ServerRow):
@@ -354,6 +378,11 @@ class PlexTuiApp(App[None]):
             self.show_media_details(row.media)
             self.set_status(context_hint(row))
             self.maybe_auto_load_more(row.media)
+        elif isinstance(row, MediaGridRow):
+            mark_active_row(event.list_view, row)
+            self.show_media_details(row.selected_media)
+            self.set_status(context_hint(row))
+            self.maybe_auto_load_more(row.selected_media)
         elif isinstance(row, LoadMoreRow):
             mark_active_row(event.list_view, row)
             self.show_detail_text("Load the next page of items.")
@@ -484,10 +513,10 @@ class PlexTuiApp(App[None]):
         self.query_one("#media-title", Static).update(state.title)
         if state.items:
             selected_index = selected_media_index(state.items, selected_key)
-            rows: list[ListItem] = [media_row(item, self.config) for item in state.items]
+            rows, selected_row_index = media_rows(state.items, self.config, selected_index, self.media_grid_columns())
             if state.has_more:
                 rows.append(LoadMoreRow(len(state.items), state.total))
-            self.replace_media_rows(rows, selected_index)
+            self.replace_media_rows(rows, selected_row_index)
             self.show_media_details(state.items[selected_index])
         else:
             self.replace_media_rows([])
@@ -543,7 +572,7 @@ class PlexTuiApp(App[None]):
 
         def update_text() -> None:
             row = self.query_one("#media", ListView).highlighted_child
-            if isinstance(row, MediaRow) and row.media.key == item.key:
+            if selected_media_from_row(row) is not None and selected_media_from_row(row).key == item.key:
                 self.show_detail_text(render_detail_content(details, self.config))
 
         self.call_from_thread(update_text)
@@ -566,7 +595,8 @@ class PlexTuiApp(App[None]):
 
         def update_artwork() -> None:
             row = self.query_one("#media", ListView).highlighted_child
-            if isinstance(row, MediaRow) and row.media.key == item.key:
+            selected = selected_media_from_row(row)
+            if selected is not None and selected.key == item.key:
                 self.show_detail_text(render_detail_content(details, self.config, artwork))
                 if isinstance(row, MediaCardRow) and card_artwork is not None:
                     row.set_artwork(card_artwork)
@@ -581,6 +611,10 @@ class PlexTuiApp(App[None]):
         pane_width = self.query_one("#details").size.width
         width = min(36, max(14, pane_width - 6))
         return width, 22
+
+    def media_grid_columns(self) -> int:
+        main_width = self.query_one("#main").size.width
+        return max(1, min(5, max(1, main_width - 4) // 24))
 
     def action_focus_search(self) -> None:
         self.search_global = False
@@ -607,7 +641,7 @@ class PlexTuiApp(App[None]):
         self.set_status("Focus moved to media list")
 
     def action_toggle_media_view(self) -> None:
-        next_view = "poster" if self.config.media_view == "list" else "list"
+        next_view = next_media_view(self.config.media_view)
         if not self.update_preferences(media_view=next_view):
             return
         if self.settings_visible:
@@ -616,9 +650,45 @@ class PlexTuiApp(App[None]):
             return
         if self.browsing_stack:
             row = self.query_one("#media", ListView).highlighted_child
-            selected_key = row.media.key if isinstance(row, MediaRow) else None
+            selected = selected_media_from_row(row)
+            selected_key = selected.key if selected is not None else None
             self.show_browse_state(self.browsing_stack[-1], selected_key=selected_key)
         self.set_status(f"Media view: {media_view_value(self.config)}")
+
+    def action_grid_left(self) -> None:
+        self.move_grid_selection(-1)
+
+    def action_grid_right(self) -> None:
+        self.move_grid_selection(1)
+
+    def move_grid_selection(self, direction: int) -> None:
+        view = self.query_one("#media", ListView)
+        row = view.highlighted_child
+        if not isinstance(row, MediaGridRow):
+            return
+        index = row.items.index(row.selected_media)
+        next_index = index + direction
+        if 0 <= next_index < len(row.items):
+            self.select_grid_media(row, row.items[next_index])
+            return
+        rows = list(view.children)
+        current_row_index = rows.index(row)
+        adjacent_index = current_row_index + direction
+        if not 0 <= adjacent_index < len(rows):
+            return
+        adjacent = rows[adjacent_index]
+        if not isinstance(adjacent, MediaGridRow):
+            return
+        next_media = adjacent.items[-1] if direction < 0 else adjacent.items[0]
+        adjacent.set_selected_key(next_media.key, self.config)
+        set_list_index(view, adjacent_index)
+        self.show_media_details(next_media)
+        self.set_status(context_hint(adjacent))
+
+    def select_grid_media(self, row: MediaGridRow, media: MediaItem) -> None:
+        row.set_selected_key(media.key, self.config)
+        self.show_media_details(media)
+        self.set_status(context_hint(row))
 
     def action_show_settings(self) -> None:
         self.help_visible = False
@@ -638,7 +708,7 @@ class PlexTuiApp(App[None]):
         view.append(SettingsActionRow("Set subtitles to None", "subtitle_none"))
         view.append(SettingsActionRow("Clear subtitle preference", "clear_subtitle"))
         view.append(SettingsActionRow("Toggle artwork on/off", "toggle_artwork"))
-        view.append(SettingsActionRow("Toggle media list/poster view", "toggle_media_view"))
+        view.append(SettingsActionRow("Cycle media view", "toggle_media_view"))
         view.append(SettingsActionRow("Set artwork renderer: block", "artwork_renderer_block"))
         view.append(SettingsActionRow("Set artwork renderer: auto", "artwork_renderer_auto"))
         view.append(SettingsActionRow("Set artwork renderer: Kitty", "artwork_renderer_kitty"))
@@ -719,17 +789,19 @@ class PlexTuiApp(App[None]):
 
     def action_subtitle_picker(self) -> None:
         row = self.query_one("#media", ListView).highlighted_child
-        if not isinstance(row, MediaRow) or not row.media.playable:
+        media = selected_media_from_row(row)
+        if media is None or not media.playable:
             self.set_status("Select playable media before choosing subtitles")
             return
-        self.open_stream_picker(row.media, "subtitle")
+        self.open_stream_picker(media, "subtitle")
 
     def action_audio_picker(self) -> None:
         row = self.query_one("#media", ListView).highlighted_child
-        if not isinstance(row, MediaRow) or not row.media.playable:
+        media = selected_media_from_row(row)
+        if media is None or not media.playable:
             self.set_status("Select playable media before choosing audio")
             return
-        self.open_stream_picker(row.media, "audio")
+        self.open_stream_picker(media, "audio")
 
     @work(thread=True)
     def open_stream_picker(self, media: MediaItem, stream_type: str) -> None:
@@ -898,22 +970,23 @@ class PlexTuiApp(App[None]):
 
     def action_play_selected(self) -> None:
         row = self.query_one("#media", ListView).highlighted_child
-        if not isinstance(row, MediaRow):
+        media = selected_media_from_row(row)
+        if media is None:
             self.set_status("No media selected")
             return
-        if not row.media.playable:
+        if not media.playable:
             self.set_status("Selected item is not directly playable")
             return
         subtitle_choice = preferred_subtitle_choice(
-            row.media.raw,
+            media.raw,
             self.config.preferred_subtitle_language,
             self.config.subtitle_mode,
         )
-        audio_choice = preferred_audio_choice(row.media.raw, self.config.preferred_audio_language)
+        audio_choice = preferred_audio_choice(media.raw, self.config.preferred_audio_language)
         try:
             stop_mpv(self.player)
             self.player = play_with_mpv(
-                row.media.raw,
+                media.raw,
                 subtitle_choice=subtitle_choice,
                 audio_choice=audio_choice,
             )
@@ -931,7 +1004,7 @@ class PlexTuiApp(App[None]):
             else ""
         )
         preference_text = render_playback_preferences(self.config, audio_choice, subtitle_choice)
-        self.set_status(f"Playing {row.media.title}{resume_text}{subtitle_text} ({self.player.stream_mode}; {preference_text})")
+        self.set_status(f"Playing {media.title}{resume_text}{subtitle_text} ({self.player.stream_mode}; {preference_text})")
 
     def action_stop_playback(self) -> None:
         if self.player is None or not self.player.active:
@@ -1020,6 +1093,27 @@ def render_detail_content(details: object, config: AppConfig | None = None, artw
     return Group(artwork, Text(""), text)
 
 
+def media_rows(
+    items: list[MediaItem],
+    config: AppConfig,
+    selected_index: int,
+    grid_columns: int,
+) -> tuple[list[ListItem], int]:
+    if config.media_view == "grid":
+        rows: list[ListItem] = []
+        selected_row_index = 0
+        for start in range(0, len(items), grid_columns):
+            chunk = items[start:start + grid_columns]
+            if start <= selected_index < start + len(chunk):
+                selected_row_index = len(rows)
+                selected_key = items[selected_index].key
+            else:
+                selected_key = chunk[0].key
+            rows.append(MediaGridRow(chunk, selected_key, config))
+        return rows, selected_row_index
+    return [media_row(item, config) for item in items], selected_index
+
+
 def media_row(item: MediaItem, config: AppConfig) -> MediaRow:
     if config.media_view == "poster":
         return MediaCardRow(item, config)
@@ -1034,6 +1128,50 @@ def render_media_card(media: MediaItem, artwork: object | None = None) -> object
         status = "poster available" if media.artwork_path else "no poster"
         artwork = Text(f"[{status}]", style="dim")
     return Group(artwork, title, subtitle)
+
+
+def render_media_grid(items: list[MediaItem], selected_key: str, config: AppConfig) -> object:
+    cards = [render_media_grid_card(item, item.key == selected_key, config) for item in items]
+    return Columns(cards, equal=True, expand=False, padding=(0, 2))
+
+
+def render_media_grid_card(media: MediaItem, selected: bool, config: AppConfig) -> object:
+    marker = "> " if selected else "  "
+    title_style = "bold reverse" if selected else "bold"
+    title = truncate_text(media.title, 20)
+    subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), 20)
+    artwork = cached_card_artwork(media, config)
+    if artwork is None:
+        status = "poster" if media.artwork_path else "no poster"
+        artwork = Text(f"[{status}]", style="dim")
+    return Group(
+        artwork,
+        Text(f"{marker}{title}", style=title_style),
+        Text(f"  {subtitle}", style="dim"),
+    )
+
+
+def cached_card_artwork(media: MediaItem, config: AppConfig) -> object | None:
+    if not artwork_enabled(config) or not media.artwork_path or not artwork_is_cached(media.artwork_path, config):
+        return None
+    try:
+        return render_artwork(fetch_artwork(media.raw, media.artwork_path, config), width=10, max_height=5)
+    except Exception:
+        return None
+
+
+def truncate_text(value: str, width: int) -> str:
+    if len(value) <= width:
+        return value
+    return value[:max(0, width - 3)] + "..."
+
+
+def selected_media_from_row(row: object) -> MediaItem | None:
+    if isinstance(row, MediaRow):
+        return row.media
+    if isinstance(row, MediaGridRow):
+        return row.selected_media
+    return None
 
 
 def artwork_enabled(config: AppConfig | None) -> bool:
@@ -1084,7 +1222,7 @@ def render_settings(config: AppConfig) -> str:
         "Set subtitles to None",
         "Clear subtitle preference",
         "Toggle artwork on/off",
-        "Toggle media list/poster view",
+        "Cycle media view",
         "Set artwork renderer: block",
         "Set artwork renderer: auto",
         "Set artwork renderer: Kitty",
@@ -1100,7 +1238,8 @@ def render_help() -> str:
         "tab / shift+tab: move focus",
         "l: focus libraries",
         "m: focus media list",
-        "v: toggle list/poster view",
+        "v: cycle list/poster/grid view",
+        "left/right: move across grid cards",
         "",
         "Search",
         "/: search current library",
@@ -1135,6 +1274,10 @@ def context_hint(row: ListItem) -> str:
         if row.media.playable:
             return "Enter selects item / p plays / a audio / s subtitles"
         return "Enter opens item"
+    if isinstance(row, MediaGridRow):
+        if row.selected_media.playable:
+            return "Left/right selects card / p plays / a audio / s subtitles"
+        return "Left/right selects card / Enter opens item"
     if isinstance(row, ServerRow):
         return "Enter selects server"
     if isinstance(row, StreamRow):
@@ -1218,7 +1361,17 @@ def artwork_renderer_value(config: AppConfig) -> str:
 
 
 def media_view_value(config: AppConfig) -> str:
+    if config.media_view == "grid":
+        return "Grid"
     return "Poster" if config.media_view == "poster" else "List"
+
+
+def next_media_view(media_view: str) -> str:
+    order = ["list", "poster", "grid"]
+    try:
+        return order[(order.index(media_view) + 1) % len(order)]
+    except ValueError:
+        return "list"
 
 
 def render_playback_preferences(

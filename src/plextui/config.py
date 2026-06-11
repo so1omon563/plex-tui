@@ -65,7 +65,7 @@ def load_config() -> AppConfig:
         write_debug_log(f"invalid artwork_renderer {artwork_renderer!r}; using 'block'")
         artwork_renderer = "block"
     media_view = data.get("media_view", "list")
-    if media_view not in {"list", "poster"}:
+    if media_view not in {"list", "poster", "grid"}:
         write_debug_log(f"invalid media_view {media_view!r}; using 'list'")
         media_view = "list"
     return AppConfig(

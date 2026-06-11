@@ -12,6 +12,7 @@ from urllib.request import Request, urlopen
 from PIL import Image, ImageOps
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.segment import Segment
+from rich.style import Style
 from rich.text import Text
 
 from .config import AppConfig, cache_path
@@ -19,6 +20,16 @@ from .config import AppConfig, cache_path
 
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
 NATIVE_IMAGE_ENV = "PLEX_TUI_ENABLE_NATIVE_IMAGES"
+KITTY_PLACEHOLDER = "\U0010eeee"
+KITTY_DIACRITICS = [
+    "\u0305", "\u030d", "\u030e", "\u0310", "\u0312", "\u033d", "\u033e", "\u033f",
+    "\u0346", "\u031a", "\u0316", "\u0317", "\u0318", "\u0319", "\u031c", "\u031d",
+    "\u031e", "\u031f", "\u0320", "\u0324", "\u0325", "\u0326", "\u0329", "\u032a",
+    "\u032b", "\u032c", "\u032d", "\u032e", "\u032f", "\u0330", "\u0331", "\u0332",
+    "\u0333", "\u0339", "\u033a", "\u033b", "\u033c", "\u0345", "\u0347", "\u0348",
+    "\u0349", "\u034d", "\u034e", "\u0353", "\u0354", "\u0355", "\u0356", "\u0357",
+    "\u0358", "\u0359", "\u035a", "\u035c", "\u035d", "\u035e", "\u035f", "\u0360",
+]
 
 
 def fetch_artwork(raw: Any, path: str, config: AppConfig) -> bytes:
@@ -99,7 +110,9 @@ def render_protocol_artwork(data: bytes, renderer: str, width: int = 28, max_hei
     image = resize_for_cells(load_image(data), width, max_height)
     buffer = BytesIO()
     image.save(buffer, format="PNG")
-    return KittyImage(buffer.getvalue(), image.width, max(1, (image.height + 1) // 2), image.width, image.height)
+    png_data = buffer.getvalue()
+    image_id = stable_image_id(png_data)
+    return KittyImage(png_data, image_id, image.width, max(1, (image.height + 1) // 2), image.width, image.height)
 
 
 def resolve_protocol_renderer(renderer: str) -> str:
@@ -139,19 +152,33 @@ def rgb(color: tuple[int, int, int]) -> str:
     return f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}"
 
 
+def stable_image_id(data: bytes) -> int:
+    value = int.from_bytes(hashlib.sha256(data).digest()[:3], "big")
+    return value or 1
+
+
 class KittyImage:
-    def __init__(self, png_data: bytes, columns: int, rows: int, pixel_width: int, pixel_height: int) -> None:
+    def __init__(self, png_data: bytes, image_id: int, columns: int, rows: int, pixel_width: int, pixel_height: int) -> None:
         self.png_data = png_data
+        self.image_id = image_id
         self.columns = columns
-        self.rows = rows
+        self.rows = min(rows, len(KITTY_DIACRITICS))
         self.pixel_width = pixel_width
         self.pixel_height = pixel_height
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
         payload = base64.b64encode(self.png_data).decode("ascii")
         command = (
-            f"\x1b_Ga=T,f=100,s={self.pixel_width},v={self.pixel_height},"
-            f"c={self.columns},r={self.rows};{payload}\x1b\\"
+            f"\x1b_Ga=T,f=100,q=2,U=1,i={self.image_id},"
+            f"s={self.pixel_width},v={self.pixel_height},c={self.columns},r={self.rows};"
+            f"{payload}\x1b\\"
         )
         yield Segment(command)
-        yield Segment("\n".join(" " * self.columns for _ in range(self.rows)))
+        style = Style(color=f"#{self.image_id:06x}")
+        for row in range(self.rows):
+            line = KITTY_PLACEHOLDER + KITTY_DIACRITICS[row]
+            if self.columns > 1:
+                line += KITTY_PLACEHOLDER * (self.columns - 1)
+            yield Segment(line, style)
+            if row + 1 < self.rows:
+                yield Segment("\n")

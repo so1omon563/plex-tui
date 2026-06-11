@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from plextui.app import (
     LoadMoreRow,
+    MediaGridRow,
     MediaRow,
     context_hint,
     format_offset,
     media_row,
+    media_rows,
+    next_media_view,
     render_audio_playback_preference,
     render_details,
     render_help,
@@ -135,7 +138,8 @@ def test_render_help_groups_key_bindings():
     assert "Settings" in rendered
     assert "Paths" in rendered
     assert "Debug log:" in rendered
-    assert "v: toggle list/poster view" in rendered
+    assert "v: cycle list/poster/grid view" in rendered
+    assert "left/right: move across grid cards" in rendered
     assert "?: show help" in rendered
 
 
@@ -155,8 +159,34 @@ def test_media_row_can_render_poster_card_view():
     assert "Movie" in card.renderables[1].plain
 
 
+def test_media_rows_can_group_grid_view():
+    items = [
+        MediaItem(f"Movie {index}", "2024", "movie", str(index), True, object(), artwork_path="/thumb")
+        for index in range(5)
+    ]
+    config = AppConfig(
+        base_url="http://plex",
+        token="token",
+        client_identifier="client-id",
+        media_view="grid",
+    )
+
+    rows, selected_row = media_rows(items, config, selected_index=3, grid_columns=2)
+
+    assert len(rows) == 3
+    assert selected_row == 1
+    assert isinstance(rows[1], MediaGridRow)
+    assert rows[1].selected_media.key == "3"
+    assert next_media_view("list") == "poster"
+    assert next_media_view("poster") == "grid"
+    assert next_media_view("grid") == "list"
+
+
 def test_context_hints_for_media_and_load_more():
     playable = MediaItem("Movie", "", "movie", "1", True, object())
 
     assert context_hint(MediaRow(playable)) == "Enter selects item / p plays / a audio / s subtitles"
+    assert context_hint(MediaGridRow([playable], playable.key, AppConfig("http://plex", "token", "client"))) == (
+        "Left/right selects card / p plays / a audio / s subtitles"
+    )
     assert context_hint(LoadMoreRow(100, 200)) == "Enter loads next page"

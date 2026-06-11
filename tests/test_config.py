@@ -67,7 +67,7 @@ def test_invalid_artwork_settings_log_and_normalize(tmp_path, monkeypatch):
             'client_identifier = "client"',
             'artwork_mode = "maybe"',
             'artwork_renderer = "sixel"',
-            'media_view = "grid"',
+            'media_view = "tiles"',
             "",
         ]),
         encoding="utf-8",

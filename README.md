@@ -113,7 +113,7 @@ pipx reinstall ~/plex-tui
 - `tab` / `shift+tab`: move keyboard focus
 - `l`: move keyboard focus to the libraries list
 - `m`: move keyboard focus to the media list
-- `v`: toggle media list/poster view
+- `v`: cycle media list/poster/grid view
 - `,`: show settings
 - `escape`: clear search / go back
 - `enter`: open selected item
@@ -147,14 +147,16 @@ not require Kitty, iTerm2, or Sixel image protocol support. Downloaded artwork
 is cached in the app cache directory shown in Settings.
 
 Poster view mode changes the media browser from compact text rows to larger
-poster cards. Cards use cached artwork immediately and update selected posters
-after their artwork is fetched.
+poster cards. Grid view groups cards into rows and supports left/right movement
+within the highlighted row. Cards use cached artwork immediately and update
+selected posters after their artwork is fetched.
 
 Native terminal image output is not enabled by default because terminal image
 protocols can conflict with Textual's screen renderer. `artwork_renderer =
 "kitty"` and `artwork_renderer = "auto"` still fall back to colored block art
 unless `PLEX_TUI_ENABLE_NATIVE_IMAGES=1` is set. Treat that env var as
-experimental.
+experimental. The Kitty path uses Unicode placeholders so image positions can
+follow Textual's normal cell layout.
 
 When playback starts, external subtitle streams reported by Plex are passed to
 `mpv` automatically. Items with embedded PGS/VOBSUB subtitles are direct-played
