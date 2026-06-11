@@ -1,0 +1,80 @@
+# Repository Guidelines
+
+## Project Structure & Module Organization
+
+This is a Python/Textual terminal app for browsing Plex and launching playback
+through `mpv`.
+
+- `src/plextui/`: application source.
+  - `app.py`: Textual UI, navigation, settings, and high-level actions.
+  - `plex_service.py`: Plex API mapping and media detail extraction.
+  - `player.py`: `mpv` launch, stream selection, and playback diagnostics.
+  - `config.py`, `auth.py`, `artwork.py`, `models.py`: supporting modules.
+- `tests/`: pytest suite, split by app helpers/navigation and service modules.
+- `README.md`, `PACKAGING.md`, `RELEASE.md`, `ROADMAP.md`: user and release docs.
+- `config.example.toml`: example user configuration.
+
+## Build, Test, and Development Commands
+
+Use the project Makefile from the repository root:
+
+```bash
+make install-dev   # install editable package with dev dependencies
+make run           # start the TUI locally
+make smoke         # import/app construction sanity check
+make test          # run pytest
+make compile       # compile src and tests
+make build         # build sdist and wheel
+make check-package # build and validate package metadata
+make check         # smoke, tests, compile, and package validation
+```
+
+The app requires Python 3.11+ and uses external `mpv` for playback.
+
+## Coding Style & Naming Conventions
+
+Use standard Python style with 4-space indentation and type annotations for new
+public helpers or cross-module data. Prefer small pure helper functions for
+rendering/status logic, and keep Textual event handling in `PlexTuiApp`.
+
+Naming conventions:
+
+- Classes: `PascalCase`, for example `MediaGrid`.
+- Functions and variables: `snake_case`.
+- Tests: `test_<behavior>` or async helpers named `run_<behavior>_check`.
+
+No formatter is currently enforced. Keep edits minimal and consistent with
+nearby code.
+
+## Testing Guidelines
+
+Tests use `pytest`. Add focused unit tests for helper logic and app navigation
+tests for Textual behavior. Prefer deterministic fake objects over live Plex
+calls. Run at least:
+
+```bash
+make test
+make compile
+make smoke
+```
+
+For packaging or metadata changes, also run `make check-package` or `make check`.
+
+## Commit & Pull Request Guidelines
+
+Git history uses short imperative subjects, such as `Speed up grid navigation`
+and `Polish settings and grid navigation`. Keep commits scoped to one logical
+change and include docs/tests with behavior changes.
+
+Pull requests should include:
+
+- A concise summary of user-visible behavior.
+- Tests run and results.
+- Screenshots or terminal notes for TUI changes when useful.
+- Any config, packaging, or migration impact.
+
+## Security & Configuration Tips
+
+Never commit real Plex tokens, account tokens, debug logs, or local config files.
+Use `config.example.toml` for examples. Logs should redact tokens; preserve that
+behavior when changing playback or request diagnostics.
