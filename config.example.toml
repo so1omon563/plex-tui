@@ -23,6 +23,9 @@ client_identifier = "plex-tui-your-stable-client-id"
 # auto_load_threshold controls how close to the end of loaded items selection
 # must be before the next page is fetched automatically.
 # auto_load_threshold = 10
+# grid_prefetch_pages controls how many grid pages ahead poster artwork is
+# prepared. Use 0 to fetch only the visible page.
+# grid_prefetch_pages = 3
 
 # Optional artwork settings.
 # artwork_mode can be "on" or "off".

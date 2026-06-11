@@ -17,6 +17,9 @@ MAX_PAGE_SIZE = 500
 DEFAULT_AUTO_LOAD_THRESHOLD = 10
 MIN_AUTO_LOAD_THRESHOLD = 1
 MAX_AUTO_LOAD_THRESHOLD = 100
+DEFAULT_GRID_PREFETCH_PAGES = 3
+MIN_GRID_PREFETCH_PAGES = 0
+MAX_GRID_PREFETCH_PAGES = 5
 
 
 @dataclass(frozen=True)
@@ -37,6 +40,7 @@ class AppConfig:
     mpv_window_size: str = ""
     page_size: int = DEFAULT_PAGE_SIZE
     auto_load_threshold: int = DEFAULT_AUTO_LOAD_THRESHOLD
+    grid_prefetch_pages: int = DEFAULT_GRID_PREFETCH_PAGES
 
 
 def config_path() -> Path:
@@ -111,6 +115,13 @@ def load_config() -> AppConfig:
         MAX_AUTO_LOAD_THRESHOLD,
         "auto_load_threshold",
     )
+    grid_prefetch_pages = bounded_int(
+        data.get("grid_prefetch_pages", ""),
+        DEFAULT_GRID_PREFETCH_PAGES,
+        MIN_GRID_PREFETCH_PAGES,
+        MAX_GRID_PREFETCH_PAGES,
+        "grid_prefetch_pages",
+    )
     return AppConfig(
         base_url=base_url.strip(),
         token=token.strip(),
@@ -128,6 +139,7 @@ def load_config() -> AppConfig:
         mpv_window_size=mpv_window_size.strip(),
         page_size=page_size,
         auto_load_threshold=auto_load_threshold,
+        grid_prefetch_pages=grid_prefetch_pages,
     )
 
 
@@ -165,6 +177,8 @@ def save_config(config: AppConfig) -> None:
         lines.append(f"page_size = {config.page_size}")
     if config.auto_load_threshold != DEFAULT_AUTO_LOAD_THRESHOLD:
         lines.append(f"auto_load_threshold = {config.auto_load_threshold}")
+    if config.grid_prefetch_pages != DEFAULT_GRID_PREFETCH_PAGES:
+        lines.append(f"grid_prefetch_pages = {config.grid_prefetch_pages}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

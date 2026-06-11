@@ -184,7 +184,8 @@ available, and the details pane shows the effective playback choices.
 - Audio and subtitle pickers with saved language preferences.
 - Plex resume support and playback progress reporting.
 - Settings screen for stream preferences, artwork modes, grid density, page
-  size, auto-load threshold, media view, and `mpv` window size.
+  size, auto-load threshold, grid artwork prefetching, media view, and `mpv`
+  window size.
 
 ## Artwork
 
@@ -193,10 +194,12 @@ terminals without Kitty, iTerm2, or Sixel support. Native terminal image output
 is disabled for now because Kitty protocol rendering conflicts with Textual's
 screen renderer in practice.
 
-Grid view prefetches artwork for the visible page immediately and the next page
-after selection settles. Compact, comfortable, and large density modes adjust
-card and poster sizing. The artwork cache is bounded and stored in the app cache
-directory shown in Settings.
+Grid view prefetches artwork for the visible page immediately and, by default,
+prepares three pages ahead in the background. `grid_prefetch_pages` can be set
+from `0` to `5`; use `0` to fetch only the visible page on slower systems.
+Compact, comfortable, and large density modes adjust card and poster sizing. The
+artwork cache is bounded and stored in the app cache directory shown in
+Settings.
 
 ## Diagnostics
 

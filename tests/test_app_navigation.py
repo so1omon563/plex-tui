@@ -94,6 +94,10 @@ def test_grid_prefetch_schedules_loaded_pages_ahead():
     asyncio.run(run_grid_prefetch_pages_ahead_check())
 
 
+def test_grid_prefetch_pages_ahead_can_be_disabled():
+    asyncio.run(run_grid_prefetch_disabled_lookahead_check())
+
+
 def test_cached_grid_prefetch_hydrates_visible_artwork():
     asyncio.run(run_cached_grid_prefetch_hydration_check())
 
@@ -732,6 +736,29 @@ async def run_grid_prefetch_pages_ahead_check():
         assert [entry[2] for entry in scheduled[:4]] == [0.0, 0.0, 0.0, 0.0]
 
 
+async def run_grid_prefetch_disabled_lookahead_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid", grid_prefetch_pages=0)
+        items = [
+            MediaItem(f"Movie {index}", "", "movie", str(index), True, Raw(), artwork_path=f"/thumb/{index}")
+            for index in range(40)
+        ]
+        scheduled = []
+
+        def capture_prefetch(items, page_key, page_label, delay=0.0):
+            scheduled.append((tuple(item.key for item in items), page_label, delay))
+            app.prefetched_grid_pages.add(page_key)
+            app.active_grid_prefetch_pages.discard(page_key)
+
+        app.prefetch_grid_items = capture_prefetch
+        app.show_browse_state(BrowseState("Movies", items))
+        await pilot.pause(0.2)
+
+        assert [entry[1] for entry in scheduled] == ["current"]
+
+
 async def run_cached_grid_prefetch_hydration_check():
     app = PlexTuiApp()
     async with app.run_test(size=(110, 32)) as pilot:
@@ -1150,12 +1177,18 @@ async def run_settings_action_check():
             assert app.config.auto_load_threshold == 10
             app.run_settings_action("reset_auto_load_threshold")
             assert app.config.auto_load_threshold == 10
+            app.run_settings_action("increase_grid_prefetch_pages")
+            assert app.config.grid_prefetch_pages == 4
+            app.run_settings_action("decrease_grid_prefetch_pages")
+            assert app.config.grid_prefetch_pages == 3
+            app.run_settings_action("reset_grid_prefetch_pages")
+            assert app.config.grid_prefetch_pages == 3
             app.run_settings_action("reset_mpv_window_size")
             assert app.config.mpv_window_size == ""
             app.run_settings_action("cycle_grid_density")
             assert app.config.grid_density == "large"
 
-        assert save_config.call_count == 11
+        assert save_config.call_count == 14
 
 
 async def run_settings_recent_debug_log_check(tmp_path):
@@ -1249,7 +1282,7 @@ async def run_numeric_settings_input_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
-        app.config = AppConfig("http://plex", "token", "client-id", page_size=40, auto_load_threshold=10)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=40, auto_load_threshold=10, grid_prefetch_pages=3)
 
         with patch("plextui.app.save_config") as save_config:
             app.save_numeric_setting_input("page_size", "Page size", "120", 25, 500, 40)
@@ -1264,8 +1297,12 @@ async def run_numeric_settings_input_check():
             assert app.config.auto_load_threshold == 30
             app.save_numeric_setting_input("auto_load_threshold", "Auto-load threshold", "", 1, 100, 10)
             assert app.config.auto_load_threshold == 10
+            app.save_numeric_setting_input("grid_prefetch_pages", "Grid prefetch pages", "5", 0, 5, 3)
+            assert app.config.grid_prefetch_pages == 5
+            app.save_numeric_setting_input("grid_prefetch_pages", "Grid prefetch pages", "", 0, 5, 3)
+            assert app.config.grid_prefetch_pages == 3
 
-        assert save_config.call_count == 4
+        assert save_config.call_count == 6
 
 
 async def run_grid_density_settings_view_check():

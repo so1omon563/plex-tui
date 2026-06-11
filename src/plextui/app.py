@@ -25,10 +25,13 @@ from .artwork import artwork_is_cached, fetch_artwork, render_artwork, render_pr
 from .auth import LoginSession, ServerChoice, save_server_choice
 from .config import (
     DEFAULT_AUTO_LOAD_THRESHOLD,
+    DEFAULT_GRID_PREFETCH_PAGES,
     DEFAULT_PAGE_SIZE,
     MAX_AUTO_LOAD_THRESHOLD,
+    MAX_GRID_PREFETCH_PAGES,
     MAX_PAGE_SIZE,
     MIN_AUTO_LOAD_THRESHOLD,
+    MIN_GRID_PREFETCH_PAGES,
     MIN_PAGE_SIZE,
     AppConfig,
     cache_path,
@@ -65,7 +68,6 @@ GRID_DETAIL_REFRESH_DELAY = 0.65
 LIST_DETAIL_REFRESH_DELAY = 0.35
 DETAIL_ARTWORK_REFRESH_DELAY = 0.55
 GRID_PREFETCH_WORKERS = 3
-GRID_PREFETCH_PAGES_AHEAD = 3
 
 
 @dataclass
@@ -1208,7 +1210,7 @@ class PlexTuiApp(App[None]):
         if current_key in self.active_grid_prefetch_pages:
             return
 
-        for page_offset in range(1, GRID_PREFETCH_PAGES_AHEAD + 1):
+        for page_offset in range(1, self.config.grid_prefetch_pages + 1):
             next_items = grid.visible_page_items(page_offset=page_offset)
             if not next_items:
                 break
@@ -1562,6 +1564,28 @@ class PlexTuiApp(App[None]):
                 DEFAULT_AUTO_LOAD_THRESHOLD,
             )
             return
+        if action == "increase_grid_prefetch_pages":
+            if self.update_numeric_preference("grid_prefetch_pages", 1, MIN_GRID_PREFETCH_PAGES, MAX_GRID_PREFETCH_PAGES):
+                self.set_status(f"Grid prefetch pages: {self.config.grid_prefetch_pages}")
+            return
+        if action == "decrease_grid_prefetch_pages":
+            if self.update_numeric_preference("grid_prefetch_pages", -1, MIN_GRID_PREFETCH_PAGES, MAX_GRID_PREFETCH_PAGES):
+                self.set_status(f"Grid prefetch pages: {self.config.grid_prefetch_pages}")
+            return
+        if action == "reset_grid_prefetch_pages":
+            if self.update_preferences(grid_prefetch_pages=DEFAULT_GRID_PREFETCH_PAGES):
+                self.refresh_settings_after_change(action, "Grid prefetch pages", str(self.config.grid_prefetch_pages))
+            return
+        if action == "set_grid_prefetch_pages":
+            self.prompt_numeric_setting(
+                "grid_prefetch_pages",
+                "Grid prefetch pages",
+                self.config.grid_prefetch_pages,
+                MIN_GRID_PREFETCH_PAGES,
+                MAX_GRID_PREFETCH_PAGES,
+                DEFAULT_GRID_PREFETCH_PAGES,
+            )
+            return
         if action == "show_debug_log":
             path = debug_log_path()
             self.show_detail_text(f"Debug log\n\n{path}\n\nSet PLEX_TUI_PERF_LOG=1 before launch to include browsing performance timings.")
@@ -1815,6 +1839,16 @@ class PlexTuiApp(App[None]):
                     DEFAULT_AUTO_LOAD_THRESHOLD,
                 )
                 return
+            if self.input_mode == "grid_prefetch_pages":
+                self.save_numeric_setting_input(
+                    "grid_prefetch_pages",
+                    "Grid prefetch pages",
+                    query,
+                    MIN_GRID_PREFETCH_PAGES,
+                    MAX_GRID_PREFETCH_PAGES,
+                    DEFAULT_GRID_PREFETCH_PAGES,
+                )
+                return
             self.input_mode = ""
             self.run_search(query, self.search_global)
 
@@ -1865,7 +1899,7 @@ class PlexTuiApp(App[None]):
             search.display = False
             input_mode = self.input_mode
             self.input_mode = ""
-            if input_mode in {"mpv_window_size", "page_size", "auto_load_threshold"}:
+            if input_mode in {"mpv_window_size", "page_size", "auto_load_threshold", "grid_prefetch_pages"}:
                 self.action_show_settings()
                 return
             if self.browsing_stack:
@@ -2233,6 +2267,10 @@ def settings_rows(config: AppConfig) -> list[ListItem]:
         SettingsActionRow(f"Auto-load Threshold: {config.auto_load_threshold} +5", "increase_auto_load_threshold"),
         SettingsActionRow("Auto-load Threshold: set custom value...", "set_auto_load_threshold"),
         SettingsActionRow(f"Auto-load Threshold: reset to {DEFAULT_AUTO_LOAD_THRESHOLD}", "reset_auto_load_threshold"),
+        SettingsActionRow(f"Grid Prefetch Pages: {config.grid_prefetch_pages} -1", "decrease_grid_prefetch_pages"),
+        SettingsActionRow(f"Grid Prefetch Pages: {config.grid_prefetch_pages} +1", "increase_grid_prefetch_pages"),
+        SettingsActionRow("Grid Prefetch Pages: set custom value...", "set_grid_prefetch_pages"),
+        SettingsActionRow(f"Grid Prefetch Pages: reset to {DEFAULT_GRID_PREFETCH_PAGES}", "reset_grid_prefetch_pages"),
         SettingsHeaderRow("Diagnostics"),
         SettingsValueRow(f"Config Path: {config_path()}"),
         SettingsValueRow(f"Cache Path: {cache_path()}"),
@@ -2279,6 +2317,7 @@ def render_settings(config: AppConfig) -> str:
         f"Grid Density: {grid_density_value(config)}",
         f"Page Size: {config.page_size}",
         f"Auto-load Threshold: {config.auto_load_threshold}",
+        f"Grid Prefetch Pages: {config.grid_prefetch_pages}",
         "Set custom browsing values with whole numbers inside the allowed range.",
         "",
         "Diagnostics",
@@ -2456,6 +2495,8 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         return f"Current page size: {config.page_size}"
     if "auto_load_threshold" in action:
         return f"Current auto-load threshold: {config.auto_load_threshold}"
+    if "grid_prefetch_pages" in action:
+        return f"Current grid prefetch pages: {config.grid_prefetch_pages}"
     if action.startswith("show_"):
         return f"Debug log: {debug_log_path()}"
     return ""
@@ -2530,6 +2571,10 @@ def settings_action_label(action: str) -> str:
         "increase_auto_load_threshold": "Auto-load Threshold: increase",
         "set_auto_load_threshold": "Auto-load Threshold: set custom value",
         "reset_auto_load_threshold": f"Auto-load Threshold: reset to {DEFAULT_AUTO_LOAD_THRESHOLD}",
+        "decrease_grid_prefetch_pages": "Grid Prefetch Pages: decrease",
+        "increase_grid_prefetch_pages": "Grid Prefetch Pages: increase",
+        "set_grid_prefetch_pages": "Grid Prefetch Pages: set custom value",
+        "reset_grid_prefetch_pages": f"Grid Prefetch Pages: reset to {DEFAULT_GRID_PREFETCH_PAGES}",
         "show_debug_log": "Show debug log path",
         "show_recent_debug_log": "Show recent debug log",
     }
@@ -2539,6 +2584,8 @@ def settings_action_label(action: str) -> str:
 def numeric_setting_label(name: str) -> str:
     if name == "auto_load_threshold":
         return "Auto-load threshold"
+    if name == "grid_prefetch_pages":
+        return "Grid prefetch pages"
     if name == "page_size":
         return "Page size"
     return name

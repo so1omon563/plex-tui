@@ -76,6 +76,7 @@ def save_server_choice(config: AppConfig, account_token: str, choice: ServerChoi
         mpv_window_size=config.mpv_window_size,
         page_size=config.page_size,
         auto_load_threshold=config.auto_load_threshold,
+        grid_prefetch_pages=config.grid_prefetch_pages,
     )
     save_config(saved)
     return saved

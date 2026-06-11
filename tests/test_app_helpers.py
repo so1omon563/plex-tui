@@ -135,6 +135,7 @@ def test_render_settings_includes_stream_preferences():
         theme="textual-light",
         page_size=250,
         auto_load_threshold=25,
+        grid_prefetch_pages=4,
     )
 
     rendered = render_settings(config)
@@ -150,6 +151,7 @@ def test_render_settings_includes_stream_preferences():
     assert "mpv Window Size: Default" in rendered
     assert "Page Size: 250" in rendered
     assert "Auto-load Threshold: 25" in rendered
+    assert "Grid Prefetch Pages: 4" in rendered
     assert "Show recent debug log" in rendered
     assert subtitle_preference_value(config) == "eng"
 
@@ -161,6 +163,7 @@ def test_settings_rows_are_grouped_with_action_values():
         "client-id",
         page_size=80,
         auto_load_threshold=20,
+        grid_prefetch_pages=4,
         mpv_window_size="1280x720",
     )
 
@@ -179,6 +182,8 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "Page Size: set custom value...  [input]" in labels
     assert "Auto-load Threshold: 20 -5  [step]" in labels
     assert "Auto-load Threshold: set custom value...  [input]" in labels
+    assert "Grid Prefetch Pages: 4 +1  [step]" in labels
+    assert "Grid Prefetch Pages: set custom value...  [input]" in labels
     assert "Show recent debug log  [show]" in labels
 
 

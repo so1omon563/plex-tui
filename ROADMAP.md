@@ -3,7 +3,7 @@
 ## App UX
 
 - Keep measuring real library browsing, especially any remaining list/grid latency after the prefetch/rendering and idle-detail passes.
-- Consider a small in-memory rendered-artwork cache if profiling still shows repeated artwork render costs.
+- Continue tuning grid artwork defaults, especially `grid_prefetch_pages`, across large remote libraries and slower machines.
 - Continue tuning focus and selection affordances based on real terminal themes.
 - Improve the settings screen beyond action rows:
   - richer inline controls for grouped playback, artwork, browsing, and account actions
@@ -27,5 +27,6 @@
 ## Technical Follow-Up
 
 - Keep profiling grid browsing with `PLEX_TUI_PERF_LOG=1`.
+- Revisit artwork logging volume after another round of real-library testing.
 - Revisit native terminal image support, especially Kitty, behind a safe opt-in path.
 - Add focused regression tests for any real-world Plex media edge cases discovered during use.

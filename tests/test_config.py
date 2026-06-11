@@ -29,6 +29,7 @@ def test_config_example_parses_and_uses_known_fields():
         "mpv_window_size",
         "page_size",
         "auto_load_threshold",
+        "grid_prefetch_pages",
         "artwork_mode",
         "artwork_renderer",
         "detail_artwork_mode",
@@ -53,6 +54,7 @@ def test_invalid_subtitle_mode_logs_and_normalizes(tmp_path, monkeypatch):
             'mpv_window_size = "huge"',
             'page_size = "5"',
             'auto_load_threshold = "500"',
+            'grid_prefetch_pages = "20"',
             "",
         ]),
         encoding="utf-8",
@@ -66,11 +68,13 @@ def test_invalid_subtitle_mode_logs_and_normalizes(tmp_path, monkeypatch):
     assert loaded.mpv_window_size == ""
     assert loaded.page_size == config.DEFAULT_PAGE_SIZE
     assert loaded.auto_load_threshold == config.DEFAULT_AUTO_LOAD_THRESHOLD
+    assert loaded.grid_prefetch_pages == config.DEFAULT_GRID_PREFETCH_PAGES
     log = debug_file.read_text(encoding="utf-8")
     assert "invalid subtitle_mode" in log
     assert "invalid mpv_window_size" in log
     assert "invalid page_size" in log
     assert "invalid auto_load_threshold" in log
+    assert "invalid grid_prefetch_pages" in log
 
 
 def test_invalid_artwork_settings_log_and_normalize(tmp_path, monkeypatch):
@@ -136,16 +140,26 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     config_file = tmp_path / "config.toml"
     monkeypatch.setattr(config, "config_path", lambda: config_file)
 
-    saved = config.AppConfig("http://plex", "token", "client", page_size=250, auto_load_threshold=25, grid_density="large")
+    saved = config.AppConfig(
+        "http://plex",
+        "token",
+        "client",
+        page_size=250,
+        auto_load_threshold=25,
+        grid_prefetch_pages=4,
+        grid_density="large",
+    )
     config.save_config(saved)
     loaded = config.load_config()
 
     assert loaded.page_size == 250
     assert loaded.auto_load_threshold == 25
+    assert loaded.grid_prefetch_pages == 4
     assert loaded.grid_density == "large"
     text = config_file.read_text(encoding="utf-8")
     assert "page_size = 250" in text
     assert "auto_load_threshold = 25" in text
+    assert "grid_prefetch_pages = 4" in text
     assert 'grid_density = "large"' in text
 
 
