@@ -248,6 +248,10 @@ def test_detail_artwork_refresh_waits_for_stable_selection():
     asyncio.run(run_detail_artwork_idle_check())
 
 
+def test_grid_detail_artwork_skips_card_only_fetch():
+    asyncio.run(run_grid_detail_artwork_card_fetch_check())
+
+
 def test_detail_refresh_reuses_cached_reload():
     app = PlexTuiApp()
     app.config = AppConfig("http://plex", "token", "client-id", media_view="list")
@@ -829,6 +833,33 @@ async def run_detail_artwork_idle_check():
         assert refreshed[0][1] == 1
         assert refreshed[0][2] is not None
         assert not refreshed[0][3]
+
+
+async def run_grid_detail_artwork_card_fetch_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        app.show_media_grid()
+        app.detail_refresh_token = 1
+        full_item = MediaItem("Movie", "", "movie", "1", True, Raw(), artwork_path="/thumb")
+        details = SimpleNamespace(artwork_path="/thumb")
+        refreshed = []
+        callbacks = []
+
+        def capture_artwork(item, details, token, detail_size, include_card_artwork):
+            refreshed.append((item.title, token, detail_size, include_card_artwork))
+
+        def capture_timer(delay, callback, name=""):
+            callbacks.append((delay, callback, name))
+            return SimpleNamespace(stop=lambda: None)
+
+        app.fetch_media_detail_artwork = capture_artwork
+        with patch.object(app, "set_timer", capture_timer):
+            app.schedule_media_detail_artwork_refresh(full_item, details, token=1)
+
+        assert refreshed == []
+        assert callbacks == []
 
 
 async def run_search_load_more_row_check():

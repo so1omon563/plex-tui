@@ -964,7 +964,7 @@ class PlexTuiApp(App[None]):
         if not artwork_enabled(self.config) or not getattr(details, "artwork_path", ""):
             return
         detail_size = self.detail_artwork_size() if detail_artwork_enabled(self.config) else None
-        include_card_artwork = self.media_grid_visible()
+        include_card_artwork = False
         if detail_size is None and not include_card_artwork:
             return
         self.detail_artwork_timer = self.set_timer(
