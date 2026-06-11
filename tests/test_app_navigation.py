@@ -211,8 +211,15 @@ async def run_focus_pane_check():
         await pilot.pause(0.1)
         assert app.query_one("#main").has_class("focused-pane")
         assert not app.query_one("#sidebar").has_class("focused-pane")
+        assert not app.query_one("#details").has_class("focused-pane")
         assert app.query_one("#media-title").content.startswith("[FOCUS]")
         assert app.query_one("#libraries-title").content == "Libraries"
+
+        app.action_focus_details()
+        await pilot.pause(0.1)
+        assert app.query_one("#details").has_class("focused-pane")
+        assert app.query_one("#details-title").content == "[FOCUS] Details"
+        assert not app.query_one("#main").has_class("focused-pane")
 
 
 async def run_tab_focus_pane_check():
@@ -232,6 +239,21 @@ async def run_tab_focus_pane_check():
         assert app.query_one("#main").has_class("focused-pane")
         assert app.query_one("#media-title").content.startswith("[FOCUS]")
         assert not app.query_one("#libraries-title").content.startswith("[FOCUS]")
+
+        await pilot.press("tab")
+        await pilot.pause(0.2)
+
+        assert app.query_one("#details").has_class("focused-pane")
+        assert app.query_one("#details-title").content == "[FOCUS] Details"
+        assert not app.query_one("#main").has_class("focused-pane")
+        assert not app.query_one("#media-title").content.startswith("[FOCUS]")
+
+        await pilot.press("shift+tab")
+        await pilot.pause(0.2)
+
+        assert app.query_one("#main").has_class("focused-pane")
+        assert app.query_one("#media-title").content.startswith("[FOCUS]")
+        assert not app.query_one("#details").has_class("focused-pane")
 
 
 async def run_library_highlight_check():

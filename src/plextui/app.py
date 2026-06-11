@@ -474,14 +474,16 @@ class PlexTuiApp(App[None]):
         self.set_focus_pane(
             sidebar=focused_id == "libraries",
             main=focused_id in {"media", "media-grid", "search"},
+            details=focused_id == "detail-scroll",
         )
 
-    def set_focus_pane(self, *, sidebar: bool = False, main: bool = False) -> None:
+    def set_focus_pane(self, *, sidebar: bool = False, main: bool = False, details: bool = False) -> None:
         self.query_one("#sidebar").set_class(sidebar, "focused-pane")
         self.query_one("#main").set_class(main, "focused-pane")
+        self.query_one("#details").set_class(details, "focused-pane")
         self.update_pane_title("#libraries-title", "Libraries", sidebar)
         self.update_pane_title("#media-title", self.media_title_text(), main)
-        self.update_pane_title("#details-title", "Details", False)
+        self.update_pane_title("#details-title", "Details", details)
 
     def update_pane_title(self, selector: str, text: str, focused: bool) -> None:
         title = f"{FOCUS_TITLE_PREFIX}{text}" if focused else text
@@ -1004,13 +1006,28 @@ class PlexTuiApp(App[None]):
         self.focus_media_browser()
         self.set_status("Focus moved to media list")
 
+    def action_focus_details(self) -> None:
+        self.query_one("#detail-scroll", VerticalScroll).focus()
+        self.set_focus_pane(details=True)
+        self.set_status("Focus moved to details")
+
     def action_focus_next(self) -> None:
-        super().action_focus_next()
-        self.call_after_refresh(self.update_focus_pane)
+        focused_id = getattr(self.focused, "id", "")
+        if focused_id == "libraries":
+            self.action_focus_media()
+        elif focused_id in {"media", "media-grid", "search"}:
+            self.action_focus_details()
+        else:
+            self.action_focus_libraries()
 
     def action_focus_previous(self) -> None:
-        super().action_focus_previous()
-        self.call_after_refresh(self.update_focus_pane)
+        focused_id = getattr(self.focused, "id", "")
+        if focused_id == "libraries":
+            self.action_focus_details()
+        elif focused_id == "detail-scroll":
+            self.action_focus_media()
+        else:
+            self.action_focus_libraries()
 
     def action_toggle_media_view(self) -> None:
         next_view = next_media_view(self.config.media_view)
