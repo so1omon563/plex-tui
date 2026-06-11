@@ -25,3 +25,5 @@ client_identifier = "plex-tui-your-stable-client-id"
 # detail_artwork_mode = "list_only"
 # media_view can be "list" or "grid".
 # media_view = "list"
+# Textual theme selected from the command palette.
+# theme = "textual-dark"

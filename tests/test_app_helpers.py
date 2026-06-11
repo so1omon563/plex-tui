@@ -89,6 +89,7 @@ def test_render_settings_includes_stream_preferences():
         preferred_audio_language="jpn",
         preferred_subtitle_language="eng",
         subtitle_mode="preferred",
+        theme="textual-light",
     )
 
     rendered = render_settings(config)
@@ -100,6 +101,7 @@ def test_render_settings_includes_stream_preferences():
     assert "Artwork Renderer: Block" in rendered
     assert "Details Artwork: List only" in rendered
     assert "Media View: List" in rendered
+    assert "Theme: textual-light" in rendered
     assert subtitle_preference_value(config) == "eng"
 
 

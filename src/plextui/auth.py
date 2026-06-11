@@ -66,6 +66,11 @@ def save_server_choice(config: AppConfig, account_token: str, choice: ServerChoi
         preferred_audio_language=config.preferred_audio_language,
         preferred_subtitle_language=config.preferred_subtitle_language,
         subtitle_mode=config.subtitle_mode,
+        artwork_mode=config.artwork_mode,
+        artwork_renderer=config.artwork_renderer,
+        detail_artwork_mode=config.detail_artwork_mode,
+        media_view=config.media_view,
+        theme=config.theme,
     )
     save_config(saved)
     return saved

@@ -30,6 +30,7 @@ def test_config_example_parses_and_uses_known_fields():
         "artwork_renderer",
         "detail_artwork_mode",
         "media_view",
+        "theme",
     }
     assert raw["base_url"]
     assert raw["token"]
@@ -88,6 +89,18 @@ def test_invalid_artwork_settings_log_and_normalize(tmp_path, monkeypatch):
     assert "invalid artwork_renderer" in log
     assert "invalid detail_artwork_mode" in log
     assert "invalid media_view" in log
+
+
+def test_theme_round_trips_through_config(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    monkeypatch.setattr(config, "config_path", lambda: config_file)
+
+    saved = config.AppConfig("http://plex", "token", "client", theme="textual-light")
+    config.save_config(saved)
+    loaded = config.load_config()
+
+    assert loaded.theme == "textual-light"
+    assert 'theme = "textual-light"' in config_file.read_text(encoding="utf-8")
 
 
 def test_deprecated_poster_view_normalizes_to_list(tmp_path, monkeypatch):

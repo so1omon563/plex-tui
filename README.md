@@ -136,7 +136,8 @@ items fetches the next page automatically. You can also select the
 The settings view shows the active config and supports reconnect/reload,
 Plex relogin, clearing or changing audio/subtitle preferences separately,
 artwork on/off, artwork renderer selection, details artwork mode, and media
-list/grid view mode.
+list/grid view mode. Theme changes made through Textual's command palette are
+saved and restored on restart.
 
 The details pane shows metadata, saved audio/subtitle preferences, reported
 audio tracks, and reported subtitle tracks. Subtitle rows include external vs

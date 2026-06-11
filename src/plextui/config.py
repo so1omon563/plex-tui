@@ -25,6 +25,7 @@ class AppConfig:
     artwork_renderer: str = "block"
     detail_artwork_mode: str = "list_only"
     media_view: str = "list"
+    theme: str = "textual-dark"
 
 
 def config_path() -> Path:
@@ -76,6 +77,7 @@ def load_config() -> AppConfig:
     if media_view not in {"list", "grid"}:
         write_debug_log(f"invalid media_view {media_view!r}; using 'list'")
         media_view = "list"
+    theme = data.get("theme", "textual-dark")
     return AppConfig(
         base_url=base_url.strip(),
         token=token.strip(),
@@ -88,6 +90,7 @@ def load_config() -> AppConfig:
         artwork_renderer=artwork_renderer.strip(),
         detail_artwork_mode=detail_artwork_mode.strip(),
         media_view=media_view.strip(),
+        theme=theme.strip() or "textual-dark",
     )
 
 
@@ -115,6 +118,8 @@ def save_config(config: AppConfig) -> None:
         lines.append(f'detail_artwork_mode = "{_toml_escape(config.detail_artwork_mode)}"')
     if config.media_view != "list":
         lines.append(f'media_view = "{_toml_escape(config.media_view)}"')
+    if config.theme != "textual-dark":
+        lines.append(f'theme = "{_toml_escape(config.theme)}"')
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

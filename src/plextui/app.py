@@ -16,7 +16,7 @@ from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, St
 
 from .artwork import artwork_is_cached, fetch_artwork, render_artwork, render_protocol_artwork
 from .auth import LoginSession, ServerChoice, save_server_choice
-from .config import AppConfig, cache_path, config_path, debug_log_path, load_config, save_config
+from .config import AppConfig, cache_path, config_path, debug_log_path, load_config, save_config, write_debug_log
 from .models import LibraryItem, MediaItem
 from .player import (
     PlayerError,
@@ -320,6 +320,7 @@ class PlexTuiApp(App[None]):
     suppress_auto_load: bool
     player: PlayerHandle | None
     prefetched_grid_pages: set[tuple[str, ...]]
+    applying_config_theme: bool
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -355,9 +356,39 @@ class PlexTuiApp(App[None]):
         self.suppress_auto_load = False
         self.player = None
         self.prefetched_grid_pages = set()
+        self.applying_config_theme = False
+        try:
+            self.config = load_config()
+            self.apply_config_theme()
+        except Exception:
+            pass
         self.query_one("#search", Input).display = False
         self.query_one("#media-grid-scroll", VerticalScroll).display = False
         self.load_server()
+
+    def apply_config_theme(self) -> None:
+        if self.config.theme not in self.available_themes:
+            write_debug_log(f"invalid theme {self.config.theme!r}; using current theme")
+            return
+        if self.theme == self.config.theme:
+            return
+        self.applying_config_theme = True
+        try:
+            self.theme = self.config.theme
+        finally:
+            self.applying_config_theme = False
+
+    def _watch_theme(self, theme_name: str) -> None:
+        super()._watch_theme(theme_name)
+        if getattr(self, "applying_config_theme", False) or not hasattr(self, "config"):
+            return
+        if getattr(self.config, "theme", "") == theme_name:
+            return
+        self.config = replace(self.config, theme=theme_name)
+        try:
+            save_config(self.config)
+        except OSError as exc:
+            self.set_status(f"Error: failed to save theme: {exc}")
 
     @work(thread=True)
     def load_server(self) -> None:
@@ -375,6 +406,7 @@ class PlexTuiApp(App[None]):
 
         def update() -> None:
             self.service = service
+            self.apply_config_theme()
             self.title = f"plex-tui - {service.friendly_name}"
             self.set_status(f"Connected to {service.friendly_name}")
             self.populate_libraries(libraries)
@@ -1366,6 +1398,7 @@ def config_rows(config: AppConfig) -> list[tuple[str, str]]:
         ("Artwork Renderer", artwork_renderer_value(config)),
         ("Details Artwork", detail_artwork_mode_value(config)),
         ("Media View", media_view_value(config)),
+        ("Theme", config.theme),
     ]
 
 
