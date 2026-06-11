@@ -282,13 +282,17 @@ def test_media_grid_tracks_selection_and_visible_page():
     config = AppConfig("http://plex", "token", "client", media_view="grid")
     grid = MediaGrid()
 
-    grid.set_items(items, selected_index=3, config=config, columns=2)
+    grid.set_items(items, selected_index=3, config=config, columns=2, rows=2)
     grid.set_artwork("3", "art")
 
     assert grid.selected_media is not None
     assert grid.selected_media.key == "3"
     assert grid.artwork["3"] == "art"
-    assert [item.key for item in grid.visible_page_items(rows=2)] == ["0", "1", "2", "3"]
+    assert [item.key for item in grid.visible_page_items()] == ["0", "1", "2", "3"]
+
+    grid.set_selected_index(4)
+
+    assert [item.key for item in grid.visible_page_items()] == ["4"]
 
 
 def test_context_hints_for_media_and_load_more():

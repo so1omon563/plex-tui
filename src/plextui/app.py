@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -95,6 +96,7 @@ class MediaGrid(Static):
         self.items: list[MediaItem] = []
         self.selected_index = 0
         self.columns = 1
+        self.rows = 1
         self.config: AppConfig | None = None
         self.artwork: dict[str, object] = {}
 
@@ -104,10 +106,18 @@ class MediaGrid(Static):
             return None
         return self.items[min(self.selected_index, len(self.items) - 1)]
 
-    def set_items(self, items: list[MediaItem], selected_index: int, config: AppConfig, columns: int) -> None:
+    def set_items(
+        self,
+        items: list[MediaItem],
+        selected_index: int,
+        config: AppConfig,
+        columns: int,
+        rows: int = 1,
+    ) -> None:
         self.items = items
         self.selected_index = min(max(0, selected_index), max(0, len(items) - 1))
         self.columns = max(1, columns)
+        self.rows = max(1, rows)
         self.config = config
         self.artwork = {key: value for key, value in self.artwork.items() if key in {item.key for item in items}}
         self.refresh_grid()
@@ -142,8 +152,13 @@ class MediaGrid(Static):
         self.artwork[media_key] = artwork
         self.refresh_grid()
 
-    def visible_page_items(self, rows: int) -> list[MediaItem]:
-        page_size = max(1, self.columns * rows)
+    @property
+    def page_start(self) -> int:
+        page_size = max(1, self.columns * self.rows)
+        return (self.selected_index // page_size) * page_size
+
+    def visible_page_items(self, rows: int | None = None) -> list[MediaItem]:
+        page_size = max(1, self.columns * (rows or self.rows))
         start = (self.selected_index // page_size) * page_size
         return self.items[start:start + page_size]
 
@@ -153,12 +168,12 @@ class MediaGrid(Static):
             return
         selected = self.selected_media
         selected_key = selected.key if selected is not None else self.items[0].key
-        self.update(render_media_grid(self.items, selected_key, self.config, self.columns, self.artwork))
+        self.update(render_media_grid(self.visible_page_items(), selected_key, self.config, self.columns, self.artwork))
 
     def scroll_selected_visible(self) -> None:
         if not self.is_mounted:
             return
-        row = self.selected_index // max(1, self.columns)
+        row = (self.selected_index - self.page_start) // max(1, self.columns)
         if self.parent is not None:
             self.parent.scroll_to(y=max(0, row * GRID_CARD_HEIGHT), animate=False)
 
@@ -323,6 +338,7 @@ class PlexTuiApp(App[None]):
     player: PlayerHandle | None
     prefetched_grid_pages: set[tuple[str, ...]]
     applying_config_theme: bool
+    detail_refresh_token: int
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -359,6 +375,7 @@ class PlexTuiApp(App[None]):
         self.player = None
         self.prefetched_grid_pages = set()
         self.applying_config_theme = False
+        self.detail_refresh_token = 0
         try:
             self.config = load_config()
             self.apply_config_theme()
@@ -674,8 +691,8 @@ class PlexTuiApp(App[None]):
             selected_index = selected_media_index(state.items, selected_key)
             if self.config.media_view == "grid":
                 grid = self.show_media_grid()
-                columns, _ = self.media_grid_geometry()
-                grid.set_items(state.items, selected_index, self.config, columns)
+                columns, rows = self.media_grid_geometry()
+                grid.set_items(state.items, selected_index, self.config, columns, rows)
                 self.prefetch_grid_page(grid)
             else:
                 self.show_media_list()
@@ -714,12 +731,19 @@ class PlexTuiApp(App[None]):
             set_list_index(view, selected_index)
 
     def show_media_details(self, item: MediaItem) -> None:
+        self.detail_refresh_token += 1
+        token = self.detail_refresh_token
         details = media_details(item)
         self.show_detail_text(render_detail_content(details, self.config, raw=item.raw))
-        self.refresh_media_details(item)
+        delay = 0.35 if self.media_grid_visible() else 0.0
+        self.refresh_media_details(item, token, delay)
 
     @work(thread=True, exclusive=True)
-    def refresh_media_details(self, item: MediaItem) -> None:
+    def refresh_media_details(self, item: MediaItem, token: int, delay: float = 0.0) -> None:
+        if delay:
+            time.sleep(delay)
+        if token != self.detail_refresh_token:
+            return
         if not hasattr(item.raw, "reload"):
             return
         try:
@@ -738,6 +762,8 @@ class PlexTuiApp(App[None]):
         details = media_details(full_item)
 
         def update_text() -> None:
+            if token != self.detail_refresh_token:
+                return
             selected = self.selected_media()
             if selected is not None and selected.key == item.key:
                 self.show_detail_text(render_detail_content(details, self.config, raw=full_item.raw))
@@ -762,6 +788,8 @@ class PlexTuiApp(App[None]):
             return
 
         def update_artwork() -> None:
+            if token != self.detail_refresh_token:
+                return
             selected = self.selected_media()
             if selected is not None and selected.key == item.key:
                 if artwork is not None:
@@ -840,8 +868,7 @@ class PlexTuiApp(App[None]):
     def prefetch_grid_page(self, grid: MediaGrid) -> None:
         if not artwork_enabled(self.config):
             return
-        _, page_rows = self.media_grid_geometry()
-        items = grid.visible_page_items(page_rows)
+        items = grid.visible_page_items()
         page_key = tuple(item.key for item in items)
         if page_key in self.prefetched_grid_pages:
             return

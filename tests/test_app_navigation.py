@@ -63,8 +63,8 @@ def test_grid_browse_state_preserves_selected_media():
     asyncio.run(run_grid_browse_state_preserve_selection_check())
 
 
-def test_grid_selection_scrolls_to_selected_row():
-    asyncio.run(run_grid_selection_scroll_check())
+def test_grid_selection_pages_visible_cards():
+    asyncio.run(run_grid_selection_page_check())
 
 
 def test_search_state_adds_load_more_row():
@@ -307,7 +307,7 @@ async def run_grid_browse_state_preserve_selection_check():
         assert grid.selected_media.title == "Third"
 
 
-async def run_grid_selection_scroll_check():
+async def run_grid_selection_page_check():
     app = PlexTuiApp()
     async with app.run_test(size=(110, 32)) as pilot:
         await pilot.pause(1.0)
@@ -320,13 +320,15 @@ async def run_grid_selection_scroll_check():
         app.show_browse_state(BrowseState("Movies", items))
         await pilot.pause(0.2)
         grid = app.query_one("#media-grid")
-        grid_scroll = app.query_one("#media-grid-scroll")
-        start_scroll = grid_scroll.scroll_y
+        first_page = [item.key for item in grid.visible_page_items()]
 
         grid.set_selected_index(30)
         await pilot.pause(0.2)
 
-        assert grid_scroll.scroll_y > start_scroll
+        assert first_page[0] == "0"
+        next_page = [item.key for item in grid.visible_page_items()]
+        assert next_page != first_page
+        assert "30" in next_page
 
 
 async def run_search_load_more_row_check():
