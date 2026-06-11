@@ -1,12 +1,11 @@
 # Roadmap
 
-## Immediate Post-0.1.0
+## Immediate Post-0.2.0
 
-- Validate a fresh install from the `v0.1.0` tag on macOS:
-  - `pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.1.0"`
+- Validate a fresh install from the `v0.2.0` tag on macOS:
+  - `pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.2.0"`
   - `plex-tui --smoke`
   - real browsing and playback session
-- Add screenshots or an animated terminal capture to the README.
 - Collect rough edges from real library browsing, especially grid view latency and artwork rendering.
 
 ## App UX
@@ -17,10 +16,9 @@
 - Iterate on artwork/grid presentation:
   - tune density presets across narrow and wide terminals
   - consider separate poster-size controls if density presets are not enough
-- Improve playback status:
-  - clearer current `mpv` state
-  - better reporting when Plex/default stream choices are used
-  - more visible playback errors from `debug.log`
+- Improve playback diagnostics:
+  - surface more actionable excerpts from `debug.log`
+  - consider a compact active-playback footer once more player state is available
 
 ## Packaging & Distribution
 

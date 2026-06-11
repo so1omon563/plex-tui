@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from plextui.auth import LoginSession
+from plextui import __version__
+from plextui.auth import LoginSession, plex_headers
 from plextui.config import AppConfig
 
 
@@ -20,3 +21,10 @@ def test_login_start_returns_url_when_browser_open_fails(monkeypatch):
 
     assert session.start(timeout=10) == "http://plex/login"
     assert session.pin_login.timeout == 10
+
+
+def test_plex_headers_use_package_version():
+    headers = plex_headers(AppConfig("", "", "client-id"))
+
+    assert headers["X-Plex-Version"] == __version__
+    assert headers["X-Plex-Client-Identifier"] == "client-id"

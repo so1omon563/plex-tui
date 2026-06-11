@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from plexapi.myplex import MyPlexAccount, MyPlexPinLogin, MyPlexResource
 
+from . import __version__
 from .config import APP_NAME, AppConfig, save_config
 
 
@@ -83,7 +84,7 @@ def save_server_choice(config: AppConfig, account_token: str, choice: ServerChoi
 def plex_headers(config: AppConfig) -> dict[str, str]:
     return {
         "X-Plex-Product": APP_NAME,
-        "X-Plex-Version": "0.1.0",
+        "X-Plex-Version": __version__,
         "X-Plex-Client-Identifier": config.client_identifier,
         "X-Plex-Platform": "Python",
         "X-Plex-Platform-Version": "3",

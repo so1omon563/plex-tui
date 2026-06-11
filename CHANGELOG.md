@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 - Unreleased
+## 0.2.0 - 2026-06-11
 
 - Improved README structure and expanded the post-0.1.0 roadmap.
 - Grouped the Settings screen into account, stream, playback, artwork, browsing, and diagnostics sections.

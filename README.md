@@ -55,7 +55,7 @@ plex-tui
 To install the latest tagged release instead:
 
 ```bash
-pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.1.0"
+pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.2.0"
 ```
 
 Useful CLI checks:
