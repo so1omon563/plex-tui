@@ -198,9 +198,12 @@ class MediaGrid(Static):
             return
         selected = self.selected_media
         selected_key = selected.key if selected is not None else self.items[0].key
+        visible_items = self.visible_page_items()
+        visible_keys = {item.key for item in visible_items}
+        loaded_count = len(visible_keys.intersection(self.artwork))
         started = time.perf_counter()
-        self.update(render_media_grid(self.visible_page_items(), selected_key, self.config, self.columns, self.artwork))
-        write_performance_log("grid_render", started, f"items={len(self.visible_page_items())} columns={self.columns}")
+        self.update(render_media_grid(visible_items, selected_key, self.config, self.columns, self.artwork))
+        write_performance_log("grid_render", started, f"items={len(visible_items)} loaded={loaded_count} columns={self.columns}")
 
     def scroll_selected_visible(self) -> None:
         if not self.is_mounted:
@@ -2067,6 +2070,8 @@ def render_media_grid_card(
     title = truncate_text(media.title, content_width)
     subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), content_width)
     artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
+    if hasattr(artwork, "copy"):
+        artwork = artwork.copy()
     if artwork is None:
         status = "poster" if media.artwork_path else "no poster"
         artwork = Text(f"[{status}]", style="dim")

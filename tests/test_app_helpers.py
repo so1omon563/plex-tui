@@ -435,6 +435,15 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
     assert "▸ Movie" not in unselected_text
 
 
+def test_grid_card_copies_cached_artwork_renderable():
+    media = MediaItem("Movie", "2024", "movie", "1", True, object(), artwork_path="/thumb")
+    artwork = SimpleNamespace(copy=lambda: "copied-art")
+
+    rendered = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"), {"1": artwork})
+
+    assert rendered.renderables[0] == "copied-art"
+
+
 def test_render_help_groups_key_bindings():
     rendered = render_help()
 
