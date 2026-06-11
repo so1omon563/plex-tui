@@ -207,13 +207,13 @@ def resolve_subtitle_choice(item: Any, choice: StreamChoice | None) -> Any:
         return None
     if choice.stream_id == 0:
         return 0
-    return choice.stream
+    return find_stream_by_id(subtitle_streams(item), choice.stream_id) or choice.stream
 
 
 def resolve_audio_choice(item: Any, choice: StreamChoice | None) -> Any:
     if choice is None:
         return None
-    return choice.stream
+    return find_stream_by_id(audio_streams(item), choice.stream_id) or choice.stream
 
 
 def external_subtitle_urls(item: Any, selected_subtitle: Any = None) -> list[str]:
@@ -222,7 +222,7 @@ def external_subtitle_urls(item: Any, selected_subtitle: Any = None) -> list[str
         return urls
     for part in iter_parts(item):
         for stream in part.subtitleStreams():
-            if selected_subtitle is not None and stream is not selected_subtitle:
+            if selected_subtitle is not None and not same_stream(stream, selected_subtitle):
                 continue
             key = getattr(stream, "key", None)
             if not key:
@@ -253,7 +253,7 @@ def has_embedded_subtitles(item: Any, selected_subtitle: Any = None) -> bool:
         return False
     embedded_codecs = {"pgs", "vobsub", "idx"}
     for stream in subtitle_streams(item):
-        if selected_subtitle is not None and stream is not selected_subtitle:
+        if selected_subtitle is not None and not same_stream(stream, selected_subtitle):
             continue
         codec = str(getattr(stream, "codec", "")).lower()
         if codec in embedded_codecs and not getattr(stream, "key", None):
@@ -335,6 +335,23 @@ def stream_label(stream: Any) -> str:
     values.extend(flags)
     suffix = ", ".join(values)
     return f"{label} ({suffix})" if suffix else str(label)
+
+
+def find_stream_by_id(streams: list[Any], stream_id: int | None) -> Any:
+    if stream_id is None:
+        return None
+    for stream in streams:
+        if getattr(stream, "id", None) == stream_id:
+            return stream
+    return None
+
+
+def same_stream(left: Any, right: Any) -> bool:
+    left_id = getattr(left, "id", None)
+    right_id = getattr(right, "id", None)
+    if left_id is not None and right_id is not None:
+        return left_id == right_id
+    return left is right
 
 
 def iter_parts(item: Any) -> list[Any]:

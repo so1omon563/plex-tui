@@ -14,6 +14,11 @@ dependencies = [
   "textual>=0.86",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
 [project.scripts]
 plex-tui = "plextui.__main__:main"
 
