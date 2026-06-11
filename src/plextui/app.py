@@ -2070,8 +2070,7 @@ def render_media_grid_card(
     title = truncate_text(media.title, content_width)
     subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), content_width)
     artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
-    if hasattr(artwork, "copy"):
-        artwork = artwork.copy()
+    artwork = copy_renderable(artwork)
     if artwork is None:
         status = "poster" if media.artwork_path else "no poster"
         artwork = Text(f"[{status}]", style="dim")
@@ -2084,9 +2083,18 @@ def render_media_grid_card(
     )
 
 
+def copy_renderable(renderable: object | None) -> object | None:
+    if isinstance(renderable, Group):
+        return Group(*(copy_renderable(item) for item in renderable.renderables))
+    if hasattr(renderable, "copy"):
+        return renderable.copy()
+    return renderable
+
+
 def render_card_artwork(data: bytes, config: AppConfig) -> object:
     spec = grid_density_spec(config)
-    return render_artwork(data, width=int(spec["art_width"]), max_height=int(spec["art_height"]))
+    artwork = render_artwork(data, width=int(spec["art_width"]), max_height=int(spec["art_height"]))
+    return Group(*artwork.split("\n"))
 
 
 def card_artwork_pixel_size(config: AppConfig) -> tuple[int, int]:

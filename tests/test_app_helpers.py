@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from io import BytesIO
 from types import SimpleNamespace
+
+from PIL import Image
+from rich.console import Group
+from rich.text import Text
 
 from plextui.app import (
     BrowseState,
@@ -24,6 +29,7 @@ from plextui.app import (
     playback_exit_status,
     recent_debug_log_lines,
     render_audio_playback_preference,
+    render_card_artwork,
     render_debug_log_details,
     render_details,
     render_help,
@@ -410,6 +416,17 @@ def test_card_artwork_pixel_size_tracks_terminal_render_size():
     assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="large")) == (24, 24)
 
 
+def test_render_card_artwork_uses_per_line_renderables():
+    image = Image.new("RGB", (2, 4), "#ff0000")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+
+    rendered = render_card_artwork(buffer.getvalue(), AppConfig("http://plex", "token", "client", grid_density="compact"))
+
+    assert isinstance(rendered, Group)
+    assert all(isinstance(line, Text) for line in rendered.renderables)
+
+
 def test_render_subtitle_none_playback_status():
     config = AppConfig(
         base_url="http://plex",
@@ -437,11 +454,13 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
 
 def test_grid_card_copies_cached_artwork_renderable():
     media = MediaItem("Movie", "2024", "movie", "1", True, object(), artwork_path="/thumb")
-    artwork = SimpleNamespace(copy=lambda: "copied-art")
+    artwork = Group(Text("line 1"), Text("line 2"))
 
     rendered = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"), {"1": artwork})
 
-    assert rendered.renderables[0] == "copied-art"
+    assert isinstance(rendered.renderables[0], Group)
+    assert rendered.renderables[0] is not artwork
+    assert rendered.renderables[0].renderables[0] is not artwork.renderables[0]
 
 
 def test_render_help_groups_key_bindings():
