@@ -7,6 +7,7 @@ from plextui.app import (
     LoadMoreRow,
     MediaGrid,
     MediaRow,
+    card_artwork_pixel_size,
     context_hint,
     detail_artwork_enabled,
     effective_stream_preference_rows,
@@ -402,6 +403,11 @@ def test_grid_density_cycles_and_changes_card_width():
     assert grid_card_width(AppConfig("http://plex", "token", "client", grid_density="compact")) < grid_card_width(
         AppConfig("http://plex", "token", "client", grid_density="large")
     )
+
+
+def test_card_artwork_pixel_size_tracks_terminal_render_size():
+    assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="comfortable")) == (36, 36)
+    assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="large")) == (48, 48)
 
 
 def test_render_subtitle_none_playback_status():
