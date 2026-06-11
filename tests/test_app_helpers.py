@@ -24,6 +24,7 @@ from plextui.app import (
     render_picker_details,
     render_settings,
     render_subtitle_playback_preference,
+    settings_rows,
     subtitle_preference_value,
 )
 from plextui.config import AppConfig
@@ -127,6 +128,29 @@ def test_render_settings_includes_stream_preferences():
     assert "Page Size: 250" in rendered
     assert "Auto-load Threshold: 25" in rendered
     assert subtitle_preference_value(config) == "eng"
+
+
+def test_settings_rows_are_grouped_with_action_values():
+    config = AppConfig(
+        "http://plex",
+        "token",
+        "client-id",
+        page_size=80,
+        auto_load_threshold=20,
+        mpv_window_size="1280x720",
+    )
+
+    labels = [getattr(row, "label_text") for row in settings_rows(config)]
+
+    assert "[ Account ]" in labels
+    assert "[ Streams ]" in labels
+    assert "[ Playback ]" in labels
+    assert "[ Artwork ]" in labels
+    assert "[ Browsing ]" in labels
+    assert "[ Diagnostics ]" in labels
+    assert "mpv Window Size: 1280x720  [cycle]" in labels
+    assert "Page Size: 80  [+10]" in labels
+    assert "Auto-load Threshold: 20  [-5]" in labels
 
 
 def test_detail_artwork_mode_defaults_to_list_only():

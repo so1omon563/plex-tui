@@ -3,6 +3,7 @@
 ## 0.2.0 - Unreleased
 
 - Improved README structure and expanded the post-0.1.0 roadmap.
+- Grouped the Settings screen into account, stream, playback, artwork, browsing, and diagnostics sections.
 
 ## 0.1.0 - 2026-06-11
 

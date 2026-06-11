@@ -13,7 +13,7 @@
 
 - Improve the settings screen beyond action rows:
   - direct text entry for advanced values
-  - clearer grouping for playback, artwork, browsing, and account actions
+  - richer row controls for grouped playback, artwork, browsing, and account actions
   - safer confirmation for destructive preference resets
 - Iterate on artwork/grid presentation:
   - tune card size, spacing, and poster dimensions across terminal sizes

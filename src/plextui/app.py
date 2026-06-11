@@ -248,8 +248,21 @@ class StreamRow(ListItem):
 
 class SettingsActionRow(ListItem):
     def __init__(self, label: str, action: str) -> None:
+        self.label_text = label
         super().__init__(Label(label))
         self.action = action
+
+
+class SettingsHeaderRow(ListItem):
+    def __init__(self, label: str) -> None:
+        self.label_text = f"[ {label} ]"
+        super().__init__(Label(self.label_text))
+
+
+class SettingsValueRow(ListItem):
+    def __init__(self, label: str) -> None:
+        self.label_text = label
+        super().__init__(Label(label))
 
 
 class StatusChanged(Message):
@@ -556,7 +569,7 @@ class PlexTuiApp(App[None]):
             mark_active_row(event.list_view, row)
             self.show_detail_text(f"{row.choice.name}\n\n{row.choice.uri}\n\nSource: {row.choice.source}")
             self.set_status(context_hint(row))
-        elif isinstance(row, StreamRow) or isinstance(row, SettingsActionRow):
+        elif isinstance(row, StreamRow) or isinstance(row, (SettingsActionRow, SettingsHeaderRow, SettingsValueRow)):
             mark_active_row(event.list_view, row)
             self.set_status(context_hint(row))
         elif row is None and not list(event.list_view.children):
@@ -981,31 +994,8 @@ class PlexTuiApp(App[None]):
         self.query_one("#media-title", Static).update("Settings")
         view = self.show_media_list()
         view.clear()
-        for label, value in config_rows(self.config):
-            view.append(ListItem(Label(f"{label}: {value}")))
-        view.append(ListItem(Label("")))
-        view.append(SettingsActionRow("Reconnect / reload libraries", "reload"))
-        view.append(SettingsActionRow("Relogin with Plex", "relogin"))
-        view.append(SettingsActionRow("Clear audio/subtitle preferences", "clear_tracks"))
-        view.append(SettingsActionRow("Clear audio preference", "clear_audio"))
-        view.append(SettingsActionRow("Set subtitles to Auto", "subtitle_auto"))
-        view.append(SettingsActionRow("Set subtitles to None", "subtitle_none"))
-        view.append(SettingsActionRow("Clear subtitle preference", "clear_subtitle"))
-        view.append(SettingsActionRow("Toggle artwork on/off", "toggle_artwork"))
-        view.append(SettingsActionRow("Cycle details artwork", "cycle_detail_artwork"))
-        view.append(SettingsActionRow("Cycle media view", "toggle_media_view"))
-        view.append(SettingsActionRow("Cycle mpv window size", "cycle_mpv_window_size"))
-        view.append(SettingsActionRow("Reset mpv window size", "reset_mpv_window_size"))
-        view.append(SettingsActionRow("Increase page size", "increase_page_size"))
-        view.append(SettingsActionRow("Decrease page size", "decrease_page_size"))
-        view.append(SettingsActionRow("Reset page size", "reset_page_size"))
-        view.append(SettingsActionRow("Increase auto-load threshold", "increase_auto_load_threshold"))
-        view.append(SettingsActionRow("Decrease auto-load threshold", "decrease_auto_load_threshold"))
-        view.append(SettingsActionRow("Reset auto-load threshold", "reset_auto_load_threshold"))
-        view.append(SettingsActionRow("Show debug log path", "show_debug_log"))
-        view.append(SettingsActionRow("Set artwork renderer: block", "artwork_renderer_block"))
-        view.append(SettingsActionRow("Set artwork renderer: auto", "artwork_renderer_auto"))
-        view.append(SettingsActionRow("Set artwork renderer: Kitty", "artwork_renderer_kitty"))
+        for row in settings_rows(self.config):
+            view.append(row)
         self.show_detail_text(render_settings(self.config))
         view.focus()
         self.set_status("Settings")
@@ -1602,59 +1592,91 @@ def artwork_status(details: object, config: AppConfig | None) -> str:
     return "available"
 
 
-def config_rows(config: AppConfig) -> list[tuple[str, str]]:
+def settings_rows(config: AppConfig) -> list[ListItem]:
     return [
-        ("Config Path", str(config_path())),
-        ("Cache Path", str(cache_path())),
-        ("Debug Log", str(debug_log_path())),
-        ("Base URL", config.base_url or "not set"),
-        ("Server Token", "saved" if config.token else "not set"),
-        ("Account Token", "saved" if config.account_token else "not set"),
-        ("Client ID", config.client_identifier or "not set"),
-        ("Audio Preference", preference_value(config.preferred_audio_language)),
-        ("Subtitle Mode", subtitle_mode_value(config)),
-        ("Subtitle Language", subtitle_language_value(config)),
-        ("Artwork", artwork_mode_value(config)),
-        ("Artwork Renderer", artwork_renderer_value(config)),
-        ("Details Artwork", detail_artwork_mode_value(config)),
-        ("Media View", media_view_value(config)),
-        ("Theme", config.theme),
-        ("mpv Window Size", mpv_window_size_value(config)),
-        ("Page Size", str(config.page_size)),
-        ("Auto-load Threshold", str(config.auto_load_threshold)),
+        SettingsHeaderRow("Account"),
+        SettingsValueRow(f"Server: {config.base_url or 'not set'}"),
+        SettingsValueRow(f"Server Token: {'saved' if config.token else 'not set'}"),
+        SettingsValueRow(f"Account Token: {'saved' if config.account_token else 'not set'}"),
+        SettingsActionRow("Reconnect / reload libraries", "reload"),
+        SettingsActionRow("Relogin with Plex", "relogin"),
+        SettingsHeaderRow("Streams"),
+        SettingsValueRow(f"Audio Preference: {preference_value(config.preferred_audio_language)}"),
+        SettingsValueRow(f"Subtitle Mode: {subtitle_mode_value(config)}"),
+        SettingsValueRow(f"Subtitle Language: {subtitle_language_value(config)}"),
+        SettingsActionRow("Clear audio preference", "clear_audio"),
+        SettingsActionRow("Set subtitles to Auto", "subtitle_auto"),
+        SettingsActionRow("Set subtitles to None", "subtitle_none"),
+        SettingsActionRow("Clear subtitle preference", "clear_subtitle"),
+        SettingsActionRow("Clear audio/subtitle preferences", "clear_tracks"),
+        SettingsHeaderRow("Playback"),
+        SettingsActionRow(f"mpv Window Size: {mpv_window_size_value(config)}  [cycle]", "cycle_mpv_window_size"),
+        SettingsActionRow("mpv Window Size: reset to Default", "reset_mpv_window_size"),
+        SettingsHeaderRow("Artwork"),
+        SettingsActionRow(f"Artwork: {artwork_mode_value(config)}  [toggle]", "toggle_artwork"),
+        SettingsActionRow(f"Details Artwork: {detail_artwork_mode_value(config)}  [cycle]", "cycle_detail_artwork"),
+        SettingsActionRow("Artwork Renderer: block", "artwork_renderer_block"),
+        SettingsActionRow("Artwork Renderer: auto", "artwork_renderer_auto"),
+        SettingsActionRow("Artwork Renderer: Kitty", "artwork_renderer_kitty"),
+        SettingsHeaderRow("Browsing"),
+        SettingsActionRow(f"Media View: {media_view_value(config)}  [toggle]", "toggle_media_view"),
+        SettingsActionRow(f"Page Size: {config.page_size}  [-10]", "decrease_page_size"),
+        SettingsActionRow(f"Page Size: {config.page_size}  [+10]", "increase_page_size"),
+        SettingsActionRow(f"Page Size: reset to {DEFAULT_PAGE_SIZE}", "reset_page_size"),
+        SettingsActionRow(f"Auto-load Threshold: {config.auto_load_threshold}  [-5]", "decrease_auto_load_threshold"),
+        SettingsActionRow(f"Auto-load Threshold: {config.auto_load_threshold}  [+5]", "increase_auto_load_threshold"),
+        SettingsActionRow(f"Auto-load Threshold: reset to {DEFAULT_AUTO_LOAD_THRESHOLD}", "reset_auto_load_threshold"),
+        SettingsHeaderRow("Diagnostics"),
+        SettingsValueRow(f"Config Path: {config_path()}"),
+        SettingsValueRow(f"Cache Path: {cache_path()}"),
+        SettingsValueRow(f"Debug Log: {debug_log_path()}"),
+        SettingsValueRow(f"Client ID: {config.client_identifier or 'not set'}"),
+        SettingsValueRow(f"Theme: {config.theme}"),
+        SettingsActionRow("Show debug log path", "show_debug_log"),
     ]
 
 
 def render_settings(config: AppConfig) -> str:
-    lines = ["Settings", ""]
-    for label, value in config_rows(config):
-        lines.append(f"{label}: {value}")
-    lines.extend([
+    lines = [
+        "Settings",
         "",
-        "Actions",
+        "Account",
+        f"Server: {config.base_url or 'not set'}",
+        f"Server Token: {'saved' if config.token else 'not set'}",
+        f"Account Token: {'saved' if config.account_token else 'not set'}",
         "Reconnect / reload libraries",
         "Relogin with Plex",
-        "Clear audio/subtitle preferences",
+        "",
+        "Streams",
+        f"Audio Preference: {preference_value(config.preferred_audio_language)}",
+        f"Subtitle Mode: {subtitle_mode_value(config)}",
+        f"Subtitle Language: {subtitle_language_value(config)}",
         "Clear audio preference",
         "Set subtitles to Auto",
         "Set subtitles to None",
         "Clear subtitle preference",
-        "Toggle artwork on/off",
-        "Cycle details artwork",
-        "Cycle media view",
-        "Cycle mpv window size",
-        "Reset mpv window size",
-        "Increase page size",
-        "Decrease page size",
-        "Reset page size",
-        "Increase auto-load threshold",
-        "Decrease auto-load threshold",
-        "Reset auto-load threshold",
-        "Show debug log path",
-        "Set artwork renderer: block",
-        "Set artwork renderer: auto",
-        "Set artwork renderer: Kitty",
-    ])
+        "Clear audio/subtitle preferences",
+        "",
+        "Playback",
+        f"mpv Window Size: {mpv_window_size_value(config)}",
+        "",
+        "Artwork",
+        f"Artwork: {artwork_mode_value(config)}",
+        f"Details Artwork: {detail_artwork_mode_value(config)}",
+        f"Artwork Renderer: {artwork_renderer_value(config)}",
+        "",
+        "Browsing",
+        f"Media View: {media_view_value(config)}",
+        f"Page Size: {config.page_size}",
+        f"Auto-load Threshold: {config.auto_load_threshold}",
+        "",
+        "Diagnostics",
+        f"Config Path: {config_path()}",
+        f"Cache Path: {cache_path()}",
+        f"Debug Log: {debug_log_path()}",
+        f"Client ID: {config.client_identifier or 'not set'}",
+        f"Theme: {config.theme}",
+    ]
     return "\n".join(lines)
 
 
@@ -1717,6 +1739,10 @@ def context_hint(row: object) -> str:
         return "Enter saves preference"
     if isinstance(row, SettingsActionRow):
         return "Enter runs action"
+    if isinstance(row, SettingsHeaderRow):
+        return "Settings section"
+    if isinstance(row, SettingsValueRow):
+        return "Current setting value"
     return "Enter selects row"
 
 
