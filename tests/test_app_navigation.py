@@ -116,7 +116,38 @@ def test_current_grid_prefetch_applies_artwork_progressively():
 
     assert ("1", "art-1") in applied
     assert ("2", "art-2") in applied
-    assert all(entry[0] != "batch" for entry in applied)
+    assert ("batch", {"1": "art-1", "2": "art-2"}) in applied
+
+
+def test_partial_grid_prefetch_is_not_marked_complete():
+    app = PlexTuiApp()
+    app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+    app.active_grid_prefetch_pages = {("1", "2")}
+    app.prefetched_grid_pages = set()
+    app.pending_grid_prefetches = []
+    app.rendered_grid_artwork_cache = {}
+    items = [
+        MediaItem("One", "", "movie", "1", True, Raw(), artwork_path="/thumb/1"),
+        MediaItem("Two", "", "movie", "2", True, Raw(), artwork_path="/thumb/2"),
+    ]
+    applied = []
+    app.call_from_thread = lambda callback, *args: callback(*args)
+    app.apply_grid_artwork = lambda media_key, artwork: applied.append((media_key, artwork))
+    app.apply_grid_artworks = lambda artwork_by_key: applied.append(("batch", artwork_by_key))
+
+    def render_item(item, width, height):
+        if item.key == "2":
+            raise RuntimeError("failed")
+        return item, f"art-{item.key}", 1.0, 1.0
+
+    app.render_grid_prefetch_item = render_item
+
+    PlexTuiApp.prefetch_grid_items.__wrapped__(app, items, ("1", "2"), "current")
+
+    assert ("1", "art-1") in applied
+    assert ("batch", {"1": "art-1"}) in applied
+    assert ("1", "2") not in app.prefetched_grid_pages
+    assert not app.active_grid_prefetch_pages
 
 
 def test_grid_prefetch_reuses_rendered_artwork_cache():

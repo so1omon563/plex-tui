@@ -1222,6 +1222,7 @@ class PlexTuiApp(App[None]):
         render_ms = 0.0
         cached_count = 0
         rendered_cache_hits = 0
+        failed_count = 0
         try:
             prefetch_items = [item for item in items if item.artwork_path]
             width, height = card_artwork_pixel_size(self.config)
@@ -1248,7 +1249,13 @@ class PlexTuiApp(App[None]):
                     for future in as_completed(futures):
                         try:
                             item, artwork, item_fetch_ms, item_render_ms = future.result()
-                        except Exception:
+                        except Exception as error:
+                            failed_count += 1
+                            write_performance_log(
+                                "grid_prefetch_item_failed",
+                                started,
+                                f"page={page_label} error={type(error).__name__}: {error}",
+                            )
                             continue
                         fetch_ms += item_fetch_ms
                         render_ms += item_render_ms
@@ -1256,14 +1263,16 @@ class PlexTuiApp(App[None]):
                         rendered[item.key] = artwork
                         if page_label == "current":
                             self.call_from_thread(self.apply_grid_artwork, item.key, artwork)
-            if rendered and page_label != "current":
+            if rendered and (page_label != "current" or pending_items):
                 self.call_from_thread(self.apply_grid_artworks, rendered)
 
-            self.prefetched_grid_pages.add(page_key)
+            expected_count = len(prefetch_items)
+            if len(rendered) == expected_count:
+                self.prefetched_grid_pages.add(page_key)
             write_performance_log(
                 "grid_prefetch",
                 started,
-                f"page={page_label} items={len(items)} rendered={len(rendered)} cached={cached_count} rendered_cached={rendered_cache_hits} fetch={fetch_ms:.1f}ms render={render_ms:.1f}ms workers={GRID_PREFETCH_WORKERS}",
+                f"page={page_label} items={len(items)} expected={expected_count} rendered={len(rendered)} failed={failed_count} cached={cached_count} rendered_cached={rendered_cache_hits} fetch={fetch_ms:.1f}ms render={render_ms:.1f}ms workers={GRID_PREFETCH_WORKERS}",
             )
         finally:
             self.active_grid_prefetch_pages.discard(page_key)
