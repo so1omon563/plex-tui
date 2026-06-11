@@ -13,3 +13,4 @@
 - Added playback diagnostics with token-redacted `debug.log` output.
 - Added development workflow targets, smoke checks, and Linux/macOS setup documentation.
 - Added release checklist and packaging option documentation.
+- Added configurable page size and auto-load threshold for browsing performance.

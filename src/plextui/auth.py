@@ -72,6 +72,8 @@ def save_server_choice(config: AppConfig, account_token: str, choice: ServerChoi
         media_view=config.media_view,
         theme=config.theme,
         mpv_window_size=config.mpv_window_size,
+        page_size=config.page_size,
+        auto_load_threshold=config.auto_load_threshold,
     )
     save_config(saved)
     return saved

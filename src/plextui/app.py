@@ -32,10 +32,7 @@ from .player import (
     stream_language_label,
     subtitle_choices,
 )
-from .plex_service import DEFAULT_PAGE_SIZE, PlexService, media_details, row_progress_marker
-
-
-AUTO_LOAD_REMAINING_THRESHOLD = 10
+from .plex_service import PlexService, media_details, row_progress_marker
 GRID_CARD_CONTENT_WIDTH = 20
 GRID_CARD_WIDTH = 23
 GRID_CARD_GAP = 2
@@ -545,7 +542,7 @@ class PlexTuiApp(App[None]):
             return
         self.post_message(StatusChanged(f"Loading {library.title}..."))
         try:
-            page = self.service.library_page(library, 0, DEFAULT_PAGE_SIZE)
+            page = self.service.library_page(library, 0, self.config.page_size)
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return
@@ -573,7 +570,7 @@ class PlexTuiApp(App[None]):
         if self.settings_visible or self.picker_visible or self.loading_more or not self.browsing_stack:
             return
         state = self.browsing_stack[-1]
-        if should_auto_load_more(state, media.key, AUTO_LOAD_REMAINING_THRESHOLD):
+        if should_auto_load_more(state, media.key, self.config.auto_load_threshold):
             self.load_more_media(selected_key=media.key)
 
     def selected_media(self) -> MediaItem | None:
@@ -619,9 +616,9 @@ class PlexTuiApp(App[None]):
         self.post_message(StatusChanged(f"Loading more {state.title}..."))
         try:
             if state.search:
-                page = self.service.search_page(state.search_query, state.selected_library, state.next_start, DEFAULT_PAGE_SIZE)
+                page = self.service.search_page(state.search_query, state.selected_library, state.next_start, self.config.page_size)
             else:
-                page = self.service.library_page(state.selected_library, state.next_start, DEFAULT_PAGE_SIZE)
+                page = self.service.library_page(state.selected_library, state.next_start, self.config.page_size)
         except Exception as exc:
             self.loading_more = False
             self.call_from_thread(self.show_error, str(exc))
@@ -1123,7 +1120,7 @@ class PlexTuiApp(App[None]):
         self.post_message(StatusChanged(f"Searching {scope} for {query}..."))
         try:
             library = None if global_search else self.selected_library
-            page = self.service.search_page(query, library, 0, DEFAULT_PAGE_SIZE)
+            page = self.service.search_page(query, library, 0, self.config.page_size)
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return
@@ -1456,6 +1453,8 @@ def config_rows(config: AppConfig) -> list[tuple[str, str]]:
         ("Media View", media_view_value(config)),
         ("Theme", config.theme),
         ("mpv Window Size", mpv_window_size_value(config)),
+        ("Page Size", str(config.page_size)),
+        ("Auto-load Threshold", str(config.auto_load_threshold)),
     ]
 
 

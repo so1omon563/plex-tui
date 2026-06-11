@@ -17,6 +17,13 @@ client_identifier = "plex-tui-your-stable-client-id"
 # Optional mpv window size passed as --autofit. Examples: "1280x720", "80%".
 # mpv_window_size = "1280x720"
 
+# Optional browsing performance settings.
+# page_size controls how many Plex items each library/search request loads.
+# page_size = 60
+# auto_load_threshold controls how close to the end of loaded items selection
+# must be before the next page is fetched automatically.
+# auto_load_threshold = 15
+
 # Optional artwork settings.
 # artwork_mode can be "on" or "off".
 # artwork_mode = "on"

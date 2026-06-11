@@ -47,6 +47,14 @@ def test_load_more_media_appends_next_page():
     asyncio.run(run_load_more_media_check())
 
 
+def test_initial_library_uses_configured_page_size():
+    asyncio.run(run_initial_library_page_size_check())
+
+
+def test_initial_search_uses_configured_page_size():
+    asyncio.run(run_initial_search_page_size_check())
+
+
 def test_load_more_media_can_preserve_selected_row():
     asyncio.run(run_load_more_media_preserve_selection_check())
 
@@ -194,10 +202,44 @@ class FakePagedService:
         return self.page
 
 
+async def run_initial_library_page_size_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        library = LibraryItem("Movies", "1", "movie", object())
+        page = MediaPage([MediaItem("First", "", "movie", "1", True, Raw())], start=0, total=1)
+        service = FakePagedService(page)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=45)
+        app.service = service
+
+        app.open_library(library)
+        await pilot.pause(0.5)
+
+        assert service.calls == [(library, 0, 45)]
+
+
+async def run_initial_search_page_size_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        library = LibraryItem("Movies", "1", "movie", object())
+        page = MediaPage([MediaItem("First", "", "movie", "1", True, Raw())], start=0, total=1)
+        service = FakePagedService(page)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=55)
+        app.service = service
+        app.selected_library = library
+
+        app.run_search("first")
+        await pilot.pause(0.5)
+
+        assert service.search_calls == [("first", library, 0, 55)]
+
+
 async def run_load_more_media_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=50)
         library = LibraryItem("Movies", "1", "movie", object())
         first = MediaItem("First", "", "movie", "1", True, Raw())
         second = MediaItem("Second", "", "movie", "2", True, Raw())
@@ -210,7 +252,7 @@ async def run_load_more_media_check():
         await pilot.pause(0.5)
 
         state = app.browsing_stack[-1]
-        assert service.calls
+        assert service.calls == [(library, 1, 50)]
         assert [item.title for item in state.items] == ["First", "Second"]
         assert state.next_start == 2
         assert state.has_more
@@ -319,6 +361,7 @@ async def run_load_more_search_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=75)
         library = LibraryItem("Movies", "1", "movie", object())
         first = MediaItem("First", "", "movie", "1", True, Raw())
         second = MediaItem("Second", "", "movie", "2", True, Raw())
@@ -341,7 +384,7 @@ async def run_load_more_search_check():
         await pilot.pause(0.5)
 
         state = app.browsing_stack[-1]
-        assert service.search_calls == [("first", library, 1, 100)]
+        assert service.search_calls == [("first", library, 1, 75)]
         assert [item.title for item in state.items] == ["First", "Second"]
         assert state.next_start == 2
         assert state.has_more

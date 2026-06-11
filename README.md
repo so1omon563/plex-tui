@@ -151,7 +151,10 @@ from Plex.
 
 Top-level library views load in pages. Navigating near the end of the loaded
 items fetches the next page automatically. You can also select the
-`Load more...` row and press `enter`.
+`Load more...` row and press `enter`. Page size and auto-load threshold are
+configurable and shown in Settings. Defaults are tuned for responsive browsing:
+60 items per page and auto-load when selection reaches the final 15 loaded
+items.
 
 The settings view shows the active config and supports reconnect/reload,
 Plex relogin, clearing or changing audio/subtitle preferences separately,
