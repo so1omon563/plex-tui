@@ -411,6 +411,7 @@ class PlexTuiApp(App[None]):
     player: PlayerHandle | None
     prefetched_grid_pages: set[tuple[str, ...]]
     active_grid_prefetch_pages: set[tuple[str, ...]]
+    pending_grid_prefetches: list[tuple[list[MediaItem], tuple[str, ...], str, float]]
     last_grid_prefetch_page: tuple[str, ...]
     applying_config_theme: bool
     detail_refresh_token: int
@@ -455,6 +456,7 @@ class PlexTuiApp(App[None]):
         self.player = None
         self.prefetched_grid_pages = set()
         self.active_grid_prefetch_pages = set()
+        self.pending_grid_prefetches = []
         self.last_grid_prefetch_page = ()
         self.applying_config_theme = False
         self.detail_refresh_token = 0
@@ -1147,8 +1149,42 @@ class PlexTuiApp(App[None]):
         if page_key in self.prefetched_grid_pages:
             write_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=cached items={len(items)}")
             return
+        if self.active_grid_prefetch_pages:
+            self.queue_grid_prefetch(items, page_key, page_label, delay)
+            write_performance_log("grid_prefetch_queued", started, f"page={page_label} items={len(items)}")
+            return
         self.active_grid_prefetch_pages.add(page_key)
         self.prefetch_grid_items(items, page_key, page_label, delay)
+
+    def queue_grid_prefetch(
+        self,
+        items: list[MediaItem],
+        page_key: tuple[str, ...],
+        page_label: str,
+        delay: float = 0.0,
+    ) -> None:
+        self.pending_grid_prefetches = [
+            pending
+            for pending in self.pending_grid_prefetches
+            if pending[1] != page_key and pending[2] != page_label
+        ]
+        pending = (items, page_key, page_label, delay)
+        if page_label == "current":
+            self.pending_grid_prefetches.insert(0, pending)
+        else:
+            self.pending_grid_prefetches.append(pending)
+
+    def drain_grid_prefetch_queue(self) -> None:
+        if self.active_grid_prefetch_pages:
+            return
+        while self.pending_grid_prefetches:
+            items, page_key, page_label, delay = self.pending_grid_prefetches.pop(0)
+            if page_key in self.prefetched_grid_pages:
+                write_performance_log("grid_prefetch_skipped", time.perf_counter(), f"page={page_label} reason=cached items={len(items)}")
+                continue
+            self.active_grid_prefetch_pages.add(page_key)
+            self.prefetch_grid_items(items, page_key, page_label, delay)
+            return
 
     @work(thread=True)
     def prefetch_grid_items(
@@ -1160,6 +1196,7 @@ class PlexTuiApp(App[None]):
     ) -> None:
         if not artwork_enabled(self.config):
             self.active_grid_prefetch_pages.discard(page_key)
+            self.call_from_thread(self.drain_grid_prefetch_queue)
             return
         started = time.perf_counter()
         if delay:
@@ -1186,6 +1223,7 @@ class PlexTuiApp(App[None]):
             )
         finally:
             self.active_grid_prefetch_pages.discard(page_key)
+            self.call_from_thread(self.drain_grid_prefetch_queue)
 
     def apply_grid_artwork(self, media_key: str, artwork: object) -> None:
         grid = self.query_one("#media-grid", MediaGrid)

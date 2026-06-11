@@ -86,6 +86,10 @@ def test_grid_prefetch_schedules_once_per_visible_page():
     asyncio.run(run_grid_prefetch_schedule_check())
 
 
+def test_grid_prefetch_queues_while_active_with_current_priority():
+    asyncio.run(run_grid_prefetch_queue_check())
+
+
 def test_grid_detail_refresh_waits_for_idle_selection():
     asyncio.run(run_grid_detail_refresh_idle_check())
 
@@ -523,6 +527,46 @@ async def run_grid_prefetch_schedule_check():
         app.schedule_grid_prefetch(grid)
         await pilot.pause(0.2)
         assert len(scheduled) > initial_schedule_count
+
+
+async def run_grid_prefetch_queue_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        current_items = [
+            MediaItem(f"Current {index}", "", "movie", f"c{index}", True, Raw(), artwork_path=f"/current/{index}")
+            for index in range(3)
+        ]
+        next_items = [
+            MediaItem(f"Next {index}", "", "movie", f"n{index}", True, Raw(), artwork_path=f"/next/{index}")
+            for index in range(3)
+        ]
+        scheduled = []
+
+        def capture_prefetch(items, page_key, page_label, delay=0.0):
+            scheduled.append((tuple(item.key for item in items), page_key, page_label, delay))
+
+        app.prefetch_grid_items = capture_prefetch
+        app.active_grid_prefetch_pages.add(("active",))
+
+        app.start_grid_prefetch(next_items, "next", delay=0.2)
+        app.start_grid_prefetch(current_items, "current")
+
+        assert scheduled == []
+        assert [pending[2] for pending in app.pending_grid_prefetches] == ["current", "next"]
+
+        app.active_grid_prefetch_pages.clear()
+        app.drain_grid_prefetch_queue()
+
+        assert scheduled[0][2] == "current"
+        assert scheduled[0][0] == tuple(item.key for item in current_items)
+
+        app.active_grid_prefetch_pages.clear()
+        app.drain_grid_prefetch_queue()
+
+        assert scheduled[1][2] == "next"
+        assert scheduled[1][0] == tuple(item.key for item in next_items)
 
 
 async def run_grid_detail_refresh_idle_check():
