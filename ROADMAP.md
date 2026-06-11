@@ -4,8 +4,8 @@
 
 - Collect rough edges from real library browsing, especially grid view latency and artwork rendering.
 - Improve the settings screen beyond action rows:
-  - richer row controls for grouped playback, artwork, browsing, and account actions
-  - clearer visual affordances for confirmation-required actions
+  - richer inline controls for grouped playback, artwork, browsing, and account actions
+  - consider dedicated edit widgets for toggles, numeric values, and option sets
 - Iterate on artwork/grid presentation:
   - tune density presets across narrow and wide terminals
   - consider separate poster-size controls if density presets are not enough

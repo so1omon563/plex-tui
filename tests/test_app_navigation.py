@@ -469,6 +469,7 @@ async def run_settings_recent_debug_log_check(tmp_path):
 
         with patch("plextui.app.debug_log_path", return_value=log):
             app.action_show_settings()
+            await pilot.pause(0.2)
             app.run_settings_action("show_recent_debug_log")
         await pilot.pause(0.2)
 
@@ -606,6 +607,7 @@ async def run_settings_highlight_check():
         assert row is not None
         assert row.has_class("active-row")
         assert getattr(row, "label_text") == "[ Account ]"
+        assert "Settings Section" in app.query_one("#detail-content").content
 
         with patch("plextui.app.save_config"):
             app.run_settings_action("cycle_grid_density")
@@ -615,6 +617,10 @@ async def run_settings_highlight_check():
         assert row is not None
         assert row.has_class("active-row")
         assert getattr(row, "action") == "cycle_grid_density"
+        details = app.query_one("#detail-content").content
+        assert "Grid Density" in details
+        assert "Type: cycle" in details
+        assert "Current grid density: Large" in details
 
 
 async def run_help_back_check():

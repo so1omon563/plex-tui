@@ -251,9 +251,10 @@ class StreamRow(ListItem):
 
 class SettingsActionRow(ListItem):
     def __init__(self, label: str, action: str) -> None:
-        self.label_text = label
-        super().__init__(Label(label))
         self.action = action
+        self.action_kind = settings_action_kind(action)
+        self.label_text = f"{label}  [{self.action_kind}]"
+        super().__init__(Label(self.label_text))
 
 
 class SettingsHeaderRow(ListItem):
@@ -576,8 +577,12 @@ class PlexTuiApp(App[None]):
             mark_active_row(event.list_view, row)
             self.show_detail_text(f"{row.choice.name}\n\n{row.choice.uri}\n\nSource: {row.choice.source}")
             self.set_status(context_hint(row))
-        elif isinstance(row, StreamRow) or isinstance(row, (SettingsActionRow, SettingsHeaderRow, SettingsValueRow)):
+        elif isinstance(row, StreamRow):
             mark_active_row(event.list_view, row)
+            self.set_status(context_hint(row))
+        elif isinstance(row, (SettingsActionRow, SettingsHeaderRow, SettingsValueRow)):
+            mark_active_row(event.list_view, row)
+            self.show_detail_text(render_settings_row_details(row, self.config, self.pending_confirmation_action))
             self.set_status(context_hint(row))
         elif row is None and not list(event.list_view.children):
             self.show_detail_text("Select an item")
@@ -1792,24 +1797,24 @@ def settings_rows(config: AppConfig) -> list[ListItem]:
         SettingsActionRow("Clear subtitle preference", "clear_subtitle"),
         SettingsActionRow("Clear audio/subtitle preferences", "clear_tracks"),
         SettingsHeaderRow("Playback"),
-        SettingsActionRow(f"mpv Window Size: {mpv_window_size_value(config)}  [cycle]", "cycle_mpv_window_size"),
+        SettingsActionRow(f"mpv Window Size: {mpv_window_size_value(config)}", "cycle_mpv_window_size"),
         SettingsActionRow("mpv Window Size: set custom value...", "set_mpv_window_size"),
         SettingsActionRow("mpv Window Size: reset to Default", "reset_mpv_window_size"),
         SettingsHeaderRow("Artwork"),
-        SettingsActionRow(f"Artwork: {artwork_mode_value(config)}  [toggle]", "toggle_artwork"),
-        SettingsActionRow(f"Details Artwork: {detail_artwork_mode_value(config)}  [cycle]", "cycle_detail_artwork"),
+        SettingsActionRow(f"Artwork: {artwork_mode_value(config)}", "toggle_artwork"),
+        SettingsActionRow(f"Details Artwork: {detail_artwork_mode_value(config)}", "cycle_detail_artwork"),
         SettingsActionRow("Artwork Renderer: block", "artwork_renderer_block"),
         SettingsActionRow("Artwork Renderer: auto", "artwork_renderer_auto"),
         SettingsActionRow("Artwork Renderer: Kitty", "artwork_renderer_kitty"),
         SettingsHeaderRow("Browsing"),
-        SettingsActionRow(f"Media View: {media_view_value(config)}  [toggle]", "toggle_media_view"),
-        SettingsActionRow(f"Grid Density: {grid_density_value(config)}  [cycle]", "cycle_grid_density"),
-        SettingsActionRow(f"Page Size: {config.page_size}  [-10]", "decrease_page_size"),
-        SettingsActionRow(f"Page Size: {config.page_size}  [+10]", "increase_page_size"),
+        SettingsActionRow(f"Media View: {media_view_value(config)}", "toggle_media_view"),
+        SettingsActionRow(f"Grid Density: {grid_density_value(config)}", "cycle_grid_density"),
+        SettingsActionRow(f"Page Size: {config.page_size} -10", "decrease_page_size"),
+        SettingsActionRow(f"Page Size: {config.page_size} +10", "increase_page_size"),
         SettingsActionRow("Page Size: set custom value...", "set_page_size"),
         SettingsActionRow(f"Page Size: reset to {DEFAULT_PAGE_SIZE}", "reset_page_size"),
-        SettingsActionRow(f"Auto-load Threshold: {config.auto_load_threshold}  [-5]", "decrease_auto_load_threshold"),
-        SettingsActionRow(f"Auto-load Threshold: {config.auto_load_threshold}  [+5]", "increase_auto_load_threshold"),
+        SettingsActionRow(f"Auto-load Threshold: {config.auto_load_threshold} -5", "decrease_auto_load_threshold"),
+        SettingsActionRow(f"Auto-load Threshold: {config.auto_load_threshold} +5", "increase_auto_load_threshold"),
         SettingsActionRow("Auto-load Threshold: set custom value...", "set_auto_load_threshold"),
         SettingsActionRow(f"Auto-load Threshold: reset to {DEFAULT_AUTO_LOAD_THRESHOLD}", "reset_auto_load_threshold"),
         SettingsHeaderRow("Diagnostics"),
@@ -1929,12 +1934,153 @@ def context_hint(row: object) -> str:
     if isinstance(row, StreamRow):
         return "Enter saves preference"
     if isinstance(row, SettingsActionRow):
+        if row.action_kind == "confirm":
+            return "Enter once to arm / Enter again to confirm"
+        if row.action_kind == "input":
+            return "Enter edits value"
+        if row.action_kind == "toggle":
+            return "Enter toggles setting"
+        if row.action_kind == "cycle":
+            return "Enter cycles setting"
+        if row.action_kind == "step":
+            return "Enter adjusts setting"
+        if row.action_kind == "reset":
+            return "Enter resets setting"
+        if row.action_kind == "show":
+            return "Enter shows details"
+        if row.action_kind == "set":
+            return "Enter sets value"
         return "Enter runs action"
     if isinstance(row, SettingsHeaderRow):
         return "Settings section"
     if isinstance(row, SettingsValueRow):
         return "Current setting value"
     return "Enter selects row"
+
+
+def settings_action_kind(action: str) -> str:
+    if confirmation_required(action):
+        return "confirm"
+    if action.startswith("set_"):
+        return "input"
+    if action.startswith(("increase_", "decrease_")):
+        return "step"
+    if action.startswith("reset_"):
+        return "reset"
+    if action.startswith("toggle_"):
+        return "toggle"
+    if action.startswith("cycle_"):
+        return "cycle"
+    if action.startswith("show_"):
+        return "show"
+    if action.startswith("artwork_renderer_") or action.startswith("subtitle_"):
+        return "set"
+    if action in {"reload", "relogin"}:
+        return "run"
+    return "run"
+
+
+def render_settings_row_details(
+    row: SettingsActionRow | SettingsHeaderRow | SettingsValueRow,
+    config: AppConfig,
+    pending_confirmation_action: str = "",
+) -> str:
+    if isinstance(row, SettingsHeaderRow):
+        return f"Settings Section\n\n{row.label_text}\n\nUse Up/Down to choose a setting in this section."
+    if isinstance(row, SettingsValueRow):
+        return f"Current Setting\n\n{row.label_text}\n\nThis row is informational and does not change on Enter."
+
+    if pending_confirmation_action == row.action and confirmation_required(row.action):
+        return (
+            "Confirm Action\n\n"
+            f"{settings_action_label(row.action)}\n\n"
+            "Press Enter on this same row again to confirm."
+        )
+
+    lines = [
+        "Setting Action",
+        "",
+        settings_action_label(row.action),
+        "",
+        f"Type: {row.action_kind}",
+        settings_action_current_value(row.action, config),
+        "",
+        settings_action_help(row.action),
+    ]
+    return "\n".join(line for line in lines if line)
+
+
+def settings_action_current_value(action: str, config: AppConfig) -> str:
+    if action == "clear_tracks":
+        return (
+            f"Current audio preference: {preference_value(config.preferred_audio_language)}\n"
+            f"Current subtitle mode: {subtitle_mode_value(config)}\n"
+            f"Current subtitle language: {subtitle_language_value(config)}"
+        )
+    if action == "clear_audio":
+        return f"Current audio preference: {preference_value(config.preferred_audio_language)}"
+    if action in {"subtitle_auto", "subtitle_none", "clear_subtitle"}:
+        return (
+            f"Current subtitle mode: {subtitle_mode_value(config)}\n"
+            f"Current subtitle language: {subtitle_language_value(config)}"
+        )
+    if action in {"cycle_mpv_window_size", "set_mpv_window_size", "reset_mpv_window_size"}:
+        return f"Current mpv window size: {mpv_window_size_value(config)}"
+    if action == "toggle_artwork":
+        return f"Current artwork: {artwork_mode_value(config)}"
+    if action == "cycle_detail_artwork":
+        return f"Current details artwork: {detail_artwork_mode_value(config)}"
+    if action.startswith("artwork_renderer_"):
+        return f"Current artwork renderer: {artwork_renderer_value(config)}"
+    if action == "toggle_media_view":
+        return f"Current media view: {media_view_value(config)}"
+    if action == "cycle_grid_density":
+        return f"Current grid density: {grid_density_value(config)}"
+    if "page_size" in action:
+        return f"Current page size: {config.page_size}"
+    if "auto_load_threshold" in action:
+        return f"Current auto-load threshold: {config.auto_load_threshold}"
+    if action.startswith("show_"):
+        return f"Debug log: {debug_log_path()}"
+    return ""
+
+
+def settings_action_help(action: str) -> str:
+    if confirmation_required(action):
+        return "Press Enter once to arm this change. Press Enter again on the same row to confirm."
+    if action == "reload":
+        return "Press Enter to reconnect and reload libraries."
+    if action == "relogin":
+        return "Press Enter to start Plex login again."
+    if action == "subtitle_auto":
+        return "Press Enter to let Plex or saved language preference choose subtitles."
+    if action == "subtitle_none":
+        return "Press Enter to disable subtitles by default."
+    if action == "cycle_mpv_window_size":
+        return "Press Enter to cycle through default window-size presets."
+    if action == "set_mpv_window_size":
+        return "Press Enter to type a custom size such as 1280x720, 80%, or 80%x80%."
+    if action == "toggle_artwork":
+        return "Press Enter to turn artwork fetching on or off."
+    if action == "cycle_detail_artwork":
+        return "Press Enter to choose where poster art appears in the details pane."
+    if action.startswith("artwork_renderer_"):
+        return "Press Enter to select this terminal artwork renderer."
+    if action == "toggle_media_view":
+        return "Press Enter to switch between list and grid browsing."
+    if action == "cycle_grid_density":
+        return "Press Enter to cycle compact, comfortable, and large grid layouts."
+    if action.startswith(("increase_", "decrease_")):
+        return "Press Enter to adjust this value by one step."
+    if action.startswith("reset_"):
+        return "Press Enter to restore the default value."
+    if action.startswith("set_"):
+        return "Press Enter to type a custom value."
+    if action == "show_debug_log":
+        return "Press Enter to show the debug log path."
+    if action == "show_recent_debug_log":
+        return "Press Enter to show the most recent debug log lines."
+    return "Press Enter to run this action."
 
 
 def confirmation_required(action: str) -> bool:
@@ -1946,6 +2092,30 @@ def settings_action_label(action: str) -> str:
         "clear_tracks": "Clear audio/subtitle preferences",
         "clear_audio": "Clear audio preference",
         "clear_subtitle": "Clear subtitle preference",
+        "reload": "Reconnect / reload libraries",
+        "relogin": "Relogin with Plex",
+        "subtitle_auto": "Set subtitles to Auto",
+        "subtitle_none": "Set subtitles to None",
+        "cycle_mpv_window_size": "mpv Window Size",
+        "set_mpv_window_size": "mpv Window Size: set custom value",
+        "reset_mpv_window_size": "mpv Window Size: reset to Default",
+        "toggle_artwork": "Artwork",
+        "cycle_detail_artwork": "Details Artwork",
+        "artwork_renderer_block": "Artwork Renderer: block",
+        "artwork_renderer_auto": "Artwork Renderer: auto",
+        "artwork_renderer_kitty": "Artwork Renderer: Kitty",
+        "toggle_media_view": "Media View",
+        "cycle_grid_density": "Grid Density",
+        "decrease_page_size": "Page Size: decrease",
+        "increase_page_size": "Page Size: increase",
+        "set_page_size": "Page Size: set custom value",
+        "reset_page_size": f"Page Size: reset to {DEFAULT_PAGE_SIZE}",
+        "decrease_auto_load_threshold": "Auto-load Threshold: decrease",
+        "increase_auto_load_threshold": "Auto-load Threshold: increase",
+        "set_auto_load_threshold": "Auto-load Threshold: set custom value",
+        "reset_auto_load_threshold": f"Auto-load Threshold: reset to {DEFAULT_AUTO_LOAD_THRESHOLD}",
+        "show_debug_log": "Show debug log path",
+        "show_recent_debug_log": "Show recent debug log",
     }
     return labels.get(action, action)
 
