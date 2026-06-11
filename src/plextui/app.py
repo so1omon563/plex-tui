@@ -558,6 +558,10 @@ class PlexTuiApp(App[None]):
         view.append(SettingsActionRow("Reconnect / reload libraries", "reload"))
         view.append(SettingsActionRow("Relogin with Plex", "relogin"))
         view.append(SettingsActionRow("Clear audio/subtitle preferences", "clear_tracks"))
+        view.append(SettingsActionRow("Clear audio preference", "clear_audio"))
+        view.append(SettingsActionRow("Set subtitles to Auto", "subtitle_auto"))
+        view.append(SettingsActionRow("Set subtitles to None", "subtitle_none"))
+        view.append(SettingsActionRow("Clear subtitle preference", "clear_subtitle"))
         self.show_detail_text(render_settings(self.config))
         view.focus()
         self.set_status("Settings")
@@ -576,18 +580,29 @@ class PlexTuiApp(App[None]):
         if action == "clear_tracks":
             self.selected_audio = None
             self.selected_subtitle = None
-            self.config = replace(
-                self.config,
+            if not self.update_preferences(
                 preferred_audio_language="",
                 preferred_subtitle_language="",
                 subtitle_mode="auto",
-            )
-            try:
-                save_config(self.config)
-            except OSError as exc:
-                self.show_error(f"failed to save preference: {exc}")
+            ):
                 return
             self.set_status("Cleared audio/subtitle preferences")
+            return
+        if action == "clear_audio":
+            if self.update_preferences(preferred_audio_language=""):
+                self.set_status("Cleared audio preference")
+            return
+        if action == "subtitle_auto":
+            if self.update_preferences(preferred_subtitle_language="", subtitle_mode="auto"):
+                self.set_status("Subtitle preference: Auto")
+            return
+        if action == "subtitle_none":
+            if self.update_preferences(preferred_subtitle_language="", subtitle_mode="none"):
+                self.set_status("Subtitle preference: None")
+            return
+        if action == "clear_subtitle":
+            if self.update_preferences(preferred_subtitle_language="", subtitle_mode="auto"):
+                self.set_status("Cleared subtitle preference")
             return
         self.set_status(f"Unknown settings action: {action}")
 
@@ -667,6 +682,15 @@ class PlexTuiApp(App[None]):
                 subtitle_mode="preferred",
             )
         save_config(self.config)
+
+    def update_preferences(self, **changes: str) -> bool:
+        self.config = replace(self.config, **changes)
+        try:
+            save_config(self.config)
+        except OSError as exc:
+            self.show_error(f"failed to save preference: {exc}")
+            return False
+        return True
 
     def current_stream_choice(
         self,
@@ -768,16 +792,18 @@ class PlexTuiApp(App[None]):
         if not row.media.playable:
             self.set_status("Selected item is not directly playable")
             return
+        subtitle_choice = preferred_subtitle_choice(
+            row.media.raw,
+            self.config.preferred_subtitle_language,
+            self.config.subtitle_mode,
+        )
+        audio_choice = preferred_audio_choice(row.media.raw, self.config.preferred_audio_language)
         try:
             stop_mpv(self.player)
             self.player = play_with_mpv(
                 row.media.raw,
-                subtitle_choice=preferred_subtitle_choice(
-                    row.media.raw,
-                    self.config.preferred_subtitle_language,
-                    self.config.subtitle_mode,
-                ),
-                audio_choice=preferred_audio_choice(row.media.raw, self.config.preferred_audio_language),
+                subtitle_choice=subtitle_choice,
+                audio_choice=audio_choice,
             )
         except PlayerError as exc:
             self.show_error(str(exc))
@@ -792,7 +818,8 @@ class PlexTuiApp(App[None]):
             if self.player.start_offset_ms
             else ""
         )
-        self.set_status(f"Playing {row.media.title}{resume_text}{subtitle_text} ({self.player.stream_mode})")
+        preference_text = render_playback_preferences(self.config, audio_choice, subtitle_choice)
+        self.set_status(f"Playing {row.media.title}{resume_text}{subtitle_text} ({self.player.stream_mode}; {preference_text})")
 
     def action_stop_playback(self) -> None:
         if self.player is None or not self.player.active:
@@ -865,7 +892,8 @@ def config_rows(config: AppConfig) -> list[tuple[str, str]]:
         ("Account Token", "saved" if config.account_token else "not set"),
         ("Client ID", config.client_identifier or "not set"),
         ("Audio Preference", preference_value(config.preferred_audio_language)),
-        ("Subtitle Preference", subtitle_preference_value(config)),
+        ("Subtitle Mode", subtitle_mode_value(config)),
+        ("Subtitle Language", subtitle_language_value(config)),
     ]
 
 
@@ -879,6 +907,10 @@ def render_settings(config: AppConfig) -> str:
         "Reconnect / reload libraries",
         "Relogin with Plex",
         "Clear audio/subtitle preferences",
+        "Clear audio preference",
+        "Set subtitles to Auto",
+        "Set subtitles to None",
+        "Clear subtitle preference",
     ])
     return "\n".join(lines)
 
@@ -928,6 +960,50 @@ def subtitle_preference_value(config: AppConfig) -> str:
     if config.subtitle_mode == "preferred":
         return preference_value(config.preferred_subtitle_language)
     return "Plex/default"
+
+
+def subtitle_mode_value(config: AppConfig) -> str:
+    if config.subtitle_mode == "none":
+        return "None"
+    if config.subtitle_mode == "preferred":
+        return "Preferred"
+    return "Auto"
+
+
+def subtitle_language_value(config: AppConfig) -> str:
+    if config.subtitle_mode != "preferred":
+        return "Plex/default"
+    return preference_value(config.preferred_subtitle_language)
+
+
+def render_playback_preferences(
+    config: AppConfig,
+    audio_choice: StreamChoice | None,
+    subtitle_choice: StreamChoice | None,
+) -> str:
+    return "; ".join([
+        render_audio_playback_preference(config, audio_choice),
+        render_subtitle_playback_preference(config, subtitle_choice),
+    ])
+
+
+def render_audio_playback_preference(config: AppConfig, audio_choice: StreamChoice | None) -> str:
+    preferred = config.preferred_audio_language
+    if not preferred:
+        return "audio Plex/default"
+    if audio_choice is None:
+        return f"audio {preferred} not found, Plex/default"
+    return f"audio {audio_choice.label}"
+
+
+def render_subtitle_playback_preference(config: AppConfig, subtitle_choice: StreamChoice | None) -> str:
+    if config.subtitle_mode == "none":
+        return "subtitles none"
+    if config.subtitle_mode != "preferred" or not config.preferred_subtitle_language:
+        return "subtitles Plex/default"
+    if subtitle_choice is None:
+        return f"subtitles {config.preferred_subtitle_language} not found, Plex/default"
+    return f"subtitles {subtitle_choice.label}"
 
 
 def stream_preference_key(choice: StreamChoice) -> str:

@@ -52,6 +52,10 @@ def test_load_more_media_appends_search_page():
     asyncio.run(run_load_more_search_check())
 
 
+def test_settings_actions_update_preferences():
+    asyncio.run(run_settings_action_check())
+
+
 def test_should_auto_load_more_near_end_only():
     library = LibraryItem("Movies", "1", "movie", object())
     items = [
@@ -262,3 +266,28 @@ async def run_load_more_search_check():
         assert [item.title for item in state.items] == ["First", "Second"]
         assert state.next_start == 2
         assert state.has_more
+
+
+async def run_settings_action_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig(
+            "http://plex",
+            "token",
+            "client-id",
+            preferred_audio_language="jpn",
+            preferred_subtitle_language="eng",
+            subtitle_mode="preferred",
+        )
+
+        with patch("plextui.app.save_config") as save_config:
+            app.run_settings_action("clear_audio")
+            assert app.config.preferred_audio_language == ""
+            app.run_settings_action("subtitle_none")
+            assert app.config.subtitle_mode == "none"
+            assert app.config.preferred_subtitle_language == ""
+            app.run_settings_action("subtitle_auto")
+            assert app.config.subtitle_mode == "auto"
+
+        assert save_config.call_count == 3

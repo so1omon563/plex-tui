@@ -1,8 +1,16 @@
 from __future__ import annotations
 
-from plextui.app import format_offset, render_details, render_settings, subtitle_preference_value
+from plextui.app import (
+    format_offset,
+    render_audio_playback_preference,
+    render_details,
+    render_settings,
+    render_subtitle_playback_preference,
+    subtitle_preference_value,
+)
 from plextui.config import AppConfig
 from plextui.models import MediaDetails
+from plextui.player import StreamChoice
 
 
 def test_format_offset():
@@ -57,5 +65,33 @@ def test_render_settings_includes_stream_preferences():
     rendered = render_settings(config)
 
     assert "Audio Preference: jpn" in rendered
-    assert "Subtitle Preference: eng" in rendered
+    assert "Subtitle Mode: Preferred" in rendered
+    assert "Subtitle Language: eng" in rendered
     assert subtitle_preference_value(config) == "eng"
+
+
+def test_render_playback_preference_status():
+    config = AppConfig(
+        base_url="http://plex",
+        token="token",
+        client_identifier="client-id",
+        preferred_audio_language="jpn",
+        preferred_subtitle_language="eng",
+        subtitle_mode="preferred",
+    )
+
+    assert render_audio_playback_preference(config, None) == "audio jpn not found, Plex/default"
+    assert render_subtitle_playback_preference(config, None) == "subtitles eng not found, Plex/default"
+    assert render_audio_playback_preference(config, StreamChoice(1, "Japanese")) == "audio Japanese"
+    assert render_subtitle_playback_preference(config, StreamChoice(2, "English")) == "subtitles English"
+
+
+def test_render_subtitle_none_playback_status():
+    config = AppConfig(
+        base_url="http://plex",
+        token="token",
+        client_identifier="client-id",
+        subtitle_mode="none",
+    )
+
+    assert render_subtitle_playback_preference(config, StreamChoice(0, "None")) == "subtitles none"

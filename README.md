@@ -100,7 +100,7 @@ items fetches the next page automatically. You can also select the
 `Load more...` row and press `enter`.
 
 The settings view shows the active config and supports reconnect/reload,
-Plex relogin, and clearing audio/subtitle preferences.
+Plex relogin, and clearing or changing audio/subtitle preferences separately.
 
 When playback starts, external subtitle streams reported by Plex are passed to
 `mpv` automatically. Items with embedded PGS/VOBSUB subtitles are direct-played
@@ -108,7 +108,9 @@ from the original media part so `mpv` can see the subtitle tracks.
 
 Audio and subtitle picker choices are saved as language preferences. On future
 playback, plex-tui resolves those preferences against the selected media item's
-available tracks.
+available tracks. Playback status includes the resolved audio/subtitle choice,
+or notes when a preferred language was not found and Plex/default behavior was
+used.
 
 Playback resumes from Plex's saved position when available. While the app is
 running, playback position is reported back to Plex periodically and when
