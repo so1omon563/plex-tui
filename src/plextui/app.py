@@ -1181,7 +1181,7 @@ class PlexTuiApp(App[None]):
             next_items = grid.visible_page_items(page_offset=page_offset)
             if not next_items:
                 break
-            self.start_grid_prefetch(next_items, f"next-{page_offset}", delay=0.2 * page_offset)
+            self.start_grid_prefetch(next_items, f"next-{page_offset}")
 
     def start_grid_prefetch(
         self,

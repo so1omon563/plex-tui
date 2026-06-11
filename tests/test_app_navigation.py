@@ -708,7 +708,7 @@ async def run_grid_prefetch_pages_ahead_check():
         await pilot.pause(0.2)
 
         assert [entry[1] for entry in scheduled[:4]] == ["current", "next-1", "next-2", "next-3"]
-        assert [entry[2] for entry in scheduled[:4]] == [0.0, 0.2, 0.4, 0.6000000000000001]
+        assert [entry[2] for entry in scheduled[:4]] == [0.0, 0.0, 0.0, 0.0]
 
 
 async def run_cached_grid_prefetch_hydration_check():
@@ -731,7 +731,8 @@ async def run_cached_grid_prefetch_hydration_check():
 
         grid = app.query_one("#media-grid")
         visible_items = grid.visible_page_items()
-        assert grid.artwork == {item.key: f"art-{item.key}" for item in visible_items}
+        for item in visible_items:
+            assert grid.artwork[item.key] == f"art-{item.key}"
 
 
 async def run_grid_prefetch_queue_check():
