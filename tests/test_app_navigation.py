@@ -158,7 +158,7 @@ async def run_picker_return_check():
             app.choose_stream(StreamChoice(0, "None (disable subtitles)"), "subtitle")
         await pilot.pause(0.2)
 
-        assert app.query_one("#media-title").content == "Movies"
+        assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Movies"
         assert app.query_one("#detail-content").content.splitlines()[0] == "Second"
 
 
@@ -196,11 +196,15 @@ async def run_focus_pane_check():
         await pilot.pause(0.1)
         assert app.query_one("#sidebar").has_class("focused-pane")
         assert not app.query_one("#main").has_class("focused-pane")
+        assert app.query_one("#libraries-title").content == "[FOCUS] Libraries"
+        assert not app.query_one("#media-title").content.startswith("[FOCUS]")
 
         app.action_focus_media()
         await pilot.pause(0.1)
         assert app.query_one("#main").has_class("focused-pane")
         assert not app.query_one("#sidebar").has_class("focused-pane")
+        assert app.query_one("#media-title").content.startswith("[FOCUS]")
+        assert app.query_one("#libraries-title").content == "Libraries"
 
 
 async def run_library_highlight_check():
@@ -594,7 +598,7 @@ async def run_playback_error_check(tmp_path):
             app.action_play_selected()
         await pilot.pause(0.2)
 
-        assert app.query_one("#media-title").content == "Playback Error"
+        assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Playback Error"
         details = app.query_one("#detail-content").content
         assert "mpv missing" in details
         assert f"Debug log: {log}" in details
@@ -735,12 +739,12 @@ async def run_help_back_check():
 
         app.action_show_help()
         await pilot.pause(0.2)
-        assert app.query_one("#media-title").content == "Help"
+        assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Help"
         assert "Keyboard reference" in app.query_one("#detail-content").content
 
         app.action_back_or_clear()
         await pilot.pause(0.2)
-        assert app.query_one("#media-title").content == "Movies"
+        assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Movies"
         assert app.query_one("#detail-content").content.splitlines()[0] == "First"
 
 

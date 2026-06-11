@@ -277,6 +277,9 @@ class StatusChanged(Message):
         super().__init__()
 
 
+FOCUS_TITLE_PREFIX = "[FOCUS] "
+
+
 class PlexTuiApp(App[None]):
     CSS = """
     Screen {
@@ -413,7 +416,7 @@ class PlexTuiApp(App[None]):
         yield Header()
         with Horizontal(id="body"):
             with Vertical(id="sidebar"):
-                yield Static("Libraries", classes="pane-title")
+                yield Static("Libraries", id="libraries-title", classes="pane-title")
                 yield ListView(id="libraries")
             with Vertical(id="main"):
                 yield Static("Media", id="media-title", classes="pane-title")
@@ -422,7 +425,7 @@ class PlexTuiApp(App[None]):
                 with VerticalScroll(id="media-grid-scroll"):
                     yield MediaGrid()
             with Vertical(id="details"):
-                yield Static("Details", classes="pane-title")
+                yield Static("Details", id="details-title", classes="pane-title")
                 with VerticalScroll(id="detail-scroll"):
                     yield Static("Select an item", id="detail-content")
         yield Static("", id="status")
@@ -476,6 +479,21 @@ class PlexTuiApp(App[None]):
     def set_focus_pane(self, *, sidebar: bool = False, main: bool = False) -> None:
         self.query_one("#sidebar").set_class(sidebar, "focused-pane")
         self.query_one("#main").set_class(main, "focused-pane")
+        self.update_pane_title("#libraries-title", "Libraries", sidebar)
+        self.update_pane_title("#media-title", self.media_title_text(), main)
+        self.update_pane_title("#details-title", "Details", False)
+
+    def update_pane_title(self, selector: str, text: str, focused: bool) -> None:
+        title = f"{FOCUS_TITLE_PREFIX}{text}" if focused else text
+        self.query_one(selector, Static).update(title)
+
+    def media_title_text(self) -> str:
+        title = str(self.query_one("#media-title", Static).content)
+        return title.removeprefix(FOCUS_TITLE_PREFIX)
+
+    def set_media_title(self, text: str) -> None:
+        focused = self.query_one("#main").has_class("focused-pane")
+        self.update_pane_title("#media-title", text, focused)
 
     def apply_config_theme(self) -> None:
         if self.config.theme not in self.available_themes:
@@ -539,7 +557,7 @@ class PlexTuiApp(App[None]):
             return
 
         def show_url() -> None:
-            self.query_one("#media-title", Static).update("Plex Login")
+            self.set_media_title("Plex Login")
             view = self.show_media_list()
             view.clear()
             view.append(ListItem(Label("A Plex login page was opened in your browser.")))
@@ -561,7 +579,7 @@ class PlexTuiApp(App[None]):
             if len(choices) == 1:
                 self.choose_server(choices[0])
                 return
-            self.query_one("#media-title", Static).update("Select Server")
+            self.set_media_title("Select Server")
             view = self.show_media_list()
             view.clear()
             for choice in choices:
@@ -790,12 +808,12 @@ class PlexTuiApp(App[None]):
         self.call_from_thread(update)
 
     def show_media(self, title: str, items: list[MediaItem], selected_key: str | None = None) -> None:
-        self.query_one("#media-title", Static).update(title)
+        self.set_media_title(title)
         state = BrowseState(title, items)
         self.show_browse_state(state, selected_key=selected_key)
 
     def show_browse_state(self, state: BrowseState, selected_key: str | None = None) -> None:
-        self.query_one("#media-title", Static).update(state.title)
+        self.set_media_title(state.title)
         if state.items:
             started = time.perf_counter()
             selected_index = selected_media_index(state.items, selected_key)
@@ -1090,7 +1108,7 @@ class PlexTuiApp(App[None]):
         self.help_visible = False
         self.picker_visible = False
         self.settings_visible = True
-        self.query_one("#media-title", Static).update("Settings")
+        self.set_media_title("Settings")
         view = self.show_media_list()
         view.clear()
         selected_index = 0
@@ -1116,7 +1134,7 @@ class PlexTuiApp(App[None]):
         self.help_visible = True
         self.settings_visible = False
         self.picker_visible = False
-        self.query_one("#media-title", Static).update("Help")
+        self.set_media_title("Help")
         rows = [ListItem(Label(line)) for line in render_help().splitlines()]
         self.show_media_list()
         self.replace_media_rows(rows, 0 if rows else None)
@@ -1317,7 +1335,7 @@ class PlexTuiApp(App[None]):
             self.settings_visible = False
             self.picker_media_key = media.key
             picker_title = "Subtitle Tracks" if stream_type == "subtitle" else "Audio Tracks"
-            self.query_one("#media-title", Static).update(f"{picker_title}: {media.title}")
+            self.set_media_title(f"{picker_title}: {media.title}")
             rows = [
                 StreamRow(choice, stream_type, stream_choice_matches(choice, current_choice))
                 for choice in choices
@@ -1651,7 +1669,7 @@ class PlexTuiApp(App[None]):
     def show_error(self, text: str) -> None:
         config_hint = f"Config: {config_path()}"
         self.set_status(f"Error: {text}")
-        self.query_one("#media-title", Static).update("Error")
+        self.set_media_title("Error")
         view = self.show_media_list()
         view.clear()
         view.append(ListItem(Label(f"{text}\n{config_hint}")))
@@ -1662,7 +1680,7 @@ class PlexTuiApp(App[None]):
         self.cancel_media_detail_refresh()
         path = debug_log_path()
         self.set_status(f"Playback error: {text}. Debug log: {path}")
-        self.query_one("#media-title", Static).update("Playback Error")
+        self.set_media_title("Playback Error")
         view = self.show_media_list()
         view.clear()
         view.append(ListItem(Label(f"{text}\nDebug log: {path}")))

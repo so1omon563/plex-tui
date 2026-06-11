@@ -15,6 +15,7 @@
 - Improved grid browsing smoothness by debouncing detail reloads, throttling artwork prefetch, and avoiding cached-artwork rendering during selection redraws.
 - Made grid detail reloads idle-aware so rapid selection movement no longer starts stale Plex reload workers.
 - Made grid artwork appear progressively as each card renders and added stronger focused-pane styling.
+- Added an explicit `[FOCUS]` marker to the active pane title.
 
 ## 0.2.0 - 2026-06-11
 
