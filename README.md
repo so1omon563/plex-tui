@@ -7,6 +7,16 @@ plex-tui is currently an early release. It supports Plex login, server
 selection, paged library browsing, search, list/grid views, stream preferences,
 terminal poster artwork, and playback progress reporting.
 
+## Screenshots
+
+### Grid view
+
+![plex-tui grid view](docs/assets/grid-view.png)
+
+### List view
+
+![plex-tui list view](docs/assets/list-view.png)
+
 ## Requirements
 
 - Python 3.11 or newer

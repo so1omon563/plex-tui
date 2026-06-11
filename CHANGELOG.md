@@ -11,6 +11,7 @@
 - Added configurable compact, comfortable, and large grid density modes.
 - Kept Settings open after value changes and added clearer changed-value feedback.
 - Preserved Settings row highlighting after opening Settings and changing values.
+- Added README screenshots for grid and list views.
 
 ## 0.1.0 - 2026-06-11
 
