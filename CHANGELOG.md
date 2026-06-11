@@ -10,6 +10,7 @@
 - Replaced the heavy selected grid-card border with a quieter marker/footer treatment.
 - Added configurable compact, comfortable, and large grid density modes.
 - Kept Settings open after value changes and added clearer changed-value feedback.
+- Preserved Settings row highlighting after opening Settings and changing values.
 
 ## 0.1.0 - 2026-06-11
 

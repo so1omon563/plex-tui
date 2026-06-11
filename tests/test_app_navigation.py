@@ -95,6 +95,10 @@ def test_grid_density_setting_stays_in_settings_view():
     asyncio.run(run_grid_density_settings_view_check())
 
 
+def test_settings_highlight_defaults_and_preserves_changed_row():
+    asyncio.run(run_settings_highlight_check())
+
+
 def test_help_view_returns_to_media_on_escape():
     asyncio.run(run_help_back_check())
 
@@ -534,6 +538,31 @@ async def run_grid_density_settings_view_check():
         assert app.query_one("#media").display
         assert not app.query_one("#media-grid-scroll").display
         assert app.config.grid_density == "large"
+
+
+async def run_settings_highlight_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+
+        app.action_show_settings()
+        await pilot.pause(0.2)
+
+        media = app.query_one("#media")
+        row = media.highlighted_child
+        assert row is not None
+        assert row.has_class("active-row")
+        assert getattr(row, "label_text") == "[ Account ]"
+
+        with patch("plextui.app.save_config"):
+            app.run_settings_action("cycle_grid_density")
+        await pilot.pause(0.2)
+
+        row = media.highlighted_child
+        assert row is not None
+        assert row.has_class("active-row")
+        assert getattr(row, "action") == "cycle_grid_density"
 
 
 async def run_help_back_check():

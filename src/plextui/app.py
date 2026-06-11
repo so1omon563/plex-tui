@@ -1008,10 +1008,13 @@ class PlexTuiApp(App[None]):
         for index, row in enumerate(rows):
             if selected_action and isinstance(row, SettingsActionRow) and row.action == selected_action:
                 selected_index = index
+                break
+        for row in rows:
             view.append(row)
         self.show_detail_text(render_settings(self.config))
         view.focus()
         set_list_index(view, selected_index)
+        view.call_after_refresh(set_list_index, view, selected_index)
         self.set_status("Settings")
 
     def refresh_settings_after_change(self, action: str, label: str, value: str) -> None:
