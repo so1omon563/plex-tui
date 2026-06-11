@@ -29,10 +29,12 @@ For local package validation, test both source and wheel installs:
 
 ```bash
 pipx install --force .
-pipx runpip plex-tui show plex-tui
+plex-tui --version
+plex-tui --smoke
 python -m build
 pipx install --force dist/plex_tui-*.whl
-pipx runpip plex-tui show plex-tui
+plex-tui --version
+plex-tui --smoke
 ```
 
 ## Recommended Path
@@ -66,7 +68,7 @@ pipx runpip plex-tui show plex-tui
    - Depend on `python@3.13` or the current Homebrew Python.
    - Depend on `mpv`.
    - Install from a tagged source archive or PyPI release.
-   - Run `python -m plextui.smoke` in the formula test.
+   - Run `plex-tui --smoke` in the formula test.
 
 3. **Arch AUR**
 
@@ -79,7 +81,7 @@ pipx runpip plex-tui show plex-tui
    - Use a tagged GitHub source archive for `plex-tui`.
    - Prefer system Python packages for `python-textual`, `python-pillow`,
      `python-plexapi`, and `python-platformdirs` when available.
-   - Include a `check()` step that runs the smoke test.
+   - Include a `check()` step that runs `plex-tui --smoke`.
 
 4. **Standalone binaries**
 

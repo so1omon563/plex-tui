@@ -75,6 +75,10 @@ Or run the installed console command directly:
 
 ```bash
 plex-tui
+plex-tui --version
+plex-tui --config-path
+plex-tui --debug-log-path
+plex-tui --smoke
 ```
 
 ## Development
@@ -98,13 +102,14 @@ To try the package in an isolated command environment:
 
 ```bash
 pipx install ~/plex-tui
-plex-tui
+plex-tui --smoke
 ```
 
 Or install directly from the GitHub repository:
 
 ```bash
 pipx install "git+https://github.com/so1omon563/plex-tui.git"
+plex-tui --smoke
 ```
 
 During local development, reinstall the `pipx` copy after changes:

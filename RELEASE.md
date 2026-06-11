@@ -36,14 +36,16 @@ Test the package in an isolated command environment:
 
 ```bash
 pipx install --force dist/plex_tui-*.whl
-plex-tui
+plex-tui --version
+plex-tui --smoke
 ```
 
 For local source testing:
 
 ```bash
 pipx install --force .
-plex-tui
+plex-tui --version
+plex-tui --smoke
 ```
 
 ## Versioning
