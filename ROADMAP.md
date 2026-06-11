@@ -22,6 +22,8 @@
 
 ## Packaging & Distribution
 
+- Improve Homebrew install time; the current formula works but builds native
+  Python resources such as `pillow` from source.
 - Validate the draft Arch AUR `PKGBUILD` on an Arch system and publish if clean.
 - Consider standalone artifacts only after the app behavior stabilizes.
 

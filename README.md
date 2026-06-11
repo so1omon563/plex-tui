@@ -57,6 +57,8 @@ brew install plex-tui
 ```
 
 The Homebrew formula installs `mpv` automatically.
+The first Homebrew install can take several minutes because native Python
+dependencies such as `pillow` are built from source.
 
 To install from GitHub instead:
 
