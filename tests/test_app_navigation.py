@@ -87,6 +87,10 @@ def test_mpv_window_size_input_updates_preferences():
     asyncio.run(run_mpv_window_size_input_check())
 
 
+def test_numeric_settings_input_updates_preferences():
+    asyncio.run(run_numeric_settings_input_check())
+
+
 def test_help_view_returns_to_media_on_escape():
     asyncio.run(run_help_back_check())
 
@@ -411,6 +415,8 @@ async def run_settings_action_check():
 
         with patch("plextui.app.save_config") as save_config:
             app.run_settings_action("clear_audio")
+            assert app.config.preferred_audio_language == "jpn"
+            app.run_settings_action("clear_audio")
             assert app.config.preferred_audio_language == ""
             app.run_settings_action("subtitle_none")
             assert app.config.subtitle_mode == "none"
@@ -475,6 +481,29 @@ async def run_mpv_window_size_input_check():
             assert app.config.mpv_window_size == ""
 
         assert save_config.call_count == 2
+
+
+async def run_numeric_settings_input_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=40, auto_load_threshold=10)
+
+        with patch("plextui.app.save_config") as save_config:
+            app.save_numeric_setting_input("page_size", "Page size", "120", 25, 500, 40)
+            assert app.config.page_size == 120
+            app.save_numeric_setting_input("page_size", "Page size", "bad", 25, 500, 40)
+            assert app.config.page_size == 120
+            app.save_numeric_setting_input("page_size", "Page size", "1000", 25, 500, 40)
+            assert app.config.page_size == 120
+            app.save_numeric_setting_input("page_size", "Page size", "", 25, 500, 40)
+            assert app.config.page_size == 40
+            app.save_numeric_setting_input("auto_load_threshold", "Auto-load threshold", "30", 1, 100, 10)
+            assert app.config.auto_load_threshold == 30
+            app.save_numeric_setting_input("auto_load_threshold", "Auto-load threshold", "", 1, 100, 10)
+            assert app.config.auto_load_threshold == 10
+
+        assert save_config.call_count == 4
 
 
 async def run_help_back_check():

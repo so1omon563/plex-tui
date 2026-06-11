@@ -368,6 +368,7 @@ class PlexTuiApp(App[None]):
     pending_account_token: str
     search_global: bool
     input_mode: str
+    pending_confirmation_action: str
     help_visible: bool
     settings_visible: bool
     picker_visible: bool
@@ -407,6 +408,7 @@ class PlexTuiApp(App[None]):
         self.pending_account_token = ""
         self.search_global = False
         self.input_mode = ""
+        self.pending_confirmation_action = ""
         self.help_visible = False
         self.settings_visible = False
         self.picker_visible = False
@@ -1018,6 +1020,13 @@ class PlexTuiApp(App[None]):
         self.set_status("Help")
 
     def run_settings_action(self, action: str) -> None:
+        if confirmation_required(action) and self.pending_confirmation_action != action:
+            self.pending_confirmation_action = action
+            self.show_detail_text(f"Confirm Action\n\n{settings_action_label(action)}\n\nPress Enter on the same row again to confirm.")
+            self.set_status(f"Press Enter again to confirm: {settings_action_label(action)}")
+            return
+        if action != self.pending_confirmation_action:
+            self.pending_confirmation_action = ""
         if action == "reload":
             self.settings_visible = False
             self.load_server()
@@ -1029,6 +1038,7 @@ class PlexTuiApp(App[None]):
             self.begin_login()
             return
         if action == "clear_tracks":
+            self.pending_confirmation_action = ""
             self.selected_audio = None
             self.selected_subtitle = None
             if not self.update_preferences(
@@ -1037,22 +1047,29 @@ class PlexTuiApp(App[None]):
                 subtitle_mode="auto",
             ):
                 return
+            self.action_show_settings()
             self.set_status("Cleared audio/subtitle preferences")
             return
         if action == "clear_audio":
+            self.pending_confirmation_action = ""
             if self.update_preferences(preferred_audio_language=""):
+                self.action_show_settings()
                 self.set_status("Cleared audio preference")
             return
         if action == "subtitle_auto":
             if self.update_preferences(preferred_subtitle_language="", subtitle_mode="auto"):
+                self.action_show_settings()
                 self.set_status("Subtitle preference: Auto")
             return
         if action == "subtitle_none":
             if self.update_preferences(preferred_subtitle_language="", subtitle_mode="none"):
+                self.action_show_settings()
                 self.set_status("Subtitle preference: None")
             return
         if action == "clear_subtitle":
+            self.pending_confirmation_action = ""
             if self.update_preferences(preferred_subtitle_language="", subtitle_mode="auto"):
+                self.action_show_settings()
                 self.set_status("Cleared subtitle preference")
             return
         if action == "toggle_artwork":
@@ -1093,6 +1110,16 @@ class PlexTuiApp(App[None]):
                 self.action_show_settings()
                 self.set_status(f"Page size: {self.config.page_size}")
             return
+        if action == "set_page_size":
+            self.prompt_numeric_setting(
+                "page_size",
+                "Page size",
+                self.config.page_size,
+                MIN_PAGE_SIZE,
+                MAX_PAGE_SIZE,
+                DEFAULT_PAGE_SIZE,
+            )
+            return
         if action == "increase_auto_load_threshold":
             if self.update_numeric_preference("auto_load_threshold", 5, MIN_AUTO_LOAD_THRESHOLD, MAX_AUTO_LOAD_THRESHOLD):
                 self.set_status(f"Auto-load threshold: {self.config.auto_load_threshold}")
@@ -1105,6 +1132,16 @@ class PlexTuiApp(App[None]):
             if self.update_preferences(auto_load_threshold=DEFAULT_AUTO_LOAD_THRESHOLD):
                 self.action_show_settings()
                 self.set_status(f"Auto-load threshold: {self.config.auto_load_threshold}")
+            return
+        if action == "set_auto_load_threshold":
+            self.prompt_numeric_setting(
+                "auto_load_threshold",
+                "Auto-load threshold",
+                self.config.auto_load_threshold,
+                MIN_AUTO_LOAD_THRESHOLD,
+                MAX_AUTO_LOAD_THRESHOLD,
+                DEFAULT_AUTO_LOAD_THRESHOLD,
+            )
             return
         if action == "show_debug_log":
             path = debug_log_path()
@@ -1255,14 +1292,61 @@ class PlexTuiApp(App[None]):
     def save_mpv_window_size_input(self, value: str) -> None:
         size = value.strip()
         if size and not valid_mpv_window_size(size):
-            self.set_status("Invalid mpv window size. Use 1280x720, 80%, or 80%x80%.")
             self.prompt_mpv_window_size()
+            self.set_status("Invalid mpv window size. Use 1280x720, 80%, or 80%x80%.")
             return
         if not self.update_preferences(mpv_window_size=size):
             return
         self.input_mode = ""
         self.action_show_settings()
         self.set_status(f"mpv window size: {mpv_window_size_value(self.config)}")
+
+    def prompt_numeric_setting(
+        self,
+        name: str,
+        label: str,
+        current: int,
+        minimum: int,
+        maximum: int,
+        default: int,
+    ) -> None:
+        self.input_mode = name
+        search = self.query_one("#search", Input)
+        search.placeholder = f"{label}: {minimum}-{maximum}, or empty for default {default}"
+        search.value = str(current)
+        search.display = True
+        search.focus()
+        self.show_detail_text(f"Enter {label.lower()} as a whole number from {minimum} to {maximum}. Submit empty to reset to {default}.")
+        self.set_status(f"Enter custom {label.lower()}")
+
+    def save_numeric_setting_input(
+        self,
+        name: str,
+        label: str,
+        value: str,
+        minimum: int,
+        maximum: int,
+        default: int,
+    ) -> None:
+        text = value.strip()
+        if not text:
+            parsed = default
+        else:
+            try:
+                parsed = int(text)
+            except ValueError:
+                self.prompt_numeric_setting(name, label, int(getattr(self.config, name)), minimum, maximum, default)
+                self.set_status(f"Invalid {label.lower()}. Use a whole number from {minimum} to {maximum}.")
+                return
+            if parsed < minimum or parsed > maximum:
+                self.prompt_numeric_setting(name, label, int(getattr(self.config, name)), minimum, maximum, default)
+                self.set_status(f"Invalid {label.lower()}. Use a whole number from {minimum} to {maximum}.")
+                return
+        if not self.update_preferences(**{name: parsed}):
+            return
+        self.input_mode = ""
+        self.action_show_settings()
+        self.set_status(f"{label}: {parsed}")
 
     def current_stream_choice(
         self,
@@ -1294,6 +1378,19 @@ class PlexTuiApp(App[None]):
             event.input.value = ""
             if self.input_mode == "mpv_window_size":
                 self.save_mpv_window_size_input(query)
+                return
+            if self.input_mode == "page_size":
+                self.save_numeric_setting_input("page_size", "Page size", query, MIN_PAGE_SIZE, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE)
+                return
+            if self.input_mode == "auto_load_threshold":
+                self.save_numeric_setting_input(
+                    "auto_load_threshold",
+                    "Auto-load threshold",
+                    query,
+                    MIN_AUTO_LOAD_THRESHOLD,
+                    MAX_AUTO_LOAD_THRESHOLD,
+                    DEFAULT_AUTO_LOAD_THRESHOLD,
+                )
                 return
             self.input_mode = ""
             self.run_search(query, self.search_global)
@@ -1345,7 +1442,7 @@ class PlexTuiApp(App[None]):
             search.display = False
             input_mode = self.input_mode
             self.input_mode = ""
-            if input_mode == "mpv_window_size":
+            if input_mode in {"mpv_window_size", "page_size", "auto_load_threshold"}:
                 self.action_show_settings()
                 return
             if self.browsing_stack:
@@ -1663,9 +1760,11 @@ def settings_rows(config: AppConfig) -> list[ListItem]:
         SettingsActionRow(f"Media View: {media_view_value(config)}  [toggle]", "toggle_media_view"),
         SettingsActionRow(f"Page Size: {config.page_size}  [-10]", "decrease_page_size"),
         SettingsActionRow(f"Page Size: {config.page_size}  [+10]", "increase_page_size"),
+        SettingsActionRow("Page Size: set custom value...", "set_page_size"),
         SettingsActionRow(f"Page Size: reset to {DEFAULT_PAGE_SIZE}", "reset_page_size"),
         SettingsActionRow(f"Auto-load Threshold: {config.auto_load_threshold}  [-5]", "decrease_auto_load_threshold"),
         SettingsActionRow(f"Auto-load Threshold: {config.auto_load_threshold}  [+5]", "increase_auto_load_threshold"),
+        SettingsActionRow("Auto-load Threshold: set custom value...", "set_auto_load_threshold"),
         SettingsActionRow(f"Auto-load Threshold: reset to {DEFAULT_AUTO_LOAD_THRESHOLD}", "reset_auto_load_threshold"),
         SettingsHeaderRow("Diagnostics"),
         SettingsValueRow(f"Config Path: {config_path()}"),
@@ -1711,6 +1810,7 @@ def render_settings(config: AppConfig) -> str:
         f"Media View: {media_view_value(config)}",
         f"Page Size: {config.page_size}",
         f"Auto-load Threshold: {config.auto_load_threshold}",
+        "Set custom browsing values with whole numbers inside the allowed range.",
         "",
         "Diagnostics",
         f"Config Path: {config_path()}",
@@ -1786,6 +1886,19 @@ def context_hint(row: object) -> str:
     if isinstance(row, SettingsValueRow):
         return "Current setting value"
     return "Enter selects row"
+
+
+def confirmation_required(action: str) -> bool:
+    return action in {"clear_tracks", "clear_audio", "clear_subtitle"}
+
+
+def settings_action_label(action: str) -> str:
+    labels = {
+        "clear_tracks": "Clear audio/subtitle preferences",
+        "clear_audio": "Clear audio preference",
+        "clear_subtitle": "Clear subtitle preference",
+    }
+    return labels.get(action, action)
 
 
 def render_loaded_status(title: str, loaded: int, total: int | None, has_more: bool) -> str:

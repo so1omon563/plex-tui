@@ -12,9 +12,8 @@
 ## App UX
 
 - Improve the settings screen beyond action rows:
-  - direct text entry for page size and auto-load threshold
   - richer row controls for grouped playback, artwork, browsing, and account actions
-  - safer confirmation for destructive preference resets
+  - clearer visual affordances for confirmation-required actions
 - Iterate on artwork/grid presentation:
   - tune card size, spacing, and poster dimensions across terminal sizes
   - replace the heavy selected-card border with a cleaner selection treatment

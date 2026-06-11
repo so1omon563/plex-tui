@@ -151,7 +151,9 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "mpv Window Size: 1280x720  [cycle]" in labels
     assert "mpv Window Size: set custom value..." in labels
     assert "Page Size: 80  [+10]" in labels
+    assert "Page Size: set custom value..." in labels
     assert "Auto-load Threshold: 20  [-5]" in labels
+    assert "Auto-load Threshold: set custom value..." in labels
 
 
 def test_detail_artwork_mode_defaults_to_list_only():
