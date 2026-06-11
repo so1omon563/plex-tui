@@ -84,3 +84,25 @@ def test_invalid_artwork_settings_log_and_normalize(tmp_path, monkeypatch):
     assert "invalid artwork_mode" in log
     assert "invalid artwork_renderer" in log
     assert "invalid media_view" in log
+
+
+def test_deprecated_poster_view_normalizes_to_list(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    debug_file = tmp_path / "debug.log"
+    config_file.write_text(
+        '\n'.join([
+            'base_url = "http://plex"',
+            'token = "token"',
+            'client_identifier = "client"',
+            'media_view = "poster"',
+            "",
+        ]),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "config_path", lambda: config_file)
+    monkeypatch.setattr(config, "debug_log_path", lambda: debug_file)
+
+    loaded = config.load_config()
+
+    assert loaded.media_view == "list"
+    assert "deprecated" in debug_file.read_text(encoding="utf-8")

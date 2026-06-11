@@ -113,7 +113,7 @@ pipx reinstall ~/plex-tui
 - `tab` / `shift+tab`: move keyboard focus
 - `l`: move keyboard focus to the libraries list
 - `m`: move keyboard focus to the media list
-- `v`: cycle media list/poster/grid view
+- `v`: toggle media list/grid view
 - `,`: show settings
 - `escape`: clear search / go back
 - `enter`: open selected item
@@ -135,7 +135,7 @@ items fetches the next page automatically. You can also select the
 
 The settings view shows the active config and supports reconnect/reload,
 Plex relogin, clearing or changing audio/subtitle preferences separately,
-artwork on/off, artwork renderer selection, and media list/poster view mode.
+artwork on/off, artwork renderer selection, and media list/grid view mode.
 
 The details pane shows metadata, saved audio/subtitle preferences, reported
 audio tracks, and reported subtitle tracks. Subtitle rows include external vs
@@ -146,11 +146,11 @@ art when a poster is available. This works in ordinary color terminals and does
 not require Kitty, iTerm2, or Sixel image protocol support. Downloaded artwork
 is cached in the app cache directory shown in Settings.
 
-Poster view mode changes the media browser from compact text rows to larger
-stacked poster cards. Grid view shows a page of larger cards at a time; use
-up/down to change pages and left/right to move within the highlighted page.
-Cards use cached artwork immediately and update selected posters after their
-artwork is fetched.
+List view keeps the browser compact and shows selected poster artwork in the
+details pane. Grid view shows a page of larger cards at a time; use up/down to
+change pages and left/right to move within the highlighted page. Cards use
+cached artwork immediately and update selected posters after their artwork is
+fetched.
 
 Native terminal image output is disabled for now because Kitty image protocols
 conflict with Textual's screen renderer in practice. `artwork_renderer =

@@ -72,21 +72,6 @@ class MediaRow(ListItem):
         self.media = media
 
 
-class MediaCardRow(MediaRow):
-    def __init__(self, media: MediaItem, config: AppConfig) -> None:
-        self.media = media
-        self.card = Static(render_media_card(media))
-        ListItem.__init__(self, self.card)
-        if artwork_enabled(config) and media.artwork_path and artwork_is_cached(media.artwork_path, config):
-            try:
-                self.set_artwork(render_artwork(fetch_artwork(media.raw, media.artwork_path, config), width=18, max_height=9))
-            except Exception:
-                pass
-
-    def set_artwork(self, artwork: object) -> None:
-        self.card.update(render_media_card(self.media, artwork))
-
-
 class MediaGridRow(ListItem):
     def __init__(self, items: list[MediaItem], selected_key: str | None, config: AppConfig, columns: int) -> None:
         self.items = items
@@ -605,9 +590,7 @@ class PlexTuiApp(App[None]):
             selected = selected_media_from_row(row)
             if selected is not None and selected.key == item.key:
                 self.show_detail_text(render_detail_content(details, self.config, artwork))
-                if isinstance(row, MediaCardRow) and card_artwork is not None:
-                    row.set_artwork(card_artwork)
-                elif isinstance(row, MediaGridRow) and card_artwork is not None:
+                if isinstance(row, MediaGridRow) and card_artwork is not None:
                     row.set_artwork(item.key, card_artwork, self.config)
 
         self.call_from_thread(update_artwork)
@@ -1115,19 +1098,7 @@ def media_rows(
 
 
 def media_row(item: MediaItem, config: AppConfig) -> MediaRow:
-    if config.media_view == "poster":
-        return MediaCardRow(item, config)
     return MediaRow(item)
-
-
-def render_media_card(media: MediaItem, artwork: object | None = None) -> object:
-    title = Text(media.title, style="bold")
-    subtitle_bits = [media.kind, media.subtitle]
-    subtitle = Text("  ".join(bit for bit in subtitle_bits if bit), style="dim")
-    if artwork is None:
-        status = "poster available" if media.artwork_path else "no poster"
-        artwork = Text(f"[{status}]", style="dim")
-    return Group(artwork, title, subtitle)
 
 
 def render_media_grid(
@@ -1258,7 +1229,7 @@ def render_help() -> str:
         "tab / shift+tab: move focus",
         "l: focus libraries",
         "m: focus media list",
-        "v: cycle list/poster/grid view",
+        "v: toggle list/grid view",
         "left/right: move across grid cards",
         "",
         "Search",
@@ -1383,15 +1354,11 @@ def artwork_renderer_value(config: AppConfig) -> str:
 def media_view_value(config: AppConfig) -> str:
     if config.media_view == "grid":
         return "Grid"
-    return "Poster" if config.media_view == "poster" else "List"
+    return "List"
 
 
 def next_media_view(media_view: str) -> str:
-    order = ["list", "poster", "grid"]
-    try:
-        return order[(order.index(media_view) + 1) % len(order)]
-    except ValueError:
-        return "list"
+    return "grid" if media_view == "list" else "list"
 
 
 def render_playback_preferences(

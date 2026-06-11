@@ -12,7 +12,6 @@ from plextui.app import (
     render_audio_playback_preference,
     render_details,
     render_help,
-    render_media_card,
     render_settings,
     render_subtitle_playback_preference,
     subtitle_preference_value,
@@ -138,25 +137,9 @@ def test_render_help_groups_key_bindings():
     assert "Settings" in rendered
     assert "Paths" in rendered
     assert "Debug log:" in rendered
-    assert "v: cycle list/poster/grid view" in rendered
+    assert "v: toggle list/grid view" in rendered
     assert "left/right: move across grid cards" in rendered
     assert "?: show help" in rendered
-
-
-def test_media_row_can_render_poster_card_view():
-    media = MediaItem("Movie", "2024", "movie", "1", True, object(), artwork_path="/thumb")
-    config = AppConfig(
-        base_url="http://plex",
-        token="token",
-        client_identifier="client-id",
-        media_view="poster",
-    )
-
-    row = media_row(media, config)
-    card = render_media_card(media)
-
-    assert row.media is media
-    assert "Movie" in card.renderables[1].plain
 
 
 def test_media_rows_can_group_grid_view():
@@ -180,8 +163,7 @@ def test_media_rows_can_group_grid_view():
     assert len(rows[0].items) == 4
     rows[0].set_artwork("3", "art", config)
     assert rows[0].artwork["3"] == "art"
-    assert next_media_view("list") == "poster"
-    assert next_media_view("poster") == "grid"
+    assert next_media_view("list") == "grid"
     assert next_media_view("grid") == "list"
 
 
