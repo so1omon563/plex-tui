@@ -16,5 +16,4 @@ build/
 .env
 .env.*
 .DS_Store
-.crush/
 mpv-shot*.jpg
