@@ -34,6 +34,10 @@ def test_focus_actions_mark_active_pane():
     asyncio.run(run_focus_pane_check())
 
 
+def test_tab_focus_updates_active_pane_marker():
+    asyncio.run(run_tab_focus_pane_check())
+
+
 def test_populate_libraries_highlights_first_rebuilt_row():
     asyncio.run(run_library_highlight_check())
 
@@ -113,6 +117,10 @@ def test_numeric_settings_input_updates_preferences():
 
 def test_grid_density_setting_stays_in_settings_view():
     asyncio.run(run_grid_density_settings_view_check())
+
+
+def test_toggle_media_view_refocuses_visible_browser():
+    asyncio.run(run_toggle_media_view_focus_check())
 
 
 def test_settings_highlight_defaults_and_preserves_changed_row():
@@ -205,6 +213,25 @@ async def run_focus_pane_check():
         assert not app.query_one("#sidebar").has_class("focused-pane")
         assert app.query_one("#media-title").content.startswith("[FOCUS]")
         assert app.query_one("#libraries-title").content == "Libraries"
+
+
+async def run_tab_focus_pane_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
+        app.show_media("Movies", [MediaItem("First", "", "movie", "1", True, Raw())])
+        await pilot.pause(0.2)
+
+        app.action_focus_libraries()
+        await pilot.pause(0.1)
+        await pilot.press("tab")
+        await pilot.pause(0.2)
+
+        assert app.query_one("#main").has_class("focused-pane")
+        assert app.query_one("#media-title").content.startswith("[FOCUS]")
+        assert not app.query_one("#libraries-title").content.startswith("[FOCUS]")
 
 
 async def run_library_highlight_check():
@@ -692,6 +719,37 @@ async def run_grid_density_settings_view_check():
         assert app.query_one("#media").display
         assert not app.query_one("#media-grid-scroll").display
         assert app.config.grid_density == "large"
+
+
+async def run_toggle_media_view_focus_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        app.browsing_stack = [
+            BrowseState(
+                "Movies",
+                [MediaItem(f"Movie {index}", "2024", "movie", str(index), True, Raw()) for index in range(8)],
+            )
+        ]
+        app.show_browse_state(app.browsing_stack[-1])
+        app.focus_media_browser()
+        await pilot.pause(0.2)
+        assert app.query_one("#media-grid-scroll").display
+
+        with patch("plextui.app.save_config"):
+            app.action_toggle_media_view()
+        await pilot.pause(0.2)
+        assert app.query_one("#media").display
+        assert app.query_one("#media").has_focus
+        assert app.query_one("#main").has_class("focused-pane")
+
+        with patch("plextui.app.save_config"):
+            app.action_toggle_media_view()
+        await pilot.pause(0.2)
+        assert app.query_one("#media-grid-scroll").display
+        assert app.query_one("#media-grid").has_focus
+        assert app.query_one("#main").has_class("focused-pane")
 
 
 async def run_settings_highlight_check():

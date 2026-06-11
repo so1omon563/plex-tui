@@ -1004,6 +1004,14 @@ class PlexTuiApp(App[None]):
         self.focus_media_browser()
         self.set_status("Focus moved to media list")
 
+    def action_focus_next(self) -> None:
+        super().action_focus_next()
+        self.call_after_refresh(self.update_focus_pane)
+
+    def action_focus_previous(self) -> None:
+        super().action_focus_previous()
+        self.call_after_refresh(self.update_focus_pane)
+
     def action_toggle_media_view(self) -> None:
         next_view = next_media_view(self.config.media_view)
         if not self.update_preferences(media_view=next_view):
@@ -1016,6 +1024,7 @@ class PlexTuiApp(App[None]):
             selected = self.selected_media()
             selected_key = selected.key if selected is not None else None
             self.show_browse_state(self.browsing_stack[-1], selected_key=selected_key)
+            self.focus_media_browser()
         self.set_status(f"Media view: {media_view_value(self.config)}")
 
     def action_grid_left(self) -> None:
