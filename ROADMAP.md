@@ -12,7 +12,7 @@
 ## App UX
 
 - Improve the settings screen beyond action rows:
-  - direct text entry for advanced values
+  - direct text entry for page size and auto-load threshold
   - richer row controls for grouped playback, artwork, browsing, and account actions
   - safer confirmation for destructive preference resets
 - Iterate on artwork/grid presentation:

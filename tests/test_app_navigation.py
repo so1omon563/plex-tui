@@ -83,6 +83,10 @@ def test_quick_preference_actions_update_config():
     asyncio.run(run_quick_preference_action_check())
 
 
+def test_mpv_window_size_input_updates_preferences():
+    asyncio.run(run_mpv_window_size_input_check())
+
+
 def test_help_view_returns_to_media_on_escape():
     asyncio.run(run_help_back_check())
 
@@ -454,6 +458,23 @@ async def run_quick_preference_action_check():
             assert app.config.mpv_window_size == "1280x720"
 
         assert save_config.call_count == 4
+
+
+async def run_mpv_window_size_input_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", mpv_window_size="1280x720")
+
+        with patch("plextui.app.save_config") as save_config:
+            app.save_mpv_window_size_input("80%x80%")
+            assert app.config.mpv_window_size == "80%x80%"
+            app.save_mpv_window_size_input("bad")
+            assert app.config.mpv_window_size == "80%x80%"
+            app.save_mpv_window_size_input("")
+            assert app.config.mpv_window_size == ""
+
+        assert save_config.call_count == 2
 
 
 async def run_help_back_check():

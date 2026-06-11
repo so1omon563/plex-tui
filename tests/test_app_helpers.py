@@ -149,6 +149,7 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "[ Browsing ]" in labels
     assert "[ Diagnostics ]" in labels
     assert "mpv Window Size: 1280x720  [cycle]" in labels
+    assert "mpv Window Size: set custom value..." in labels
     assert "Page Size: 80  [+10]" in labels
     assert "Auto-load Threshold: 20  [-5]" in labels
 

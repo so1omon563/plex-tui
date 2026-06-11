@@ -31,6 +31,7 @@ from .config import (
     debug_log_path,
     load_config,
     save_config,
+    valid_mpv_window_size,
     write_debug_log,
 )
 from .models import LibraryItem, MediaItem
@@ -366,6 +367,7 @@ class PlexTuiApp(App[None]):
     login_session: LoginSession | None
     pending_account_token: str
     search_global: bool
+    input_mode: str
     help_visible: bool
     settings_visible: bool
     picker_visible: bool
@@ -404,6 +406,7 @@ class PlexTuiApp(App[None]):
         self.login_session = None
         self.pending_account_token = ""
         self.search_global = False
+        self.input_mode = ""
         self.help_visible = False
         self.settings_visible = False
         self.picker_visible = False
@@ -881,6 +884,7 @@ class PlexTuiApp(App[None]):
 
     def action_focus_search(self) -> None:
         self.search_global = False
+        self.input_mode = "search"
         search = self.query_one("#search", Input)
         search.placeholder = "Search current library"
         search.value = ""
@@ -889,6 +893,7 @@ class PlexTuiApp(App[None]):
 
     def action_focus_global_search(self) -> None:
         self.search_global = True
+        self.input_mode = "search"
         search = self.query_one("#search", Input)
         search.placeholder = "Search all libraries"
         search.value = ""
@@ -1067,6 +1072,9 @@ class PlexTuiApp(App[None]):
         if action == "cycle_mpv_window_size":
             self.action_cycle_mpv_window_size()
             return
+        if action == "set_mpv_window_size":
+            self.prompt_mpv_window_size()
+            return
         if action == "reset_mpv_window_size":
             if self.update_preferences(mpv_window_size=""):
                 self.action_show_settings()
@@ -1234,6 +1242,28 @@ class PlexTuiApp(App[None]):
         self.action_show_settings()
         return True
 
+    def prompt_mpv_window_size(self) -> None:
+        self.input_mode = "mpv_window_size"
+        search = self.query_one("#search", Input)
+        search.placeholder = 'mpv window size: 1280x720, 80%, 80%x80%, or empty for default'
+        search.value = self.config.mpv_window_size
+        search.display = True
+        search.focus()
+        self.show_detail_text("Enter an mpv --autofit value. Examples: 1280x720, 80%, 80%x80%. Submit empty to reset to Default.")
+        self.set_status("Enter custom mpv window size")
+
+    def save_mpv_window_size_input(self, value: str) -> None:
+        size = value.strip()
+        if size and not valid_mpv_window_size(size):
+            self.set_status("Invalid mpv window size. Use 1280x720, 80%, or 80%x80%.")
+            self.prompt_mpv_window_size()
+            return
+        if not self.update_preferences(mpv_window_size=size):
+            return
+        self.input_mode = ""
+        self.action_show_settings()
+        self.set_status(f"mpv window size: {mpv_window_size_value(self.config)}")
+
     def current_stream_choice(
         self,
         item: object,
@@ -1261,6 +1291,11 @@ class PlexTuiApp(App[None]):
         if event.input.id == "search":
             query = event.value.strip()
             event.input.display = False
+            event.input.value = ""
+            if self.input_mode == "mpv_window_size":
+                self.save_mpv_window_size_input(query)
+                return
+            self.input_mode = ""
             self.run_search(query, self.search_global)
 
     @work(thread=True)
@@ -1308,6 +1343,11 @@ class PlexTuiApp(App[None]):
         if search.display:
             search.value = ""
             search.display = False
+            input_mode = self.input_mode
+            self.input_mode = ""
+            if input_mode == "mpv_window_size":
+                self.action_show_settings()
+                return
             if self.browsing_stack:
                 state = self.browsing_stack[-1]
                 self.show_browse_state(state)
@@ -1611,6 +1651,7 @@ def settings_rows(config: AppConfig) -> list[ListItem]:
         SettingsActionRow("Clear audio/subtitle preferences", "clear_tracks"),
         SettingsHeaderRow("Playback"),
         SettingsActionRow(f"mpv Window Size: {mpv_window_size_value(config)}  [cycle]", "cycle_mpv_window_size"),
+        SettingsActionRow("mpv Window Size: set custom value...", "set_mpv_window_size"),
         SettingsActionRow("mpv Window Size: reset to Default", "reset_mpv_window_size"),
         SettingsHeaderRow("Artwork"),
         SettingsActionRow(f"Artwork: {artwork_mode_value(config)}  [toggle]", "toggle_artwork"),
@@ -1659,6 +1700,7 @@ def render_settings(config: AppConfig) -> str:
         "",
         "Playback",
         f"mpv Window Size: {mpv_window_size_value(config)}",
+        "Set custom mpv window size with values like 1280x720, 80%, or 80%x80%.",
         "",
         "Artwork",
         f"Artwork: {artwork_mode_value(config)}",

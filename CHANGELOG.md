@@ -4,6 +4,7 @@
 
 - Improved README structure and expanded the post-0.1.0 roadmap.
 - Grouped the Settings screen into account, stream, playback, artwork, browsing, and diagnostics sections.
+- Added direct Settings input for custom `mpv` window sizes.
 
 ## 0.1.0 - 2026-06-11
 
