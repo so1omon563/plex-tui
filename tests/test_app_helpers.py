@@ -171,14 +171,15 @@ def test_media_rows_can_group_grid_view():
         media_view="grid",
     )
 
-    rows, selected_row = media_rows(items, config, selected_index=3, grid_columns=2)
+    rows, selected_row = media_rows(items, config, selected_index=3, grid_columns=2, grid_rows=2)
 
-    assert len(rows) == 3
-    assert selected_row == 1
-    assert isinstance(rows[1], MediaGridRow)
-    assert rows[1].selected_media.key == "3"
-    rows[1].set_artwork("3", "art", config)
-    assert rows[1].artwork["3"] == "art"
+    assert len(rows) == 2
+    assert selected_row == 0
+    assert isinstance(rows[0], MediaGridRow)
+    assert rows[0].selected_media.key == "3"
+    assert len(rows[0].items) == 4
+    rows[0].set_artwork("3", "art", config)
+    assert rows[0].artwork["3"] == "art"
     assert next_media_view("list") == "poster"
     assert next_media_view("poster") == "grid"
     assert next_media_view("grid") == "list"
@@ -188,7 +189,7 @@ def test_context_hints_for_media_and_load_more():
     playable = MediaItem("Movie", "", "movie", "1", True, object())
 
     assert context_hint(MediaRow(playable)) == "Enter selects item / p plays / a audio / s subtitles"
-    assert context_hint(MediaGridRow([playable], playable.key, AppConfig("http://plex", "token", "client"))) == (
-        "Left/right selects card / p plays / a audio / s subtitles"
+    assert context_hint(MediaGridRow([playable], playable.key, AppConfig("http://plex", "token", "client"), 1)) == (
+        "Left/right selects card / up/down pages / p plays / a audio / s subtitles"
     )
     assert context_hint(LoadMoreRow(100, 200)) == "Enter loads next page"

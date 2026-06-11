@@ -79,7 +79,7 @@ class MediaCardRow(MediaRow):
         ListItem.__init__(self, self.card)
         if artwork_enabled(config) and media.artwork_path and artwork_is_cached(media.artwork_path, config):
             try:
-                self.set_artwork(render_artwork(fetch_artwork(media.raw, media.artwork_path, config), width=12, max_height=6))
+                self.set_artwork(render_artwork(fetch_artwork(media.raw, media.artwork_path, config), width=18, max_height=9))
             except Exception:
                 pass
 
@@ -88,11 +88,12 @@ class MediaCardRow(MediaRow):
 
 
 class MediaGridRow(ListItem):
-    def __init__(self, items: list[MediaItem], selected_key: str | None, config: AppConfig) -> None:
+    def __init__(self, items: list[MediaItem], selected_key: str | None, config: AppConfig, columns: int) -> None:
         self.items = items
         self.selected_key = selected_key if selected_key in {item.key for item in items} else items[0].key
+        self.columns = columns
         self.artwork: dict[str, object] = {}
-        self.grid = Static(render_media_grid(self.items, self.selected_key, config, self.artwork))
+        self.grid = Static(render_media_grid(self.items, self.selected_key, config, self.columns, self.artwork))
         ListItem.__init__(self, self.grid)
 
     @property
@@ -104,11 +105,11 @@ class MediaGridRow(ListItem):
 
     def set_selected_key(self, selected_key: str, config: AppConfig) -> None:
         self.selected_key = selected_key
-        self.grid.update(render_media_grid(self.items, self.selected_key, config, self.artwork))
+        self.grid.update(render_media_grid(self.items, self.selected_key, config, self.columns, self.artwork))
 
     def set_artwork(self, media_key: str, artwork: object, config: AppConfig) -> None:
         self.artwork[media_key] = artwork
-        self.grid.update(render_media_grid(self.items, self.selected_key, config, self.artwork))
+        self.grid.update(render_media_grid(self.items, self.selected_key, config, self.columns, self.artwork))
 
 
 class LoadMoreRow(ListItem):
@@ -518,7 +519,8 @@ class PlexTuiApp(App[None]):
         self.query_one("#media-title", Static).update(state.title)
         if state.items:
             selected_index = selected_media_index(state.items, selected_key)
-            rows, selected_row_index = media_rows(state.items, self.config, selected_index, self.media_grid_columns())
+            columns, page_rows = self.media_grid_geometry()
+            rows, selected_row_index = media_rows(state.items, self.config, selected_index, columns, page_rows)
             if state.has_more:
                 rows.append(LoadMoreRow(len(state.items), state.total))
             self.replace_media_rows(rows, selected_row_index)
@@ -592,7 +594,7 @@ class PlexTuiApp(App[None]):
                     render_protocol_artwork(data, self.config.artwork_renderer, width=width, max_height=height)
                     or render_artwork(data, width=width, max_height=height)
                 )
-                card_artwork = render_artwork(data, width=12, max_height=6)
+                card_artwork = render_artwork(data, width=18, max_height=9)
             except Exception:
                 artwork = None
         if not artwork:
@@ -619,9 +621,11 @@ class PlexTuiApp(App[None]):
         width = min(36, max(14, pane_width - 6))
         return width, 22
 
-    def media_grid_columns(self) -> int:
-        main_width = self.query_one("#main").size.width
-        return max(1, min(8, max(1, main_width - 4) // 14))
+    def media_grid_geometry(self) -> tuple[int, int]:
+        media_size = self.query_one("#media").size
+        columns = max(1, min(5, max(1, media_size.width - 4) // 24))
+        rows = max(1, min(4, max(1, media_size.height - 2) // 13))
+        return columns, rows
 
     def action_focus_search(self) -> None:
         self.search_global = False
@@ -678,19 +682,6 @@ class PlexTuiApp(App[None]):
         if 0 <= next_index < len(row.items):
             self.select_grid_media(row, row.items[next_index])
             return
-        rows = list(view.children)
-        current_row_index = rows.index(row)
-        adjacent_index = current_row_index + direction
-        if not 0 <= adjacent_index < len(rows):
-            return
-        adjacent = rows[adjacent_index]
-        if not isinstance(adjacent, MediaGridRow):
-            return
-        next_media = adjacent.items[-1] if direction < 0 else adjacent.items[0]
-        adjacent.set_selected_key(next_media.key, self.config)
-        set_list_index(view, adjacent_index)
-        self.show_media_details(next_media)
-        self.set_status(context_hint(adjacent))
 
     def select_grid_media(self, row: MediaGridRow, media: MediaItem) -> None:
         row.set_selected_key(media.key, self.config)
@@ -1105,18 +1096,20 @@ def media_rows(
     config: AppConfig,
     selected_index: int,
     grid_columns: int,
+    grid_rows: int = 1,
 ) -> tuple[list[ListItem], int]:
     if config.media_view == "grid":
         rows: list[ListItem] = []
         selected_row_index = 0
-        for start in range(0, len(items), grid_columns):
-            chunk = items[start:start + grid_columns]
+        page_size = max(1, grid_columns * grid_rows)
+        for start in range(0, len(items), page_size):
+            chunk = items[start:start + page_size]
             if start <= selected_index < start + len(chunk):
                 selected_row_index = len(rows)
                 selected_key = items[selected_index].key
             else:
                 selected_key = chunk[0].key
-            rows.append(MediaGridRow(chunk, selected_key, config))
+            rows.append(MediaGridRow(chunk, selected_key, config, grid_columns))
         return rows, selected_row_index
     return [media_row(item, config) for item in items], selected_index
 
@@ -1141,13 +1134,18 @@ def render_media_grid(
     items: list[MediaItem],
     selected_key: str,
     config: AppConfig,
+    columns: int,
     artwork_overrides: dict[str, object] | None = None,
 ) -> object:
-    cards = [
-        render_media_grid_card(item, item.key == selected_key, config, artwork_overrides)
-        for item in items
-    ]
-    return Columns(cards, equal=True, expand=False, padding=(0, 1))
+    rows = []
+    for start in range(0, len(items), columns):
+        chunk = items[start:start + columns]
+        cards = [
+            render_media_grid_card(item, item.key == selected_key, config, artwork_overrides)
+            for item in chunk
+        ]
+        rows.append(Columns(cards, equal=True, expand=False, padding=(0, 2)))
+    return Group(*rows)
 
 
 def render_media_grid_card(
@@ -1158,8 +1156,8 @@ def render_media_grid_card(
 ) -> object:
     marker = "> " if selected else "  "
     title_style = "bold reverse" if selected else "bold"
-    title = truncate_text(media.title, 12)
-    subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), 12)
+    title = truncate_text(media.title, 20)
+    subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), 20)
     artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
     if artwork is None:
         artwork = cached_card_artwork(media, config)
@@ -1177,7 +1175,7 @@ def cached_card_artwork(media: MediaItem, config: AppConfig) -> object | None:
     if not artwork_enabled(config) or not media.artwork_path or not artwork_is_cached(media.artwork_path, config):
         return None
     try:
-        return render_artwork(fetch_artwork(media.raw, media.artwork_path, config), width=8, max_height=4)
+        return render_artwork(fetch_artwork(media.raw, media.artwork_path, config), width=18, max_height=9)
     except Exception:
         return None
 
@@ -1298,8 +1296,8 @@ def context_hint(row: ListItem) -> str:
         return "Enter opens item"
     if isinstance(row, MediaGridRow):
         if row.selected_media.playable:
-            return "Left/right selects card / p plays / a audio / s subtitles"
-        return "Left/right selects card / Enter opens item"
+            return "Left/right selects card / up/down pages / p plays / a audio / s subtitles"
+        return "Left/right selects card / up/down pages / Enter opens item"
     if isinstance(row, ServerRow):
         return "Enter selects server"
     if isinstance(row, StreamRow):

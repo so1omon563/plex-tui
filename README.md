@@ -147,9 +147,10 @@ not require Kitty, iTerm2, or Sixel image protocol support. Downloaded artwork
 is cached in the app cache directory shown in Settings.
 
 Poster view mode changes the media browser from compact text rows to larger
-poster cards. Grid view groups cards into rows and supports left/right movement
-within the highlighted row. Cards use cached artwork immediately and update
-selected posters after their artwork is fetched.
+stacked poster cards. Grid view shows a page of larger cards at a time; use
+up/down to change pages and left/right to move within the highlighted page.
+Cards use cached artwork immediately and update selected posters after their
+artwork is fetched.
 
 Native terminal image output is disabled for now because Kitty image protocols
 conflict with Textual's screen renderer in practice. `artwork_renderer =

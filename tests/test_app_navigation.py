@@ -3,7 +3,14 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import patch
 
-from plextui.app import BrowseState, LoadMoreRow, PlexTuiApp, render_loaded_status, should_auto_load_more
+from plextui.app import (
+    BrowseState,
+    LoadMoreRow,
+    PlexTuiApp,
+    render_loaded_status,
+    selected_media_from_row,
+    should_auto_load_more,
+)
 from plextui.config import AppConfig
 from plextui.models import LibraryItem, MediaItem
 from plextui.player import StreamChoice
@@ -210,7 +217,9 @@ async def run_load_more_media_preserve_selection_check():
 
         row = app.query_one("#media").highlighted_child
         assert row is not None
-        assert row.media.title == "Second"
+        selected = selected_media_from_row(row)
+        assert selected is not None
+        assert selected.title == "Second"
 
 
 async def run_search_load_more_row_check():
