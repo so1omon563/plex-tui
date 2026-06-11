@@ -85,10 +85,14 @@ Common local commands:
 make smoke
 make test
 make compile
+make check
 ```
 
 `make smoke` checks imports, app construction, bindings, config path resolution,
 and a small helper self-check without connecting to Plex.
+
+`make check` runs smoke tests, unit tests, compile checks, builds package
+artifacts, and validates package metadata.
 
 To try the package in an isolated command environment:
 
@@ -97,11 +101,22 @@ pipx install ~/plex-tui
 plex-tui
 ```
 
+Or install directly from the GitHub repository:
+
+```bash
+pipx install "git+https://github.com/so1omon563/plex-tui.git"
+```
+
 During local development, reinstall the `pipx` copy after changes:
 
 ```bash
 pipx reinstall ~/plex-tui
 ```
+
+Release and packaging notes:
+
+- `RELEASE.md`: local validation, build, install-test, and release checklist.
+- `PACKAGING.md`: PyPI/pipx, Homebrew, AUR, and standalone packaging options.
 
 ## Keys
 

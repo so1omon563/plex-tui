@@ -9,6 +9,25 @@ description = "A small standalone Plex terminal UI."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
+authors = [
+  { name = "so1omon" },
+]
+keywords = ["plex", "tui", "textual", "mpv"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Multimedia :: Video",
+  "Topic :: Terminals",
+]
 dependencies = [
   "Pillow>=10.0",
   "plexapi>=4.15",
@@ -18,11 +37,19 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "build>=1.2",
+  "hatchling>=1.25",
   "pytest>=8.0",
+  "twine>=5.0",
 ]
 
 [project.scripts]
 plex-tui = "plextui.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/so1omon563/plex-tui"
+Issues = "https://github.com/so1omon563/plex-tui/issues"
+Repository = "https://github.com/so1omon563/plex-tui"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/plextui"]

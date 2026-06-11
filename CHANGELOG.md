@@ -12,3 +12,4 @@
 - Added settings actions for reload, relogin, and audio/subtitle preference management.
 - Added playback diagnostics with token-redacted `debug.log` output.
 - Added development workflow targets, smoke checks, and Linux/macOS setup documentation.
+- Added release checklist and packaging option documentation.

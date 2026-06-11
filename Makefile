@@ -1,4 +1,4 @@
-.PHONY: install-dev run test compile smoke
+.PHONY: install-dev run test compile smoke build check-package check clean
 
 PYTHON ?= .venv/bin/python
 
@@ -16,3 +16,14 @@ compile:
 
 smoke:
 	$(PYTHON) -m plextui.smoke
+
+build:
+	$(PYTHON) -m build --no-isolation
+
+check-package: build
+	$(PYTHON) -m twine check dist/*
+
+check: smoke test compile check-package
+
+clean:
+	rm -rf build dist *.egg-info src/*.egg-info
