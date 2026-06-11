@@ -203,7 +203,11 @@ class MediaGrid(Static):
         loaded_count = len(visible_keys.intersection(self.artwork))
         started = time.perf_counter()
         self.update(render_media_grid(visible_items, selected_key, self.config, self.columns, self.artwork))
-        write_performance_log("grid_render", started, f"items={len(visible_items)} loaded={loaded_count} columns={self.columns}")
+        write_performance_log(
+            "grid_render",
+            started,
+            f"items={len(visible_items)} loaded={loaded_count} columns={self.columns} page={','.join(item.key for item in visible_items)}",
+        )
 
     def scroll_selected_visible(self) -> None:
         if not self.is_mounted:
@@ -1171,14 +1175,19 @@ class PlexTuiApp(App[None]):
         current_items = grid.visible_page_items()
         self.hydrate_grid_artwork_from_cache(grid, current_items)
         current_key = grid_page_key(current_items)
+        missing_current_artwork = [
+            item
+            for item in current_items
+            if item.artwork_path and item.key not in grid.artwork
+        ]
         selected = grid.selected_media
         if selected is not None:
             current_items = sorted(current_items, key=lambda item: item.key != selected.key)
-        if current_key != self.last_grid_prefetch_page:
+        if current_key != self.last_grid_prefetch_page or missing_current_artwork:
             self.last_grid_prefetch_page = current_key
             self.start_grid_prefetch(current_items, "current", page_key=current_key)
         else:
-            write_performance_log("grid_prefetch_skipped", time.perf_counter(), "page=current reason=same-page")
+            write_performance_log("grid_prefetch_skipped", time.perf_counter(), "page=current reason=same-page-loaded")
 
         for page_offset in range(1, GRID_PREFETCH_PAGES_AHEAD + 1):
             next_items = grid.visible_page_items(page_offset=page_offset)

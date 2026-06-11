@@ -13,6 +13,7 @@ from plextui.app import (
     PlexTuiApp,
     card_artwork_pixel_size,
     grid_artwork_cache_key,
+    grid_page_key,
     render_loaded_status,
     should_auto_load_more,
 )
@@ -99,6 +100,10 @@ def test_cached_grid_prefetch_hydrates_visible_artwork():
 
 def test_cold_grid_prefetch_applies_visible_artwork():
     asyncio.run(run_cold_grid_prefetch_application_check())
+
+
+def test_same_grid_page_with_missing_artwork_retries_prefetch():
+    asyncio.run(run_same_grid_page_missing_artwork_retry_check())
 
 
 def test_grid_prefetch_queues_while_active_with_current_priority():
@@ -760,6 +765,38 @@ async def run_cold_grid_prefetch_application_check():
         grid = app.query_one("#media-grid")
         for item in grid.visible_page_items():
             assert grid.artwork[item.key] == f"art-{item.key}"
+
+
+async def run_same_grid_page_missing_artwork_retry_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        items = [
+            MediaItem(f"Movie {index}", "", "movie", str(index), True, Raw(), artwork_path=f"/thumb/{index}")
+            for index in range(6)
+        ]
+        scheduled = []
+
+        def capture_prefetch(items, page_key, page_label, delay=0.0):
+            scheduled.append((tuple(item.key for item in items), page_key, page_label, delay))
+
+        app.prefetch_grid_items = capture_prefetch
+        app.show_browse_state(BrowseState("Movies", items))
+        await pilot.pause(0.2)
+
+        grid = app.query_one("#media-grid")
+        page_key = grid_page_key(grid.visible_page_items())
+        app.last_grid_prefetch_page = page_key
+        app.active_grid_prefetch_pages.clear()
+        scheduled.clear()
+
+        app.schedule_grid_prefetch(grid)
+        await pilot.pause(0.2)
+
+        assert scheduled
+        assert scheduled[0][1] == page_key
+        assert scheduled[0][2] == "current"
 
 
 async def run_grid_prefetch_queue_check():
