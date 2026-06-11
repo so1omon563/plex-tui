@@ -1134,9 +1134,12 @@ class PlexTuiApp(App[None]):
             return
         current_items = grid.visible_page_items()
         current_key = grid_page_key(current_items)
+        selected = grid.selected_media
+        if selected is not None:
+            current_items = sorted(current_items, key=lambda item: item.key != selected.key)
         if current_key != self.last_grid_prefetch_page:
             self.last_grid_prefetch_page = current_key
-            self.start_grid_prefetch(current_items, "current")
+            self.start_grid_prefetch(current_items, "current", page_key=current_key)
         else:
             write_performance_log("grid_prefetch_skipped", time.perf_counter(), "page=current reason=same-page")
 
@@ -1144,9 +1147,15 @@ class PlexTuiApp(App[None]):
         if next_items:
             self.start_grid_prefetch(next_items, "next", delay=0.2)
 
-    def start_grid_prefetch(self, items: list[MediaItem], page_label: str, delay: float = 0.0) -> None:
+    def start_grid_prefetch(
+        self,
+        items: list[MediaItem],
+        page_label: str,
+        delay: float = 0.0,
+        page_key: tuple[str, ...] | None = None,
+    ) -> None:
         started = time.perf_counter()
-        page_key = grid_page_key(items)
+        page_key = page_key or grid_page_key(items)
         if not page_key:
             return
         if page_key in self.active_grid_prefetch_pages:
@@ -1228,6 +1237,8 @@ class PlexTuiApp(App[None]):
                     continue
                 rendered_cache_hits += 1
                 rendered[item.key] = artwork
+            if page_label == "current" and rendered:
+                self.call_from_thread(self.apply_grid_artworks, dict(rendered))
             if pending_items:
                 with ThreadPoolExecutor(max_workers=min(GRID_PREFETCH_WORKERS, len(pending_items))) as executor:
                     futures = [
@@ -1243,7 +1254,9 @@ class PlexTuiApp(App[None]):
                         render_ms += item_render_ms
                         self.rendered_grid_artwork_cache[grid_artwork_cache_key(item, self.config)] = artwork
                         rendered[item.key] = artwork
-            if rendered:
+                        if page_label == "current":
+                            self.call_from_thread(self.apply_grid_artwork, item.key, artwork)
+            if rendered and page_label != "current":
                 self.call_from_thread(self.apply_grid_artworks, rendered)
 
             self.prefetched_grid_pages.add(page_key)
