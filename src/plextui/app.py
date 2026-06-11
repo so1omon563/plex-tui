@@ -1125,8 +1125,8 @@ def render_media_grid_card(
     config: AppConfig,
     artwork_overrides: dict[str, object] | None = None,
 ) -> object:
-    marker = "> " if selected else "  "
-    title_style = "bold reverse" if selected else "bold"
+    marker = ">> " if selected else "   "
+    title_style = "bold #e5a00d" if selected else "bold"
     title = truncate_text(media.title, 20)
     subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), 20)
     artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
@@ -1136,9 +1136,11 @@ def render_media_grid_card(
         status = "poster" if media.artwork_path else "no poster"
         artwork = Text(f"[{status}]", style="dim")
     return Group(
+        Text("┏━━━━━━━━━━━━━━━━━━┓" if selected else "                  ", style="#e5a00d"),
         artwork,
         Text(f"{marker}{title}", style=title_style),
         Text(f"  {subtitle}", style="dim"),
+        Text("┗━━━━━━━━━━━━━━━━━━┛" if selected else "                  ", style="#e5a00d"),
     )
 
 
@@ -1416,7 +1418,7 @@ def set_list_index(view: ListView, index: int) -> None:
 def mark_active_row(view: ListView, active_row: ListItem) -> None:
     for child in view.children:
         if isinstance(child, ListItem):
-            child.set_class(child is active_row, "active-row")
+            child.set_class(child is active_row and not isinstance(child, MediaGridRow), "active-row")
 
 
 def stream_choice_matches(choice: StreamChoice, selected_choice: StreamChoice | None) -> bool:
