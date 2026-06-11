@@ -11,16 +11,19 @@ from plextui.app import (
     detail_artwork_enabled,
     effective_stream_preference_rows,
     format_offset,
+    grid_card_width,
     grid_status,
     media_row,
     media_rows,
     next_detail_artwork_mode,
+    next_grid_density,
     next_media_view,
     next_mpv_window_size,
     playback_exit_status,
     render_audio_playback_preference,
     render_details,
     render_help,
+    render_media_grid_card,
     render_picker_details,
     render_settings,
     render_subtitle_playback_preference,
@@ -149,6 +152,7 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "[ Browsing ]" in labels
     assert "[ Diagnostics ]" in labels
     assert "mpv Window Size: 1280x720  [cycle]" in labels
+    assert "Grid Density: Comfortable  [cycle]" in labels
     assert "mpv Window Size: set custom value..." in labels
     assert "Page Size: 80  [+10]" in labels
     assert "Page Size: set custom value..." in labels
@@ -246,6 +250,15 @@ def test_mpv_window_size_cycles_common_values():
     assert next_mpv_window_size("80%") == ""
 
 
+def test_grid_density_cycles_and_changes_card_width():
+    assert next_grid_density("comfortable") == "large"
+    assert next_grid_density("large") == "compact"
+    assert next_grid_density("compact") == "comfortable"
+    assert grid_card_width(AppConfig("http://plex", "token", "client", grid_density="compact")) < grid_card_width(
+        AppConfig("http://plex", "token", "client", grid_density="large")
+    )
+
+
 def test_render_subtitle_none_playback_status():
     config = AppConfig(
         base_url="http://plex",
@@ -255,6 +268,20 @@ def test_render_subtitle_none_playback_status():
     )
 
     assert render_subtitle_playback_preference(config, StreamChoice(0, "None")) == "subtitles none"
+
+
+def test_grid_card_selected_style_uses_marker_without_heavy_border():
+    media = MediaItem("Movie", "2024", "movie", "1", True, object(), artwork_path="")
+
+    selected = render_media_grid_card(media, True, AppConfig("http://plex", "token", "client"))
+    unselected = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"))
+
+    selected_text = "\n".join(str(renderable) for renderable in selected.renderables)
+    unselected_text = "\n".join(str(renderable) for renderable in unselected.renderables)
+    assert "▸ Movie" in selected_text
+    assert "selected" in selected_text
+    assert "┏" not in selected_text
+    assert "▸ Movie" not in unselected_text
 
 
 def test_render_help_groups_key_bindings():

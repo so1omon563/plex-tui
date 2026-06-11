@@ -122,12 +122,12 @@ See `config.example.toml` for optional settings.
 - Plex PIN login and server selection.
 - Paged library browsing with automatic loading near the end of loaded items.
 - Current-library search and bounded global search.
-- List view plus grid view with terminal poster artwork.
+- List view plus configurable-density grid view with terminal poster artwork.
 - External subtitle support and direct playback for embedded PGS/VOBSUB tracks.
 - Audio and subtitle pickers with saved language preferences.
 - Plex resume support and playback progress reporting.
-- Settings screen for stream preferences, artwork modes, page size, auto-load
-  threshold, media view, and `mpv` window size.
+- Settings screen for stream preferences, artwork modes, grid density, page
+  size, auto-load threshold, media view, and `mpv` window size.
 
 ## Artwork
 
@@ -137,8 +137,9 @@ is disabled for now because Kitty protocol rendering conflicts with Textual's
 screen renderer in practice.
 
 Grid view prefetches artwork for the visible page immediately and the next page
-after selection settles. The artwork cache is bounded and stored in the app
-cache directory shown in Settings.
+after selection settles. Compact, comfortable, and large density modes adjust
+card and poster sizing. The artwork cache is bounded and stored in the app cache
+directory shown in Settings.
 
 ## Diagnostics
 

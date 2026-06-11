@@ -7,6 +7,8 @@
 - Added direct Settings input for custom `mpv` window sizes.
 - Added direct Settings input for custom page size and auto-load threshold values.
 - Added confirmation for destructive Settings preference clears.
+- Replaced the heavy selected grid-card border with a quieter marker/footer treatment.
+- Added configurable compact, comfortable, and large grid density modes.
 
 ## 0.1.0 - 2026-06-11
 

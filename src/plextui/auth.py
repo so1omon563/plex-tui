@@ -69,6 +69,7 @@ def save_server_choice(config: AppConfig, account_token: str, choice: ServerChoi
         artwork_mode=config.artwork_mode,
         artwork_renderer=config.artwork_renderer,
         detail_artwork_mode=config.detail_artwork_mode,
+        grid_density=config.grid_density,
         media_view=config.media_view,
         theme=config.theme,
         mpv_window_size=config.mpv_window_size,

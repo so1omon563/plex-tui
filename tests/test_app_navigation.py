@@ -437,8 +437,10 @@ async def run_settings_action_check():
             assert app.config.auto_load_threshold == 10
             app.run_settings_action("reset_mpv_window_size")
             assert app.config.mpv_window_size == ""
+            app.run_settings_action("cycle_grid_density")
+            assert app.config.grid_density == "large"
 
-        assert save_config.call_count == 10
+        assert save_config.call_count == 11
 
 
 async def run_quick_preference_action_check():

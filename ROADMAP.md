@@ -15,9 +15,8 @@
   - richer row controls for grouped playback, artwork, browsing, and account actions
   - clearer visual affordances for confirmation-required actions
 - Iterate on artwork/grid presentation:
-  - tune card size, spacing, and poster dimensions across terminal sizes
-  - replace the heavy selected-card border with a cleaner selection treatment
-  - consider configurable grid density or poster size
+  - tune density presets across narrow and wide terminals
+  - consider separate poster-size controls if density presets are not enough
 - Improve playback status:
   - clearer current `mpv` state
   - better reporting when Plex/default stream choices are used

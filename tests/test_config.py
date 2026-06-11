@@ -32,6 +32,7 @@ def test_config_example_parses_and_uses_known_fields():
         "artwork_mode",
         "artwork_renderer",
         "detail_artwork_mode",
+        "grid_density",
         "media_view",
         "theme",
     }
@@ -83,6 +84,7 @@ def test_invalid_artwork_settings_log_and_normalize(tmp_path, monkeypatch):
             'artwork_mode = "maybe"',
             'artwork_renderer = "sixel"',
             'detail_artwork_mode = "always"',
+            'grid_density = "huge"',
             'media_view = "tiles"',
             "",
         ]),
@@ -96,11 +98,13 @@ def test_invalid_artwork_settings_log_and_normalize(tmp_path, monkeypatch):
     assert loaded.artwork_mode == "on"
     assert loaded.artwork_renderer == "block"
     assert loaded.detail_artwork_mode == "list_only"
+    assert loaded.grid_density == "comfortable"
     assert loaded.media_view == "list"
     log = debug_file.read_text(encoding="utf-8")
     assert "invalid artwork_mode" in log
     assert "invalid artwork_renderer" in log
     assert "invalid detail_artwork_mode" in log
+    assert "invalid grid_density" in log
     assert "invalid media_view" in log
 
 
@@ -132,15 +136,17 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     config_file = tmp_path / "config.toml"
     monkeypatch.setattr(config, "config_path", lambda: config_file)
 
-    saved = config.AppConfig("http://plex", "token", "client", page_size=250, auto_load_threshold=25)
+    saved = config.AppConfig("http://plex", "token", "client", page_size=250, auto_load_threshold=25, grid_density="large")
     config.save_config(saved)
     loaded = config.load_config()
 
     assert loaded.page_size == 250
     assert loaded.auto_load_threshold == 25
+    assert loaded.grid_density == "large"
     text = config_file.read_text(encoding="utf-8")
     assert "page_size = 250" in text
     assert "auto_load_threshold = 25" in text
+    assert 'grid_density = "large"' in text
 
 
 def test_deprecated_poster_view_normalizes_to_list(tmp_path, monkeypatch):

@@ -50,11 +50,12 @@ from .player import (
     subtitle_choices,
 )
 from .plex_service import PlexService, media_details, row_progress_marker
-GRID_CARD_CONTENT_WIDTH = 20
-GRID_CARD_WIDTH = 23
 GRID_CARD_GAP = 2
-GRID_CARD_RENDER_WIDTH = GRID_CARD_WIDTH + GRID_CARD_GAP
-GRID_CARD_HEIGHT = 13
+GRID_DENSITY_SPECS = {
+    "compact": {"width": 19, "content_width": 16, "art_width": 14, "art_height": 7, "height": 10, "max_columns": 6},
+    "comfortable": {"width": 23, "content_width": 20, "art_width": 18, "art_height": 9, "height": 12, "max_columns": 5},
+    "large": {"width": 29, "content_width": 26, "art_width": 24, "art_height": 12, "height": 15, "max_columns": 4},
+}
 
 
 @dataclass
@@ -196,7 +197,7 @@ class MediaGrid(Static):
             return
         row = (self.selected_index - self.page_start) // max(1, self.columns)
         if self.parent is not None:
-            self.parent.scroll_to(y=max(0, row * GRID_CARD_HEIGHT), animate=False)
+            self.parent.scroll_to(y=max(0, row * grid_card_height(self.config)), animate=False)
 
     def on_key(self, event) -> None:
         if not self.items:
@@ -849,7 +850,7 @@ class PlexTuiApp(App[None]):
                         render_protocol_artwork(data, self.config.artwork_renderer, width=width, max_height=height)
                         or render_artwork(data, width=width, max_height=height)
                     )
-                card_artwork = render_artwork(data, width=18, max_height=9)
+                card_artwork = render_card_artwork(data, self.config)
             except Exception:
                 artwork = None
             write_performance_log("detail_artwork", artwork_started, f"title={item.title!r} path={details.artwork_path!r}")
@@ -880,8 +881,9 @@ class PlexTuiApp(App[None]):
 
     def media_grid_geometry(self) -> tuple[int, int]:
         media_size = self.query_one("#main").size
-        columns = max(1, min(5, max(1, media_size.width - 4) // GRID_CARD_RENDER_WIDTH))
-        rows = max(1, min(4, max(1, media_size.height - 2) // 13))
+        spec = grid_density_spec(self.config)
+        columns = max(1, min(int(spec["max_columns"]), max(1, media_size.width - 4) // grid_card_render_width(self.config)))
+        rows = max(1, min(4, max(1, media_size.height - 2) // grid_card_height(self.config)))
         return columns, rows
 
     def action_focus_search(self) -> None:
@@ -973,7 +975,7 @@ class PlexTuiApp(App[None]):
                 continue
             try:
                 data = fetch_artwork(item.raw, item.artwork_path, self.config)
-                rendered[item.key] = render_artwork(data, width=18, max_height=9)
+                rendered[item.key] = render_card_artwork(data, self.config)
             except Exception:
                 continue
 
@@ -1085,6 +1087,16 @@ class PlexTuiApp(App[None]):
             return
         if action == "toggle_media_view":
             self.action_toggle_media_view()
+            return
+        if action == "cycle_grid_density":
+            next_density = next_grid_density(self.config.grid_density)
+            if self.update_preferences(grid_density=next_density):
+                self.action_show_settings()
+                if self.browsing_stack and self.config.media_view == "grid":
+                    selected = self.selected_media()
+                    selected_key = selected.key if selected is not None else None
+                    self.show_browse_state(self.browsing_stack[-1], selected_key=selected_key)
+                self.set_status(f"Grid density: {grid_density_value(self.config)}")
             return
         if action == "cycle_mpv_window_size":
             self.action_cycle_mpv_window_size()
@@ -1650,7 +1662,7 @@ def render_media_grid(
         ]
         row = Table.grid(padding=(0, 1))
         for _ in cards:
-            row.add_column(width=GRID_CARD_WIDTH, no_wrap=True)
+            row.add_column(width=grid_card_width(config), no_wrap=True)
         row.add_row(*cards)
         rows.append(row)
     return Group(*rows)
@@ -1662,24 +1674,23 @@ def render_media_grid_card(
     config: AppConfig,
     artwork_overrides: dict[str, object] | None = None,
 ) -> object:
-    marker = ">> " if selected else "   "
+    marker = "▸ " if selected else "  "
     title_style = "bold #e5a00d" if selected else "bold"
-    title = truncate_text(media.title, GRID_CARD_CONTENT_WIDTH)
-    subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), GRID_CARD_CONTENT_WIDTH)
+    content_width = grid_card_content_width(config)
+    title = truncate_text(media.title, content_width)
+    subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), content_width)
     artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
     if artwork is None:
         artwork = cached_card_artwork(media, config)
     if artwork is None:
         status = "poster" if media.artwork_path else "no poster"
         artwork = Text(f"[{status}]", style="dim")
-    border = "┏" + ("━" * (GRID_CARD_WIDTH - 2)) + "┓"
-    bottom_border = "┗" + ("━" * (GRID_CARD_WIDTH - 2)) + "┛"
+    footer = "selected" if selected else ""
     return Group(
-        Text(border if selected else " " * GRID_CARD_WIDTH, style="#e5a00d"),
         artwork,
         Text(f"{marker}{title}", style=title_style),
         Text(f"  {subtitle}", style="dim"),
-        Text(bottom_border if selected else " " * GRID_CARD_WIDTH, style="#e5a00d"),
+        Text(f"  {footer}", style="#e5a00d" if selected else "dim"),
     )
 
 
@@ -1687,9 +1698,35 @@ def cached_card_artwork(media: MediaItem, config: AppConfig) -> object | None:
     if not artwork_enabled(config) or not media.artwork_path or not artwork_is_cached(media.artwork_path, config):
         return None
     try:
-        return render_artwork(fetch_artwork(media.raw, media.artwork_path, config), width=18, max_height=9)
+        return render_card_artwork(fetch_artwork(media.raw, media.artwork_path, config), config)
     except Exception:
         return None
+
+
+def render_card_artwork(data: bytes, config: AppConfig) -> object:
+    spec = grid_density_spec(config)
+    return render_artwork(data, width=int(spec["art_width"]), max_height=int(spec["art_height"]))
+
+
+def grid_density_spec(config: AppConfig | None) -> dict[str, int]:
+    density = getattr(config, "grid_density", "comfortable")
+    return GRID_DENSITY_SPECS.get(density, GRID_DENSITY_SPECS["comfortable"])
+
+
+def grid_card_width(config: AppConfig | None) -> int:
+    return int(grid_density_spec(config)["width"])
+
+
+def grid_card_content_width(config: AppConfig | None) -> int:
+    return int(grid_density_spec(config)["content_width"])
+
+
+def grid_card_render_width(config: AppConfig | None) -> int:
+    return grid_card_width(config) + GRID_CARD_GAP
+
+
+def grid_card_height(config: AppConfig | None) -> int:
+    return int(grid_density_spec(config)["height"])
 
 
 def truncate_text(value: str, width: int) -> str:
@@ -1758,6 +1795,7 @@ def settings_rows(config: AppConfig) -> list[ListItem]:
         SettingsActionRow("Artwork Renderer: Kitty", "artwork_renderer_kitty"),
         SettingsHeaderRow("Browsing"),
         SettingsActionRow(f"Media View: {media_view_value(config)}  [toggle]", "toggle_media_view"),
+        SettingsActionRow(f"Grid Density: {grid_density_value(config)}  [cycle]", "cycle_grid_density"),
         SettingsActionRow(f"Page Size: {config.page_size}  [-10]", "decrease_page_size"),
         SettingsActionRow(f"Page Size: {config.page_size}  [+10]", "increase_page_size"),
         SettingsActionRow("Page Size: set custom value...", "set_page_size"),
@@ -1808,6 +1846,7 @@ def render_settings(config: AppConfig) -> str:
         "",
         "Browsing",
         f"Media View: {media_view_value(config)}",
+        f"Grid Density: {grid_density_value(config)}",
         f"Page Size: {config.page_size}",
         f"Auto-load Threshold: {config.auto_load_threshold}",
         "Set custom browsing values with whole numbers inside the allowed range.",
@@ -2010,8 +2049,25 @@ def media_view_value(config: AppConfig) -> str:
     return "List"
 
 
+def grid_density_value(config: AppConfig) -> str:
+    if config.grid_density == "compact":
+        return "Compact"
+    if config.grid_density == "large":
+        return "Large"
+    return "Comfortable"
+
+
 def next_media_view(media_view: str) -> str:
     return "grid" if media_view == "list" else "list"
+
+
+def next_grid_density(value: str) -> str:
+    values = ["comfortable", "large", "compact"]
+    try:
+        index = values.index(value)
+    except ValueError:
+        return "comfortable"
+    return values[(index + 1) % len(values)]
 
 
 def mpv_window_size_value(config: AppConfig) -> str:

@@ -31,6 +31,7 @@ class AppConfig:
     artwork_mode: str = "on"
     artwork_renderer: str = "block"
     detail_artwork_mode: str = "list_only"
+    grid_density: str = "comfortable"
     media_view: str = "list"
     theme: str = "textual-dark"
     mpv_window_size: str = ""
@@ -80,6 +81,10 @@ def load_config() -> AppConfig:
     if detail_artwork_mode not in {"list_only", "on", "off"}:
         write_debug_log(f"invalid detail_artwork_mode {detail_artwork_mode!r}; using 'list_only'")
         detail_artwork_mode = "list_only"
+    grid_density = data.get("grid_density", "comfortable")
+    if grid_density not in {"compact", "comfortable", "large"}:
+        write_debug_log(f"invalid grid_density {grid_density!r}; using 'comfortable'")
+        grid_density = "comfortable"
     media_view = data.get("media_view", "list")
     if media_view == "poster":
         write_debug_log("media_view 'poster' is deprecated; using 'list'")
@@ -117,6 +122,7 @@ def load_config() -> AppConfig:
         artwork_mode=artwork_mode.strip(),
         artwork_renderer=artwork_renderer.strip(),
         detail_artwork_mode=detail_artwork_mode.strip(),
+        grid_density=grid_density.strip(),
         media_view=media_view.strip(),
         theme=theme.strip() or "textual-dark",
         mpv_window_size=mpv_window_size.strip(),
@@ -147,6 +153,8 @@ def save_config(config: AppConfig) -> None:
         lines.append(f'artwork_renderer = "{_toml_escape(config.artwork_renderer)}"')
     if config.detail_artwork_mode != "list_only":
         lines.append(f'detail_artwork_mode = "{_toml_escape(config.detail_artwork_mode)}"')
+    if config.grid_density != "comfortable":
+        lines.append(f'grid_density = "{_toml_escape(config.grid_density)}"')
     if config.media_view != "list":
         lines.append(f'media_view = "{_toml_escape(config.media_view)}"')
     if config.theme != "textual-dark":
