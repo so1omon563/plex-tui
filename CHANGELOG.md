@@ -12,6 +12,7 @@
 - Kept Settings open after value changes and added clearer changed-value feedback.
 - Preserved Settings row highlighting after opening Settings and changing values.
 - Added README screenshots for grid and list views.
+- Clarified README install instructions for `main` versus tagged releases.
 
 ## 0.1.0 - 2026-06-11
 
