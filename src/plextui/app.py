@@ -1993,7 +1993,7 @@ def render_card_artwork(data: bytes, config: AppConfig) -> object:
 
 def card_artwork_pixel_size(config: AppConfig) -> tuple[int, int]:
     spec = grid_density_spec(config)
-    return int(spec["art_width"]) * 2, int(spec["art_height"]) * 4
+    return int(spec["art_width"]), int(spec["art_height"]) * 2
 
 
 def grid_artwork_cache_key(item: MediaItem, config: AppConfig) -> tuple[str, str]:

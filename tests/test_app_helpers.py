@@ -406,8 +406,8 @@ def test_grid_density_cycles_and_changes_card_width():
 
 
 def test_card_artwork_pixel_size_tracks_terminal_render_size():
-    assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="comfortable")) == (36, 36)
-    assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="large")) == (48, 48)
+    assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="comfortable")) == (18, 18)
+    assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="large")) == (24, 24)
 
 
 def test_render_subtitle_none_playback_status():
