@@ -109,6 +109,7 @@ pipx reinstall ~/plex-tui
 - `r`: reload
 - `/`: search current library
 - `g`: search all libraries
+- `?`: show help
 - `tab` / `shift+tab`: move keyboard focus
 - `l`: move keyboard focus to the libraries list
 - `m`: move keyboard focus to the media list
@@ -119,6 +120,8 @@ pipx reinstall ~/plex-tui
 - `a`: choose and save an audio preference
 - `s`: choose and save a subtitle preference
 - `x`: stop launched `mpv`
+
+The status line shows context-sensitive hints for the highlighted row.
 
 Search results are navigable views. Press `escape` from results or opened
 children to return to the previous list. Current-library search results page

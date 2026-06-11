@@ -163,6 +163,7 @@ class PlexTuiApp(App[None]):
         Binding("g", "focus_global_search", "Global"),
         Binding("tab", "focus_next", "Next"),
         Binding("shift+tab", "focus_previous", "Prev"),
+        Binding("question_mark", "show_help", "Help"),
         Binding("l", "focus_libraries", "Focus libraries"),
         Binding("m", "focus_media", "Focus media list"),
         Binding("comma", "show_settings", "Settings"),
@@ -180,6 +181,7 @@ class PlexTuiApp(App[None]):
     login_session: LoginSession | None
     pending_account_token: str
     search_global: bool
+    help_visible: bool
     settings_visible: bool
     picker_visible: bool
     selected_subtitle: StreamChoice | None
@@ -211,6 +213,7 @@ class PlexTuiApp(App[None]):
         self.login_session = None
         self.pending_account_token = ""
         self.search_global = False
+        self.help_visible = False
         self.settings_visible = False
         self.picker_visible = False
         self.selected_subtitle = None
@@ -325,18 +328,23 @@ class PlexTuiApp(App[None]):
             return
         if isinstance(row, LibraryRow):
             mark_active_row(event.list_view, row)
+            self.set_status(context_hint(row))
         elif isinstance(row, MediaRow):
             mark_active_row(event.list_view, row)
             self.show_media_details(row.media)
+            self.set_status(context_hint(row))
             self.maybe_auto_load_more(row.media)
         elif isinstance(row, LoadMoreRow):
             mark_active_row(event.list_view, row)
             self.show_detail_text("Load the next page of items.")
+            self.set_status(context_hint(row))
         elif isinstance(row, ServerRow):
             mark_active_row(event.list_view, row)
             self.show_detail_text(f"{row.choice.name}\n\n{row.choice.uri}\n\nSource: {row.choice.source}")
+            self.set_status(context_hint(row))
         elif isinstance(row, StreamRow) or isinstance(row, SettingsActionRow):
             mark_active_row(event.list_view, row)
+            self.set_status(context_hint(row))
         elif row is None and not list(event.list_view.children):
             self.show_detail_text("Select an item")
 
@@ -547,6 +555,7 @@ class PlexTuiApp(App[None]):
         self.set_status("Focus moved to media list")
 
     def action_show_settings(self) -> None:
+        self.help_visible = False
         self.picker_visible = False
         self.settings_visible = True
         self.query_one("#media-title", Static).update("Settings")
@@ -565,6 +574,17 @@ class PlexTuiApp(App[None]):
         self.show_detail_text(render_settings(self.config))
         view.focus()
         self.set_status("Settings")
+
+    def action_show_help(self) -> None:
+        self.help_visible = True
+        self.settings_visible = False
+        self.picker_visible = False
+        self.query_one("#media-title", Static).update("Help")
+        rows = [ListItem(Label(line)) for line in render_help().splitlines()]
+        self.replace_media_rows(rows, 0 if rows else None)
+        self.show_detail_text("Keyboard reference. Press escape to return.")
+        self.query_one("#media", ListView).focus()
+        self.set_status("Help")
 
     def run_settings_action(self, action: str) -> None:
         if action == "reload":
@@ -766,7 +786,8 @@ class PlexTuiApp(App[None]):
             self.query_one("#media", ListView).focus()
             return
 
-        if self.settings_visible or self.picker_visible:
+        if self.help_visible or self.settings_visible or self.picker_visible:
+            self.help_visible = False
             self.settings_visible = False
             self.picker_visible = False
             selected_key = self.picker_media_key
@@ -929,6 +950,53 @@ def render_settings(config: AppConfig) -> str:
         "Clear subtitle preference",
     ])
     return "\n".join(lines)
+
+
+def render_help() -> str:
+    return "\n".join([
+        "Navigation",
+        "enter: open selected row",
+        "escape: go back / close current view",
+        "tab / shift+tab: move focus",
+        "l: focus libraries",
+        "m: focus media list",
+        "",
+        "Search",
+        "/: search current library",
+        "g: search all libraries",
+        "",
+        "Playback",
+        "p: play selected media with mpv",
+        "x: stop launched mpv",
+        "",
+        "Streams",
+        "a: choose and save audio preference",
+        "s: choose and save subtitle preference",
+        "",
+        "Settings",
+        ",: show settings",
+        "r: reconnect / reload libraries",
+        "?: show help",
+        "q: quit",
+    ])
+
+
+def context_hint(row: ListItem) -> str:
+    if isinstance(row, LibraryRow):
+        return "Enter opens library"
+    if isinstance(row, LoadMoreRow):
+        return "Enter loads next page"
+    if isinstance(row, MediaRow):
+        if row.media.playable:
+            return "Enter selects item / p plays / a audio / s subtitles"
+        return "Enter opens item"
+    if isinstance(row, ServerRow):
+        return "Enter selects server"
+    if isinstance(row, StreamRow):
+        return "Enter saves preference"
+    if isinstance(row, SettingsActionRow):
+        return "Enter runs action"
+    return "Enter selects row"
 
 
 def render_loaded_status(title: str, loaded: int, total: int | None, has_more: bool) -> str:

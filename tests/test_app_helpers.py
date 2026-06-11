@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 from plextui.app import (
+    LoadMoreRow,
+    MediaRow,
+    context_hint,
     format_offset,
     render_audio_playback_preference,
     render_details,
+    render_help,
     render_settings,
     render_subtitle_playback_preference,
     subtitle_preference_value,
 )
 from plextui.config import AppConfig
-from plextui.models import MediaDetails
+from plextui.models import MediaDetails, MediaItem
 from plextui.player import StreamChoice
 
 
@@ -110,3 +114,21 @@ def test_render_subtitle_none_playback_status():
     )
 
     assert render_subtitle_playback_preference(config, StreamChoice(0, "None")) == "subtitles none"
+
+
+def test_render_help_groups_key_bindings():
+    rendered = render_help()
+
+    assert "Navigation" in rendered
+    assert "Search" in rendered
+    assert "Playback" in rendered
+    assert "Streams" in rendered
+    assert "Settings" in rendered
+    assert "?: show help" in rendered
+
+
+def test_context_hints_for_media_and_load_more():
+    playable = MediaItem("Movie", "", "movie", "1", True, object())
+
+    assert context_hint(MediaRow(playable)) == "Enter selects item / p plays / a audio / s subtitles"
+    assert context_hint(LoadMoreRow(100, 200)) == "Enter loads next page"

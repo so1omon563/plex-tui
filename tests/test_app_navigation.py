@@ -56,6 +56,10 @@ def test_settings_actions_update_preferences():
     asyncio.run(run_settings_action_check())
 
 
+def test_help_view_returns_to_media_on_escape():
+    asyncio.run(run_help_back_check())
+
+
 def test_should_auto_load_more_near_end_only():
     library = LibraryItem("Movies", "1", "movie", object())
     items = [
@@ -291,3 +295,27 @@ async def run_settings_action_check():
             assert app.config.subtitle_mode == "auto"
 
         assert save_config.call_count == 3
+
+
+async def run_help_back_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        items = [
+            MediaItem("First", "", "movie", "1", True, Raw()),
+            MediaItem("Second", "", "movie", "2", True, Raw()),
+        ]
+        app.browsing_stack = [BrowseState("Movies", items)]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_show_help()
+        await pilot.pause(0.2)
+        assert app.query_one("#media-title").content == "Help"
+        assert "Keyboard reference" in app.query_one("#detail-content").content
+
+        app.action_back_or_clear()
+        await pilot.pause(0.2)
+        assert app.query_one("#media-title").content == "Movies"
+        assert app.query_one("#detail-content").content.splitlines()[0] == "First"
