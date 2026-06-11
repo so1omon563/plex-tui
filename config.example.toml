@@ -1,3 +1,16 @@
+# Example config paths:
+# macOS: ~/Library/Application Support/plex-tui/config.toml
+# Linux: ~/.config/plex-tui/config.toml
+
 base_url = "http://127.0.0.1:32400"
 token = "your-plex-token"
 client_identifier = "plex-tui-your-stable-client-id"
+
+# Optional account token saved by Plex PIN login.
+# account_token = "your-plex-account-token"
+
+# Optional stream preferences. Use Plex language codes when possible.
+# preferred_audio_language = "jpn"
+# preferred_subtitle_language = "eng"
+# subtitle_mode can be "auto", "none", or "preferred".
+# subtitle_mode = "preferred"

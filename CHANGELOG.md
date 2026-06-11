@@ -1,0 +1,14 @@
+# Changelog
+
+## 0.1.0 - Unreleased
+
+- Added Plex PIN login and server selection.
+- Added library browsing with paged loading and automatic loading near the end of the list.
+- Added current-library search with paged results and bounded global search.
+- Added playback through `mpv` with Plex resume and progress reporting.
+- Added audio and subtitle pickers with saved language preferences.
+- Added support for external subtitles and embedded PGS/VOBSUB subtitle playback.
+- Added media details for metadata, audio tracks, subtitle tracks, and saved stream preferences.
+- Added settings actions for reload, relogin, and audio/subtitle preference management.
+- Added playback diagnostics with token-redacted `debug.log` output.
+- Added development workflow targets, smoke checks, and Linux/macOS setup documentation.
