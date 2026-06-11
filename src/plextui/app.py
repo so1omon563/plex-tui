@@ -13,7 +13,7 @@ from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, St
 from .auth import LoginSession, ServerChoice, save_server_choice
 from .config import AppConfig, config_path, load_config
 from .models import LibraryItem, MediaItem
-from .player import PlayerError, PlayerHandle, StreamChoice, play_with_mpv, stop_mpv, subtitle_choices
+from .player import PlayerError, PlayerHandle, StreamChoice, audio_choices, play_with_mpv, stop_mpv, subtitle_choices
 from .plex_service import PlexService, media_details
 
 
@@ -121,6 +121,7 @@ class PlexTuiApp(App[None]):
         Binding("comma", "show_settings", "Settings"),
         Binding("escape", "back_or_clear", "Back"),
         Binding("p", "play_selected", "Play"),
+        Binding("a", "audio_picker", "Audio"),
         Binding("s", "subtitle_picker", "Subtitles"),
         Binding("x", "stop_playback", "Stop"),
     ]
@@ -135,6 +136,7 @@ class PlexTuiApp(App[None]):
     settings_visible: bool
     picker_visible: bool
     selected_subtitle: StreamChoice | None
+    selected_audio: StreamChoice | None
     player: PlayerHandle | None
 
     def compose(self) -> ComposeResult:
@@ -162,6 +164,7 @@ class PlexTuiApp(App[None]):
         self.settings_visible = False
         self.picker_visible = False
         self.selected_subtitle = None
+        self.selected_audio = None
         self.player = None
         self.query_one("#search", Input).display = False
         self.load_server()
@@ -408,11 +411,18 @@ class PlexTuiApp(App[None]):
             return
         self.open_stream_picker(row.media, "subtitle")
 
+    def action_audio_picker(self) -> None:
+        row = self.query_one("#media", ListView).highlighted_child
+        if not isinstance(row, MediaRow) or not row.media.playable:
+            self.set_status("Select playable media before choosing audio")
+            return
+        self.open_stream_picker(row.media, "audio")
+
     @work(thread=True)
     def open_stream_picker(self, media: MediaItem, stream_type: str) -> None:
-        self.post_message(StatusChanged("Loading subtitle tracks..."))
+        self.post_message(StatusChanged(f"Loading {stream_type} tracks..."))
         try:
-            choices = subtitle_choices(media.raw)
+            choices = subtitle_choices(media.raw) if stream_type == "subtitle" else audio_choices(media.raw)
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return
@@ -420,14 +430,14 @@ class PlexTuiApp(App[None]):
         def update() -> None:
             self.picker_visible = True
             self.settings_visible = False
-            self.query_one("#media-title", Static).update("Subtitle Tracks")
+            self.query_one("#media-title", Static).update("Subtitle Tracks" if stream_type == "subtitle" else "Audio Tracks")
             view = self.query_one("#media", ListView)
             view.clear()
             for choice in choices:
                 view.append(StreamRow(choice, stream_type))
             view.focus()
-            self.show_detail_text("Select a subtitle track for the next playback.")
-            self.set_status("Choose subtitle track")
+            self.show_detail_text(f"Select a {stream_type} track for the next playback.")
+            self.set_status(f"Choose {stream_type} track")
 
         self.call_from_thread(update)
 
@@ -435,6 +445,9 @@ class PlexTuiApp(App[None]):
         if stream_type == "subtitle":
             self.selected_subtitle = choice
             self.set_status(f"Subtitle: {choice.label}")
+        elif stream_type == "audio":
+            self.selected_audio = choice
+            self.set_status(f"Audio: {choice.label}")
         self.picker_visible = False
         if self.browsing_stack:
             state = self.browsing_stack[-1]
@@ -508,7 +521,11 @@ class PlexTuiApp(App[None]):
             return
         try:
             stop_mpv(self.player)
-            self.player = play_with_mpv(row.media.raw, subtitle_choice=self.selected_subtitle)
+            self.player = play_with_mpv(
+                row.media.raw,
+                subtitle_choice=self.selected_subtitle,
+                audio_choice=self.selected_audio,
+            )
         except PlayerError as exc:
             self.show_error(str(exc))
             return
