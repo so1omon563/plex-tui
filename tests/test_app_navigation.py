@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from plextui.app import (
@@ -72,6 +73,10 @@ def test_settings_actions_update_preferences():
 
 def test_help_view_returns_to_media_on_escape():
     asyncio.run(run_help_back_check())
+
+
+def test_completed_player_updates_status():
+    asyncio.run(run_completed_player_status_check())
 
 
 def test_should_auto_load_more_near_end_only():
@@ -385,3 +390,16 @@ async def run_help_back_check():
         await pilot.pause(0.2)
         assert app.query_one("#media-title").content == "Movies"
         assert app.query_one("#detail-content").content.splitlines()[0] == "First"
+
+
+async def run_completed_player_status_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.player = SimpleNamespace(title="Movie", process=SimpleNamespace(poll=lambda: 0))
+
+        app.check_player_status()
+        await pilot.pause(0.1)
+
+        assert app.player is None
+        assert app.query_one("#status").content == "Playback ended: Movie"

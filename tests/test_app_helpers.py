@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from plextui.app import (
     LoadMoreRow,
     MediaGrid,
@@ -11,6 +13,7 @@ from plextui.app import (
     media_rows,
     next_detail_artwork_mode,
     next_media_view,
+    playback_exit_status,
     render_audio_playback_preference,
     render_details,
     render_help,
@@ -26,6 +29,17 @@ from plextui.player import StreamChoice
 def test_format_offset():
     assert format_offset(65000) == "1:05"
     assert format_offset(3_665_000) == "1:01:05"
+
+
+def test_playback_exit_status_describes_process_state():
+    assert playback_exit_status(SimpleNamespace(title="Movie", process=SimpleNamespace(poll=lambda: None))) is None
+    assert playback_exit_status(SimpleNamespace(title="Movie", process=SimpleNamespace(poll=lambda: 0))) == "Playback ended: Movie"
+    assert playback_exit_status(SimpleNamespace(title="Movie", process=SimpleNamespace(poll=lambda: 2))) == (
+        "Playback exited with code 2: Movie"
+    )
+    assert playback_exit_status(SimpleNamespace(title="Movie", process=SimpleNamespace(poll=lambda: -15))) == (
+        "Playback terminated by signal 15: Movie"
+    )
 
 
 def test_render_details_includes_subtitles_and_summary():

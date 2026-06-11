@@ -122,7 +122,8 @@ pipx reinstall ~/plex-tui
 - `s`: choose and save a subtitle preference
 - `x`: stop launched `mpv`
 
-The status line shows context-sensitive hints for the highlighted row.
+The status line shows context-sensitive hints for the highlighted row and
+reports when launched `mpv` playback ends or exits with an error code.
 
 Search results are navigable views. Press `escape` from results or opened
 children to return to the previous list. Current-library search results page

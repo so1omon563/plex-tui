@@ -364,6 +364,7 @@ class PlexTuiApp(App[None]):
             pass
         self.query_one("#search", Input).display = False
         self.query_one("#media-grid-scroll", VerticalScroll).display = False
+        self.set_interval(1.0, self.check_player_status)
         self.load_server()
 
     def apply_config_theme(self) -> None:
@@ -1187,9 +1188,22 @@ class PlexTuiApp(App[None]):
         preference_text = render_playback_preferences(self.config, audio_choice, subtitle_choice)
         self.set_status(f"Playing {media.title}{resume_text}{subtitle_text} ({self.player.stream_mode}; {preference_text})")
 
+    def check_player_status(self) -> None:
+        if self.player is None:
+            return
+        status = playback_exit_status(self.player)
+        if status is None:
+            return
+        self.player = None
+        self.set_status(status)
+
     def action_stop_playback(self) -> None:
-        if self.player is None or not self.player.active:
+        if self.player is None:
             self.set_status("Nothing is playing")
+            self.player = None
+            return
+        if not self.player.active:
+            self.set_status(playback_exit_status(self.player) or "Nothing is playing")
             self.player = None
             return
         title = self.player.title
@@ -1592,6 +1606,17 @@ def render_playback_preferences(
         render_audio_playback_preference(config, audio_choice),
         render_subtitle_playback_preference(config, subtitle_choice),
     ])
+
+
+def playback_exit_status(player: PlayerHandle) -> str | None:
+    returncode = player.process.poll()
+    if returncode is None:
+        return None
+    if returncode == 0:
+        return f"Playback ended: {player.title}"
+    if returncode < 0:
+        return f"Playback terminated by signal {-returncode}: {player.title}"
+    return f"Playback exited with code {returncode}: {player.title}"
 
 
 def render_audio_playback_preference(config: AppConfig, audio_choice: StreamChoice | None) -> str:
