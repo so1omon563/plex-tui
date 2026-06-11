@@ -11,7 +11,8 @@ namcap PKGBUILD plex-tui-*.pkg.tar.*
 ```
 
 The repository also includes an `AUR Package` GitHub Actions workflow that runs
-the same build/check path inside an `archlinux:base-devel` container.
+the same build/check path inside an `archlinux:base-devel` container and checks
+that `.SRCINFO` matches `PKGBUILD`.
 
 The package depends on `mpv` because playback is delegated to the system player.
 If any Python dependency is unavailable in the official repositories, depend on

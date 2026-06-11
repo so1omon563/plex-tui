@@ -12,6 +12,7 @@ depends=(
   "python-pillow"
   "python-platformdirs"
   "python-plexapi"
+  "python-rich"
   "python-textual"
 )
 makedepends=(
