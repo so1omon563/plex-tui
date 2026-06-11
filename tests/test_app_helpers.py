@@ -68,6 +68,7 @@ def test_render_settings_hides_tokens():
     assert "secret" not in rendered
     assert "Server Token: saved" in rendered
     assert "Account Token: saved" in rendered
+    assert "Cache Path:" in rendered
     assert "Debug Log:" in rendered
 
 

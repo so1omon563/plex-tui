@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from platformdirs import user_config_dir
+from platformdirs import user_cache_dir, user_config_dir
 
 
 APP_NAME = "plex-tui"
@@ -25,6 +25,10 @@ class AppConfig:
 
 def config_path() -> Path:
     return Path(user_config_dir(APP_NAME)) / "config.toml"
+
+
+def cache_path() -> Path:
+    return Path(user_cache_dir(APP_NAME))
 
 
 def debug_log_path() -> Path:

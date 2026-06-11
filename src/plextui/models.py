@@ -32,3 +32,4 @@ class MediaDetails:
     subtitles: list[str]
     summary: str
     playable: bool
+    artwork_path: str = ""

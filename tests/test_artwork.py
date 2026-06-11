@@ -1,0 +1,43 @@
+from __future__ import annotations
+
+from io import BytesIO
+
+from PIL import Image
+
+from plextui.artwork import add_token, artwork_url, render_artwork
+from plextui.config import AppConfig
+
+
+class RawServer:
+    def url(self, path, includeToken=False):
+        suffix = "?X-Plex-Token=server-token" if includeToken else ""
+        return f"http://plex{path}{suffix}"
+
+
+class RawItem:
+    _server = RawServer()
+
+
+def test_add_token_preserves_existing_query():
+    url = add_token("http://plex/library/metadata/1/thumb?width=300", "token")
+
+    assert url == "http://plex/library/metadata/1/thumb?width=300&X-Plex-Token=token"
+
+
+def test_artwork_url_prefers_plexapi_server_url():
+    config = AppConfig(base_url="http://fallback", token="fallback-token", client_identifier="client")
+
+    assert artwork_url(RawItem(), "/library/metadata/1/thumb", config) == (
+        "http://plex/library/metadata/1/thumb?X-Plex-Token=server-token"
+    )
+
+
+def test_render_artwork_returns_halfcell_text():
+    image = Image.new("RGB", (2, 4), "#ff0000")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+
+    rendered = render_artwork(buffer.getvalue(), width=2, max_height=2)
+
+    assert rendered.plain == "▀▀\n▀▀"
+    assert rendered.spans

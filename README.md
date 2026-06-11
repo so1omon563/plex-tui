@@ -139,6 +139,11 @@ The details pane shows metadata, saved audio/subtitle preferences, reported
 audio tracks, and reported subtitle tracks. Subtitle rows include external vs
 embedded when Plex exposes enough information.
 
+The details pane also renders Plex poster artwork as portable colored block
+art when a poster is available. This works in ordinary color terminals and does
+not require Kitty, iTerm2, or Sixel image protocol support. Downloaded artwork
+is cached in the app cache directory shown in Settings.
+
 When playback starts, external subtitle streams reported by Plex are passed to
 `mpv` automatically. Items with embedded PGS/VOBSUB subtitles are direct-played
 from the original media part so `mpv` can see the subtitle tracks.

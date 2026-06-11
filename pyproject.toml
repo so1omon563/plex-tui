@@ -10,6 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
+  "Pillow>=10.0",
   "plexapi>=4.15",
   "platformdirs>=4.2",
   "textual>=0.86",

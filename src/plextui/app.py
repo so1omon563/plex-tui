@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from typing import Any
 
+from rich.console import Group
+from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -10,8 +13,9 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 
+from .artwork import fetch_artwork, render_artwork
 from .auth import LoginSession, ServerChoice, save_server_choice
-from .config import AppConfig, config_path, debug_log_path, load_config, save_config
+from .config import AppConfig, cache_path, config_path, debug_log_path, load_config, save_config
 from .models import LibraryItem, MediaItem
 from .player import (
     PlayerError,
@@ -499,7 +503,7 @@ class PlexTuiApp(App[None]):
 
     def show_media_details(self, item: MediaItem) -> None:
         details = media_details(item)
-        self.show_detail_text(render_details(details, self.config))
+        self.show_detail_text(render_detail_content(details, self.config))
         self.refresh_media_details(item)
 
     @work(thread=True, exclusive=True)
@@ -518,16 +522,33 @@ class PlexTuiApp(App[None]):
         except Exception:
             return
 
-        def update() -> None:
+        details = media_details(full_item)
+
+        def update_text() -> None:
             row = self.query_one("#media", ListView).highlighted_child
             if isinstance(row, MediaRow) and row.media.key == item.key:
-                details = media_details(full_item)
-                self.show_detail_text(render_details(details, self.config))
+                self.show_detail_text(render_detail_content(details, self.config))
 
-        self.call_from_thread(update)
+        self.call_from_thread(update_text)
 
-    def show_detail_text(self, text: str) -> None:
-        self.query_one("#detail-content", Static).update(text)
+        artwork = None
+        if details.artwork_path:
+            try:
+                artwork = render_artwork(fetch_artwork(full_item.raw, details.artwork_path, self.config))
+            except Exception:
+                artwork = None
+        if not artwork:
+            return
+
+        def update_artwork() -> None:
+            row = self.query_one("#media", ListView).highlighted_child
+            if isinstance(row, MediaRow) and row.media.key == item.key:
+                self.show_detail_text(render_detail_content(details, self.config, artwork))
+
+        self.call_from_thread(update_artwork)
+
+    def show_detail_text(self, content: Any) -> None:
+        self.query_one("#detail-content", Static).update(content)
         self.query_one("#detail-scroll", VerticalScroll).scroll_home(animate=False)
 
     def action_focus_search(self) -> None:
@@ -921,9 +942,17 @@ def render_details(details: object, config: AppConfig | None = None) -> str:
     return "\n".join(lines)
 
 
+def render_detail_content(details: object, config: AppConfig | None = None, artwork: Text | None = None) -> object:
+    text = render_details(details, config)
+    if artwork is None:
+        return text
+    return Group(artwork, Text(""), text)
+
+
 def config_rows(config: AppConfig) -> list[tuple[str, str]]:
     return [
         ("Config Path", str(config_path())),
+        ("Cache Path", str(cache_path())),
         ("Debug Log", str(debug_log_path())),
         ("Base URL", config.base_url or "not set"),
         ("Server Token", "saved" if config.token else "not set"),

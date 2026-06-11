@@ -44,6 +44,9 @@ class Part:
 
 class DetailedRawItem(RawItem):
     summary = "Summary"
+    grandparentThumb = "/library/metadata/show/thumb"
+    parentThumb = "/library/metadata/season/thumb"
+    thumb = "/library/metadata/movie/thumb"
 
     def iterParts(self):
         return [Part()]
@@ -133,3 +136,4 @@ def test_media_details_include_audio_and_subtitle_locations():
         "English (srt, external, selected)",
         "Signs (vobsub, embedded, forced)",
     ]
+    assert details.artwork_path == "/library/metadata/show/thumb"

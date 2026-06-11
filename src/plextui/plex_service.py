@@ -157,7 +157,16 @@ def media_details(item: MediaItem) -> MediaDetails:
         subtitles=subtitle_details(raw),
         summary=str(getattr(raw, "summary", "") or ""),
         playable=item.playable,
+        artwork_path=artwork_path(raw),
     )
+
+
+def artwork_path(raw: Any) -> str:
+    for attr in ("grandparentThumb", "parentThumb", "thumb", "art"):
+        value = getattr(raw, attr, None)
+        if value:
+            return str(value)
+    return ""
 
 
 def metadata_fields(raw: Any) -> list[tuple[str, str]]:
