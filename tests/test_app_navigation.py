@@ -54,6 +54,10 @@ def test_grid_browse_state_preserves_selected_media():
     asyncio.run(run_grid_browse_state_preserve_selection_check())
 
 
+def test_grid_selection_scrolls_to_selected_row():
+    asyncio.run(run_grid_selection_scroll_check())
+
+
 def test_search_state_adds_load_more_row():
     asyncio.run(run_search_load_more_row_check())
 
@@ -240,7 +244,7 @@ async def run_grid_browse_state_preserve_selection_check():
         await pilot.pause(0.2)
 
         grid = app.query_one("#media-grid")
-        assert grid.display
+        assert app.query_one("#media-grid-scroll").display
         assert grid.selected_media is not None
         assert grid.selected_media.title == "Second"
 
@@ -250,6 +254,28 @@ async def run_grid_browse_state_preserve_selection_check():
 
         assert grid.selected_media is not None
         assert grid.selected_media.title == "Third"
+
+
+async def run_grid_selection_scroll_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        items = [
+            MediaItem(f"Movie {index}", "", "movie", str(index), True, Raw())
+            for index in range(40)
+        ]
+
+        app.show_browse_state(BrowseState("Movies", items))
+        await pilot.pause(0.2)
+        grid = app.query_one("#media-grid")
+        grid_scroll = app.query_one("#media-grid-scroll")
+        start_scroll = grid_scroll.scroll_y
+
+        grid.set_selected_index(30)
+        await pilot.pause(0.2)
+
+        assert grid_scroll.scroll_y > start_scroll
 
 
 async def run_search_load_more_row_check():

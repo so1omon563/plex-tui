@@ -40,6 +40,7 @@ GRID_CARD_CONTENT_WIDTH = 20
 GRID_CARD_WIDTH = 23
 GRID_CARD_GAP = 2
 GRID_CARD_RENDER_WIDTH = GRID_CARD_WIDTH + GRID_CARD_GAP
+GRID_CARD_HEIGHT = 13
 
 
 @dataclass
@@ -110,6 +111,7 @@ class MediaGrid(Static):
         self.config = config
         self.artwork = {key: value for key, value in self.artwork.items() if key in {item.key for item in items}}
         self.refresh_grid()
+        self.scroll_selected_visible()
         selected = self.selected_media
         if selected is not None:
             self.post_message(self.Highlighted(selected))
@@ -128,6 +130,7 @@ class MediaGrid(Static):
             return
         self.selected_index = next_index
         self.refresh_grid()
+        self.scroll_selected_visible()
         selected = self.selected_media
         if selected is not None:
             self.post_message(self.Highlighted(selected))
@@ -151,6 +154,13 @@ class MediaGrid(Static):
         selected = self.selected_media
         selected_key = selected.key if selected is not None else self.items[0].key
         self.update(render_media_grid(self.items, selected_key, self.config, self.columns, self.artwork))
+
+    def scroll_selected_visible(self) -> None:
+        if not self.is_mounted:
+            return
+        row = self.selected_index // max(1, self.columns)
+        if self.parent is not None:
+            self.parent.scroll_to(y=max(0, row * GRID_CARD_HEIGHT), animate=False)
 
     def on_key(self, event) -> None:
         if not self.items:
@@ -262,10 +272,13 @@ class PlexTuiApp(App[None]):
         color: $text;
     }
 
-    #media-grid {
+    #media-grid-scroll {
         height: 1fr;
-        padding: 0 1;
         overflow-y: auto;
+    }
+
+    #media-grid {
+        padding: 0 1;
     }
     """
 
@@ -318,7 +331,8 @@ class PlexTuiApp(App[None]):
                 yield Static("Media", id="media-title", classes="pane-title")
                 yield Input(placeholder="Search current library", id="search")
                 yield ListView(id="media")
-                yield MediaGrid()
+                with VerticalScroll(id="media-grid-scroll"):
+                    yield MediaGrid()
             with Vertical(id="details"):
                 yield Static("Details", classes="pane-title")
                 with VerticalScroll(id="detail-scroll"):
@@ -342,7 +356,7 @@ class PlexTuiApp(App[None]):
         self.player = None
         self.prefetched_grid_pages = set()
         self.query_one("#search", Input).display = False
-        self.query_one("#media-grid", MediaGrid).display = False
+        self.query_one("#media-grid-scroll", VerticalScroll).display = False
         self.load_server()
 
     @work(thread=True)
@@ -525,30 +539,32 @@ class PlexTuiApp(App[None]):
             self.load_more_media(selected_key=media.key)
 
     def selected_media(self) -> MediaItem | None:
-        grid = self.query_one("#media-grid", MediaGrid)
-        if grid.display:
-            return grid.selected_media
+        if self.media_grid_visible():
+            return self.query_one("#media-grid", MediaGrid).selected_media
         return selected_media_from_row(self.query_one("#media", ListView).highlighted_child)
 
     def focus_media_browser(self) -> None:
-        grid = self.query_one("#media-grid", MediaGrid)
-        if grid.display:
-            grid.focus()
+        if self.media_grid_visible():
+            self.query_one("#media-grid", MediaGrid).focus()
             return
         self.query_one("#media", ListView).focus()
 
+    def media_grid_visible(self) -> bool:
+        return bool(self.query_one("#media-grid-scroll", VerticalScroll).display)
+
     def show_media_list(self) -> ListView:
         media = self.query_one("#media", ListView)
-        grid = self.query_one("#media-grid", MediaGrid)
+        grid_scroll = self.query_one("#media-grid-scroll", VerticalScroll)
         media.display = True
-        grid.display = False
+        grid_scroll.display = False
         return media
 
     def show_media_grid(self) -> MediaGrid:
         media = self.query_one("#media", ListView)
+        grid_scroll = self.query_one("#media-grid-scroll", VerticalScroll)
         grid = self.query_one("#media-grid", MediaGrid)
         media.display = False
-        grid.display = True
+        grid_scroll.display = True
         return grid
 
     @work(thread=True, exclusive=True)
@@ -698,23 +714,25 @@ class PlexTuiApp(App[None]):
         if artwork_enabled(self.config) and details.artwork_path:
             try:
                 data = fetch_artwork(full_item.raw, details.artwork_path, self.config)
-                width, height = self.detail_artwork_size()
-                artwork = (
-                    render_protocol_artwork(data, self.config.artwork_renderer, width=width, max_height=height)
-                    or render_artwork(data, width=width, max_height=height)
-                )
+                if detail_artwork_enabled(self.config):
+                    width, height = self.detail_artwork_size()
+                    artwork = (
+                        render_protocol_artwork(data, self.config.artwork_renderer, width=width, max_height=height)
+                        or render_artwork(data, width=width, max_height=height)
+                    )
                 card_artwork = render_artwork(data, width=18, max_height=9)
             except Exception:
                 artwork = None
-        if not artwork:
+        if not artwork and not card_artwork:
             return
 
         def update_artwork() -> None:
             selected = self.selected_media()
             if selected is not None and selected.key == item.key:
-                self.show_detail_text(render_detail_content(details, self.config, artwork))
+                if artwork is not None:
+                    self.show_detail_text(render_detail_content(details, self.config, artwork))
                 grid = self.query_one("#media-grid", MediaGrid)
-                if grid.display and card_artwork is not None:
+                if self.media_grid_visible() and card_artwork is not None:
                     grid.set_artwork(item.key, card_artwork)
 
         self.call_from_thread(update_artwork)
@@ -780,7 +798,7 @@ class PlexTuiApp(App[None]):
 
     def move_grid_selection(self, direction: int) -> None:
         grid = self.query_one("#media-grid", MediaGrid)
-        if grid.display:
+        if self.media_grid_visible():
             grid.move_selection(direction)
 
     @work(thread=True)
@@ -833,6 +851,7 @@ class PlexTuiApp(App[None]):
         view.append(SettingsActionRow("Set subtitles to None", "subtitle_none"))
         view.append(SettingsActionRow("Clear subtitle preference", "clear_subtitle"))
         view.append(SettingsActionRow("Toggle artwork on/off", "toggle_artwork"))
+        view.append(SettingsActionRow("Cycle details artwork", "cycle_detail_artwork"))
         view.append(SettingsActionRow("Cycle media view", "toggle_media_view"))
         view.append(SettingsActionRow("Set artwork renderer: block", "artwork_renderer_block"))
         view.append(SettingsActionRow("Set artwork renderer: auto", "artwork_renderer_auto"))
@@ -895,6 +914,12 @@ class PlexTuiApp(App[None]):
             next_mode = "off" if self.config.artwork_mode == "on" else "on"
             if self.update_preferences(artwork_mode=next_mode):
                 self.set_status(f"Artwork: {artwork_mode_value(self.config)}")
+            return
+        if action == "cycle_detail_artwork":
+            next_mode = next_detail_artwork_mode(self.config.detail_artwork_mode)
+            if self.update_preferences(detail_artwork_mode=next_mode):
+                self.action_show_settings()
+                self.set_status(f"Details artwork: {detail_artwork_mode_value(self.config)}")
             return
         if action == "toggle_media_view":
             self.action_toggle_media_view()
@@ -1304,6 +1329,16 @@ def artwork_enabled(config: AppConfig | None) -> bool:
     return config is None or config.artwork_mode == "on"
 
 
+def detail_artwork_enabled(config: AppConfig) -> bool:
+    if not artwork_enabled(config):
+        return False
+    if config.detail_artwork_mode == "off":
+        return False
+    if config.detail_artwork_mode == "list_only" and config.media_view == "grid":
+        return False
+    return True
+
+
 def artwork_status(details: object, config: AppConfig | None) -> str:
     if not artwork_enabled(config):
         return "disabled"
@@ -1329,6 +1364,7 @@ def config_rows(config: AppConfig) -> list[tuple[str, str]]:
         ("Subtitle Language", subtitle_language_value(config)),
         ("Artwork", artwork_mode_value(config)),
         ("Artwork Renderer", artwork_renderer_value(config)),
+        ("Details Artwork", detail_artwork_mode_value(config)),
         ("Media View", media_view_value(config)),
     ]
 
@@ -1348,6 +1384,7 @@ def render_settings(config: AppConfig) -> str:
         "Set subtitles to None",
         "Clear subtitle preference",
         "Toggle artwork on/off",
+        "Cycle details artwork",
         "Cycle media view",
         "Set artwork renderer: block",
         "Set artwork renderer: auto",
@@ -1485,6 +1522,22 @@ def artwork_renderer_value(config: AppConfig) -> str:
     if config.artwork_renderer == "auto":
         return "Auto"
     return "Block"
+
+
+def detail_artwork_mode_value(config: AppConfig) -> str:
+    if config.detail_artwork_mode == "on":
+        return "On"
+    if config.detail_artwork_mode == "off":
+        return "Off"
+    return "List only"
+
+
+def next_detail_artwork_mode(value: str) -> str:
+    if value == "list_only":
+        return "on"
+    if value == "on":
+        return "off"
+    return "list_only"
 
 
 def media_view_value(config: AppConfig) -> str:

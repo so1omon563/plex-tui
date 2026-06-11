@@ -135,16 +135,18 @@ items fetches the next page automatically. You can also select the
 
 The settings view shows the active config and supports reconnect/reload,
 Plex relogin, clearing or changing audio/subtitle preferences separately,
-artwork on/off, artwork renderer selection, and media list/grid view mode.
+artwork on/off, artwork renderer selection, details artwork mode, and media
+list/grid view mode.
 
 The details pane shows metadata, saved audio/subtitle preferences, reported
 audio tracks, and reported subtitle tracks. Subtitle rows include external vs
 embedded when Plex exposes enough information.
 
-The details pane also renders Plex poster artwork as portable colored block
-art when a poster is available. This works in ordinary color terminals and does
-not require Kitty, iTerm2, or Sixel image protocol support. Downloaded artwork
-is cached in the app cache directory shown in Settings.
+The details pane can render Plex poster artwork as portable colored block art
+when a poster is available. By default, details artwork is shown in list view
+and hidden in grid view. This works in ordinary color terminals and does not
+require Kitty, iTerm2, or Sixel image protocol support. Downloaded artwork is
+cached in the app cache directory shown in Settings.
 
 List view keeps the browser compact and shows selected poster artwork in the
 details pane. Grid view uses arrow-key card selection in a dedicated grid

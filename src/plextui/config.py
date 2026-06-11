@@ -23,6 +23,7 @@ class AppConfig:
     subtitle_mode: str = "auto"
     artwork_mode: str = "on"
     artwork_renderer: str = "block"
+    detail_artwork_mode: str = "list_only"
     media_view: str = "list"
 
 
@@ -64,6 +65,10 @@ def load_config() -> AppConfig:
     if artwork_renderer not in {"block", "auto", "kitty"}:
         write_debug_log(f"invalid artwork_renderer {artwork_renderer!r}; using 'block'")
         artwork_renderer = "block"
+    detail_artwork_mode = data.get("detail_artwork_mode", "list_only")
+    if detail_artwork_mode not in {"list_only", "on", "off"}:
+        write_debug_log(f"invalid detail_artwork_mode {detail_artwork_mode!r}; using 'list_only'")
+        detail_artwork_mode = "list_only"
     media_view = data.get("media_view", "list")
     if media_view == "poster":
         write_debug_log("media_view 'poster' is deprecated; using 'list'")
@@ -81,6 +86,7 @@ def load_config() -> AppConfig:
         subtitle_mode=subtitle_mode.strip(),
         artwork_mode=artwork_mode.strip(),
         artwork_renderer=artwork_renderer.strip(),
+        detail_artwork_mode=detail_artwork_mode.strip(),
         media_view=media_view.strip(),
     )
 
@@ -105,6 +111,8 @@ def save_config(config: AppConfig) -> None:
         lines.append(f'artwork_mode = "{_toml_escape(config.artwork_mode)}"')
     if config.artwork_renderer != "block":
         lines.append(f'artwork_renderer = "{_toml_escape(config.artwork_renderer)}"')
+    if config.detail_artwork_mode != "list_only":
+        lines.append(f'detail_artwork_mode = "{_toml_escape(config.detail_artwork_mode)}"')
     if config.media_view != "list":
         lines.append(f'media_view = "{_toml_escape(config.media_view)}"')
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

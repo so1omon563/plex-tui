@@ -28,6 +28,7 @@ def test_config_example_parses_and_uses_known_fields():
         "subtitle_mode",
         "artwork_mode",
         "artwork_renderer",
+        "detail_artwork_mode",
         "media_view",
     }
     assert raw["base_url"]
@@ -67,6 +68,7 @@ def test_invalid_artwork_settings_log_and_normalize(tmp_path, monkeypatch):
             'client_identifier = "client"',
             'artwork_mode = "maybe"',
             'artwork_renderer = "sixel"',
+            'detail_artwork_mode = "always"',
             'media_view = "tiles"',
             "",
         ]),
@@ -79,10 +81,12 @@ def test_invalid_artwork_settings_log_and_normalize(tmp_path, monkeypatch):
 
     assert loaded.artwork_mode == "on"
     assert loaded.artwork_renderer == "block"
+    assert loaded.detail_artwork_mode == "list_only"
     assert loaded.media_view == "list"
     log = debug_file.read_text(encoding="utf-8")
     assert "invalid artwork_mode" in log
     assert "invalid artwork_renderer" in log
+    assert "invalid detail_artwork_mode" in log
     assert "invalid media_view" in log
 
 

@@ -5,9 +5,11 @@ from plextui.app import (
     MediaGrid,
     MediaRow,
     context_hint,
+    detail_artwork_enabled,
     format_offset,
     media_row,
     media_rows,
+    next_detail_artwork_mode,
     next_media_view,
     render_audio_playback_preference,
     render_details,
@@ -96,8 +98,22 @@ def test_render_settings_includes_stream_preferences():
     assert "Subtitle Language: eng" in rendered
     assert "Artwork: On" in rendered
     assert "Artwork Renderer: Block" in rendered
+    assert "Details Artwork: List only" in rendered
     assert "Media View: List" in rendered
     assert subtitle_preference_value(config) == "eng"
+
+
+def test_detail_artwork_mode_defaults_to_list_only():
+    list_config = AppConfig("http://plex", "token", "client-id")
+    grid_config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+
+    assert detail_artwork_enabled(list_config)
+    assert not detail_artwork_enabled(grid_config)
+    assert detail_artwork_enabled(AppConfig("http://plex", "token", "client-id", media_view="grid", detail_artwork_mode="on"))
+    assert not detail_artwork_enabled(AppConfig("http://plex", "token", "client-id", detail_artwork_mode="off"))
+    assert next_detail_artwork_mode("list_only") == "on"
+    assert next_detail_artwork_mode("on") == "off"
+    assert next_detail_artwork_mode("off") == "list_only"
 
 
 def test_render_playback_preference_status():
