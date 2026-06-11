@@ -15,6 +15,7 @@ from .config import AppConfig, cache_path
 
 
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
+ARTWORK_CACHE_LIMIT_BYTES = 100 * 1024 * 1024
 NATIVE_IMAGE_ENV = "PLEX_TUI_ENABLE_NATIVE_IMAGES"
 
 
@@ -35,6 +36,7 @@ def fetch_artwork(raw: Any, path: str, config: AppConfig) -> bytes:
 
     cached.parent.mkdir(parents=True, exist_ok=True)
     cached.write_bytes(data)
+    prune_artwork_cache()
     return data
 
 
@@ -70,6 +72,33 @@ def cached_artwork_path(path: str, config: AppConfig) -> Path:
 
 def artwork_is_cached(path: str, config: AppConfig) -> bool:
     return cached_artwork_path(path, config).exists()
+
+
+def prune_artwork_cache(limit_bytes: int = ARTWORK_CACHE_LIMIT_BYTES) -> None:
+    directory = cache_path() / "artwork"
+    if not directory.exists():
+        return
+    files = []
+    total = 0
+    try:
+        for path in directory.iterdir():
+            if not path.is_file():
+                continue
+            stat = path.stat()
+            files.append((stat.st_mtime, stat.st_size, path))
+            total += stat.st_size
+    except OSError:
+        return
+    if total <= limit_bytes:
+        return
+    for _, size, path in sorted(files):
+        try:
+            path.unlink()
+        except OSError:
+            continue
+        total -= size
+        if total <= limit_bytes:
+            break
 
 
 def render_artwork(data: bytes, width: int = 28, max_height: int = 20) -> Text:

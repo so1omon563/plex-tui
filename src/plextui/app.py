@@ -80,6 +80,7 @@ class MediaGridRow(ListItem):
         self.artwork: dict[str, object] = {}
         self.grid = Static(render_media_grid(self.items, self.selected_key, config, self.columns, self.artwork))
         ListItem.__init__(self, self.grid)
+        self.add_class("grid-page")
 
     @property
     def selected_media(self) -> MediaItem:
@@ -184,6 +185,11 @@ class PlexTuiApp(App[None]):
         background: $accent;
         color: $text;
     }
+
+    #media > .grid-page.-highlight {
+        background: transparent;
+        color: $text;
+    }
     """
 
     BINDINGS = [
@@ -223,6 +229,7 @@ class PlexTuiApp(App[None]):
     loading_more: bool
     suppress_auto_load: bool
     player: PlayerHandle | None
+    prefetched_grid_pages: set[tuple[str, ...]]
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -255,6 +262,7 @@ class PlexTuiApp(App[None]):
         self.loading_more = False
         self.suppress_auto_load = False
         self.player = None
+        self.prefetched_grid_pages = set()
         self.query_one("#search", Input).display = False
         self.load_server()
 
@@ -372,6 +380,7 @@ class PlexTuiApp(App[None]):
         elif isinstance(row, MediaGridRow):
             mark_active_row(event.list_view, row)
             self.show_media_details(row.selected_media)
+            self.prefetch_grid_page(row)
             self.set_status(context_hint(row))
             self.maybe_auto_load_more(row.selected_media)
         elif isinstance(row, LoadMoreRow):
@@ -670,6 +679,36 @@ class PlexTuiApp(App[None]):
         row.set_selected_key(media.key, self.config)
         self.show_media_details(media)
         self.set_status(context_hint(row))
+
+    @work(thread=True)
+    def prefetch_grid_page(self, row: MediaGridRow) -> None:
+        if not artwork_enabled(self.config):
+            return
+        page_key = tuple(item.key for item in row.items)
+        if page_key in self.prefetched_grid_pages:
+            return
+        self.prefetched_grid_pages.add(page_key)
+
+        rendered: dict[str, object] = {}
+        for item in row.items:
+            if not item.artwork_path:
+                continue
+            try:
+                data = fetch_artwork(item.raw, item.artwork_path, self.config)
+                rendered[item.key] = render_artwork(data, width=18, max_height=9)
+            except Exception:
+                continue
+
+        if not rendered:
+            return
+
+        def update() -> None:
+            if not row.is_mounted:
+                return
+            row.artwork.update(rendered)
+            row.grid.update(render_media_grid(row.items, row.selected_key, self.config, row.columns, row.artwork))
+
+        self.call_from_thread(update)
 
     def action_show_settings(self) -> None:
         self.help_visible = False

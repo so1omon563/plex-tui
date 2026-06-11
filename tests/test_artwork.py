@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 from io import BytesIO
 
 from PIL import Image
 
-from plextui.artwork import add_token, artwork_url, render_artwork, render_protocol_artwork
+from plextui import artwork
+from plextui.artwork import add_token, artwork_url, prune_artwork_cache, render_artwork, render_protocol_artwork
 from plextui.config import AppConfig
 
 
@@ -62,3 +64,21 @@ def test_render_protocol_artwork_is_disabled_even_when_enabled(monkeypatch):
     rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=2, max_height=2)
 
     assert rendered is None
+
+
+def test_prune_artwork_cache_removes_oldest_files(tmp_path, monkeypatch):
+    cache_dir = tmp_path / "cache"
+    artwork_dir = cache_dir / "artwork"
+    artwork_dir.mkdir(parents=True)
+    old = artwork_dir / "old.img"
+    new = artwork_dir / "new.img"
+    old.write_bytes(b"1" * 10)
+    new.write_bytes(b"2" * 10)
+    os.utime(old, (1, 1))
+    os.utime(new, (2, 2))
+    monkeypatch.setattr(artwork, "cache_path", lambda: cache_dir)
+
+    prune_artwork_cache(limit_bytes=10)
+
+    assert not old.exists()
+    assert new.exists()

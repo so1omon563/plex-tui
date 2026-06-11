@@ -150,7 +150,8 @@ List view keeps the browser compact and shows selected poster artwork in the
 details pane. Grid view shows a page of larger cards at a time; use up/down to
 change pages and left/right to move within the highlighted page. Cards use
 cached artwork immediately and update selected posters after their artwork is
-fetched.
+fetched. Grid view prefetches artwork for the highlighted page only, and the
+artwork cache is pruned to stay bounded.
 
 Native terminal image output is disabled for now because Kitty image protocols
 conflict with Textual's screen renderer in practice. `artwork_renderer =
