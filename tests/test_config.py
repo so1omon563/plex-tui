@@ -26,6 +26,9 @@ def test_config_example_parses_and_uses_known_fields():
         "preferred_audio_language",
         "preferred_subtitle_language",
         "subtitle_mode",
+        "artwork_mode",
+        "artwork_renderer",
+        "media_view",
     }
     assert raw["base_url"]
     assert raw["token"]
@@ -52,3 +55,32 @@ def test_invalid_subtitle_mode_logs_and_normalizes(tmp_path, monkeypatch):
 
     assert loaded.subtitle_mode == "auto"
     assert "invalid subtitle_mode" in debug_file.read_text(encoding="utf-8")
+
+
+def test_invalid_artwork_settings_log_and_normalize(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    debug_file = tmp_path / "debug.log"
+    config_file.write_text(
+        '\n'.join([
+            'base_url = "http://plex"',
+            'token = "token"',
+            'client_identifier = "client"',
+            'artwork_mode = "maybe"',
+            'artwork_renderer = "sixel"',
+            'media_view = "grid"',
+            "",
+        ]),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "config_path", lambda: config_file)
+    monkeypatch.setattr(config, "debug_log_path", lambda: debug_file)
+
+    loaded = config.load_config()
+
+    assert loaded.artwork_mode == "on"
+    assert loaded.artwork_renderer == "block"
+    assert loaded.media_view == "list"
+    log = debug_file.read_text(encoding="utf-8")
+    assert "invalid artwork_mode" in log
+    assert "invalid artwork_renderer" in log
+    assert "invalid media_view" in log

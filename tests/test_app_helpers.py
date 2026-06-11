@@ -5,9 +5,11 @@ from plextui.app import (
     MediaRow,
     context_hint,
     format_offset,
+    media_row,
     render_audio_playback_preference,
     render_details,
     render_help,
+    render_media_card,
     render_settings,
     render_subtitle_playback_preference,
     subtitle_preference_value,
@@ -32,6 +34,7 @@ def test_render_details_includes_subtitles_and_summary():
         subtitles=["English (srt, selected)"],
         summary="Summary text",
         playable=True,
+        artwork_path="/library/metadata/1/thumb",
     )
 
     rendered = render_details(
@@ -50,6 +53,7 @@ def test_render_details_includes_subtitles_and_summary():
     assert "Preferences" in rendered
     assert "Audio preference: jpn" in rendered
     assert "Subtitle mode: Preferred" in rendered
+    assert "Artwork: available" in rendered
     assert "- Japanese (aac, 2ch, selected)" in rendered
     assert "- English (srt, selected)" in rendered
     assert "Summary text" in rendered
@@ -88,6 +92,9 @@ def test_render_settings_includes_stream_preferences():
     assert "Audio Preference: jpn" in rendered
     assert "Subtitle Mode: Preferred" in rendered
     assert "Subtitle Language: eng" in rendered
+    assert "Artwork: On" in rendered
+    assert "Artwork Renderer: Block" in rendered
+    assert "Media View: List" in rendered
     assert subtitle_preference_value(config) == "eng"
 
 
@@ -128,7 +135,24 @@ def test_render_help_groups_key_bindings():
     assert "Settings" in rendered
     assert "Paths" in rendered
     assert "Debug log:" in rendered
+    assert "v: toggle list/poster view" in rendered
     assert "?: show help" in rendered
+
+
+def test_media_row_can_render_poster_card_view():
+    media = MediaItem("Movie", "2024", "movie", "1", True, object(), artwork_path="/thumb")
+    config = AppConfig(
+        base_url="http://plex",
+        token="token",
+        client_identifier="client-id",
+        media_view="poster",
+    )
+
+    row = media_row(media, config)
+    card = render_media_card(media)
+
+    assert row.media is media
+    assert "Movie" in card.renderables[1].plain
 
 
 def test_context_hints_for_media_and_load_more():

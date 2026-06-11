@@ -20,6 +20,7 @@ class MediaItem:
     key: str
     playable: bool
     raw: Any
+    artwork_path: str = ""
 
 
 @dataclass(frozen=True)

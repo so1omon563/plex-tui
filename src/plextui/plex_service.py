@@ -122,6 +122,7 @@ def to_media_item(raw: Any) -> MediaItem:
         key=key,
         playable=kind in PLAYABLE_TYPES and hasattr(raw, "getStreamURL"),
         raw=raw,
+        artwork_path=artwork_path(raw),
     )
 
 
@@ -157,7 +158,7 @@ def media_details(item: MediaItem) -> MediaDetails:
         subtitles=subtitle_details(raw),
         summary=str(getattr(raw, "summary", "") or ""),
         playable=item.playable,
-        artwork_path=artwork_path(raw),
+        artwork_path=artwork_path(raw) or item.artwork_path,
     )
 
 

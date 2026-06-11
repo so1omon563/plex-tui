@@ -3,8 +3,9 @@ from __future__ import annotations
 from io import BytesIO
 
 from PIL import Image
+from rich.console import Console
 
-from plextui.artwork import add_token, artwork_url, render_artwork
+from plextui.artwork import add_token, artwork_url, render_artwork, render_protocol_artwork
 from plextui.config import AppConfig
 
 
@@ -41,3 +42,17 @@ def test_render_artwork_returns_halfcell_text():
 
     assert rendered.plain == "▀▀\n▀▀"
     assert rendered.spans
+
+
+def test_render_protocol_artwork_can_emit_kitty_sequence():
+    image = Image.new("RGB", (2, 4), "#00ff00")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+
+    rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=2, max_height=2)
+    console = Console(record=True, force_terminal=True)
+    console.print(rendered)
+
+    output = console.export_text(styles=False)
+    assert "\x1b_G" in output
+    assert "a=T" in output

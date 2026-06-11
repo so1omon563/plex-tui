@@ -21,6 +21,9 @@ class AppConfig:
     preferred_audio_language: str = ""
     preferred_subtitle_language: str = ""
     subtitle_mode: str = "auto"
+    artwork_mode: str = "on"
+    artwork_renderer: str = "block"
+    media_view: str = "list"
 
 
 def config_path() -> Path:
@@ -53,6 +56,18 @@ def load_config() -> AppConfig:
     if subtitle_mode not in {"auto", "none", "preferred"}:
         write_debug_log(f"invalid subtitle_mode {subtitle_mode!r}; using 'auto'")
         subtitle_mode = "auto"
+    artwork_mode = data.get("artwork_mode", "on")
+    if artwork_mode not in {"on", "off"}:
+        write_debug_log(f"invalid artwork_mode {artwork_mode!r}; using 'on'")
+        artwork_mode = "on"
+    artwork_renderer = data.get("artwork_renderer", "block")
+    if artwork_renderer not in {"block", "auto", "kitty"}:
+        write_debug_log(f"invalid artwork_renderer {artwork_renderer!r}; using 'block'")
+        artwork_renderer = "block"
+    media_view = data.get("media_view", "list")
+    if media_view not in {"list", "poster"}:
+        write_debug_log(f"invalid media_view {media_view!r}; using 'list'")
+        media_view = "list"
     return AppConfig(
         base_url=base_url.strip(),
         token=token.strip(),
@@ -61,6 +76,9 @@ def load_config() -> AppConfig:
         preferred_audio_language=preferred_audio_language.strip(),
         preferred_subtitle_language=preferred_subtitle_language.strip(),
         subtitle_mode=subtitle_mode.strip(),
+        artwork_mode=artwork_mode.strip(),
+        artwork_renderer=artwork_renderer.strip(),
+        media_view=media_view.strip(),
     )
 
 
@@ -80,6 +98,12 @@ def save_config(config: AppConfig) -> None:
         lines.append(f'preferred_subtitle_language = "{_toml_escape(config.preferred_subtitle_language)}"')
     if config.subtitle_mode != "auto":
         lines.append(f'subtitle_mode = "{_toml_escape(config.subtitle_mode)}"')
+    if config.artwork_mode != "on":
+        lines.append(f'artwork_mode = "{_toml_escape(config.artwork_mode)}"')
+    if config.artwork_renderer != "block":
+        lines.append(f'artwork_renderer = "{_toml_escape(config.artwork_renderer)}"')
+    if config.media_view != "list":
+        lines.append(f'media_view = "{_toml_escape(config.media_view)}"')
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

@@ -14,3 +14,11 @@ client_identifier = "plex-tui-your-stable-client-id"
 # preferred_subtitle_language = "eng"
 # subtitle_mode can be "auto", "none", or "preferred".
 # subtitle_mode = "preferred"
+
+# Optional artwork settings.
+# artwork_mode can be "on" or "off".
+# artwork_mode = "on"
+# artwork_renderer can be "block", "auto", or "kitty".
+# artwork_renderer = "block"
+# media_view can be "list" or "poster".
+# media_view = "list"

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 import hashlib
+import os
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -8,6 +10,8 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 from PIL import Image, ImageOps
+from rich.console import Console, ConsoleOptions, RenderResult
+from rich.segment import Segment
 from rich.text import Text
 
 from .config import AppConfig, cache_path
@@ -66,15 +70,13 @@ def cached_artwork_path(path: str, config: AppConfig) -> Path:
     return cache_path() / "artwork" / f"{key}.img"
 
 
-def render_artwork(data: bytes, width: int = 28, max_height: int = 20) -> Text:
-    image = Image.open(BytesIO(data))
-    image = ImageOps.exif_transpose(image).convert("RGB")
-    source_width, source_height = image.size
-    if not source_width or not source_height:
-        return Text()
+def artwork_is_cached(path: str, config: AppConfig) -> bool:
+    return cached_artwork_path(path, config).exists()
 
-    pixel_height = min(max_height * 2, max(2, round(source_height / source_width * width * 2)))
-    image = ImageOps.contain(image, (width, pixel_height), Image.Resampling.LANCZOS)
+
+def render_artwork(data: bytes, width: int = 28, max_height: int = 20) -> Text:
+    image = load_image(data)
+    image = resize_for_cells(image, width, max_height)
 
     text = Text()
     pixels = image.load()
@@ -88,5 +90,61 @@ def render_artwork(data: bytes, width: int = 28, max_height: int = 20) -> Text:
     return text
 
 
+def render_protocol_artwork(data: bytes, renderer: str, width: int = 28, max_height: int = 20) -> object | None:
+    resolved = resolve_protocol_renderer(renderer)
+    if resolved != "kitty":
+        return None
+
+    image = resize_for_cells(load_image(data), width, max_height)
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    return KittyImage(buffer.getvalue(), image.width, max(1, (image.height + 1) // 2), image.width, image.height)
+
+
+def resolve_protocol_renderer(renderer: str) -> str:
+    if renderer == "kitty":
+        return "kitty"
+    if renderer == "auto" and is_kitty_terminal():
+        return "kitty"
+    return "block"
+
+
+def is_kitty_terminal() -> bool:
+    return bool(os.environ.get("KITTY_WINDOW_ID") or "kitty" in os.environ.get("TERM", "").lower())
+
+
+def load_image(data: bytes) -> Image.Image:
+    return ImageOps.exif_transpose(Image.open(BytesIO(data))).convert("RGB")
+
+
+def resize_for_cells(image: Image.Image, width: int, max_height: int) -> Image.Image:
+    source_width, source_height = image.size
+    if not source_width or not source_height:
+        return Image.new("RGB", (1, 2), "#000000")
+
+    width = max(1, width)
+    max_height = max(1, max_height)
+    pixel_height = min(max_height * 2, max(2, round(source_height / source_width * width * 2)))
+    return ImageOps.contain(image, (width, pixel_height), Image.Resampling.LANCZOS)
+
+
 def rgb(color: tuple[int, int, int]) -> str:
     return f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}"
+
+
+class KittyImage:
+    def __init__(self, png_data: bytes, columns: int, rows: int, pixel_width: int, pixel_height: int) -> None:
+        self.png_data = png_data
+        self.columns = columns
+        self.rows = rows
+        self.pixel_width = pixel_width
+        self.pixel_height = pixel_height
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        payload = base64.b64encode(self.png_data).decode("ascii")
+        command = (
+            f"\x1b_Ga=T,f=100,s={self.pixel_width},v={self.pixel_height},"
+            f"c={self.columns},r={self.rows};{payload}\x1b\\"
+        )
+        yield Segment(command)
+        yield Segment("\n".join(" " * self.columns for _ in range(self.rows)))

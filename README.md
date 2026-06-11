@@ -113,6 +113,7 @@ pipx reinstall ~/plex-tui
 - `tab` / `shift+tab`: move keyboard focus
 - `l`: move keyboard focus to the libraries list
 - `m`: move keyboard focus to the media list
+- `v`: toggle media list/poster view
 - `,`: show settings
 - `escape`: clear search / go back
 - `enter`: open selected item
@@ -133,7 +134,8 @@ items fetches the next page automatically. You can also select the
 `Load more...` row and press `enter`.
 
 The settings view shows the active config and supports reconnect/reload,
-Plex relogin, and clearing or changing audio/subtitle preferences separately.
+Plex relogin, clearing or changing audio/subtitle preferences separately,
+artwork on/off, artwork renderer selection, and media list/poster view mode.
 
 The details pane shows metadata, saved audio/subtitle preferences, reported
 audio tracks, and reported subtitle tracks. Subtitle rows include external vs
@@ -143,6 +145,14 @@ The details pane also renders Plex poster artwork as portable colored block
 art when a poster is available. This works in ordinary color terminals and does
 not require Kitty, iTerm2, or Sixel image protocol support. Downloaded artwork
 is cached in the app cache directory shown in Settings.
+
+Poster view mode changes the media browser from compact text rows to larger
+poster cards. Cards use cached artwork immediately and update selected posters
+after their artwork is fetched.
+
+`artwork_renderer = "kitty"` enables experimental Kitty terminal image protocol
+output for the details pane. `artwork_renderer = "auto"` uses Kitty output only
+when a Kitty terminal is detected; otherwise it falls back to colored block art.
 
 When playback starts, external subtitle streams reported by Plex are passed to
 `mpv` automatically. Items with embedded PGS/VOBSUB subtitles are direct-played
