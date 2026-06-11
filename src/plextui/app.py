@@ -118,6 +118,10 @@ class MediaGrid(Static):
             self.media = media
             super().__init__()
 
+    class NeedsArtwork(Message):
+        def __init__(self) -> None:
+            super().__init__()
+
     def __init__(self) -> None:
         super().__init__("", id="media-grid")
         self.items: list[MediaItem] = []
@@ -201,13 +205,16 @@ class MediaGrid(Static):
         visible_items = self.visible_page_items()
         visible_keys = {item.key for item in visible_items}
         loaded_count = len(visible_keys.intersection(self.artwork))
+        poster_count = sum(1 for item in visible_items if item.artwork_path)
         started = time.perf_counter()
         self.update(render_media_grid(visible_items, selected_key, self.config, self.columns, self.artwork))
         write_performance_log(
             "grid_render",
             started,
-            f"items={len(visible_items)} loaded={loaded_count} columns={self.columns} page={','.join(item.key for item in visible_items)}",
+            f"items={len(visible_items)} posters={poster_count} loaded={loaded_count} columns={self.columns} page={','.join(item.key for item in visible_items)}",
         )
+        if poster_count and loaded_count < poster_count:
+            self.post_message(self.NeedsArtwork())
 
     def scroll_selected_visible(self) -> None:
         if not self.is_mounted:
@@ -679,6 +686,15 @@ class PlexTuiApp(App[None]):
             self.schedule_grid_prefetch(event.control)
             self.set_status(grid_status(event.control, self.browsing_stack[-1] if self.browsing_stack else None))
         self.maybe_auto_load_more(event.media)
+
+    def on_media_grid_needs_artwork(self, event: MediaGrid.NeedsArtwork) -> None:
+        grid = event.control if isinstance(event.control, MediaGrid) else None
+        if grid is None:
+            try:
+                grid = self.query_one("#media-grid", MediaGrid)
+            except NoMatches:
+                return
+        self.schedule_grid_prefetch(grid)
 
     def on_media_grid_selected(self, event: MediaGrid.Selected) -> None:
         self.open_media(event.media)

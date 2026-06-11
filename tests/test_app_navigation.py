@@ -106,6 +106,10 @@ def test_same_grid_page_with_missing_artwork_retries_prefetch():
     asyncio.run(run_same_grid_page_missing_artwork_retry_check())
 
 
+def test_grid_missing_artwork_render_schedules_prefetch():
+    asyncio.run(run_grid_missing_artwork_render_schedule_check())
+
+
 def test_grid_prefetch_queues_while_active_with_current_priority():
     asyncio.run(run_grid_prefetch_queue_check())
 
@@ -796,6 +800,35 @@ async def run_same_grid_page_missing_artwork_retry_check():
 
         assert scheduled
         assert scheduled[0][1] == page_key
+        assert scheduled[0][2] == "current"
+
+
+async def run_grid_missing_artwork_render_schedule_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        items = [
+            MediaItem(f"Movie {index}", "", "movie", str(index), True, Raw(), artwork_path=f"/thumb/{index}")
+            for index in range(6)
+        ]
+        scheduled = []
+
+        def capture_prefetch(items, page_key, page_label, delay=0.0):
+            scheduled.append((tuple(item.key for item in items), page_key, page_label, delay))
+
+        app.prefetch_grid_items = capture_prefetch
+        app.show_browse_state(BrowseState("Movies", items))
+        await pilot.pause(0.2)
+        grid = app.query_one("#media-grid")
+        scheduled.clear()
+        app.active_grid_prefetch_pages.clear()
+        app.last_grid_prefetch_page = grid_page_key(grid.visible_page_items())
+        grid.refresh_grid()
+        await pilot.pause(0.2)
+
+        assert scheduled
+        assert scheduled[0][1] == grid_page_key(grid.visible_page_items())
         assert scheduled[0][2] == "current"
 
 
