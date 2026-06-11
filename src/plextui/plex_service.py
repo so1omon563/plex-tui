@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any
 
 from plexapi.server import PlexServer
@@ -10,6 +11,22 @@ from .models import LibraryItem, MediaDetails, MediaItem
 
 
 PLAYABLE_TYPES = {"movie", "episode", "track", "clip"}
+DEFAULT_PAGE_SIZE = 100
+
+
+@dataclass(frozen=True)
+class MediaPage:
+    items: list[MediaItem]
+    start: int
+    total: int
+
+    @property
+    def next_start(self) -> int:
+        return self.start + len(self.items)
+
+    @property
+    def has_more(self) -> bool:
+        return self.next_start < self.total
 
 
 class PlexService:
@@ -37,8 +54,16 @@ class PlexService:
             for section in sections
         ]
 
+    def library_page(self, library: LibraryItem, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
+        raw_items = library.raw.all(maxresults=size, container_start=start, container_size=size)
+        items = [to_media_item(item) for item in raw_items]
+        total = getattr(raw_items, "totalSize", None)
+        if total is None:
+            total = start + len(items)
+        return MediaPage(items=items, start=start, total=int(total))
+
     def library_items(self, library: LibraryItem) -> list[MediaItem]:
-        return [to_media_item(item) for item in library.raw.all()]
+        return self.library_page(library, 0, DEFAULT_PAGE_SIZE).items
 
     def children(self, item: MediaItem) -> list[MediaItem]:
         raw = item.raw

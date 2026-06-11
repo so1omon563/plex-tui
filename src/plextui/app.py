@@ -27,7 +27,7 @@ from .player import (
     stream_language_label,
     subtitle_choices,
 )
-from .plex_service import PlexService, media_details
+from .plex_service import DEFAULT_PAGE_SIZE, PlexService, media_details
 
 
 @dataclass
@@ -36,6 +36,12 @@ class BrowseState:
     items: list[MediaItem]
     selected_library: LibraryItem | None = None
     search: bool = False
+    next_start: int = 0
+    total: int | None = None
+
+    @property
+    def has_more(self) -> bool:
+        return self.total is not None and self.next_start < self.total and self.selected_library is not None and not self.search
 
 
 class LibraryRow(ListItem):
@@ -50,6 +56,12 @@ class MediaRow(ListItem):
         subtitle = f" [{media.kind}] {media.subtitle}".rstrip()
         super().__init__(Label(f"{marker} {media.title}{subtitle}"))
         self.media = media
+
+
+class LoadMoreRow(ListItem):
+    def __init__(self, loaded: int, total: int | None) -> None:
+        total_text = str(total) if total is not None else "?"
+        super().__init__(Label(f"  Load more... ({loaded} of {total_text})"))
 
 
 class ServerRow(ListItem):
@@ -281,6 +293,8 @@ class PlexTuiApp(App[None]):
             self.open_library(row.library)
         elif isinstance(row, MediaRow):
             self.open_media(row.media)
+        elif isinstance(row, LoadMoreRow):
+            self.load_more_media()
         elif isinstance(row, ServerRow):
             self.choose_server(row.choice)
         elif isinstance(row, StreamRow):
@@ -301,6 +315,9 @@ class PlexTuiApp(App[None]):
         elif isinstance(row, MediaRow):
             mark_active_row(event.list_view, row)
             self.show_media_details(row.media)
+        elif isinstance(row, LoadMoreRow):
+            mark_active_row(event.list_view, row)
+            self.show_detail_text("Load the next page of items from this library.")
         elif isinstance(row, ServerRow):
             mark_active_row(event.list_view, row)
             self.show_detail_text(f"{row.choice.name}\n\n{row.choice.uri}\n\nSource: {row.choice.source}")
@@ -324,17 +341,50 @@ class PlexTuiApp(App[None]):
             return
         self.post_message(StatusChanged(f"Loading {library.title}..."))
         try:
-            items = self.service.library_items(library)
+            page = self.service.library_page(library, 0, DEFAULT_PAGE_SIZE)
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return
 
         def update() -> None:
             self.selected_library = library
-            self.browsing_stack = [BrowseState(library.title, items, library)]
-            self.show_media(library.title, items)
+            state = BrowseState(
+                library.title,
+                page.items,
+                library,
+                next_start=page.next_start,
+                total=page.total,
+            )
+            self.browsing_stack = [state]
+            self.show_browse_state(state)
             self.query_one("#media", ListView).focus()
-            self.set_status(f"{library.title}: {len(items)} items")
+            self.set_status(render_loaded_status(library.title, len(page.items), page.total, page.has_more))
+
+        self.call_from_thread(update)
+
+    @work(thread=True, exclusive=True)
+    def load_more_media(self) -> None:
+        if self.service is None or not self.browsing_stack:
+            return
+        state = self.browsing_stack[-1]
+        if not state.has_more or state.selected_library is None:
+            self.call_from_thread(self.set_status, "No more items to load")
+            return
+        self.post_message(StatusChanged(f"Loading more {state.title}..."))
+        try:
+            page = self.service.library_page(state.selected_library, state.next_start, DEFAULT_PAGE_SIZE)
+        except Exception as exc:
+            self.call_from_thread(self.show_error, str(exc))
+            return
+
+        def update() -> None:
+            first_new_key = page.items[0].key if page.items else None
+            state.items.extend(page.items)
+            state.next_start = page.next_start
+            state.total = page.total
+            self.show_browse_state(state, selected_key=first_new_key)
+            self.query_one("#media", ListView).focus()
+            self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more))
 
         self.call_from_thread(update)
 
@@ -356,8 +406,9 @@ class PlexTuiApp(App[None]):
             if not children:
                 self.set_status(f"No child items for {media.title}")
                 return
-            self.browsing_stack.append(BrowseState(media.title, children, self.selected_library))
-            self.show_media(media.title, children)
+            state = BrowseState(media.title, children, self.selected_library)
+            self.browsing_stack.append(state)
+            self.show_browse_state(state)
             self.query_one("#media", ListView).focus()
             self.set_status(f"{media.title}: {len(children)} items")
 
@@ -365,10 +416,18 @@ class PlexTuiApp(App[None]):
 
     def show_media(self, title: str, items: list[MediaItem], selected_key: str | None = None) -> None:
         self.query_one("#media-title", Static).update(title)
-        if items:
-            selected_index = selected_media_index(items, selected_key)
-            self.replace_media_rows([MediaRow(item) for item in items], selected_index)
-            self.show_media_details(items[selected_index])
+        state = BrowseState(title, items)
+        self.show_browse_state(state, selected_key=selected_key)
+
+    def show_browse_state(self, state: BrowseState, selected_key: str | None = None) -> None:
+        self.query_one("#media-title", Static).update(state.title)
+        if state.items:
+            selected_index = selected_media_index(state.items, selected_key)
+            rows: list[ListItem] = [MediaRow(item) for item in state.items]
+            if state.has_more:
+                rows.append(LoadMoreRow(len(state.items), state.total))
+            self.replace_media_rows(rows, selected_index)
+            self.show_media_details(state.items[selected_index])
         else:
             self.replace_media_rows([])
             self.show_detail_text("No items")
@@ -557,7 +616,7 @@ class PlexTuiApp(App[None]):
         self.picker_visible = False
         if self.browsing_stack:
             state = self.browsing_stack[-1]
-            self.show_media(state.title, state.items, selected_key=self.picker_media_key)
+            self.show_browse_state(state, selected_key=self.picker_media_key)
         self.picker_media_key = None
         self.query_one("#media", ListView).focus()
 
@@ -636,7 +695,7 @@ class PlexTuiApp(App[None]):
             search.display = False
             if self.browsing_stack:
                 state = self.browsing_stack[-1]
-                self.show_media(state.title, state.items)
+                self.show_browse_state(state)
             self.query_one("#media", ListView).focus()
             return
 
@@ -647,14 +706,14 @@ class PlexTuiApp(App[None]):
             self.picker_media_key = None
             if self.browsing_stack:
                 state = self.browsing_stack[-1]
-                self.show_media(state.title, state.items, selected_key=selected_key)
+                self.show_browse_state(state, selected_key=selected_key)
             self.query_one("#media", ListView).focus()
             return
 
         if len(self.browsing_stack) > 1:
             self.browsing_stack.pop()
             state = self.browsing_stack[-1]
-            self.show_media(state.title, state.items)
+            self.show_browse_state(state)
             self.query_one("#media", ListView).focus()
             self.set_status(state.title)
 
@@ -779,6 +838,14 @@ def render_settings(config: AppConfig) -> str:
         "Clear audio/subtitle preferences",
     ])
     return "\n".join(lines)
+
+
+def render_loaded_status(title: str, loaded: int, total: int | None, has_more: bool) -> str:
+    if total is None:
+        return f"{title}: {loaded} items"
+    if has_more:
+        return f"{title}: {loaded} of {total} items loaded"
+    return f"{title}: {loaded} items"
 
 
 def render_picker_details(stream_type: str, current_choice: StreamChoice | None, config: AppConfig) -> str:
