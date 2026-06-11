@@ -6,6 +6,7 @@
 - Added a manual TestPyPI Trusted Publishing workflow.
 - Published `plex-tui` to PyPI and updated install documentation.
 - Published the Homebrew tap and updated install documentation.
+- Added Arch package validation workflow scaffolding.
 - Added draft Arch AUR packaging files and Homebrew packaging notes.
 
 ## 0.2.0 - 2026-06-11

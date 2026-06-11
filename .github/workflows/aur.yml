@@ -1,0 +1,48 @@
+name: AUR Package
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/aur.yml"
+      - "packaging/aur/**"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/aur.yml"
+      - "packaging/aur/**"
+  workflow_dispatch:
+
+jobs:
+  makepkg:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+
+    steps:
+      - name: Install runner dependencies
+        run: |
+          pacman -Syu --noconfirm git namcap sudo
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Create build user
+        run: |
+          useradd --create-home --shell /bin/bash builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Build and check package
+        working-directory: packaging/aur
+        run: |
+          sudo -u builder makepkg --clean --syncdeps --noconfirm --check
+
+      - name: Generate .SRCINFO
+        working-directory: packaging/aur
+        run: |
+          sudo -u builder makepkg --printsrcinfo > .SRCINFO
+
+      - name: Run namcap
+        working-directory: packaging/aur
+        run: |
+          namcap PKGBUILD ./*.pkg.tar.*
