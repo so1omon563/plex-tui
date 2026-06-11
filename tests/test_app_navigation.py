@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import patch
 
 from plextui.app import BrowseState, PlexTuiApp
+from plextui.config import AppConfig
 from plextui.models import MediaItem
 from plextui.player import StreamChoice
 
@@ -25,10 +27,12 @@ async def run_picker_return_check():
             MediaItem("Second", "", "movie", "2", True, Raw()),
         ]
         app.browsing_stack = [BrowseState("Movies", items)]
+        app.config = AppConfig("http://plex", "token", "client-id")
         app.picker_media_key = "2"
         app.picker_visible = True
 
-        app.choose_stream(StreamChoice(0, "None"), "subtitle")
+        with patch("plextui.app.save_config"):
+            app.choose_stream(StreamChoice(0, "None (disable subtitles)"), "subtitle")
         await pilot.pause(0.2)
 
         assert app.query_one("#media-title").content == "Movies"

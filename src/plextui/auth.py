@@ -60,6 +60,9 @@ def save_server_choice(config: AppConfig, account_token: str, choice: ServerChoi
         token=choice.resource.accessToken,
         client_identifier=config.client_identifier,
         account_token=account_token,
+        preferred_audio_language=config.preferred_audio_language,
+        preferred_subtitle_language=config.preferred_subtitle_language,
+        subtitle_mode=config.subtitle_mode,
     )
     save_config(saved)
     return saved

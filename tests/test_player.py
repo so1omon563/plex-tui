@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from plextui.player import ProgressMonitor, StreamChoice, play_with_mpv
+from plextui.player import ProgressMonitor, StreamChoice, play_with_mpv, preferred_audio_choice, preferred_subtitle_choice
 
 
 class Server:
@@ -23,6 +23,8 @@ class SubtitleStream:
     selected = False
     codec = "srt"
     displayTitle = "English"
+    language = "English"
+    languageCode = "eng"
     _server = Server()
 
 
@@ -33,6 +35,8 @@ class AudioStream:
     selected = False
     codec = "aac"
     displayTitle = "Japanese"
+    language = "Japanese"
+    languageCode = "jpn"
     channels = 2
 
 
@@ -154,3 +158,20 @@ def test_direct_play_gets_mpv_track_hints_for_embedded_streams():
     assert handle.stream_mode == "direct"
     assert "--aid=1" in args
     assert "--sid=1" in args
+
+
+def test_preferred_choices_match_stream_language():
+    item = Item()
+
+    audio = preferred_audio_choice(item, "jpn")
+    subtitle = preferred_subtitle_choice(item, "eng", "preferred")
+    disabled = preferred_subtitle_choice(item, "eng", "none")
+    auto = preferred_subtitle_choice(item, "eng", "auto")
+
+    assert audio is not None
+    assert audio.stream_id == 42
+    assert subtitle is not None
+    assert subtitle.stream_id == 1
+    assert disabled is not None
+    assert disabled.stream_id == 0
+    assert auto is None

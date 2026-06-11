@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from textual import work
 from textual.app import App, ComposeResult
@@ -11,9 +11,22 @@ from textual.reactive import reactive
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 
 from .auth import LoginSession, ServerChoice, save_server_choice
-from .config import AppConfig, config_path, load_config
+from .config import AppConfig, config_path, load_config, save_config
 from .models import LibraryItem, MediaItem
-from .player import PlayerError, PlayerHandle, StreamChoice, audio_choices, play_with_mpv, stop_mpv, subtitle_choices
+from .player import (
+    PlayerError,
+    PlayerHandle,
+    StreamChoice,
+    audio_choices,
+    play_with_mpv,
+    preferred_audio_choice,
+    preferred_subtitle_choice,
+    same_stream,
+    stop_mpv,
+    stream_language_key,
+    stream_language_label,
+    subtitle_choices,
+)
 from .plex_service import PlexService, media_details
 
 
@@ -46,8 +59,10 @@ class ServerRow(ListItem):
 
 
 class StreamRow(ListItem):
-    def __init__(self, choice: StreamChoice, stream_type: str) -> None:
-        super().__init__(Label(choice.label))
+    def __init__(self, choice: StreamChoice, stream_type: str, current: bool = False) -> None:
+        marker = "* " if current else "  "
+        suffix = " (current)" if current else ""
+        super().__init__(Label(f"{marker}{choice.label}{suffix}"))
         self.choice = choice
         self.stream_type = stream_type
 
@@ -416,7 +431,7 @@ class PlexTuiApp(App[None]):
         view.append(ListItem(Label("")))
         view.append(SettingsActionRow("Reconnect / reload libraries", "reload"))
         view.append(SettingsActionRow("Relogin with Plex", "relogin"))
-        view.append(SettingsActionRow("Clear selected audio/subtitle tracks", "clear_tracks"))
+        view.append(SettingsActionRow("Clear audio/subtitle preferences", "clear_tracks"))
         self.show_detail_text(render_settings(self.config))
         view.focus()
         self.set_status("Settings")
@@ -435,7 +450,18 @@ class PlexTuiApp(App[None]):
         if action == "clear_tracks":
             self.selected_audio = None
             self.selected_subtitle = None
-            self.set_status("Cleared selected audio/subtitle tracks")
+            self.config = replace(
+                self.config,
+                preferred_audio_language="",
+                preferred_subtitle_language="",
+                subtitle_mode="auto",
+            )
+            try:
+                save_config(self.config)
+            except OSError as exc:
+                self.show_error(f"failed to save preference: {exc}")
+                return
+            self.set_status("Cleared audio/subtitle preferences")
             return
         self.set_status(f"Unknown settings action: {action}")
 
@@ -463,33 +489,81 @@ class PlexTuiApp(App[None]):
             return
 
         def update() -> None:
+            current_choice = self.current_stream_choice(media.raw, choices, stream_type)
+            current_index = selected_stream_index(choices, current_choice)
             self.picker_visible = True
             self.settings_visible = False
             self.picker_media_key = media.key
-            self.query_one("#media-title", Static).update("Subtitle Tracks" if stream_type == "subtitle" else "Audio Tracks")
+            picker_title = "Subtitle Tracks" if stream_type == "subtitle" else "Audio Tracks"
+            self.query_one("#media-title", Static).update(f"{picker_title}: {media.title}")
             view = self.query_one("#media", ListView)
             view.clear()
             for choice in choices:
-                view.append(StreamRow(choice, stream_type))
+                view.append(StreamRow(choice, stream_type, stream_choice_matches(choice, current_choice)))
+            if choices:
+                view.index = current_index
             view.focus()
-            self.show_detail_text(f"Select a {stream_type} track for the next playback.")
+            self.show_detail_text(render_picker_details(stream_type, current_choice, self.config))
             self.set_status(f"Choose {stream_type} track")
 
         self.call_from_thread(update)
 
     def choose_stream(self, choice: StreamChoice, stream_type: str) -> None:
+        try:
+            self.save_stream_preference(choice, stream_type)
+        except OSError as exc:
+            self.show_error(f"failed to save preference: {exc}")
+            return
         if stream_type == "subtitle":
-            self.selected_subtitle = choice
-            self.set_status(f"Subtitle: {choice.label}")
+            self.selected_subtitle = None
+            self.set_status(f"Subtitle preference: {choice.label}")
         elif stream_type == "audio":
-            self.selected_audio = choice
-            self.set_status(f"Audio: {choice.label}")
+            self.selected_audio = None
+            self.set_status(f"Audio preference: {choice.label}")
         self.picker_visible = False
         if self.browsing_stack:
             state = self.browsing_stack[-1]
             self.show_media(state.title, state.items, selected_key=self.picker_media_key)
         self.picker_media_key = None
         self.query_one("#media", ListView).focus()
+
+    def save_stream_preference(self, choice: StreamChoice, stream_type: str) -> None:
+        if stream_type == "audio":
+            self.config = replace(self.config, preferred_audio_language=stream_preference_key(choice))
+        elif choice.stream_id is None:
+            self.config = replace(self.config, preferred_subtitle_language="", subtitle_mode="auto")
+        elif choice.stream_id == 0:
+            self.config = replace(self.config, preferred_subtitle_language="", subtitle_mode="none")
+        else:
+            self.config = replace(
+                self.config,
+                preferred_subtitle_language=stream_preference_key(choice),
+                subtitle_mode="preferred",
+            )
+        save_config(self.config)
+
+    def current_stream_choice(
+        self,
+        item: object,
+        choices: list[StreamChoice],
+        stream_type: str,
+    ) -> StreamChoice | None:
+        if stream_type == "subtitle":
+            choice = preferred_subtitle_choice(
+                item,
+                self.config.preferred_subtitle_language,
+                self.config.subtitle_mode,
+            )
+            if choice is not None:
+                return choice
+            return choices[0] if choices else None
+        choice = preferred_audio_choice(item, self.config.preferred_audio_language)
+        if choice is not None:
+            return choice
+        for candidate in choices:
+            if getattr(candidate.stream, "selected", False):
+                return candidate
+        return choices[0] if choices else None
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "search":
@@ -562,8 +636,12 @@ class PlexTuiApp(App[None]):
             stop_mpv(self.player)
             self.player = play_with_mpv(
                 row.media.raw,
-                subtitle_choice=self.selected_subtitle,
-                audio_choice=self.selected_audio,
+                subtitle_choice=preferred_subtitle_choice(
+                    row.media.raw,
+                    self.config.preferred_subtitle_language,
+                    self.config.subtitle_mode,
+                ),
+                audio_choice=preferred_audio_choice(row.media.raw, self.config.preferred_audio_language),
             )
         except PlayerError as exc:
             self.show_error(str(exc))
@@ -650,6 +728,8 @@ def config_rows(config: AppConfig) -> list[tuple[str, str]]:
         ("Server Token", "saved" if config.token else "not set"),
         ("Account Token", "saved" if config.account_token else "not set"),
         ("Client ID", config.client_identifier or "not set"),
+        ("Audio Preference", preference_value(config.preferred_audio_language)),
+        ("Subtitle Preference", subtitle_preference_value(config)),
     ]
 
 
@@ -662,9 +742,59 @@ def render_settings(config: AppConfig) -> str:
         "Actions",
         "Reconnect / reload libraries",
         "Relogin with Plex",
-        "Clear selected audio/subtitle tracks",
+        "Clear audio/subtitle preferences",
     ])
     return "\n".join(lines)
+
+
+def render_picker_details(stream_type: str, current_choice: StreamChoice | None, config: AppConfig) -> str:
+    lines = [
+        "Current Selection",
+        current_choice.label if current_choice is not None else "None available",
+        "",
+        "Saved Preference",
+    ]
+    if stream_type == "audio":
+        lines.append(f"Audio: {preference_value(config.preferred_audio_language)}")
+    else:
+        lines.append(f"Subtitles: {subtitle_preference_value(config)}")
+    lines.extend(["", "Press Enter to save a preference for future playback."])
+    return "\n".join(lines)
+
+
+def preference_value(value: str) -> str:
+    return value or "Plex/default"
+
+
+def subtitle_preference_value(config: AppConfig) -> str:
+    if config.subtitle_mode == "none":
+        return "None"
+    if config.subtitle_mode == "preferred":
+        return preference_value(config.preferred_subtitle_language)
+    return "Plex/default"
+
+
+def stream_preference_key(choice: StreamChoice) -> str:
+    if choice.stream is None:
+        return ""
+    return stream_language_key(choice.stream) or stream_language_label(choice.stream).lower()
+
+
+def selected_stream_index(choices: list[StreamChoice], selected_choice: StreamChoice | None) -> int:
+    for index, choice in enumerate(choices):
+        if stream_choice_matches(choice, selected_choice):
+            return index
+    return 0
+
+
+def stream_choice_matches(choice: StreamChoice, selected_choice: StreamChoice | None) -> bool:
+    if selected_choice is None:
+        return False
+    if choice.stream_id != selected_choice.stream_id:
+        return False
+    if choice.stream is None or selected_choice.stream is None:
+        return choice.stream is selected_choice.stream
+    return same_stream(choice.stream, selected_choice.stream)
 
 
 def selected_media_index(items: list[MediaItem], selected_key: str | None) -> int:

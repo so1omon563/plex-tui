@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from plextui.app import format_offset, render_details, render_settings
+from plextui.app import format_offset, render_details, render_settings, subtitle_preference_value
 from plextui.config import AppConfig
 from plextui.models import MediaDetails
 
@@ -41,3 +41,21 @@ def test_render_settings_hides_tokens():
     assert "secret" not in rendered
     assert "Server Token: saved" in rendered
     assert "Account Token: saved" in rendered
+
+
+def test_render_settings_includes_stream_preferences():
+    config = AppConfig(
+        base_url="http://plex",
+        token="token",
+        account_token="account-token",
+        client_identifier="client-id",
+        preferred_audio_language="jpn",
+        preferred_subtitle_language="eng",
+        subtitle_mode="preferred",
+    )
+
+    rendered = render_settings(config)
+
+    assert "Audio Preference: jpn" in rendered
+    assert "Subtitle Preference: eng" in rendered
+    assert subtitle_preference_value(config) == "eng"

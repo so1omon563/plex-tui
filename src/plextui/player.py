@@ -338,7 +338,7 @@ def audio_streams(item: Any) -> list[Any]:
 
 def subtitle_choices(item: Any) -> list[StreamChoice]:
     item = full_metadata(item)
-    choices = [StreamChoice(None, "Auto"), StreamChoice(0, "None")]
+    choices = [StreamChoice(None, "Auto (Plex/default)"), StreamChoice(0, "None (disable subtitles)")]
     choices.extend(StreamChoice(getattr(stream, "id", None), stream_label(stream), stream) for stream in subtitle_streams(item))
     return choices
 
@@ -365,6 +365,48 @@ def stream_label(stream: Any) -> str:
     values.extend(flags)
     suffix = ", ".join(values)
     return f"{label} ({suffix})" if suffix else str(label)
+
+
+def preferred_audio_choice(item: Any, preferred_language: str) -> StreamChoice | None:
+    return preferred_stream_choice(audio_choices(item), preferred_language)
+
+
+def preferred_subtitle_choice(item: Any, preferred_language: str, subtitle_mode: str) -> StreamChoice | None:
+    if subtitle_mode == "none":
+        return StreamChoice(0, "None (disable subtitles)")
+    if subtitle_mode != "preferred" or not preferred_language:
+        return None
+    return preferred_stream_choice(subtitle_choices(item), preferred_language)
+
+
+def preferred_stream_choice(choices: list[StreamChoice], preferred_language: str) -> StreamChoice | None:
+    preferred = normalize_language(preferred_language)
+    if not preferred:
+        return None
+    for choice in choices:
+        if choice.stream is not None and stream_language_key(choice.stream) == preferred:
+            return choice
+    return None
+
+
+def stream_language_key(stream: Any) -> str:
+    for attr in ("languageCode", "language", "displayTitle"):
+        value = normalize_language(getattr(stream, attr, ""))
+        if value:
+            return value
+    return ""
+
+
+def stream_language_label(stream: Any) -> str:
+    for attr in ("language", "displayTitle", "languageCode"):
+        value = str(getattr(stream, attr, "") or "").strip()
+        if value:
+            return value
+    return "unknown"
+
+
+def normalize_language(value: Any) -> str:
+    return str(value or "").strip().lower()
 
 
 def find_stream_by_id(streams: list[Any], stream_id: int | None) -> Any:
