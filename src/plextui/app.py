@@ -433,7 +433,12 @@ class PlexTuiApp(App[None]):
             if self.player.subtitle_count
             else ""
         )
-        self.set_status(f"Playing {row.media.title}{subtitle_text} ({self.player.stream_mode})")
+        resume_text = (
+            f" from {format_offset(self.player.start_offset_ms)}"
+            if self.player.start_offset_ms
+            else ""
+        )
+        self.set_status(f"Playing {row.media.title}{resume_text}{subtitle_text} ({self.player.stream_mode})")
 
     def action_stop_playback(self) -> None:
         if self.player is None or not self.player.active:
@@ -465,3 +470,12 @@ class PlexTuiApp(App[None]):
         self.query_one("#media", ListView).clear()
         self.query_one("#media", ListView).append(ListItem(Label(f"{text}\n{config_hint}")))
         self.show_detail_text(config_hint)
+
+
+def format_offset(milliseconds: int) -> str:
+    seconds = max(0, milliseconds // 1000)
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"

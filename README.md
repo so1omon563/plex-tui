@@ -58,3 +58,7 @@ plex-tui
 When playback starts, external subtitle streams reported by Plex are passed to
 `mpv` automatically. Items with embedded PGS/VOBSUB subtitles are direct-played
 from the original media part so `mpv` can see the subtitle tracks.
+
+Playback resumes from Plex's saved position when available. While the app is
+running, playback position is reported back to Plex periodically and when
+playback stops.
