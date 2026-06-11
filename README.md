@@ -46,6 +46,9 @@ plex-tui
 - `q`: quit
 - `r`: reload
 - `/`: focus search
+- `tab` / `shift+tab`: move focus
+- `l`: focus libraries
+- `m`: focus media
 - `escape`: clear search / go back
 - `enter`: open selected item
 - `p`: play selected playable item with `mpv`

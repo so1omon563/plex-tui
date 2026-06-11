@@ -101,6 +101,10 @@ class PlexTuiApp(App[None]):
         Binding("q", "quit", "Quit"),
         Binding("r", "reload", "Reload"),
         Binding("/", "focus_search", "Search"),
+        Binding("tab", "focus_next", "Next"),
+        Binding("shift+tab", "focus_previous", "Prev"),
+        Binding("l", "focus_libraries", "Libraries"),
+        Binding("m", "focus_media", "Media"),
         Binding("escape", "back_or_clear", "Back"),
         Binding("p", "play_selected", "Play"),
     ]
@@ -255,6 +259,7 @@ class PlexTuiApp(App[None]):
             self.selected_library = library
             self.browsing_stack = [BrowseState(library.title, items, library)]
             self.show_media(library.title, items)
+            self.query_one("#media", ListView).focus()
             self.set_status(f"{library.title}: {len(items)} items")
 
         self.call_from_thread(update)
@@ -279,6 +284,7 @@ class PlexTuiApp(App[None]):
                 return
             self.browsing_stack.append(BrowseState(media.title, children, self.selected_library))
             self.show_media(media.title, children)
+            self.query_one("#media", ListView).focus()
             self.set_status(f"{media.title}: {len(children)} items")
 
         self.call_from_thread(update)
@@ -311,6 +317,14 @@ class PlexTuiApp(App[None]):
         search.display = True
         search.focus()
 
+    def action_focus_libraries(self) -> None:
+        self.query_one("#libraries", ListView).focus()
+        self.set_status("Libraries")
+
+    def action_focus_media(self) -> None:
+        self.query_one("#media", ListView).focus()
+        self.set_status("Media")
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "search":
             self.run_search(event.value.strip())
@@ -328,6 +342,7 @@ class PlexTuiApp(App[None]):
 
         def update() -> None:
             self.show_media(f"Search: {query}", items)
+            self.query_one("#media", ListView).focus()
             self.set_status(f"{len(items)} results")
 
         self.call_from_thread(update)
@@ -347,6 +362,7 @@ class PlexTuiApp(App[None]):
             self.browsing_stack.pop()
             state = self.browsing_stack[-1]
             self.show_media(state.title, state.items)
+            self.query_one("#media", ListView).focus()
             self.set_status(state.title)
 
     def action_play_selected(self) -> None:
