@@ -41,20 +41,18 @@ sudo pacman -S mpv
 
 ## Install
 
-The README tracks the current `main` branch. Tagged releases are available on
-the GitHub Releases page.
-
-The recommended install path for the latest `main` branch is `pipx`:
+The recommended install path is `pipx` from PyPI:
 
 ```bash
-pipx install "git+https://github.com/so1omon563/plex-tui.git"
+pipx install plex-tui
 plex-tui --smoke
 plex-tui
 ```
 
-To install the latest tagged release instead:
+To install from GitHub instead:
 
 ```bash
+pipx install "git+https://github.com/so1omon563/plex-tui.git"
 pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.2.0"
 ```
 

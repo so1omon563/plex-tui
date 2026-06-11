@@ -2,8 +2,8 @@
 
 ## Immediate Post-0.2.0
 
-- Validate a fresh install from the `v0.2.0` tag on macOS:
-  - `pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.2.0"`
+- Validate a fresh install from PyPI on macOS and Linux:
+  - `pipx install plex-tui`
   - `plex-tui --smoke`
   - real browsing and playback session
 - Collect rough edges from real library browsing, especially grid view latency and artwork rendering.
@@ -22,7 +22,6 @@
 
 ## Packaging & Distribution
 
-- Configure PyPI Trusted Publishing and publish the first PyPI release.
 - Add a Homebrew tap formula once PyPI installs are stable.
 - Validate the draft Arch AUR `PKGBUILD` on an Arch system and publish if clean.
 - Consider standalone artifacts only after the app behavior stabilizes.

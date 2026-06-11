@@ -2,21 +2,22 @@
 
 ## Current Target
 
-The current package is a standard Python project with a `plex-tui` console
-script. The best short-term install path is:
+The current package is published on PyPI as a standard Python project with a
+`plex-tui` console script. The recommended install path is:
 
 ```bash
-pipx install .
+pipx install plex-tui
 ```
 
 This keeps Python dependencies isolated while still exposing a normal command.
 Users must install `mpv` separately with their system package manager.
 
-Users can also install from GitHub:
+Users can also install from GitHub or a local checkout:
 
 ```bash
 pipx install "git+https://github.com/so1omon563/plex-tui.git"
 pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.2.0"
+pipx install .
 ```
 
 For local package validation, test both source and wheel installs:
@@ -35,8 +36,7 @@ plex-tui --smoke
 
 1. **PyPI + pipx**
 
-   Publish the Python package to PyPI once tagged GitHub releases are stable.
-   Users install with:
+   The Python package is published to PyPI. Users install with:
 
    ```bash
    pipx install plex-tui
@@ -47,15 +47,14 @@ plex-tui --smoke
    that out explicitly.
 
    The repository includes `.github/workflows/publish-pypi.yml` for PyPI Trusted
-   Publishing. Configure the PyPI project to trust:
+   Publishing. The PyPI project trusts:
 
    - Owner: `so1omon563`
    - Repository: `plex-tui`
    - Workflow: `publish-pypi.yml`
    - Environment: `pypi`
 
-   After that, publishing a GitHub Release from a `v*` tag builds and uploads
-   the package.
+   Publishing a GitHub Release from a `v*` tag builds and uploads the package.
 
    TestPyPI uses a separate trusted publisher and a manual workflow:
 
