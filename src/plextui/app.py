@@ -1505,23 +1505,18 @@ class PlexTuiApp(App[None]):
         except PlayerError as exc:
             self.show_error(str(exc))
             return
-        subtitle_text = (
-            f" with {self.player.subtitle_count} subtitles"
-            if self.player.subtitle_count
-            else ""
+        self.detail_refresh_token += 1
+        self.show_detail_text(
+            render_playback_details(media.title, self.player, self.config, audio_choice, subtitle_choice)
         )
-        resume_text = (
-            f" from {format_offset(self.player.start_offset_ms)}"
-            if self.player.start_offset_ms
-            else ""
+        self.set_status(
+            render_playback_status(media.title, self.player, self.config, audio_choice, subtitle_choice)
         )
-        preference_text = render_playback_preferences(self.config, audio_choice, subtitle_choice)
-        self.set_status(f"Playing {media.title}{resume_text}{subtitle_text} ({self.player.stream_mode}; {preference_text})")
 
     def check_player_status(self) -> None:
         if self.player is None:
             return
-        status = playback_exit_status(self.player)
+        status = playback_exit_status(self.player, debug_log_path())
         if status is None:
             return
         selected = self.selected_media()
@@ -1536,7 +1531,7 @@ class PlexTuiApp(App[None]):
             self.player = None
             return
         if not self.player.active:
-            self.set_status(playback_exit_status(self.player) or "Nothing is playing")
+            self.set_status(playback_exit_status(self.player, debug_log_path()) or "Nothing is playing")
             self.player = None
             return
         title = self.player.title
@@ -2105,6 +2100,50 @@ def render_playback_preferences(
     ])
 
 
+def render_playback_status(
+    title: str,
+    player: PlayerHandle,
+    config: AppConfig,
+    audio_choice: StreamChoice | None,
+    subtitle_choice: StreamChoice | None,
+) -> str:
+    details = [f"Playing {title}"]
+    if player.start_offset_ms:
+        details.append(f"resume {format_offset(player.start_offset_ms)}")
+    details.append(player.stream_mode)
+    if player.subtitle_count:
+        details.append(f"{player.subtitle_count} subtitles")
+    details.append(render_playback_preferences(config, audio_choice, subtitle_choice))
+    return " / ".join(details)
+
+
+def render_playback_details(
+    title: str,
+    player: PlayerHandle,
+    config: AppConfig,
+    audio_choice: StreamChoice | None,
+    subtitle_choice: StreamChoice | None,
+) -> str:
+    lines = [
+        title,
+        "",
+        "Playback",
+        "Status: playing",
+        f"Stream mode: {player.stream_mode}",
+        f"Resume: {format_offset(player.start_offset_ms) if player.start_offset_ms else 'start'}",
+        f"Subtitles available: {player.subtitle_count}",
+        f"mpv window size: {mpv_window_size_value(config)}",
+        "",
+        "Selected Streams",
+        f"Audio: {render_audio_playback_preference(config, audio_choice).removeprefix('audio ')}",
+        f"Subtitles: {render_subtitle_playback_preference(config, subtitle_choice).removeprefix('subtitles ')}",
+        "",
+        "Diagnostics",
+        f"Debug log: {debug_log_path()}",
+    ]
+    return "\n".join(lines)
+
+
 def effective_stream_preference_rows(raw: object, config: AppConfig) -> list[tuple[str, str]]:
     audio_choice = preferred_audio_choice(raw, config.preferred_audio_language)
     subtitle_choice = preferred_subtitle_choice(
@@ -2118,15 +2157,21 @@ def effective_stream_preference_rows(raw: object, config: AppConfig) -> list[tup
     ]
 
 
-def playback_exit_status(player: PlayerHandle) -> str | None:
+def playback_exit_status(player: PlayerHandle, debug_path: object | None = None) -> str | None:
     returncode = player.process.poll()
     if returncode is None:
         return None
     if returncode == 0:
         return f"Playback ended: {player.title}"
     if returncode < 0:
-        return f"Playback terminated by signal {-returncode}: {player.title}"
-    return f"Playback exited with code {returncode}: {player.title}"
+        return append_debug_log_hint(f"Playback terminated by signal {-returncode}: {player.title}", debug_path)
+    return append_debug_log_hint(f"Playback exited with code {returncode}: {player.title}", debug_path)
+
+
+def append_debug_log_hint(message: str, debug_path: object | None) -> str:
+    if debug_path is None:
+        return message
+    return f"{message}. Debug log: {debug_path}"
 
 
 def render_audio_playback_preference(config: AppConfig, audio_choice: StreamChoice | None) -> str:

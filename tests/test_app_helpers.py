@@ -25,7 +25,9 @@ from plextui.app import (
     render_help,
     render_media_grid_card,
     render_picker_details,
+    render_playback_details,
     render_settings,
+    render_playback_status,
     render_subtitle_playback_preference,
     settings_rows,
     subtitle_preference_value,
@@ -48,6 +50,12 @@ def test_playback_exit_status_describes_process_state():
     )
     assert playback_exit_status(SimpleNamespace(title="Movie", process=SimpleNamespace(poll=lambda: -15))) == (
         "Playback terminated by signal 15: Movie"
+    )
+    assert playback_exit_status(
+        SimpleNamespace(title="Movie", process=SimpleNamespace(poll=lambda: 2)),
+        "/tmp/debug.log",
+    ) == (
+        "Playback exited with code 2: Movie. Debug log: /tmp/debug.log"
     )
 
 
@@ -187,6 +195,61 @@ def test_render_playback_preference_status():
     assert render_subtitle_playback_preference(config, None) == "subtitles eng not found, Plex/default"
     assert render_audio_playback_preference(config, StreamChoice(1, "Japanese")) == "audio Japanese"
     assert render_subtitle_playback_preference(config, StreamChoice(2, "English")) == "subtitles English"
+
+
+def test_render_playback_status_includes_active_launch_context():
+    config = AppConfig(
+        base_url="http://plex",
+        token="token",
+        client_identifier="client-id",
+        preferred_audio_language="jpn",
+        preferred_subtitle_language="eng",
+        subtitle_mode="preferred",
+    )
+    player = SimpleNamespace(start_offset_ms=65_000, stream_mode="direct", subtitle_count=2)
+
+    rendered = render_playback_status(
+        "Movie",
+        player,
+        config,
+        StreamChoice(1, "Japanese"),
+        StreamChoice(2, "English"),
+    )
+
+    assert rendered == (
+        "Playing Movie / resume 1:05 / direct / 2 subtitles / audio Japanese; subtitles English"
+    )
+
+
+def test_render_playback_details_includes_streams_and_diagnostics():
+    config = AppConfig(
+        base_url="http://plex",
+        token="token",
+        client_identifier="client-id",
+        preferred_audio_language="jpn",
+        preferred_subtitle_language="eng",
+        subtitle_mode="preferred",
+        mpv_window_size="1280x720",
+    )
+    player = SimpleNamespace(start_offset_ms=0, stream_mode="transcode", subtitle_count=1)
+
+    rendered = render_playback_details(
+        "Episode",
+        player,
+        config,
+        StreamChoice(1, "Japanese"),
+        StreamChoice(2, "English"),
+    )
+
+    assert "Playback" in rendered
+    assert "Status: playing" in rendered
+    assert "Stream mode: transcode" in rendered
+    assert "Resume: start" in rendered
+    assert "Subtitles available: 1" in rendered
+    assert "mpv window size: 1280x720" in rendered
+    assert "Audio: Japanese" in rendered
+    assert "Subtitles: English" in rendered
+    assert "Debug log:" in rendered
 
 
 def test_effective_stream_preferences_report_found_missing_and_none():

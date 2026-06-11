@@ -13,6 +13,7 @@
 - Preserved Settings row highlighting after opening Settings and changing values.
 - Added README screenshots for grid and list views.
 - Clarified README install instructions for `main` versus tagged releases.
+- Improved active playback status, details-pane playback context, and abnormal `mpv` exit diagnostics.
 
 ## 0.1.0 - 2026-06-11
 
