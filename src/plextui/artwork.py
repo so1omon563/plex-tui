@@ -18,6 +18,7 @@ from .config import AppConfig, cache_path
 
 
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
+NATIVE_IMAGE_ENV = "PLEX_TUI_ENABLE_NATIVE_IMAGES"
 
 
 def fetch_artwork(raw: Any, path: str, config: AppConfig) -> bytes:
@@ -102,11 +103,17 @@ def render_protocol_artwork(data: bytes, renderer: str, width: int = 28, max_hei
 
 
 def resolve_protocol_renderer(renderer: str) -> str:
+    if not native_images_enabled():
+        return "block"
     if renderer == "kitty":
         return "kitty"
     if renderer == "auto" and is_kitty_terminal():
         return "kitty"
     return "block"
+
+
+def native_images_enabled() -> bool:
+    return os.environ.get(NATIVE_IMAGE_ENV) == "1"
 
 
 def is_kitty_terminal() -> bool:

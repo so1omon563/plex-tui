@@ -44,7 +44,18 @@ def test_render_artwork_returns_halfcell_text():
     assert rendered.spans
 
 
-def test_render_protocol_artwork_can_emit_kitty_sequence():
+def test_render_protocol_artwork_falls_back_without_explicit_native_opt_in():
+    image = Image.new("RGB", (2, 4), "#00ff00")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+
+    rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=2, max_height=2)
+
+    assert rendered is None
+
+
+def test_render_protocol_artwork_can_emit_kitty_sequence_when_enabled(monkeypatch):
+    monkeypatch.setenv("PLEX_TUI_ENABLE_NATIVE_IMAGES", "1")
     image = Image.new("RGB", (2, 4), "#00ff00")
     buffer = BytesIO()
     image.save(buffer, format="PNG")

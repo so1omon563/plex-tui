@@ -18,7 +18,8 @@ client_identifier = "plex-tui-your-stable-client-id"
 # Optional artwork settings.
 # artwork_mode can be "on" or "off".
 # artwork_mode = "on"
-# artwork_renderer can be "block", "auto", or "kitty".
+# artwork_renderer can be "block", "auto", or "kitty". Auto/kitty require
+# PLEX_TUI_ENABLE_NATIVE_IMAGES=1; otherwise they fall back to block art.
 # artwork_renderer = "block"
 # media_view can be "list" or "poster".
 # media_view = "list"

@@ -150,9 +150,11 @@ Poster view mode changes the media browser from compact text rows to larger
 poster cards. Cards use cached artwork immediately and update selected posters
 after their artwork is fetched.
 
-`artwork_renderer = "kitty"` enables experimental Kitty terminal image protocol
-output for the details pane. `artwork_renderer = "auto"` uses Kitty output only
-when a Kitty terminal is detected; otherwise it falls back to colored block art.
+Native terminal image output is not enabled by default because terminal image
+protocols can conflict with Textual's screen renderer. `artwork_renderer =
+"kitty"` and `artwork_renderer = "auto"` still fall back to colored block art
+unless `PLEX_TUI_ENABLE_NATIVE_IMAGES=1` is set. Treat that env var as
+experimental.
 
 When playback starts, external subtitle streams reported by Plex are passed to
 `mpv` automatically. Items with embedded PGS/VOBSUB subtitles are direct-played
