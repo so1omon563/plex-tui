@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
@@ -93,6 +93,10 @@ class PlexTuiApp(App[None]):
     #detail-content {
         padding: 0 1;
         width: 1fr;
+        height: auto;
+    }
+
+    #detail-scroll {
         height: 1fr;
     }
     """
@@ -132,7 +136,8 @@ class PlexTuiApp(App[None]):
                 yield ListView(id="media")
             with Vertical(id="details"):
                 yield Static("Details", classes="pane-title")
-                yield Static("Select an item", id="detail-content")
+                with VerticalScroll(id="detail-scroll"):
+                    yield Static("Select an item", id="detail-content")
         yield Static("", id="status")
         yield Footer()
 
@@ -309,11 +314,7 @@ class PlexTuiApp(App[None]):
 
     def show_media_details(self, item: MediaItem) -> None:
         details = media_details(item)
-        lines = [details.title, "", "  ".join(details.facts)]
-        if details.summary:
-            lines.extend(["", details.summary])
-        lines.extend(["", "Playable: yes" if details.playable else "Playable: no"])
-        self.show_detail_text("\n".join(lines))
+        self.show_detail_text(render_details(details))
         self.refresh_media_details(item)
 
     @work(thread=True, exclusive=True)
@@ -336,16 +337,13 @@ class PlexTuiApp(App[None]):
             row = self.query_one("#media", ListView).highlighted_child
             if isinstance(row, MediaRow) and row.media.key == item.key:
                 details = media_details(full_item)
-                lines = [details.title, "", "  ".join(details.facts)]
-                if details.summary:
-                    lines.extend(["", details.summary])
-                lines.extend(["", "Playable: yes" if details.playable else "Playable: no"])
-                self.show_detail_text("\n".join(lines))
+                self.show_detail_text(render_details(details))
 
         self.call_from_thread(update)
 
     def show_detail_text(self, text: str) -> None:
         self.query_one("#detail-content", Static).update(text)
+        self.query_one("#detail-scroll", VerticalScroll).scroll_home(animate=False)
 
     def action_focus_search(self) -> None:
         self.search_global = False
@@ -479,3 +477,25 @@ def format_offset(milliseconds: int) -> str:
     if hours:
         return f"{hours}:{minutes:02d}:{secs:02d}"
     return f"{minutes}:{secs:02d}"
+
+
+def render_details(details: object) -> str:
+    lines = [getattr(details, "title"), ""]
+
+    lines.append("Metadata")
+    for label, value in getattr(details, "metadata"):
+        lines.append(f"{label}: {value}")
+    lines.append(f"Playable: {'yes' if getattr(details, 'playable') else 'no'}")
+
+    lines.extend(["", "Subtitles"])
+    subtitles = getattr(details, "subtitles")
+    if subtitles:
+        lines.extend(f"- {subtitle}" for subtitle in subtitles)
+    else:
+        lines.append("None reported")
+
+    summary = getattr(details, "summary")
+    if summary:
+        lines.extend(["", "Summary", summary])
+
+    return "\n".join(lines)

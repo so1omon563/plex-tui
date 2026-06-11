@@ -103,9 +103,55 @@ def media_details(item: MediaItem) -> MediaDetails:
         title=item.title,
         kind=item.kind,
         facts=facts,
+        metadata=metadata_fields(raw),
+        subtitles=subtitle_details(raw),
         summary=str(getattr(raw, "summary", "") or ""),
         playable=item.playable,
     )
+
+
+def metadata_fields(raw: Any) -> list[tuple[str, str]]:
+    fields: list[tuple[str, str]] = []
+    for label, value in (
+        ("Type", getattr(raw, "TYPE", "")),
+        ("Year", getattr(raw, "year", None)),
+        ("Duration", format_duration(getattr(raw, "duration", None))),
+        ("Status", watched_state(raw)),
+        ("Episode", episode_label(raw)),
+        ("Content Rating", getattr(raw, "contentRating", None)),
+        ("Rating", rating_label(raw).replace("Rating ", "")),
+        ("Show", getattr(raw, "grandparentTitle", None)),
+        ("Season", getattr(raw, "parentTitle", None)),
+        ("Studio", getattr(raw, "studio", None)),
+    ):
+        if value:
+            fields.append((label, str(value)))
+    return fields
+
+
+def subtitle_details(raw: Any) -> list[str]:
+    subtitles: list[str] = []
+    try:
+        if not hasattr(raw, "iterParts"):
+            return subtitles
+        for part in raw.iterParts():
+            for stream in part.subtitleStreams():
+                label = getattr(stream, "displayTitle", None) or getattr(stream, "language", None) or "Unknown"
+                codec = getattr(stream, "codec", None)
+                flags = []
+                if getattr(stream, "selected", False):
+                    flags.append("selected")
+                if getattr(stream, "forced", False):
+                    flags.append("forced")
+                if getattr(stream, "hearingImpaired", False):
+                    flags.append("SDH")
+                values = [str(codec)] if codec else []
+                values.extend(flags)
+                extra = ", ".join(values)
+                subtitles.append(f"{label} ({extra})" if extra else str(label))
+    except Exception:
+        return subtitles
+    return subtitles
 
 
 def watched_state(raw: Any) -> str:
