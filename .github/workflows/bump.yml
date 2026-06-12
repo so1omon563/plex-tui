@@ -27,7 +27,7 @@ jobs:
       new_tag: ${{ steps.bump.outputs.new_version }}
       previous_tag: ${{ steps.bump.outputs.previous_version }}
       skipped: ${{ steps.bump.outputs.skipped }}
-      release_requested: ${{ steps.bump.outputs.should_release }}
+      release_requested: ${{ steps.release-intent.outputs.release_requested }}
 
     steps:
       - name: Check out repository
@@ -43,6 +43,25 @@ jobs:
           branch_name: ${{ github.event.pull_request.head.ref }}
           # Floating pointer tags are owned by release-creator so they only move
           # when a GitHub Release is intentionally published.
+
+      - name: Detect release request
+        id: release-intent
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+
+          text="$(printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | tr '[:upper:]' '[:lower:]')"
+          release_requested=false
+          for marker in "#release" "#publish" "#ship"; do
+            if grep -qF "$marker" <<< "$text"; then
+              release_requested=true
+              break
+            fi
+          done
+
+          echo "release_requested=$release_requested" >> "$GITHUB_OUTPUT"
 
   create-release:
     name: Create GitHub Release

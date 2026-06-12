@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to package, such as v0.3.0. Defaults to the latest GitHub Release."
+        description: "Release tag to package, such as v0.3.0. Defaults to the release created by the completed bump workflow."
         required: false
         type: string
 
@@ -44,13 +44,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_TAG: ${{ github.event.inputs.tag }}
+          WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
 
           if [ -n "$REQUESTED_TAG" ]; then
             tag="$REQUESTED_TAG"
           else
-            tag="$(gh release list --limit 1 --json tagName --jq '.[0].tagName')"
+            tag="$(gh release list --limit 1 --json tagName --jq '.[0].tagName // ""')"
           fi
 
           if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -58,11 +59,32 @@ jobs:
             exit 1
           fi
 
+          if ! gh release view "$tag" --json tagName --jq '.tagName' >/dev/null; then
+            echo "GitHub Release does not exist for $tag" >&2
+            exit 1
+          fi
+
+          if [ -n "$WORKFLOW_HEAD_SHA" ]; then
+            git fetch --force origin "refs/tags/$tag:refs/tags/$tag"
+            tag_sha="$(git rev-list -n 1 "$tag")"
+            if [ "$tag_sha" != "$WORKFLOW_HEAD_SHA" ]; then
+              {
+                echo "publish=false"
+              } >> "$GITHUB_OUTPUT"
+              echo "Latest release $tag points at $tag_sha, not completed workflow SHA $WORKFLOW_HEAD_SHA. Nothing to publish."
+              exit 0
+            fi
+          fi
+
           version="${tag#v}"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          {
+            echo "publish=true"
+            echo "tag=$tag"
+            echo "version=$version"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Tap Homebrew repository
+        if: steps.release.outputs.publish == 'true'
         id: tap
         env:
           PACKAGING_PR_TOKEN: ${{ secrets.PACKAGING_PR_TOKEN }}
@@ -71,17 +93,20 @@ jobs:
           echo "path=$(brew --repo so1omon563/plex-tui)" >> "$GITHUB_OUTPUT"
 
       - name: Update formula source
+        if: steps.release.outputs.publish == 'true'
         run: |
           python scripts/update_homebrew_formula.py \
             "${{ steps.tap.outputs.path }}/Formula/plex-tui.rb" \
             "${{ steps.release.outputs.version }}"
 
       - name: Audit formula
+        if: steps.release.outputs.publish == 'true'
         working-directory: ${{ steps.tap.outputs.path }}
         run: |
           brew audit --strict --online so1omon563/plex-tui/plex-tui
 
       - name: Commit tap update
+        if: steps.release.outputs.publish == 'true'
         id: commit
         working-directory: ${{ steps.tap.outputs.path }}
         env:
@@ -107,7 +132,7 @@ jobs:
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
 
       - name: Open and merge tap pull request
-        if: steps.commit.outputs.changed == 'true'
+        if: steps.release.outputs.publish == 'true' && steps.commit.outputs.changed == 'true'
         working-directory: ${{ steps.tap.outputs.path }}
         env:
           GH_TOKEN: ${{ secrets.PACKAGING_PR_TOKEN }}
