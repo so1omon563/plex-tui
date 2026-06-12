@@ -110,15 +110,38 @@ def test_render_details_includes_subtitles_and_summary():
 
     assert "Title\n--------" in rendered
     assert "movie" in rendered
-    assert "Playback: ready to play" in rendered
+    assert "Playback\nStatus: Ready to play" in rendered
     assert "Metadata" in rendered
     assert "Preferences" in rendered
-    assert "Audio preference: jpn" in rendered
-    assert "Subtitle mode: Preferred" in rendered
+    assert "Audio: jpn" in rendered
+    assert "Subtitles: Preferred / eng" in rendered
     assert "Artwork: available" in rendered
     assert "- Japanese (aac, 2ch, selected)" in rendered
     assert "- English (srt, selected)" in rendered
     assert "Summary text" in rendered
+
+
+def test_render_details_uses_clear_empty_states_and_wraps_summary():
+    details = MediaDetails(
+        title="Long Movie",
+        kind="movie",
+        facts=[],
+        metadata=[],
+        audio=[],
+        subtitles=[],
+        summary="This is a very long summary that should wrap into shorter lines instead of rendering as one long pane-breaking paragraph in the details view.",
+        playable=False,
+    )
+
+    rendered = render_details(details)
+
+    assert "Status: Opens more items" in rendered
+    assert "No metadata reported" in rendered
+    assert "No audio tracks reported" in rendered
+    assert "No subtitle tracks reported" in rendered
+    summary_lines = rendered.split("Summary\n", 1)[1].splitlines()
+    assert len(summary_lines) > 1
+    assert all(len(line) <= 76 for line in summary_lines if line)
 
 
 def test_render_settings_hides_tokens():
