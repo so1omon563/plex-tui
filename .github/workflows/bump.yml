@@ -48,11 +48,10 @@ jobs:
         id: release-intent
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
 
-          text="$(printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | tr '[:upper:]' '[:lower:]')"
+          text="$(printf '%s\n' "$PR_TITLE" | tr '[:upper:]' '[:lower:]')"
           release_requested=false
           for marker in "#release" "#publish" "#ship"; do
             if grep -qF "$marker" <<< "$text"; then
