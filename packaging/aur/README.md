@@ -22,6 +22,10 @@ makepkg --printsrcinfo
 namcap PKGBUILD ./*.pkg.tar.*
 ```
 
+The package `check()` target runs the application smoke check only. The full
+pytest suite remains covered by the main CI workflow, while AUR validation stays
+focused on package build/install metadata and Arch dependency resolution.
+
 The workflow also verifies that committed `.SRCINFO` matches `PKGBUILD`.
 
 ## Publishing
