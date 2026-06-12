@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.3.12 - 2026-06-12
+
+- Added release workflow guards so tag-only patch bumps do not republish the
+  latest GitHub Release through Homebrew or AUR automation.
+- Limited publish markers to PR titles so release examples in PR bodies do not
+  accidentally create GitHub Releases.
+- Protected `main` in the app and Homebrew tap repositories while keeping
+  automation PRs mergeable without manual approval.
+- Documented protected release automation, packaging dry-runs, and default
+  semver bump expectations for future PRs.
+
 ## 0.3.6 - 2026-06-12
 
 - Polished grid cards so poster placeholders, cached artwork, titles,
