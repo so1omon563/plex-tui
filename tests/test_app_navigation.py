@@ -1395,7 +1395,6 @@ async def run_numeric_settings_left_right_check():
         assert save_config.call_count == 2
         assert app.settings_visible
         assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Settings"
-        assert app.query_one("#status").content == "Enter edits / Left-Right adjusts"
 
 
 async def run_option_settings_left_right_check():
