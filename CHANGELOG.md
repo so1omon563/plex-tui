@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.3.6 - 2026-06-12
+
+- Polished grid cards so poster placeholders, cached artwork, titles,
+  subtitles, and selected status align more evenly in the media pane.
+- Improved the details pane hierarchy with clearer playback readiness,
+  explicit empty metadata/stream states, tighter preference rows, and wrapped
+  summaries.
+- Improved Settings detail feedback with consistent controls guidance, clearer
+  armed-confirmation text, and more useful saved-setting summaries.
+- Polished playback diagnostics with clearer active playback status, structured
+  playback error details, and more direct debug-log follow-up guidance.
+- Added shieldcn.dev README badges for CI, release, PyPI, AUR, Homebrew tap,
+  and license status.
+- Documented release-prep guidance for fetching origin tags before deciding the
+  next release version.
+
 ## 0.3.0 - 2026-06-12
 
 - Added `plex-tui --diagnostics` for collecting environment and playback setup details.
