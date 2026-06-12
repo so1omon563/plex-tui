@@ -2,12 +2,17 @@
 
 ## App UX
 
-- Verify real library browsing after the prefetch/rendering and idle-detail
-  passes, especially any remaining list/grid latency on large remote libraries.
-- Tune grid artwork defaults such as `grid_prefetch_pages` only if verification
-  shows the current defaults are too aggressive or too conservative.
-- Continue tuning focus and selection affordances based on real terminal themes.
-- Continue refining Settings ergonomics as new preferences are added.
+- Continue tuning focus, row markers, and selection affordances based on real
+  terminal themes.
+- Polish the details pane hierarchy for long summaries, missing metadata, and
+  playback readiness hints.
+- Continue refining Settings ergonomics as new preferences are added, especially
+  grouping, current-value scanning, and change feedback.
+- Tune real-library browsing only when verification shows a specific issue; the
+  latest perf pass showed fast grid rendering and poster fetches dominated by
+  network/cache timing.
+- Tune grid artwork defaults such as `grid_prefetch_pages` only if future logs
+  show the current defaults are too aggressive or too conservative.
 - Consider separate poster-size controls only if density presets are not enough
   after real-library verification.
 - Continue improving playback diagnostics as real-world `mpv` and Plex stream
@@ -16,9 +21,10 @@
 ## Packaging & Distribution
 
 - Keep planned releases moving through PRs so merged release PRs drive automatic
-  tagging, GitHub Release creation, and PyPI publishing.
-- Add a GitHub ruleset or branch protection for `main` that requires branch
-  work, pull requests, and passing checks before merge.
+  tagging, GitHub Release creation, PyPI publishing, Homebrew tap publishing,
+  and AUR publishing.
+- Keep `main` protected in both `plex-tui` and `homebrew-plex-tui`; `plex-tui`
+  requires the Python 3.11 and 3.13 checks before merge.
 - Improve Homebrew install time; the current formula works but builds native
   Python resources such as `pillow` from source.
 - Keep post-release package publishing fully automated across PyPI, Homebrew,

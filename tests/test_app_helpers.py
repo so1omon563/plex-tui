@@ -105,6 +105,9 @@ def test_render_details_includes_subtitles_and_summary():
         ),
     )
 
+    assert "Title\n--------" in rendered
+    assert "movie" in rendered
+    assert "Playback: ready to play" in rendered
     assert "Metadata" in rendered
     assert "Preferences" in rendered
     assert "Audio preference: jpn" in rendered
@@ -675,7 +678,14 @@ def test_media_row_includes_progress_marker():
 
     row = MediaRow(MediaItem("Movie", "2024", "movie", "1", True, PartialRaw()))
 
+    assert row.label_text.startswith("▶ Movie")
     assert "[resume 1m]" in row.label_text
+
+
+def test_media_row_marks_container_items():
+    row = MediaRow(MediaItem("Show", "2 seasons", "show", "1", False, object()))
+
+    assert row.label_text.startswith("› Show")
 
 
 def test_media_grid_tracks_selection_and_visible_page():

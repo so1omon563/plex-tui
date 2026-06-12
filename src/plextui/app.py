@@ -101,7 +101,7 @@ class LibraryRow(ListItem):
 
 class MediaRow(ListItem):
     def __init__(self, media: MediaItem) -> None:
-        marker = ">" if not media.playable else " "
+        marker = "▶" if media.playable else "›"
         subtitle = f" [{media.kind}] {media.subtitle}".rstrip()
         progress = row_progress_marker(media.raw)
         progress_text = f" {progress}" if progress else ""
@@ -2111,13 +2111,11 @@ def format_offset(milliseconds: int) -> str:
 
 
 def render_details(details: object, config: AppConfig | None = None, raw: object | None = None) -> str:
-    lines = [getattr(details, "title"), ""]
+    lines = render_detail_header(details, config)
 
     lines.append("Metadata")
     for label, value in getattr(details, "metadata"):
         lines.append(f"{label}: {value}")
-    lines.append(f"Playable: {'yes' if getattr(details, 'playable') else 'no'}")
-    lines.append(f"Artwork: {artwork_status(details, config)}")
 
     if config is not None:
         lines.extend([
@@ -2152,6 +2150,25 @@ def render_details(details: object, config: AppConfig | None = None, raw: object
         lines.extend(["", "Summary", summary])
 
     return "\n".join(lines)
+
+
+def render_detail_header(details: object, config: AppConfig | None = None) -> list[str]:
+    title = getattr(details, "title")
+    facts = [str(fact) for fact in getattr(details, "facts", []) if fact]
+    playable = "ready to play" if getattr(details, "playable") else "opens more items"
+    artwork = artwork_status(details, config)
+    lines = [
+        title,
+        "-" * min(max(len(title), 8), 36),
+    ]
+    if facts:
+        lines.append(" / ".join(facts))
+    lines.extend([
+        f"Playback: {playable}",
+        f"Artwork: {artwork}",
+        "",
+    ])
+    return lines
 
 
 def render_detail_content(
