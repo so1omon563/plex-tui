@@ -341,6 +341,10 @@ def test_playback_error_shows_recent_debug_log(tmp_path):
     asyncio.run(run_playback_error_check(tmp_path))
 
 
+def test_playback_footer_shows_active_playback():
+    asyncio.run(run_playback_footer_check())
+
+
 def test_quick_preference_actions_update_config():
     asyncio.run(run_quick_preference_action_check())
 
@@ -1260,6 +1264,40 @@ async def run_playback_error_check(tmp_path):
         assert "playback error: mpv missing" in details
 
 
+async def run_playback_footer_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig(
+            "http://plex",
+            "token",
+            "client-id",
+            preferred_audio_language="jpn",
+            preferred_subtitle_language="eng",
+            subtitle_mode="preferred",
+        )
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, Raw())])
+        await pilot.pause(0.2)
+
+        player = SimpleNamespace(
+            title="Movie",
+            start_offset_ms=65_000,
+            stream_mode="direct",
+            subtitle_count=2,
+            process=SimpleNamespace(poll=lambda: None),
+        )
+        with patch("plextui.app.play_with_mpv", return_value=player):
+            app.action_play_selected()
+        await pilot.pause(0.2)
+
+        footer = app.query_one("#playback-footer")
+        assert footer.display
+        assert footer.content == (
+            "Playing Movie / resume 1:05 / direct / 2 subtitles / audio jpn not found, Plex/default; "
+            "subtitles eng not found, Plex/default"
+        )
+
+
 async def run_quick_preference_action_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
@@ -1449,10 +1487,13 @@ async def run_completed_player_status_check():
         refreshed = []
         app.show_media_details = refreshed.append
         app.player = SimpleNamespace(title="Movie", process=SimpleNamespace(poll=lambda: 0))
+        app.set_playback_footer("Playing Movie")
 
         app.check_player_status()
         await pilot.pause(0.1)
 
         assert app.player is None
         assert app.query_one("#status").content == "Playback ended: Movie"
+        assert not app.query_one("#playback-footer").display
+        assert app.query_one("#playback-footer").content == ""
         assert refreshed == [item]

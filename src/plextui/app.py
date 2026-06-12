@@ -351,6 +351,13 @@ class PlexTuiApp(App[None]):
         background: $surface;
     }
 
+    #playback-footer {
+        height: 1;
+        padding: 0 1;
+        background: $panel;
+        color: $text;
+    }
+
     .pane-title {
         text-style: bold;
         padding: 0 1;
@@ -458,6 +465,7 @@ class PlexTuiApp(App[None]):
                 yield Static("Details", id="details-title", classes="pane-title")
                 with VerticalScroll(id="detail-scroll"):
                     yield Static("Select an item", id="detail-content")
+        yield Static("", id="playback-footer")
         yield Static("", id="status")
         yield Footer()
 
@@ -494,6 +502,7 @@ class PlexTuiApp(App[None]):
             pass
         self.query_one("#search", Input).display = False
         self.query_one("#media-grid-scroll", VerticalScroll).display = False
+        self.clear_playback_footer()
         self.set_interval(1.0, self.check_player_status)
         self.load_server()
 
@@ -1961,6 +1970,7 @@ class PlexTuiApp(App[None]):
                 window_size=self.config.mpv_window_size,
             )
         except PlayerError as exc:
+            self.clear_playback_footer()
             self.show_playback_error(str(exc))
             return
         self.detail_refresh_token += 1
@@ -1968,9 +1978,9 @@ class PlexTuiApp(App[None]):
         self.show_detail_text(
             render_playback_details(media.title, self.player, self.config, audio_choice, subtitle_choice)
         )
-        self.set_status(
-            render_playback_status(media.title, self.player, self.config, audio_choice, subtitle_choice)
-        )
+        status = render_playback_status(media.title, self.player, self.config, audio_choice, subtitle_choice)
+        self.set_status(status)
+        self.set_playback_footer(status)
 
     def check_player_status(self) -> None:
         if self.player is None:
@@ -1980,6 +1990,7 @@ class PlexTuiApp(App[None]):
             return
         selected = self.selected_media()
         self.player = None
+        self.clear_playback_footer()
         if selected is not None:
             self.show_media_details(selected)
         self.set_status(status)
@@ -1988,14 +1999,17 @@ class PlexTuiApp(App[None]):
         if self.player is None:
             self.set_status("Nothing is playing")
             self.player = None
+            self.clear_playback_footer()
             return
         if not self.player.active:
             self.set_status(playback_exit_status(self.player, debug_log_path()) or "Nothing is playing")
             self.player = None
+            self.clear_playback_footer()
             return
         title = self.player.title
         stop_mpv(self.player)
         self.player = None
+        self.clear_playback_footer()
         self.set_status(f"Stopped {title}")
 
     def action_reload(self) -> None:
@@ -2013,6 +2027,22 @@ class PlexTuiApp(App[None]):
             self.query_one("#status", Static).update(text)
         except NoMatches:
             return
+
+    def set_playback_footer(self, text: str) -> None:
+        try:
+            footer = self.query_one("#playback-footer", Static)
+        except NoMatches:
+            return
+        footer.display = True
+        footer.update(text)
+
+    def clear_playback_footer(self) -> None:
+        try:
+            footer = self.query_one("#playback-footer", Static)
+        except NoMatches:
+            return
+        footer.update("")
+        footer.display = False
 
     def show_error(self, text: str) -> None:
         config_hint = f"Config: {config_path()}"

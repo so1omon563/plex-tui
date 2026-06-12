@@ -13,9 +13,8 @@
 - Iterate on artwork/grid presentation:
   - tune density presets across narrow and wide terminals
   - consider separate poster-size controls if density presets are not enough
-- Improve playback diagnostics:
-  - add more targeted playback troubleshooting hints for common `mpv` failures
-  - consider a compact active-playback footer once more player state is available
+- Continue improving playback diagnostics as real-world `mpv` and Plex stream
+  failures show up in use.
 
 ## Packaging & Distribution
 
