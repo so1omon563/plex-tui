@@ -1,5 +1,12 @@
 # plex-tui
 
+[![CI](https://shieldcn.dev/github/so1omon563/plex-tui/ci.png)](https://github.com/so1omon563/plex-tui/actions/workflows/ci.yml)
+[![Release](https://shieldcn.dev/github/so1omon563/plex-tui/release.png)](https://github.com/so1omon563/plex-tui/releases/latest)
+[![PyPI](https://shieldcn.dev/badge/dynamic/json.png?url=https%3A%2F%2Fpypi.org%2Fpypi%2Fplex-tui%2Fjson&query=%24.info.version&label=PyPI&logo=pypi)](https://pypi.org/project/plex-tui/)
+[![AUR](https://shieldcn.dev/badge/dynamic/json.png?url=https%3A%2F%2Faur.archlinux.org%2Frpc%2Fv5%2Finfo%2Fplex-tui&query=%24.results%5B0%5D.Version&label=AUR&logo=archlinux)](https://aur.archlinux.org/packages/plex-tui)
+[![Homebrew](https://shieldcn.dev/badge/Homebrew-tap-blue.png?logo=homebrew)](https://github.com/so1omon563/homebrew-plex-tui)
+[![License](https://shieldcn.dev/github/so1omon563/plex-tui/license.png)](LICENSE)
+
 A standalone Python/Textual terminal UI for browsing Plex and launching playback
 through `mpv`.
 
