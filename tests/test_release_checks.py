@@ -21,6 +21,14 @@ assert UPDATE_AUR_SPEC.loader is not None
 sys.modules[UPDATE_AUR_SPEC.name] = update_aur_package
 UPDATE_AUR_SPEC.loader.exec_module(update_aur_package)
 
+UPDATE_HOMEBREW_PATH = Path(__file__).resolve().parents[1] / "scripts/update_homebrew_formula.py"
+UPDATE_HOMEBREW_SPEC = importlib.util.spec_from_file_location("update_homebrew_formula", UPDATE_HOMEBREW_PATH)
+assert UPDATE_HOMEBREW_SPEC is not None
+update_homebrew_formula = importlib.util.module_from_spec(UPDATE_HOMEBREW_SPEC)
+assert UPDATE_HOMEBREW_SPEC.loader is not None
+sys.modules[UPDATE_HOMEBREW_SPEC.name] = update_homebrew_formula
+UPDATE_HOMEBREW_SPEC.loader.exec_module(update_homebrew_formula)
+
 
 def test_release_checks_pass_for_repository():
     root = Path(__file__).resolve().parents[1]
@@ -100,6 +108,57 @@ def test_update_aur_package_updates_pkgbuild(tmp_path):
             "pkgrel=1",
             'source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")',
             'sha256sums=("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")',
+            "",
+        ]
+    )
+
+
+def test_update_homebrew_formula_updates_top_level_source_and_test(tmp_path):
+    formula = tmp_path / "plex-tui.rb"
+    formula.write_text(
+        "\n".join(
+            [
+                "class PlexTui < Formula",
+                '  url "https://files.pythonhosted.org/packages/old/plex_tui-0.2.1.tar.gz"',
+                '  sha256 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"',
+                "",
+                '  resource "requests" do',
+                '    url "https://files.pythonhosted.org/packages/requests.tar.gz"',
+                '    sha256 "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"',
+                "  end",
+                "",
+                "  test do",
+                '    assert_match "plex-tui 0.2.1", shell_output("#{bin}/plex-tui --version")',
+                "  end",
+                "end",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    update_homebrew_formula.update_formula(
+        formula,
+        "0.3.0",
+        "https://files.pythonhosted.org/packages/new/plex_tui-0.3.0.tar.gz",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    )
+
+    assert formula.read_text(encoding="utf-8") == "\n".join(
+        [
+            "class PlexTui < Formula",
+            '  url "https://files.pythonhosted.org/packages/new/plex_tui-0.3.0.tar.gz"',
+            '  sha256 "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"',
+            "",
+            '  resource "requests" do',
+            '    url "https://files.pythonhosted.org/packages/requests.tar.gz"',
+            '    sha256 "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"',
+            "  end",
+            "",
+            "  test do",
+            '    assert_match "plex-tui 0.3.0", shell_output("#{bin}/plex-tui --version")',
+            "  end",
+            "end",
             "",
         ]
     )

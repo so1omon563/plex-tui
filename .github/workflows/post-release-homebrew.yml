@@ -1,0 +1,129 @@
+name: Post-release Homebrew Publish
+
+on:
+  workflow_run:
+    workflows: ["Version Bump and Release"]
+    types: ["completed"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to package, such as v0.3.0. Defaults to the latest GitHub Release."
+        required: false
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  publish-tap:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: macos-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Check packaging PR token
+        env:
+          PACKAGING_PR_TOKEN: ${{ secrets.PACKAGING_PR_TOKEN }}
+        run: |
+          if [ -z "$PACKAGING_PR_TOKEN" ]; then
+            echo "PACKAGING_PR_TOKEN secret is required to publish the Homebrew tap" >&2
+            exit 1
+          fi
+
+      - name: Determine release tag
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "$REQUESTED_TAG" ]; then
+            tag="$REQUESTED_TAG"
+          else
+            tag="$(gh release list --limit 1 --json tagName --jq '.[0].tagName')"
+          fi
+
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must look like vX.Y.Z: $tag" >&2
+            exit 1
+          fi
+
+          version="${tag#v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Tap Homebrew repository
+        id: tap
+        env:
+          PACKAGING_PR_TOKEN: ${{ secrets.PACKAGING_PR_TOKEN }}
+        run: |
+          brew tap so1omon563/plex-tui "https://x-access-token:${PACKAGING_PR_TOKEN}@github.com/so1omon563/homebrew-plex-tui.git"
+          echo "path=$(brew --repo so1omon563/plex-tui)" >> "$GITHUB_OUTPUT"
+
+      - name: Update formula source
+        run: |
+          python scripts/update_homebrew_formula.py \
+            "${{ steps.tap.outputs.path }}/Formula/plex-tui.rb" \
+            "${{ steps.release.outputs.version }}"
+
+      - name: Audit formula
+        working-directory: ${{ steps.tap.outputs.path }}
+        run: |
+          brew audit --strict --online so1omon563/plex-tui/plex-tui
+
+      - name: Commit tap update
+        id: commit
+        working-directory: ${{ steps.tap.outputs.path }}
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet -- Formula/plex-tui.rb; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Homebrew tap is already up to date."
+            exit 0
+          fi
+
+          branch="automation/plex-tui-v${VERSION}"
+          git switch -c "$branch"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/plex-tui.rb
+          git commit -m "Update plex-tui to ${VERSION}"
+          git push origin "$branch"
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Open and merge tap pull request
+        if: steps.commit.outputs.changed == 'true'
+        working-directory: ${{ steps.tap.outputs.path }}
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGING_PR_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
+          BRANCH: ${{ steps.commit.outputs.branch }}
+        run: |
+          set -euo pipefail
+
+          pr_url="$(gh pr create \
+            --repo so1omon563/homebrew-plex-tui \
+            --base main \
+            --head "$BRANCH" \
+            --title "Update plex-tui to ${VERSION}" \
+            --body "Automated Homebrew tap update for plex-tui ${VERSION}.")"
+
+          gh pr merge "$pr_url" \
+            --repo so1omon563/homebrew-plex-tui \
+            --squash \
+            --delete-branch

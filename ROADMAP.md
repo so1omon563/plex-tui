@@ -21,8 +21,8 @@
   work, pull requests, and passing checks before merge.
 - Improve Homebrew install time; the current formula works but builds native
   Python resources such as `pillow` from source.
-- Extend post-release packaging automation to the Homebrew tap so a release
-  publishes every supported package channel.
+- Keep post-release package publishing fully automated across PyPI, Homebrew,
+  and AUR.
 - Consider standalone artifacts only after the app behavior stabilizes.
 
 ## Technical Follow-Up
