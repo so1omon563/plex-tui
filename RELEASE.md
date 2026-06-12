@@ -80,8 +80,8 @@ Merge the release PR after CI passes. The `Version Bump and Release` workflow:
 1. Runs `so1omon563/custom-semver-bumper@v1` on the merged PR and creates the
    next `vX.Y.Z` tag when the merged PR title or body includes `#patch`,
    `#minor`, or `#major`.
-2. Runs `so1omon563/release-creator@v1` when the merge message includes
-   `#release`, `#publish`, or `#ship`.
+2. Runs `so1omon563/release-creator@v1` when the merged PR title or body
+   includes `#release`, `#publish`, or `#ship`.
 3. Publishes the tagged package to PyPI through Trusted Publishing after the
    GitHub Release is created.
 
@@ -101,8 +101,10 @@ python -m venv /tmp/plex-tui-pypi
 ## 6. Homebrew Tap
 
 The `Post-release Homebrew Publish` workflow updates
-`so1omon563/homebrew-plex-tui` after a successful release workflow. It can also
-be run manually with a release tag. The workflow updates:
+`so1omon563/homebrew-plex-tui` after a successful release workflow only when the
+latest GitHub Release tag points at the completed workflow commit. Tag-only bump
+runs are ignored so they do not repackage an older release. The workflow can also
+be run manually with a release tag. It updates:
 
 - Formula URL and sha256.
 - Python resource blocks if dependencies changed.
@@ -123,10 +125,16 @@ Open tap updates as packaging-only PRs without semver bump markers.
 ## 7. Arch AUR
 
 The `Post-release AUR Update` workflow opens a packaging-only PR after a
-successful release workflow. It can also be run manually with a release tag. The
-workflow updates `packaging/aur/PKGBUILD`, regenerates `.SRCINFO`, validates the
+successful release workflow only when the latest GitHub Release tag points at the
+completed workflow commit. Tag-only bump runs are ignored so they do not
+repackage an older release. The workflow can also be run manually with a release
+tag. It updates `packaging/aur/PKGBUILD`, regenerates `.SRCINFO`, validates the
 package with `makepkg`, runs `namcap`, opens a PR without a semver bump marker,
-approves it, and enables auto-merge.
+and enables auto-merge.
+
+Generated packaging PRs are not self-approved. If branch protection requires
+review, configure rules so these packaging-only automation branches can merge
+after required checks pass, or approve them manually.
 
 After that PR merges, the `AUR Package` workflow validates the merged metadata
 on `main`. A successful `AUR Package` run triggers `Publish AUR Package`, which
