@@ -384,6 +384,7 @@ def test_render_app_diagnostics_summarizes_runtime_state(monkeypatch, tmp_path):
     assert "Subtitle mode: None" in rendered
     assert "Grid density: Large" in rendered
     assert "Grid prefetch pages: 4" in rendered
+    assert "Renderer status: Block art" in rendered
 
 
 def test_render_app_diagnostics_includes_mpv_hints_when_missing(monkeypatch, tmp_path):

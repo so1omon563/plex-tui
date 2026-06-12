@@ -24,7 +24,7 @@ from textual.timer import Timer
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 
 from . import __version__
-from .artwork import artwork_is_cached, fetch_artwork, render_artwork, render_protocol_artwork
+from .artwork import artwork_is_cached, fetch_artwork, protocol_renderer_status, render_artwork, render_protocol_artwork
 from .auth import LoginSession, ServerChoice, save_server_choice
 from .config import (
     DEFAULT_AUTO_LOAD_THRESHOLD,
@@ -3117,6 +3117,7 @@ def render_app_diagnostics(config: AppConfig, mpv_info: tuple[str, str]) -> str:
         "Artwork",
         f"Artwork: {artwork_mode_value(config)}",
         f"Renderer: {artwork_renderer_value(config)}",
+        f"Renderer status: {protocol_renderer_status(config.artwork_renderer)}",
         f"Details artwork: {detail_artwork_mode_value(config)}",
         "",
         "Browsing",

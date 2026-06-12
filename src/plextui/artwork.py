@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import os
 from io import BytesIO
@@ -17,6 +18,7 @@ from .config import AppConfig, cache_path
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
 ARTWORK_CACHE_LIMIT_BYTES = 100 * 1024 * 1024
 NATIVE_IMAGE_ENV = "PLEX_TUI_ENABLE_NATIVE_IMAGES"
+KITTY_PAYLOAD_CHUNK_SIZE = 4096
 
 
 def fetch_artwork(raw: Any, path: str, config: AppConfig, width: int | None = None, height: int | None = None) -> bytes:
@@ -136,6 +138,9 @@ def render_artwork(data: bytes, width: int = 28, max_height: int = 20) -> Text:
 
 
 def render_protocol_artwork(data: bytes, renderer: str, width: int = 28, max_height: int = 20) -> object | None:
+    resolved = resolve_protocol_renderer(renderer)
+    if resolved == "kitty":
+        return render_kitty_artwork(data, width=width, max_height=max_height)
     return None
 
 
@@ -147,6 +152,50 @@ def resolve_protocol_renderer(renderer: str) -> str:
     if renderer == "auto" and is_kitty_terminal():
         return "kitty"
     return "block"
+
+
+def protocol_renderer_status(renderer: str) -> str:
+    resolved = resolve_protocol_renderer(renderer)
+    if resolved == "kitty":
+        return "Kitty native images"
+    if not native_images_enabled() and renderer in {"auto", "kitty"}:
+        return "Block fallback; set PLEX_TUI_ENABLE_NATIVE_IMAGES=1 to enable native images"
+    if renderer == "auto":
+        return "Block fallback; Kitty terminal not detected"
+    if renderer == "kitty":
+        return "Block fallback; Kitty terminal not detected"
+    return "Block art"
+
+
+def render_kitty_artwork(data: bytes, width: int = 28, max_height: int = 20) -> Text:
+    image = load_image(data)
+    image = resize_for_cells(image, width, max_height)
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    payload = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return Text("".join(kitty_graphics_commands(payload)))
+
+
+def kitty_graphics_commands(payload: str) -> list[str]:
+    chunks = [
+        payload[index : index + KITTY_PAYLOAD_CHUNK_SIZE]
+        for index in range(0, len(payload), KITTY_PAYLOAD_CHUNK_SIZE)
+    ]
+    if not chunks:
+        return ["\033_Ga=T,f=100,q=2;\033\\"]
+    if len(chunks) == 1:
+        return [f"\033_Ga=T,f=100,q=2;{chunks[0]}\033\\"]
+
+    commands = []
+    for index, chunk in enumerate(chunks):
+        if index == 0:
+            prefix = "a=T,f=100,q=2,m=1"
+        elif index == len(chunks) - 1:
+            prefix = "m=0"
+        else:
+            prefix = "m=1"
+        commands.append(f"\033_G{prefix};{chunk}\033\\")
+    return commands
 
 
 def native_images_enabled() -> bool:

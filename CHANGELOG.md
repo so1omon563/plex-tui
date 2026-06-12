@@ -9,6 +9,7 @@
 - Added a compact active-playback footer while media is playing.
 - Simplified Settings rows into inline controls for numeric values, toggles, and option cycling.
 - Tuned grid density geometry and stabilized unloaded poster placeholders.
+- Added explicit opt-in Kitty native image rendering with block-art fallback diagnostics.
 
 ## 0.2.1 - 2026-06-11
 

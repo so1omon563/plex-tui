@@ -192,10 +192,17 @@ available, and the details pane shows the effective playback choices.
 
 ## Artwork
 
-Poster artwork renders as portable colored block art, so it works in ordinary
-terminals without Kitty, iTerm2, or Sixel support. Native terminal image output
-is disabled for now because Kitty protocol rendering conflicts with Textual's
-screen renderer in practice.
+Poster artwork renders as portable colored block art by default, so it works in
+ordinary terminals without Kitty, iTerm2, or Sixel support. Experimental Kitty
+native image output is available behind an explicit opt-in:
+
+```bash
+PLEX_TUI_ENABLE_NATIVE_IMAGES=1 plex-tui
+```
+
+Set `artwork_renderer = "kitty"` to force Kitty protocol attempts, or `auto` to
+use Kitty only when a Kitty-compatible terminal is detected. Unsupported cases
+fall back to block art and are summarized by `plex-tui --diagnostics`.
 
 Grid view prefetches artwork for the visible page immediately and, by default,
 prepares three pages ahead in the background. `grid_prefetch_pages` can be set
