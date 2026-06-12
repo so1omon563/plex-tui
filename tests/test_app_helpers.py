@@ -19,7 +19,9 @@ from plextui.app import (
     detail_artwork_enabled,
     effective_stream_preference_rows,
     format_offset,
+    grid_card_height,
     grid_card_width,
+    grid_geometry_for_size,
     grid_page_key,
     grid_status,
     media_row,
@@ -526,6 +528,19 @@ def test_grid_density_cycles_and_changes_card_width():
     )
 
 
+def test_grid_geometry_uses_density_at_common_terminal_sizes():
+    compact = AppConfig("http://plex", "token", "client", grid_density="compact")
+    comfortable = AppConfig("http://plex", "token", "client", grid_density="comfortable")
+    large = AppConfig("http://plex", "token", "client", grid_density="large")
+
+    assert grid_geometry_for_size(58, 24, compact) == (2, 2)
+    assert grid_geometry_for_size(58, 24, comfortable) == (2, 1)
+    assert grid_geometry_for_size(58, 24, large) == (1, 1)
+    assert grid_geometry_for_size(138, 34, compact) == (6, 3)
+    assert grid_geometry_for_size(138, 34, comfortable) == (5, 2)
+    assert grid_geometry_for_size(138, 34, large) == (4, 2)
+
+
 def test_card_artwork_pixel_size_tracks_terminal_render_size():
     assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="comfortable")) == (18, 18)
     assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="large")) == (24, 24)
@@ -565,6 +580,18 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
     assert "selected" in selected_text
     assert "┏" not in selected_text
     assert "▸ Movie" not in unselected_text
+
+
+def test_grid_card_placeholder_matches_artwork_height():
+    media = MediaItem("Movie", "2024", "movie", "1", True, object(), artwork_path="")
+    config = AppConfig("http://plex", "token", "client", grid_density="compact")
+
+    rendered = render_media_grid_card(media, False, config)
+
+    placeholder = rendered.renderables[0]
+    assert isinstance(placeholder, Group)
+    assert len(placeholder.renderables) == grid_card_height(config) - 3
+    assert any("[no poster]" in str(line) for line in placeholder.renderables)
 
 
 def test_grid_card_copies_cached_artwork_renderable():

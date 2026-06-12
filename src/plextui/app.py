@@ -63,9 +63,9 @@ from .player import (
 from .plex_service import PlexService, media_details, row_progress_marker
 GRID_CARD_GAP = 2
 GRID_DENSITY_SPECS = {
-    "compact": {"width": 19, "content_width": 16, "art_width": 14, "art_height": 7, "height": 10, "max_columns": 6},
-    "comfortable": {"width": 23, "content_width": 20, "art_width": 18, "art_height": 9, "height": 12, "max_columns": 5},
-    "large": {"width": 29, "content_width": 26, "art_width": 24, "art_height": 12, "height": 15, "max_columns": 4},
+    "compact": {"width": 18, "content_width": 15, "art_width": 14, "art_height": 7, "height": 10, "max_columns": 6},
+    "comfortable": {"width": 22, "content_width": 19, "art_width": 18, "art_height": 9, "height": 12, "max_columns": 5},
+    "large": {"width": 28, "content_width": 25, "art_width": 24, "art_height": 12, "height": 15, "max_columns": 4},
 }
 GRID_DETAIL_REFRESH_DELAY = 0.65
 LIST_DETAIL_REFRESH_DELAY = 0.35
@@ -1122,10 +1122,7 @@ class PlexTuiApp(App[None]):
 
     def media_grid_geometry(self) -> tuple[int, int]:
         media_size = self.query_one("#main").size
-        spec = grid_density_spec(self.config)
-        columns = max(1, min(int(spec["max_columns"]), max(1, media_size.width - 4) // grid_card_render_width(self.config)))
-        rows = max(1, min(4, max(1, media_size.height - 2) // grid_card_height(self.config)))
-        return columns, rows
+        return grid_geometry_for_size(media_size.width, media_size.height, self.config)
 
     def action_focus_search(self) -> None:
         self.search_global = False
@@ -2218,7 +2215,7 @@ def render_media_grid_card(
     artwork = copy_renderable(artwork)
     if artwork is None:
         status = "poster" if media.artwork_path else "no poster"
-        artwork = Text(f"[{status}]", style="dim")
+        artwork = grid_artwork_placeholder(status, config)
     footer = "selected" if selected else ""
     return Group(
         artwork,
@@ -2226,6 +2223,19 @@ def render_media_grid_card(
         Text(f"  {subtitle}", style="dim"),
         Text(f"  {footer}", style="#e5a00d" if selected else "dim"),
     )
+
+
+def grid_artwork_placeholder(status: str, config: AppConfig) -> Group:
+    spec = grid_density_spec(config)
+    width = int(spec["art_width"])
+    height = int(spec["art_height"])
+    label = truncate_text(f"[{status}]", width).center(width)
+    blank = " " * width
+    lines = []
+    midpoint = height // 2
+    for index in range(height):
+        lines.append(Text(label if index == midpoint else blank, style="dim"))
+    return Group(*lines)
 
 
 def copy_renderable(renderable: object | None) -> object | None:
@@ -2270,6 +2280,13 @@ def grid_card_render_width(config: AppConfig | None) -> int:
 
 def grid_card_height(config: AppConfig | None) -> int:
     return int(grid_density_spec(config)["height"])
+
+
+def grid_geometry_for_size(width: int, height: int, config: AppConfig | None) -> tuple[int, int]:
+    spec = grid_density_spec(config)
+    columns = max(1, min(int(spec["max_columns"]), max(1, width - 4) // grid_card_render_width(config)))
+    rows = max(1, min(4, max(1, height - 2) // grid_card_height(config)))
+    return columns, rows
 
 
 def truncate_text(value: str, width: int) -> str:

@@ -8,9 +8,8 @@
   shows the current defaults are too aggressive or too conservative.
 - Continue tuning focus and selection affordances based on real terminal themes.
 - Continue refining Settings ergonomics as new preferences are added.
-- Iterate on artwork/grid presentation:
-  - tune density presets across narrow and wide terminals
-  - consider separate poster-size controls if density presets are not enough
+- Consider separate poster-size controls only if density presets are not enough
+  after real-library verification.
 - Continue improving playback diagnostics as real-world `mpv` and Plex stream
   failures show up in use.
 
