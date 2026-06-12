@@ -1473,7 +1473,7 @@ class PlexTuiApp(App[None]):
 
     def refresh_settings_after_change(self, action: str, label: str, value: str) -> None:
         self.action_show_settings(selected_action=action)
-        self.show_detail_text(f"Changed\n\n{label}: {value}\n\nSettings saved.")
+        self.show_detail_text(render_settings_change_details(action, label, value, self.config))
         self.set_status(f"{label}: {value}")
 
     def action_show_help(self) -> None:
@@ -2591,15 +2591,36 @@ def render_settings_row_details(
     pending_confirmation_action: str = "",
 ) -> str:
     if isinstance(row, SettingsHeaderRow):
-        return f"Settings Section\n\n{row.label_text}\n\nUse Up/Down to choose a setting in this section."
+        return "\n".join([
+            "Settings Section",
+            "",
+            row.label_text,
+            "",
+            "Controls",
+            "- Up/Down moves through rows.",
+            "- Enter runs the highlighted setting when available.",
+        ])
     if isinstance(row, SettingsValueRow):
-        return f"Current Setting\n\n{row.label_text}\n\nThis row is informational and does not change on Enter."
+        return "\n".join([
+            "Current Setting",
+            "",
+            row.label_text,
+            "",
+            "This row is informational and does not change on Enter.",
+            "",
+            "Controls",
+            "- Up/Down moves through rows.",
+        ])
 
     if pending_confirmation_action == row.action and confirmation_required(row.action):
         return (
             "Confirm Action\n\n"
             f"{settings_action_label(row.action)}\n\n"
-            "Press Enter on this same row again to confirm."
+            "Status: armed\n\n"
+            f"{settings_action_current_value(row.action, config)}\n\n"
+            "Controls\n"
+            "- Press Enter on this same row again to confirm.\n"
+            "- Move away to cancel the confirmation."
         )
 
     if isinstance(row, SettingsNumericRow):
@@ -2614,7 +2635,10 @@ def render_settings_row_details(
             f"Step: {spec['step']}",
             f"Default: {spec['default']}",
             "",
-            "Enter edits the value. Left/Right adjusts by one step. Submit an empty value to reset to default.",
+            "Controls",
+            "- Enter edits the value.",
+            "- Left/Right adjusts by one step.",
+            "- Submit an empty value to reset to default.",
         ])
 
     if row.action_kind in {"toggle", "cycle"}:
@@ -2626,7 +2650,9 @@ def render_settings_row_details(
             f"Type: {row.action_kind}",
             settings_action_current_value(row.action, config),
             "",
-            "Enter or Left/Right changes this setting.",
+            "Controls",
+            "- Enter changes this setting.",
+            "- Left/Right changes this setting without opening an input.",
         ]
         return "\n".join(line for line in lines if line)
 
@@ -2638,9 +2664,30 @@ def render_settings_row_details(
         f"Type: {row.action_kind}",
         settings_action_current_value(row.action, config),
         "",
+        "Controls",
         settings_action_help(row.action),
     ]
     return "\n".join(line for line in lines if line)
+
+
+def render_settings_change_details(action: str, label: str, value: str, config: AppConfig) -> str:
+    lines = [
+        "Setting Saved",
+        "",
+        label,
+        "",
+        f"Current value: {value}",
+    ]
+    current = settings_action_current_value(action, config)
+    if current and current != f"Current value: {value}":
+        lines.extend(["", current])
+    lines.extend([
+        "",
+        "Controls",
+        "- The changed row remains selected.",
+        f"- {settings_action_help(action)}",
+    ])
+    return "\n".join(lines)
 
 
 def settings_action_current_value(action: str, config: AppConfig) -> str:

@@ -47,6 +47,7 @@ from plextui.app import (
     render_picker_details,
     render_playback_details,
     render_playback_error_details,
+    render_settings_change_details,
     render_settings_row_details,
     render_settings,
     render_playback_status,
@@ -238,10 +239,12 @@ def test_settings_row_details_describe_action_types():
     assert "Grid Density" in grid_details
     assert "Type: cycle" in grid_details
     assert "Current grid density: Comfortable" in grid_details
-    assert "Enter or Left/Right changes this setting." in grid_details
+    assert "Controls" in grid_details
+    assert "Left/Right changes this setting without opening an input." in grid_details
 
     confirm_details = render_settings_row_details(clear_row, config, pending_confirmation_action="clear_audio")
     assert "Confirm Action" in confirm_details
+    assert "Status: armed" in confirm_details
     assert "Press Enter on this same row again to confirm." in confirm_details
 
     input_details = render_settings_row_details(input_row, config)
@@ -252,6 +255,18 @@ def test_settings_row_details_describe_action_types():
     value_details = render_settings_row_details(value_row, config)
     assert "Current Setting" in value_details
     assert "does not change on Enter" in value_details
+
+
+def test_settings_change_details_show_saved_value_and_next_controls():
+    config = AppConfig("http://plex", "token", "client", grid_density="large")
+
+    rendered = render_settings_change_details("cycle_grid_density", "Grid density", "Large", config)
+
+    assert "Setting Saved" in rendered
+    assert "Current value: Large" in rendered
+    assert "Current grid density: Large" in rendered
+    assert "The changed row remains selected." in rendered
+    assert "cycle compact, comfortable, and large grid layouts" in rendered
 
 
 def test_detail_artwork_mode_defaults_to_list_only():
