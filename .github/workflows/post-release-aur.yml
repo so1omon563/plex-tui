@@ -63,11 +63,20 @@ jobs:
           if [ -n "$WORKFLOW_HEAD_SHA" ]; then
             git fetch --force origin "refs/tags/$tag:refs/tags/$tag"
             tag_sha="$(git rev-list -n 1 "$tag")"
-            if [ "$tag_sha" != "$WORKFLOW_HEAD_SHA" ]; then
+            workflow_sha="$WORKFLOW_HEAD_SHA"
+            merge_sha="$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "repos/${GITHUB_REPOSITORY}/commits/${WORKFLOW_HEAD_SHA}/pulls" \
+              --jq '[.[] | select(.merged_at != null) | .merge_commit_sha][0] // ""')"
+            if [ -n "$merge_sha" ]; then
+              workflow_sha="$merge_sha"
+            fi
+
+            if [ "$tag_sha" != "$workflow_sha" ]; then
               {
                 echo "publish=false"
               } >> "$GITHUB_OUTPUT"
-              echo "Latest release $tag points at $tag_sha, not completed workflow SHA $WORKFLOW_HEAD_SHA. Nothing to publish."
+              echo "Latest release $tag points at $tag_sha, not completed workflow SHA $workflow_sha. Nothing to publish."
               exit 0
             fi
           fi
