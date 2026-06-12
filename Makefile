@@ -1,4 +1,4 @@
-.PHONY: install-dev run test compile smoke build check-package check clean
+.PHONY: install-dev run test compile smoke build check-package check-release check clean
 
 PYTHON ?= .venv/bin/python
 
@@ -23,7 +23,10 @@ build:
 check-package: build
 	$(PYTHON) -m twine check dist/*
 
-check: smoke test compile check-package
+check-release:
+	$(PYTHON) scripts/check_release.py
+
+check: smoke test compile check-release check-package
 
 clean:
 	rm -rf build dist *.egg-info src/*.egg-info

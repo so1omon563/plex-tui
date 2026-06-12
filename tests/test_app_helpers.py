@@ -19,15 +19,19 @@ from plextui.app import (
     detail_artwork_enabled,
     effective_stream_preference_rows,
     format_offset,
+    grid_card_height,
     grid_card_width,
+    grid_geometry_for_size,
     grid_page_key,
     grid_status,
     media_row,
     media_rows,
     next_detail_artwork_mode,
+    next_artwork_renderer,
     next_grid_density,
     next_media_view,
     next_mpv_window_size,
+    playback_failure_hints,
     playback_exit_status,
     recent_debug_log_lines,
     render_audio_playback_preference,
@@ -181,15 +185,13 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "[ Artwork ]" in labels
     assert "[ Browsing ]" in labels
     assert "[ Diagnostics ]" in labels
-    assert "mpv Window Size: 1280x720  [cycle]" in labels
+    assert "Subtitle Mode: Auto  [cycle]" in labels
+    assert "mpv Window Size: 1280x720  [input]" in labels
     assert "Grid Density: Comfortable  [cycle]" in labels
-    assert "mpv Window Size: set custom value...  [input]" in labels
-    assert "Page Size: 80 +10  [step]" in labels
-    assert "Page Size: set custom value...  [input]" in labels
-    assert "Auto-load Threshold: 20 -5  [step]" in labels
-    assert "Auto-load Threshold: set custom value...  [input]" in labels
-    assert "Grid Prefetch Pages: 4 +1  [step]" in labels
-    assert "Grid Prefetch Pages: set custom value...  [input]" in labels
+    assert "Artwork Renderer: Block  [cycle]" in labels
+    assert "Page Size: 80 (range 25-500, step 10, default 40)  [input]" in labels
+    assert "Auto-load Threshold: 20 (range 1-100, step 5, default 10)  [input]" in labels
+    assert "Grid Prefetch Pages: 4 (range 0-5, step 1, default 3)  [input]" in labels
     assert "Show recent debug log  [show]" in labels
     assert "Show app diagnostics  [show]" in labels
 
@@ -203,17 +205,20 @@ def test_settings_row_details_describe_action_types():
     value_row = next(row for row in rows if getattr(row, "label_text", "").startswith("Server:"))
 
     grid_details = render_settings_row_details(grid_row, config)
+    assert "Setting Control" in grid_details
     assert "Grid Density" in grid_details
     assert "Type: cycle" in grid_details
     assert "Current grid density: Comfortable" in grid_details
+    assert "Enter or Left/Right changes this setting." in grid_details
 
     confirm_details = render_settings_row_details(clear_row, config, pending_confirmation_action="clear_audio")
     assert "Confirm Action" in confirm_details
     assert "Press Enter on this same row again to confirm." in confirm_details
 
     input_details = render_settings_row_details(input_row, config)
-    assert "Type: input" in input_details
-    assert "Current page size: 80" in input_details
+    assert "Numeric Setting" in input_details
+    assert "Current value: 80" in input_details
+    assert "Left/Right adjusts by one step" in input_details
 
     value_details = render_settings_row_details(value_row, config)
     assert "Current Setting" in value_details
@@ -247,6 +252,13 @@ def test_render_playback_preference_status():
     assert render_subtitle_playback_preference(config, None) == "subtitles eng not found, Plex/default"
     assert render_audio_playback_preference(config, StreamChoice(1, "Japanese")) == "audio Japanese"
     assert render_subtitle_playback_preference(config, StreamChoice(2, "English")) == "subtitles English"
+
+
+def test_next_artwork_renderer_cycles_values():
+    assert next_artwork_renderer("block") == "auto"
+    assert next_artwork_renderer("auto") == "kitty"
+    assert next_artwork_renderer("kitty") == "block"
+    assert next_artwork_renderer("bad") == "block"
 
 
 def test_render_playback_status_includes_active_launch_context():
@@ -372,6 +384,22 @@ def test_render_app_diagnostics_summarizes_runtime_state(monkeypatch, tmp_path):
     assert "Subtitle mode: None" in rendered
     assert "Grid density: Large" in rendered
     assert "Grid prefetch pages: 4" in rendered
+    assert "Renderer status: Block art" in rendered
+
+
+def test_render_app_diagnostics_includes_mpv_hints_when_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr("plextui.app.config_path", lambda: tmp_path / "config.toml")
+    monkeypatch.setattr("plextui.app.cache_path", lambda: tmp_path / "cache")
+    monkeypatch.setattr("plextui.app.debug_log_path", lambda: tmp_path / "debug.log")
+    config = AppConfig("http://plex", "token", "client-id")
+
+    rendered = render_app_diagnostics(config, ("missing", "mpv was not found on PATH"))
+
+    assert "App Diagnostics" in rendered
+    assert "Install mpv:" in rendered
+    assert "brew install mpv" in rendered
+    assert "sudo apt install mpv" in rendered
+    assert "sudo pacman -S mpv" in rendered
 
 
 def test_detect_mpv_reports_missing_found_and_failed(monkeypatch):
@@ -403,8 +431,32 @@ def test_render_playback_error_details_includes_recent_debug_log(tmp_path):
     assert "Playback Error" in rendered
     assert "failed to launch mpv" in rendered
     assert f"Debug log: {log}" in rendered
+    assert "Suggested Checks" in rendered
+    assert "mpv launch failed:" in rendered
     assert "launching mpv" not in rendered
     assert "playback error: failed" in rendered
+
+
+def test_playback_failure_hints_cover_common_failures():
+    missing = playback_failure_hints("mpv was not found in PATH")
+    assert "Install mpv:" in missing
+    assert "brew install mpv" in "\n".join(missing)
+
+    plex = playback_failure_hints("could not get stream URL from Plex: 401")
+    assert "Plex did not provide a stream URL:" in plex
+    assert "saved token still works" in "\n".join(plex)
+
+    empty = playback_failure_hints("Plex returned an empty stream URL")
+    assert "Plex returned an empty stream URL:" in empty
+    assert "Plex can play the item" in "\n".join(empty)
+
+    subtitles = playback_failure_hints("playback error: failed loading --sub-file")
+    assert "Subtitle playback may be involved:" in subtitles
+    assert "Subtitle Mode: none" in "\n".join(subtitles)
+
+    exited = playback_failure_hints("Playback exited with code 2: Movie")
+    assert "mpv exited abnormally:" in exited
+    assert "raw mpv output" in "\n".join(exited)
 
 
 def test_effective_stream_preferences_report_found_missing_and_none():
@@ -477,6 +529,19 @@ def test_grid_density_cycles_and_changes_card_width():
     )
 
 
+def test_grid_geometry_uses_density_at_common_terminal_sizes():
+    compact = AppConfig("http://plex", "token", "client", grid_density="compact")
+    comfortable = AppConfig("http://plex", "token", "client", grid_density="comfortable")
+    large = AppConfig("http://plex", "token", "client", grid_density="large")
+
+    assert grid_geometry_for_size(58, 24, compact) == (2, 2)
+    assert grid_geometry_for_size(58, 24, comfortable) == (2, 1)
+    assert grid_geometry_for_size(58, 24, large) == (1, 1)
+    assert grid_geometry_for_size(138, 34, compact) == (6, 3)
+    assert grid_geometry_for_size(138, 34, comfortable) == (5, 2)
+    assert grid_geometry_for_size(138, 34, large) == (4, 2)
+
+
 def test_card_artwork_pixel_size_tracks_terminal_render_size():
     assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="comfortable")) == (18, 18)
     assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="large")) == (24, 24)
@@ -516,6 +581,18 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
     assert "selected" in selected_text
     assert "┏" not in selected_text
     assert "▸ Movie" not in unselected_text
+
+
+def test_grid_card_placeholder_matches_artwork_height():
+    media = MediaItem("Movie", "2024", "movie", "1", True, object(), artwork_path="")
+    config = AppConfig("http://plex", "token", "client", grid_density="compact")
+
+    rendered = render_media_grid_card(media, False, config)
+
+    placeholder = rendered.renderables[0]
+    assert isinstance(placeholder, Group)
+    assert len(placeholder.renderables) == grid_card_height(config) - 3
+    assert any("[no poster]" in str(line) for line in placeholder.renderables)
 
 
 def test_grid_card_copies_cached_artwork_renderable():

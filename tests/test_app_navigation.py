@@ -341,6 +341,10 @@ def test_playback_error_shows_recent_debug_log(tmp_path):
     asyncio.run(run_playback_error_check(tmp_path))
 
 
+def test_playback_footer_shows_active_playback():
+    asyncio.run(run_playback_footer_check())
+
+
 def test_quick_preference_actions_update_config():
     asyncio.run(run_quick_preference_action_check())
 
@@ -351,6 +355,14 @@ def test_mpv_window_size_input_updates_preferences():
 
 def test_numeric_settings_input_updates_preferences():
     asyncio.run(run_numeric_settings_input_check())
+
+
+def test_numeric_settings_adjust_with_left_right():
+    asyncio.run(run_numeric_settings_left_right_check())
+
+
+def test_option_settings_cycle_with_left_right():
+    asyncio.run(run_option_settings_left_right_check())
 
 
 def test_grid_density_setting_stays_in_settings_view():
@@ -1191,8 +1203,10 @@ async def run_settings_action_check():
             assert app.config.mpv_window_size == ""
             app.run_settings_action("cycle_grid_density")
             assert app.config.grid_density == "large"
+            app.run_settings_action("cycle_artwork_renderer")
+            assert app.config.artwork_renderer == "auto"
 
-        assert save_config.call_count == 14
+        assert save_config.call_count == 15
 
 
 async def run_settings_recent_debug_log_check(tmp_path):
@@ -1258,6 +1272,40 @@ async def run_playback_error_check(tmp_path):
         assert "mpv missing" in details
         assert f"Debug log: {log}" in details
         assert "playback error: mpv missing" in details
+
+
+async def run_playback_footer_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig(
+            "http://plex",
+            "token",
+            "client-id",
+            preferred_audio_language="jpn",
+            preferred_subtitle_language="eng",
+            subtitle_mode="preferred",
+        )
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, Raw())])
+        await pilot.pause(0.2)
+
+        player = SimpleNamespace(
+            title="Movie",
+            start_offset_ms=65_000,
+            stream_mode="direct",
+            subtitle_count=2,
+            process=SimpleNamespace(poll=lambda: None),
+        )
+        with patch("plextui.app.play_with_mpv", return_value=player):
+            app.action_play_selected()
+        await pilot.pause(0.2)
+
+        footer = app.query_one("#playback-footer")
+        assert footer.display
+        assert footer.content == (
+            "Playing Movie / resume 1:05 / direct / 2 subtitles / audio jpn not found, Plex/default; "
+            "subtitles eng not found, Plex/default"
+        )
 
 
 async def run_quick_preference_action_check():
@@ -1327,6 +1375,46 @@ async def run_numeric_settings_input_check():
             assert app.config.grid_prefetch_pages == 3
 
         assert save_config.call_count == 6
+
+
+async def run_numeric_settings_left_right_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=80)
+        app.action_show_settings(selected_action="set_page_size")
+        await pilot.pause(0.2)
+
+        with patch("plextui.app.save_config") as save_config:
+            app.action_grid_right()
+            assert app.config.page_size == 90
+            app.action_grid_left()
+            assert app.config.page_size == 80
+
+        await pilot.pause(0.2)
+        assert save_config.call_count == 2
+        assert app.settings_visible
+        assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Settings"
+
+
+async def run_option_settings_left_right_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", grid_density="comfortable")
+        app.action_show_settings(selected_action="cycle_grid_density")
+        await pilot.pause(0.2)
+
+        with patch("plextui.app.save_config") as save_config:
+            app.action_grid_right()
+            assert app.config.grid_density == "large"
+            app.action_grid_left()
+            assert app.config.grid_density == "compact"
+
+        await pilot.pause(0.2)
+        assert save_config.call_count == 2
+        assert app.settings_visible
+        assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Settings"
 
 
 async def run_grid_density_settings_view_check():
@@ -1449,10 +1537,13 @@ async def run_completed_player_status_check():
         refreshed = []
         app.show_media_details = refreshed.append
         app.player = SimpleNamespace(title="Movie", process=SimpleNamespace(poll=lambda: 0))
+        app.set_playback_footer("Playing Movie")
 
         app.check_player_status()
         await pilot.pause(0.1)
 
         assert app.player is None
         assert app.query_one("#status").content == "Playback ended: Movie"
+        assert not app.query_one("#playback-footer").display
+        assert app.query_one("#playback-footer").content == ""
         assert refreshed == [item]

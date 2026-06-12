@@ -92,6 +92,7 @@ Useful CLI checks:
 plex-tui --version
 plex-tui --config-path
 plex-tui --debug-log-path
+plex-tui --diagnostics
 plex-tui --smoke
 ```
 
@@ -192,9 +193,11 @@ available, and the details pane shows the effective playback choices.
 ## Artwork
 
 Poster artwork renders as portable colored block art, so it works in ordinary
-terminals without Kitty, iTerm2, or Sixel support. Native terminal image output
-is disabled for now because Kitty protocol rendering conflicts with Textual's
-screen renderer in practice.
+terminals without Kitty, iTerm2, or Sixel support. Native Kitty image output is
+disabled inside the Textual app because direct Kitty graphics protocol placement
+can destabilize the UI. If `artwork_renderer` is set to `auto` or `kitty`, the
+app falls back to block art and summarizes the fallback in
+`plex-tui --diagnostics`.
 
 Grid view prefetches artwork for the visible page immediately and, by default,
 prepares three pages ahead in the background. `grid_prefetch_pages` can be set
@@ -221,6 +224,12 @@ Enable browsing performance timings before launch:
 
 ```bash
 PLEX_TUI_PERF_LOG=1 plex-tui
+```
+
+To collect environment information for issue reports:
+
+```bash
+plex-tui --diagnostics
 ```
 
 Verbose grid artwork internals are quieter by default. Include them only when

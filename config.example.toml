@@ -31,7 +31,7 @@ client_identifier = "plex-tui-your-stable-client-id"
 # artwork_mode can be "on" or "off".
 # artwork_mode = "on"
 # artwork_renderer can be "block", "auto", or "kitty". Auto/kitty currently
-# fall back to block art while native terminal image support is disabled.
+# fall back to block art because direct Kitty image placement is unsafe in Textual.
 # artwork_renderer = "block"
 # detail_artwork_mode can be "list_only", "on", or "off".
 # detail_artwork_mode = "list_only"

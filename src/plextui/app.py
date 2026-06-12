@@ -24,7 +24,7 @@ from textual.timer import Timer
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 
 from . import __version__
-from .artwork import artwork_is_cached, fetch_artwork, render_artwork, render_protocol_artwork
+from .artwork import artwork_is_cached, fetch_artwork, protocol_renderer_status, render_artwork, render_protocol_artwork
 from .auth import LoginSession, ServerChoice, save_server_choice
 from .config import (
     DEFAULT_AUTO_LOAD_THRESHOLD,
@@ -63,9 +63,9 @@ from .player import (
 from .plex_service import PlexService, media_details, row_progress_marker
 GRID_CARD_GAP = 2
 GRID_DENSITY_SPECS = {
-    "compact": {"width": 19, "content_width": 16, "art_width": 14, "art_height": 7, "height": 10, "max_columns": 6},
-    "comfortable": {"width": 23, "content_width": 20, "art_width": 18, "art_height": 9, "height": 12, "max_columns": 5},
-    "large": {"width": 29, "content_width": 26, "art_width": 24, "art_height": 12, "height": 15, "max_columns": 4},
+    "compact": {"width": 18, "content_width": 15, "art_width": 14, "art_height": 7, "height": 10, "max_columns": 6},
+    "comfortable": {"width": 22, "content_width": 19, "art_width": 18, "art_height": 9, "height": 12, "max_columns": 5},
+    "large": {"width": 28, "content_width": 25, "art_width": 24, "art_height": 12, "height": 15, "max_columns": 4},
 }
 GRID_DETAIL_REFRESH_DELAY = 0.65
 LIST_DETAIL_REFRESH_DELAY = 0.35
@@ -285,6 +285,12 @@ class SettingsActionRow(ListItem):
         super().__init__(Label(self.label_text))
 
 
+class SettingsNumericRow(SettingsActionRow):
+    def __init__(self, label: str, action: str, setting_name: str) -> None:
+        self.setting_name = setting_name
+        super().__init__(label, action)
+
+
 class SettingsHeaderRow(ListItem):
     def __init__(self, label: str) -> None:
         self.label_text = f"[ {label} ]"
@@ -349,6 +355,13 @@ class PlexTuiApp(App[None]):
         height: 1;
         padding: 0 1;
         background: $surface;
+    }
+
+    #playback-footer {
+        height: 1;
+        padding: 0 1;
+        background: $panel;
+        color: $text;
     }
 
     .pane-title {
@@ -458,6 +471,7 @@ class PlexTuiApp(App[None]):
                 yield Static("Details", id="details-title", classes="pane-title")
                 with VerticalScroll(id="detail-scroll"):
                     yield Static("Select an item", id="detail-content")
+        yield Static("", id="playback-footer")
         yield Static("", id="status")
         yield Footer()
 
@@ -494,6 +508,7 @@ class PlexTuiApp(App[None]):
             pass
         self.query_one("#search", Input).display = False
         self.query_one("#media-grid-scroll", VerticalScroll).display = False
+        self.clear_playback_footer()
         self.set_interval(1.0, self.check_player_status)
         self.load_server()
 
@@ -1107,10 +1122,7 @@ class PlexTuiApp(App[None]):
 
     def media_grid_geometry(self) -> tuple[int, int]:
         media_size = self.query_one("#main").size
-        spec = grid_density_spec(self.config)
-        columns = max(1, min(int(spec["max_columns"]), max(1, media_size.width - 4) // grid_card_render_width(self.config)))
-        rows = max(1, min(4, max(1, media_size.height - 2) // grid_card_height(self.config)))
-        return columns, rows
+        return grid_geometry_for_size(media_size.width, media_size.height, self.config)
 
     def action_focus_search(self) -> None:
         self.search_global = False
@@ -1180,10 +1192,33 @@ class PlexTuiApp(App[None]):
         self.set_status(f"Media view: {media_view_value(self.config)}")
 
     def action_grid_left(self) -> None:
+        if self.adjust_highlighted_setting(-1):
+            return
         self.move_grid_selection(-1)
 
     def action_grid_right(self) -> None:
+        if self.adjust_highlighted_setting(1):
+            return
         self.move_grid_selection(1)
+
+    def adjust_highlighted_setting(self, direction: int) -> bool:
+        if not self.settings_visible:
+            return False
+        row = self.query_one("#media", ListView).highlighted_child
+        if isinstance(row, SettingsNumericRow):
+            spec = numeric_setting_spec(row.setting_name)
+            step = int(spec["step"]) * direction
+            self.update_numeric_preference(
+                row.setting_name,
+                step,
+                int(spec["minimum"]),
+                int(spec["maximum"]),
+            )
+            return True
+        if isinstance(row, SettingsActionRow) and row.action_kind in {"toggle", "cycle"}:
+            self.run_settings_action(row.action)
+            return True
+        return False
 
     def move_grid_selection(self, direction: int) -> None:
         grid = self.query_one("#media-grid", MediaGrid)
@@ -1495,6 +1530,11 @@ class PlexTuiApp(App[None]):
             if self.update_preferences(preferred_subtitle_language="", subtitle_mode="auto"):
                 self.refresh_settings_after_change(action, "Subtitle preference", "Auto")
             return
+        if action == "cycle_subtitle_mode":
+            self.action_cycle_subtitle_mode()
+            if self.settings_visible:
+                self.refresh_settings_after_change(action, "Subtitle mode", subtitle_mode_value(self.config))
+            return
         if action == "toggle_artwork":
             next_mode = "off" if self.config.artwork_mode == "on" else "on"
             if self.update_preferences(artwork_mode=next_mode):
@@ -1619,6 +1659,11 @@ class PlexTuiApp(App[None]):
             if self.update_preferences(artwork_renderer="kitty"):
                 self.refresh_settings_after_change(action, "Artwork renderer", "Kitty")
             return
+        if action == "cycle_artwork_renderer":
+            next_renderer = next_artwork_renderer(self.config.artwork_renderer)
+            if self.update_preferences(artwork_renderer=next_renderer):
+                self.refresh_settings_after_change(action, "Artwork renderer", artwork_renderer_value(self.config))
+            return
         self.set_status(f"Unknown settings action: {action}")
 
     def action_subtitle_picker(self) -> None:
@@ -1736,7 +1781,7 @@ class PlexTuiApp(App[None]):
         if not self.update_preferences(**{name: value}):
             return False
         label = numeric_setting_label(name)
-        self.refresh_settings_after_change(numeric_step_action(name, step), label, str(value))
+        self.refresh_settings_after_change(f"set_{name}", label, str(value))
         return True
 
     def prompt_mpv_window_size(self) -> None:
@@ -1961,6 +2006,7 @@ class PlexTuiApp(App[None]):
                 window_size=self.config.mpv_window_size,
             )
         except PlayerError as exc:
+            self.clear_playback_footer()
             self.show_playback_error(str(exc))
             return
         self.detail_refresh_token += 1
@@ -1968,9 +2014,9 @@ class PlexTuiApp(App[None]):
         self.show_detail_text(
             render_playback_details(media.title, self.player, self.config, audio_choice, subtitle_choice)
         )
-        self.set_status(
-            render_playback_status(media.title, self.player, self.config, audio_choice, subtitle_choice)
-        )
+        status = render_playback_status(media.title, self.player, self.config, audio_choice, subtitle_choice)
+        self.set_status(status)
+        self.set_playback_footer(status)
 
     def check_player_status(self) -> None:
         if self.player is None:
@@ -1980,6 +2026,7 @@ class PlexTuiApp(App[None]):
             return
         selected = self.selected_media()
         self.player = None
+        self.clear_playback_footer()
         if selected is not None:
             self.show_media_details(selected)
         self.set_status(status)
@@ -1988,14 +2035,17 @@ class PlexTuiApp(App[None]):
         if self.player is None:
             self.set_status("Nothing is playing")
             self.player = None
+            self.clear_playback_footer()
             return
         if not self.player.active:
             self.set_status(playback_exit_status(self.player, debug_log_path()) or "Nothing is playing")
             self.player = None
+            self.clear_playback_footer()
             return
         title = self.player.title
         stop_mpv(self.player)
         self.player = None
+        self.clear_playback_footer()
         self.set_status(f"Stopped {title}")
 
     def action_reload(self) -> None:
@@ -2013,6 +2063,22 @@ class PlexTuiApp(App[None]):
             self.query_one("#status", Static).update(text)
         except NoMatches:
             return
+
+    def set_playback_footer(self, text: str) -> None:
+        try:
+            footer = self.query_one("#playback-footer", Static)
+        except NoMatches:
+            return
+        footer.display = True
+        footer.update(text)
+
+    def clear_playback_footer(self) -> None:
+        try:
+            footer = self.query_one("#playback-footer", Static)
+        except NoMatches:
+            return
+        footer.update("")
+        footer.display = False
 
     def show_error(self, text: str) -> None:
         config_hint = f"Config: {config_path()}"
@@ -2149,7 +2215,7 @@ def render_media_grid_card(
     artwork = copy_renderable(artwork)
     if artwork is None:
         status = "poster" if media.artwork_path else "no poster"
-        artwork = Text(f"[{status}]", style="dim")
+        artwork = grid_artwork_placeholder(status, config)
     footer = "selected" if selected else ""
     return Group(
         artwork,
@@ -2157,6 +2223,19 @@ def render_media_grid_card(
         Text(f"  {subtitle}", style="dim"),
         Text(f"  {footer}", style="#e5a00d" if selected else "dim"),
     )
+
+
+def grid_artwork_placeholder(status: str, config: AppConfig) -> Group:
+    spec = grid_density_spec(config)
+    width = int(spec["art_width"])
+    height = int(spec["art_height"])
+    label = truncate_text(f"[{status}]", width).center(width)
+    blank = " " * width
+    lines = []
+    midpoint = height // 2
+    for index in range(height):
+        lines.append(Text(label if index == midpoint else blank, style="dim"))
+    return Group(*lines)
 
 
 def copy_renderable(renderable: object | None) -> object | None:
@@ -2201,6 +2280,13 @@ def grid_card_render_width(config: AppConfig | None) -> int:
 
 def grid_card_height(config: AppConfig | None) -> int:
     return int(grid_density_spec(config)["height"])
+
+
+def grid_geometry_for_size(width: int, height: int, config: AppConfig | None) -> tuple[int, int]:
+    spec = grid_density_spec(config)
+    columns = max(1, min(int(spec["max_columns"]), max(1, width - 4) // grid_card_render_width(config)))
+    rows = max(1, min(4, max(1, height - 2) // grid_card_height(config)))
+    return columns, rows
 
 
 def truncate_text(value: str, width: int) -> str:
@@ -2250,7 +2336,7 @@ def settings_rows(config: AppConfig) -> list[ListItem]:
         SettingsActionRow("Relogin with Plex", "relogin"),
         SettingsHeaderRow("Streams"),
         SettingsValueRow(f"Audio Preference: {preference_value(config.preferred_audio_language)}"),
-        SettingsValueRow(f"Subtitle Mode: {subtitle_mode_value(config)}"),
+        SettingsActionRow(f"Subtitle Mode: {subtitle_mode_value(config)}", "cycle_subtitle_mode"),
         SettingsValueRow(f"Subtitle Language: {subtitle_language_value(config)}"),
         SettingsActionRow("Clear audio preference", "clear_audio"),
         SettingsActionRow("Set subtitles to Auto", "subtitle_auto"),
@@ -2258,30 +2344,17 @@ def settings_rows(config: AppConfig) -> list[ListItem]:
         SettingsActionRow("Clear subtitle preference", "clear_subtitle"),
         SettingsActionRow("Clear audio/subtitle preferences", "clear_tracks"),
         SettingsHeaderRow("Playback"),
-        SettingsActionRow(f"mpv Window Size: {mpv_window_size_value(config)}", "cycle_mpv_window_size"),
-        SettingsActionRow("mpv Window Size: set custom value...", "set_mpv_window_size"),
-        SettingsActionRow("mpv Window Size: reset to Default", "reset_mpv_window_size"),
+        SettingsActionRow(f"mpv Window Size: {mpv_window_size_value(config)}", "set_mpv_window_size"),
         SettingsHeaderRow("Artwork"),
         SettingsActionRow(f"Artwork: {artwork_mode_value(config)}", "toggle_artwork"),
         SettingsActionRow(f"Details Artwork: {detail_artwork_mode_value(config)}", "cycle_detail_artwork"),
-        SettingsActionRow("Artwork Renderer: block", "artwork_renderer_block"),
-        SettingsActionRow("Artwork Renderer: auto", "artwork_renderer_auto"),
-        SettingsActionRow("Artwork Renderer: Kitty", "artwork_renderer_kitty"),
+        SettingsActionRow(f"Artwork Renderer: {artwork_renderer_value(config)}", "cycle_artwork_renderer"),
         SettingsHeaderRow("Browsing"),
         SettingsActionRow(f"Media View: {media_view_value(config)}", "toggle_media_view"),
         SettingsActionRow(f"Grid Density: {grid_density_value(config)}", "cycle_grid_density"),
-        SettingsActionRow(f"Page Size: {config.page_size} -10", "decrease_page_size"),
-        SettingsActionRow(f"Page Size: {config.page_size} +10", "increase_page_size"),
-        SettingsActionRow("Page Size: set custom value...", "set_page_size"),
-        SettingsActionRow(f"Page Size: reset to {DEFAULT_PAGE_SIZE}", "reset_page_size"),
-        SettingsActionRow(f"Auto-load Threshold: {config.auto_load_threshold} -5", "decrease_auto_load_threshold"),
-        SettingsActionRow(f"Auto-load Threshold: {config.auto_load_threshold} +5", "increase_auto_load_threshold"),
-        SettingsActionRow("Auto-load Threshold: set custom value...", "set_auto_load_threshold"),
-        SettingsActionRow(f"Auto-load Threshold: reset to {DEFAULT_AUTO_LOAD_THRESHOLD}", "reset_auto_load_threshold"),
-        SettingsActionRow(f"Grid Prefetch Pages: {config.grid_prefetch_pages} -1", "decrease_grid_prefetch_pages"),
-        SettingsActionRow(f"Grid Prefetch Pages: {config.grid_prefetch_pages} +1", "increase_grid_prefetch_pages"),
-        SettingsActionRow("Grid Prefetch Pages: set custom value...", "set_grid_prefetch_pages"),
-        SettingsActionRow(f"Grid Prefetch Pages: reset to {DEFAULT_GRID_PREFETCH_PAGES}", "reset_grid_prefetch_pages"),
+        numeric_settings_row(config, "page_size"),
+        numeric_settings_row(config, "auto_load_threshold"),
+        numeric_settings_row(config, "grid_prefetch_pages"),
         SettingsHeaderRow("Diagnostics"),
         SettingsValueRow(f"Config Path: {config_path()}"),
         SettingsValueRow(f"Cache Path: {cache_path()}"),
@@ -2402,15 +2475,17 @@ def context_hint(row: object) -> str:
         return "Enter selects server"
     if isinstance(row, StreamRow):
         return "Enter saves preference"
+    if isinstance(row, SettingsNumericRow):
+        return "Enter edits / Left-Right adjusts"
     if isinstance(row, SettingsActionRow):
         if row.action_kind == "confirm":
             return "Enter once to arm / Enter again to confirm"
         if row.action_kind == "input":
             return "Enter edits value"
         if row.action_kind == "toggle":
-            return "Enter toggles setting"
+            return "Enter or Left-Right toggles"
         if row.action_kind == "cycle":
-            return "Enter cycles setting"
+            return "Enter or Left-Right cycles"
         if row.action_kind == "step":
             return "Enter adjusts setting"
         if row.action_kind == "reset":
@@ -2466,6 +2541,34 @@ def render_settings_row_details(
             "Press Enter on this same row again to confirm."
         )
 
+    if isinstance(row, SettingsNumericRow):
+        spec = numeric_setting_spec(row.setting_name)
+        return "\n".join([
+            "Numeric Setting",
+            "",
+            settings_action_label(row.action),
+            "",
+            f"Current value: {getattr(config, row.setting_name)}",
+            f"Allowed range: {spec['minimum']} to {spec['maximum']}",
+            f"Step: {spec['step']}",
+            f"Default: {spec['default']}",
+            "",
+            "Enter edits the value. Left/Right adjusts by one step. Submit an empty value to reset to default.",
+        ])
+
+    if row.action_kind in {"toggle", "cycle"}:
+        lines = [
+            "Setting Control",
+            "",
+            settings_action_label(row.action),
+            "",
+            f"Type: {row.action_kind}",
+            settings_action_current_value(row.action, config),
+            "",
+            "Enter or Left/Right changes this setting.",
+        ]
+        return "\n".join(line for line in lines if line)
+
     lines = [
         "Setting Action",
         "",
@@ -2493,13 +2596,18 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
             f"Current subtitle mode: {subtitle_mode_value(config)}\n"
             f"Current subtitle language: {subtitle_language_value(config)}"
         )
+    if action == "cycle_subtitle_mode":
+        return (
+            f"Current subtitle mode: {subtitle_mode_value(config)}\n"
+            f"Current subtitle language: {subtitle_language_value(config)}"
+        )
     if action in {"cycle_mpv_window_size", "set_mpv_window_size", "reset_mpv_window_size"}:
         return f"Current mpv window size: {mpv_window_size_value(config)}"
     if action == "toggle_artwork":
         return f"Current artwork: {artwork_mode_value(config)}"
     if action == "cycle_detail_artwork":
         return f"Current details artwork: {detail_artwork_mode_value(config)}"
-    if action.startswith("artwork_renderer_"):
+    if action.startswith("artwork_renderer_") or action == "cycle_artwork_renderer":
         return f"Current artwork renderer: {artwork_renderer_value(config)}"
     if action == "toggle_media_view":
         return f"Current media view: {media_view_value(config)}"
@@ -2529,6 +2637,8 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to let Plex or saved language preference choose subtitles."
     if action == "subtitle_none":
         return "Press Enter to disable subtitles by default."
+    if action == "cycle_subtitle_mode":
+        return "Press Enter to cycle subtitle mode. Use subtitle picker to save a preferred language."
     if action == "cycle_mpv_window_size":
         return "Press Enter to cycle through default window-size presets."
     if action == "set_mpv_window_size":
@@ -2537,7 +2647,7 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to turn artwork fetching on or off."
     if action == "cycle_detail_artwork":
         return "Press Enter to choose where poster art appears in the details pane."
-    if action.startswith("artwork_renderer_"):
+    if action.startswith("artwork_renderer_") or action == "cycle_artwork_renderer":
         return "Press Enter to select this terminal artwork renderer."
     if action == "toggle_media_view":
         return "Press Enter to switch between list and grid browsing."
@@ -2571,33 +2681,72 @@ def settings_action_label(action: str) -> str:
         "relogin": "Relogin with Plex",
         "subtitle_auto": "Set subtitles to Auto",
         "subtitle_none": "Set subtitles to None",
+        "cycle_subtitle_mode": "Subtitle Mode",
         "cycle_mpv_window_size": "mpv Window Size",
-        "set_mpv_window_size": "mpv Window Size: set custom value",
+        "set_mpv_window_size": "mpv Window Size",
         "reset_mpv_window_size": "mpv Window Size: reset to Default",
         "toggle_artwork": "Artwork",
         "cycle_detail_artwork": "Details Artwork",
         "artwork_renderer_block": "Artwork Renderer: block",
         "artwork_renderer_auto": "Artwork Renderer: auto",
         "artwork_renderer_kitty": "Artwork Renderer: Kitty",
+        "cycle_artwork_renderer": "Artwork Renderer",
         "toggle_media_view": "Media View",
         "cycle_grid_density": "Grid Density",
         "decrease_page_size": "Page Size: decrease",
         "increase_page_size": "Page Size: increase",
-        "set_page_size": "Page Size: set custom value",
+        "set_page_size": "Page Size",
         "reset_page_size": f"Page Size: reset to {DEFAULT_PAGE_SIZE}",
         "decrease_auto_load_threshold": "Auto-load Threshold: decrease",
         "increase_auto_load_threshold": "Auto-load Threshold: increase",
-        "set_auto_load_threshold": "Auto-load Threshold: set custom value",
+        "set_auto_load_threshold": "Auto-load Threshold",
         "reset_auto_load_threshold": f"Auto-load Threshold: reset to {DEFAULT_AUTO_LOAD_THRESHOLD}",
         "decrease_grid_prefetch_pages": "Grid Prefetch Pages: decrease",
         "increase_grid_prefetch_pages": "Grid Prefetch Pages: increase",
-        "set_grid_prefetch_pages": "Grid Prefetch Pages: set custom value",
+        "set_grid_prefetch_pages": "Grid Prefetch Pages",
         "reset_grid_prefetch_pages": f"Grid Prefetch Pages: reset to {DEFAULT_GRID_PREFETCH_PAGES}",
         "show_debug_log": "Show debug log path",
         "show_recent_debug_log": "Show recent debug log",
         "show_app_diagnostics": "Show app diagnostics",
     }
     return labels.get(action, action)
+
+
+def numeric_settings_row(config: AppConfig, name: str) -> SettingsNumericRow:
+    spec = numeric_setting_spec(name)
+    value = int(getattr(config, name))
+    label = (
+        f"{spec['label']}: {value} "
+        f"(range {spec['minimum']}-{spec['maximum']}, step {spec['step']}, default {spec['default']})"
+    )
+    return SettingsNumericRow(label, f"set_{name}", name)
+
+
+def numeric_setting_spec(name: str) -> dict[str, int | str]:
+    specs: dict[str, dict[str, int | str]] = {
+        "page_size": {
+            "label": "Page Size",
+            "minimum": MIN_PAGE_SIZE,
+            "maximum": MAX_PAGE_SIZE,
+            "default": DEFAULT_PAGE_SIZE,
+            "step": 10,
+        },
+        "auto_load_threshold": {
+            "label": "Auto-load Threshold",
+            "minimum": MIN_AUTO_LOAD_THRESHOLD,
+            "maximum": MAX_AUTO_LOAD_THRESHOLD,
+            "default": DEFAULT_AUTO_LOAD_THRESHOLD,
+            "step": 5,
+        },
+        "grid_prefetch_pages": {
+            "label": "Grid Prefetch Pages",
+            "minimum": MIN_GRID_PREFETCH_PAGES,
+            "maximum": MAX_GRID_PREFETCH_PAGES,
+            "default": DEFAULT_GRID_PREFETCH_PAGES,
+            "step": 1,
+        },
+    }
+    return specs[name]
 
 
 def numeric_setting_label(name: str) -> str:
@@ -2608,11 +2757,6 @@ def numeric_setting_label(name: str) -> str:
     if name == "page_size":
         return "Page size"
     return name
-
-
-def numeric_step_action(name: str, step: int) -> str:
-    prefix = "increase" if step > 0 else "decrease"
-    return f"{prefix}_{name}"
 
 
 def render_loaded_status(title: str, loaded: int, total: int | None, has_more: bool) -> str:
@@ -2704,6 +2848,15 @@ def artwork_renderer_value(config: AppConfig) -> str:
     if config.artwork_renderer == "auto":
         return "Auto"
     return "Block"
+
+
+def next_artwork_renderer(value: str) -> str:
+    values = ["block", "auto", "kitty"]
+    try:
+        index = values.index(value)
+    except ValueError:
+        return "block"
+    return values[(index + 1) % len(values)]
 
 
 def detail_artwork_mode_value(config: AppConfig) -> str:
@@ -2868,6 +3021,65 @@ def detect_mpv() -> tuple[str, str]:
     return path, version
 
 
+def mpv_install_hints() -> list[str]:
+    return [
+        "Install mpv:",
+        "  macOS/Homebrew: brew install mpv",
+        "  Debian/Ubuntu: sudo apt install mpv",
+        "  Fedora: sudo dnf install mpv",
+        "  Arch Linux / Manjaro: sudo pacman -S mpv",
+    ]
+
+
+def playback_failure_hints(error: str, recent_log: list[str] | None = None) -> list[str]:
+    text = "\n".join([error, *(recent_log or [])]).lower()
+    hints: list[str] = []
+    if "mpv was not found" in text or "mpv missing" in text or "no such file or directory: 'mpv'" in text:
+        hints.extend(mpv_install_hints())
+    elif "failed to launch mpv" in text or "permission denied" in text:
+        hints.extend([
+            "mpv launch failed:",
+            "  Confirm mpv is executable and available on PATH.",
+            "  Run `mpv --version` in the same shell used to start plex-tui.",
+        ])
+    if "could not get stream url" in text:
+        hints.extend([
+            "Plex did not provide a stream URL:",
+            "  Confirm the server is reachable and the saved token still works.",
+            "  Try reloading libraries or signing in again from Settings.",
+        ])
+    if "empty stream url" in text:
+        hints.extend([
+            "Plex returned an empty stream URL:",
+            "  Try a different item to separate media-specific issues from server issues.",
+            "  Check whether Plex can play the item in its own web player.",
+        ])
+    if ("sub-file" in text or "subtitle" in text) and ("failed" in text or "error" in text):
+        hints.extend([
+            "Subtitle playback may be involved:",
+            "  Try Subtitle Mode: none, then retry playback.",
+            "  If that works, choose a different subtitle track or clear the saved subtitle preference.",
+        ])
+    if "playback exited with code" in text:
+        hints.extend([
+            "mpv exited abnormally:",
+            "  Open the debug log path above and check the launch arguments.",
+            "  Retry from a terminal with the same media if you need raw mpv output.",
+        ])
+    return dedupe_lines(hints)
+
+
+def dedupe_lines(lines: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for line in lines:
+        if line in seen:
+            continue
+        seen.add(line)
+        deduped.append(line)
+    return deduped
+
+
 def render_app_diagnostics(config: AppConfig, mpv_info: tuple[str, str]) -> str:
     mpv_path, mpv_version = mpv_info
     lines = [
@@ -2892,6 +3104,10 @@ def render_app_diagnostics(config: AppConfig, mpv_info: tuple[str, str]) -> str:
         f"mpv: {mpv_path}",
         f"mpv version: {mpv_version}",
         f"mpv window size: {mpv_window_size_value(config)}",
+    ]
+    if mpv_path == "missing" or mpv_version.startswith("version check failed"):
+        lines.extend(["", *mpv_install_hints()])
+    lines.extend([
         "",
         "Streams",
         f"Audio preference: {preference_value(config.preferred_audio_language)}",
@@ -2901,6 +3117,7 @@ def render_app_diagnostics(config: AppConfig, mpv_info: tuple[str, str]) -> str:
         "Artwork",
         f"Artwork: {artwork_mode_value(config)}",
         f"Renderer: {artwork_renderer_value(config)}",
+        f"Renderer status: {protocol_renderer_status(config.artwork_renderer)}",
         f"Details artwork: {detail_artwork_mode_value(config)}",
         "",
         "Browsing",
@@ -2909,21 +3126,30 @@ def render_app_diagnostics(config: AppConfig, mpv_info: tuple[str, str]) -> str:
         f"Page size: {config.page_size}",
         f"Auto-load threshold: {config.auto_load_threshold}",
         f"Grid prefetch pages: {config.grid_prefetch_pages}",
-    ]
+    ])
     return "\n".join(lines)
 
 
 def render_playback_error_details(error: str, path: Path, max_lines: int = 12) -> str:
+    recent = recent_debug_log_lines(path, max_lines)
     lines = [
         "Playback Error",
         "",
         error,
         "",
         f"Debug log: {path}",
+    ]
+    hints = playback_failure_hints(error, recent)
+    if hints:
+        lines.extend([
+            "",
+            "Suggested Checks",
+            *hints,
+        ])
+    lines.extend([
         "",
         "Recent Debug Log",
-    ]
-    recent = recent_debug_log_lines(path, max_lines)
+    ])
     if recent:
         lines.extend(recent)
     else:

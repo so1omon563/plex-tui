@@ -4,6 +4,7 @@ import pytest
 
 from plextui import __version__
 from plextui import __main__ as cli
+from plextui.config import AppConfig
 
 
 def test_cli_prints_config_path(monkeypatch, capsys):
@@ -20,6 +21,21 @@ def test_cli_prints_debug_log_path(monkeypatch, capsys):
     assert cli.main(["--debug-log-path"]) == 0
 
     assert capsys.readouterr().out == "/tmp/plex-tui/debug.log\n"
+
+
+def test_cli_prints_diagnostics(monkeypatch, capsys):
+    config = AppConfig("http://plex", "token", "client-id")
+    monkeypatch.setattr(cli, "load_config", lambda: config)
+    monkeypatch.setattr(cli, "detect_mpv", lambda: ("/usr/bin/mpv", "mpv 0.40.0"))
+    monkeypatch.setattr(
+        cli,
+        "render_app_diagnostics",
+        lambda _config, _mpv_info: "App Diagnostics\nmpv: /usr/bin/mpv\n",
+    )
+
+    assert cli.main(["--diagnostics"]) == 0
+
+    assert capsys.readouterr().out == "App Diagnostics\nmpv: /usr/bin/mpv\n\n"
 
 
 def test_cli_prints_version(capsys):

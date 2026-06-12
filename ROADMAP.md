@@ -2,33 +2,38 @@
 
 ## App UX
 
-- Keep measuring real library browsing, especially any remaining list/grid latency after the prefetch/rendering and idle-detail passes.
-- Continue tuning grid artwork defaults, especially `grid_prefetch_pages`, across large remote libraries and slower machines.
+- Verify real library browsing after the prefetch/rendering and idle-detail
+  passes, especially any remaining list/grid latency on large remote libraries.
+- Tune grid artwork defaults such as `grid_prefetch_pages` only if verification
+  shows the current defaults are too aggressive or too conservative.
 - Continue tuning focus and selection affordances based on real terminal themes.
-- Improve the settings screen beyond action rows:
-  - richer inline controls for grouped playback, artwork, browsing, and account actions
-  - consider dedicated edit widgets for toggles, numeric values, and option sets
-- Iterate on artwork/grid presentation:
-  - tune density presets across narrow and wide terminals
-  - consider separate poster-size controls if density presets are not enough
-- Improve playback diagnostics:
-  - add more targeted playback troubleshooting hints for common `mpv` failures
-  - consider a compact active-playback footer once more player state is available
+- Continue refining Settings ergonomics as new preferences are added.
+- Consider separate poster-size controls only if density presets are not enough
+  after real-library verification.
+- Continue improving playback diagnostics as real-world `mpv` and Plex stream
+  failures show up in use.
 
 ## Packaging & Distribution
 
-- Integrate shared tagging/release actions when available, then add a
-  non-destructive release verification target around them.
+- Keep planned releases moving through PRs so merged release PRs drive automatic
+  tagging, GitHub Release creation, and PyPI publishing.
+- Add a GitHub ruleset or branch protection for `main` that requires branch
+  work, pull requests, and passing checks before merge.
 - Improve Homebrew install time; the current formula works but builds native
   Python resources such as `pillow` from source.
-- Automate Homebrew tap updates after PyPI releases, preferably by opening a
-  pull request in `so1omon563/homebrew-plex-tui` with the new formula URL,
-  sha256, and Python resource updates.
+- Automate Homebrew tap and AUR metadata updates after PyPI releases by opening
+  packaging-only pull requests with the new artifact URLs and checksums. These
+  PRs must omit semver bump markers so they do not create another release tag.
 - Consider standalone artifacts only after the app behavior stabilizes.
 
 ## Technical Follow-Up
 
-- Keep profiling grid browsing with `PLEX_TUI_PERF_LOG=1`.
+- Use `PLEX_TUI_PERF_LOG=1` for focused regression checks when changing grid,
+  artwork, pagination, or detail-loading behavior.
 - Revisit whether verbose `PLEX_TUI_ARTWORK_LOG=1` should expose more structured artwork counters.
-- Revisit native terminal image support, especially Kitty, behind a safe opt-in path.
+- Revisit native terminal image support with a Kitty Unicode-placeholder
+  prototype. Direct Kitty graphics protocol placement inside Textual caused UI
+  hangs, so any future implementation should transmit images quietly, render
+  normal placeholder text that Textual can redraw safely, and keep block art as
+  the mandatory fallback.
 - Add focused regression tests for any real-world Plex media edge cases discovered during use.

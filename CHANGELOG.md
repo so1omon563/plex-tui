@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-06-12
+
+- Added `plex-tui --diagnostics` for collecting environment and playback setup details.
+- Added PR-merge version tagging, GitHub Release creation, and PyPI publishing workflow automation.
+- Added a local release workflow and version metadata verification target.
+- Added targeted playback troubleshooting hints for common `mpv` and Plex stream failures.
+- Added a compact active-playback footer while media is playing.
+- Simplified Settings rows into inline controls for numeric values, toggles, and option cycling.
+- Tuned grid density geometry and stabilized unloaded poster placeholders.
+- Added explicit Kitty renderer fallback diagnostics while native images remain disabled inside Textual.
+
 ## 0.2.1 - 2026-06-11
 
 - Added GitHub Actions CI and PyPI Trusted Publishing workflow scaffolding.

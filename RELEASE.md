@@ -1,6 +1,9 @@
 # Release Checklist
 
-Use this checklist for tagged app releases from `so1omon563/plex-tui`.
+Use this checklist for planned app releases from `so1omon563/plex-tui`.
+Normal releases now move through a pull request into `main`; the merge runs
+`.github/workflows/bump.yml`, creates the version tag, optionally creates the
+GitHub Release, and publishes to PyPI in the same workflow run.
 
 ## 1. Local Validation
 
@@ -13,15 +16,28 @@ make check
 
 `make check` runs smoke, tests, compile, and package metadata validation.
 
-## 2. Version Prep
+## 2. Release PR Prep
 
-Before tagging:
+Prepare a release PR:
 
 - Update `version` in `pyproject.toml`.
 - Update `src/plextui/__init__.py`.
-- Move `CHANGELOG.md` entries from `Unreleased` to the release date.
+- Move `CHANGELOG.md` entries from `Unreleased` to the release version and date.
 - Confirm `README.md`, `PACKAGING.md`, and `config.example.toml` match current behavior.
 - Confirm the Git remote points to `https://github.com/so1omon563/plex-tui`.
+- Make sure the PR title or body includes the right bump marker:
+  `#patch`, `#minor`, or `#major`.
+- Add `#release`, `#publish`, or `#ship` when the merge should create the
+  GitHub Release and publish to PyPI.
+
+The semver bumper creates tags from merge metadata, but it does not edit project
+files. Keep the version files and changelog in the PR aligned with the tag the
+merge will create.
+
+Do not update Homebrew or AUR checksums in the release PR. Those checksums depend
+on the tag or published artifact that does not exist until after merge. Handle
+packaging repository updates in a follow-up PR that does not include `#patch`,
+`#minor`, or `#major`, so it cannot create another version tag.
 
 ## 3. Build Artifacts
 
@@ -57,18 +73,20 @@ python -m venv /tmp/plex-tui-testpypi
 /tmp/plex-tui-testpypi/bin/plex-tui --smoke
 ```
 
-## 5. Tag And Publish PyPI
+## 5. Merge And Publish
 
-Create and push an annotated tag:
+Merge the release PR after CI passes. The `Version Bump and Release` workflow:
 
-```bash
-git tag -a vX.Y.Z -m "Release X.Y.Z"
-git push --follow-tags
-```
+1. Runs `so1omon563/custom-semver-bumper@v1` on the merged PR and creates the
+   next `vX.Y.Z` tag when the merged PR title or body includes `#patch`,
+   `#minor`, or `#major`.
+2. Runs `so1omon563/release-creator@v1` when the merge message includes
+   `#release`, `#publish`, or `#ship`.
+3. Publishes the tagged package to PyPI through Trusted Publishing after the
+   GitHub Release is created.
 
-Create a GitHub Release for the tag. Publishing the GitHub Release triggers
-`.github/workflows/publish-pypi.yml` through PyPI Trusted Publishing. If needed,
-the same workflow can be run manually with `ref=vX.Y.Z`.
+The older `Publish to PyPI` workflow remains available as a manual fallback with
+`ref=vX.Y.Z`, and still supports manually created GitHub Releases.
 
 After PyPI publishes, validate the real package:
 
@@ -95,6 +113,8 @@ brew test so1omon563/plex-tui/plex-tui
 brew audit --strict --online so1omon563/plex-tui/plex-tui
 ```
 
+Open this as a packaging-only PR without a semver bump marker.
+
 ## 7. Arch AUR
 
 Update `packaging/aur/PKGBUILD` and regenerate `.SRCINFO`:
@@ -116,7 +136,13 @@ git commit -m "Update to X.Y.Z-1"
 git push
 ```
 
-## Manual PyPI Fallback
+Open this as a packaging-only PR without a semver bump marker.
+
+## Manual Fallbacks
+
+If a tag exists but the release step needs to be retried, create the GitHub
+Release manually or with `so1omon563/release-creator@v1`, then run
+`Publish to PyPI` manually with `ref=vX.Y.Z`.
 
 Prefer Trusted Publishing. If it is not available and a PyPI token is
 configured, upload validated artifacts manually:

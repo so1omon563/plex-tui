@@ -6,7 +6,17 @@ from io import BytesIO
 from PIL import Image
 
 from plextui import artwork
-from plextui.artwork import add_token, artwork_url, cached_artwork_path, prune_artwork_cache, render_artwork, render_protocol_artwork
+from plextui.artwork import (
+    add_token,
+    artwork_url,
+    cached_artwork_path,
+    kitty_graphics_commands,
+    protocol_renderer_status,
+    prune_artwork_cache,
+    render_kitty_artwork,
+    render_artwork,
+    render_protocol_artwork,
+)
 from plextui.config import AppConfig
 
 
@@ -76,8 +86,8 @@ def test_render_protocol_artwork_falls_back_without_explicit_native_opt_in():
     assert rendered is None
 
 
-def test_render_protocol_artwork_is_disabled_even_when_enabled(monkeypatch):
-    monkeypatch.setenv("PLEX_TUI_ENABLE_NATIVE_IMAGES", "1")
+def test_render_protocol_artwork_falls_back_even_when_native_opt_in_is_enabled(monkeypatch):
+    monkeypatch.setenv("KITTY_WINDOW_ID", "1")
     image = Image.new("RGB", (2, 4), "#00ff00")
     buffer = BytesIO()
     image.save(buffer, format="PNG")
@@ -85,6 +95,44 @@ def test_render_protocol_artwork_is_disabled_even_when_enabled(monkeypatch):
     rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=2, max_height=2)
 
     assert rendered is None
+    assert protocol_renderer_status("kitty") == "Block fallback; native Kitty images are disabled inside Textual"
+
+
+def test_render_kitty_artwork_builds_protocol_bytes():
+    image = Image.new("RGB", (2, 4), "#00ff00")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+
+    rendered = render_kitty_artwork(buffer.getvalue(), width=2, max_height=2)
+
+    assert "\033_Ga=T,f=100,q=2;" in rendered.plain
+    assert rendered.plain.endswith("\033\\")
+
+
+def test_kitty_graphics_commands_chunks_large_payload(monkeypatch):
+    monkeypatch.setattr(artwork, "KITTY_PAYLOAD_CHUNK_SIZE", 8)
+
+    commands = kitty_graphics_commands("a" * 20)
+
+    assert commands[0].startswith("\033_Ga=T,f=100,q=2,m=1;")
+    assert commands[-1].startswith("\033_Gm=0;")
+
+
+def test_auto_protocol_renderer_requires_kitty_terminal(monkeypatch):
+    monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
+    monkeypatch.setenv("TERM", "xterm-256color")
+    image = Image.new("RGB", (2, 4), "#00ff00")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+
+    rendered = render_protocol_artwork(buffer.getvalue(), "auto", width=2, max_height=2)
+
+    assert rendered is None
+    assert protocol_renderer_status("auto") == "Block fallback; native Kitty images are disabled inside Textual"
+
+
+def test_protocol_renderer_status_explains_textual_fallback():
+    assert protocol_renderer_status("kitty") == "Block fallback; native Kitty images are disabled inside Textual"
 
 
 def test_prune_artwork_cache_removes_oldest_files(tmp_path, monkeypatch):
