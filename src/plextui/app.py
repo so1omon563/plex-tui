@@ -3044,7 +3044,7 @@ def render_playback_status(
     details = [f"Playing {title}"]
     if player.start_offset_ms:
         details.append(f"resume {format_offset(player.start_offset_ms)}")
-    details.append(player.stream_mode)
+    details.append(f"mode {player.stream_mode}")
     if player.subtitle_count:
         details.append(f"{player.subtitle_count} subtitles")
     details.append(render_playback_preferences(config, audio_choice, subtitle_choice))
@@ -3062,11 +3062,11 @@ def render_playback_details(
         title,
         "",
         "Playback",
-        "Status: playing",
-        f"Stream mode: {player.stream_mode}",
+        "Status: Playing",
+        f"Mode: {player.stream_mode}",
         f"Resume: {format_offset(player.start_offset_ms) if player.start_offset_ms else 'start'}",
         f"Subtitles available: {player.subtitle_count}",
-        f"mpv window size: {mpv_window_size_value(config)}",
+        f"mpv window: {mpv_window_size_value(config)}",
         "",
         "Selected Streams",
         f"Audio: {render_audio_playback_preference(config, audio_choice).removeprefix('audio ')}",
@@ -3074,6 +3074,7 @@ def render_playback_details(
         "",
         "Diagnostics",
         f"Debug log: {debug_log_path()}",
+        "Use Settings > Show recent debug log if playback exits unexpectedly.",
     ]
     return "\n".join(lines)
 
@@ -3243,15 +3244,18 @@ def render_playback_error_details(error: str, path: Path, max_lines: int = 12) -
     lines = [
         "Playback Error",
         "",
+        "Cause",
         error,
         "",
+        "Diagnostics",
         f"Debug log: {path}",
+        "The debug log includes the mpv launch command and recent playback errors.",
     ]
     hints = playback_failure_hints(error, recent)
     if hints:
         lines.extend([
             "",
-            "Suggested Checks",
+            "Suggested Next Steps",
             *hints,
         ])
     lines.extend([

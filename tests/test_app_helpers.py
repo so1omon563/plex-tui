@@ -325,7 +325,7 @@ def test_render_playback_status_includes_active_launch_context():
     )
 
     assert rendered == (
-        "Playing Movie / resume 1:05 / direct / 2 subtitles / audio Japanese; subtitles English"
+        "Playing Movie / resume 1:05 / mode direct / 2 subtitles / audio Japanese; subtitles English"
     )
 
 
@@ -350,14 +350,15 @@ def test_render_playback_details_includes_streams_and_diagnostics():
     )
 
     assert "Playback" in rendered
-    assert "Status: playing" in rendered
-    assert "Stream mode: transcode" in rendered
+    assert "Status: Playing" in rendered
+    assert "Mode: transcode" in rendered
     assert "Resume: start" in rendered
     assert "Subtitles available: 1" in rendered
-    assert "mpv window size: 1280x720" in rendered
+    assert "mpv window: 1280x720" in rendered
     assert "Audio: Japanese" in rendered
     assert "Subtitles: English" in rendered
     assert "Debug log:" in rendered
+    assert "Show recent debug log" in rendered
 
 
 def test_recent_debug_log_lines_handles_missing_empty_and_tail(tmp_path):
@@ -473,9 +474,11 @@ def test_render_playback_error_details_includes_recent_debug_log(tmp_path):
     rendered = render_playback_error_details("failed to launch mpv", log, max_lines=1)
 
     assert "Playback Error" in rendered
+    assert "Cause" in rendered
     assert "failed to launch mpv" in rendered
     assert f"Debug log: {log}" in rendered
-    assert "Suggested Checks" in rendered
+    assert "mpv launch command" in rendered
+    assert "Suggested Next Steps" in rendered
     assert "mpv launch failed:" in rendered
     assert "launching mpv" not in rendered
     assert "playback error: failed" in rendered

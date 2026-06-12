@@ -1303,7 +1303,7 @@ async def run_playback_footer_check():
         footer = app.query_one("#playback-footer")
         assert footer.display
         assert footer.content == (
-            "Playing Movie / resume 1:05 / direct / 2 subtitles / audio jpn not found, Plex/default; "
+            "Playing Movie / resume 1:05 / mode direct / 2 subtitles / audio jpn not found, Plex/default; "
             "subtitles eng not found, Plex/default"
         )
 
