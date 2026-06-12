@@ -91,6 +91,12 @@ are allowed for packaging-only follow-ups, automation repair, docs-only
 maintenance, or other changes that should not create a new version tag; call out
 the reason in the PR body when omitting a bump marker.
 
+When preparing or estimating a release version, fetch remote tags first with
+`git fetch --tags origin` and base the decision on the latest origin tag, not
+only local tags or the latest GitHub Release. Non-release PRs with `#patch`,
+`#minor`, or `#major` still create tags, so release prep files should match the
+tag that the release PR merge will create.
+
 GitHub CLI notes:
 
 - `gh auth status` may fail inside the sandbox even when the user is logged in
