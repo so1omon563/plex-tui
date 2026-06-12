@@ -7,6 +7,7 @@
 - Added a local release workflow and version metadata verification target.
 - Added targeted playback troubleshooting hints for common `mpv` and Plex stream failures.
 - Added a compact active-playback footer while media is playing.
+- Simplified Settings rows into inline controls for numeric values, toggles, and option cycling.
 
 ## 0.2.1 - 2026-06-11
 

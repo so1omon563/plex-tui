@@ -7,9 +7,7 @@
 - Tune grid artwork defaults such as `grid_prefetch_pages` only if verification
   shows the current defaults are too aggressive or too conservative.
 - Continue tuning focus and selection affordances based on real terminal themes.
-- Improve the settings screen beyond action rows:
-  - richer inline controls for grouped playback, artwork, browsing, and account actions
-  - consider dedicated edit widgets for toggles, numeric values, and option sets
+- Continue refining Settings ergonomics as new preferences are added.
 - Iterate on artwork/grid presentation:
   - tune density presets across narrow and wide terminals
   - consider separate poster-size controls if density presets are not enough

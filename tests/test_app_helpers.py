@@ -25,6 +25,7 @@ from plextui.app import (
     media_row,
     media_rows,
     next_detail_artwork_mode,
+    next_artwork_renderer,
     next_grid_density,
     next_media_view,
     next_mpv_window_size,
@@ -182,15 +183,13 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "[ Artwork ]" in labels
     assert "[ Browsing ]" in labels
     assert "[ Diagnostics ]" in labels
-    assert "mpv Window Size: 1280x720  [cycle]" in labels
+    assert "Subtitle Mode: Auto  [cycle]" in labels
+    assert "mpv Window Size: 1280x720  [input]" in labels
     assert "Grid Density: Comfortable  [cycle]" in labels
-    assert "mpv Window Size: set custom value...  [input]" in labels
-    assert "Page Size: 80 +10  [step]" in labels
-    assert "Page Size: set custom value...  [input]" in labels
-    assert "Auto-load Threshold: 20 -5  [step]" in labels
-    assert "Auto-load Threshold: set custom value...  [input]" in labels
-    assert "Grid Prefetch Pages: 4 +1  [step]" in labels
-    assert "Grid Prefetch Pages: set custom value...  [input]" in labels
+    assert "Artwork Renderer: Block  [cycle]" in labels
+    assert "Page Size: 80 (range 25-500, step 10, default 40)  [input]" in labels
+    assert "Auto-load Threshold: 20 (range 1-100, step 5, default 10)  [input]" in labels
+    assert "Grid Prefetch Pages: 4 (range 0-5, step 1, default 3)  [input]" in labels
     assert "Show recent debug log  [show]" in labels
     assert "Show app diagnostics  [show]" in labels
 
@@ -204,17 +203,20 @@ def test_settings_row_details_describe_action_types():
     value_row = next(row for row in rows if getattr(row, "label_text", "").startswith("Server:"))
 
     grid_details = render_settings_row_details(grid_row, config)
+    assert "Setting Control" in grid_details
     assert "Grid Density" in grid_details
     assert "Type: cycle" in grid_details
     assert "Current grid density: Comfortable" in grid_details
+    assert "Enter or Left/Right changes this setting." in grid_details
 
     confirm_details = render_settings_row_details(clear_row, config, pending_confirmation_action="clear_audio")
     assert "Confirm Action" in confirm_details
     assert "Press Enter on this same row again to confirm." in confirm_details
 
     input_details = render_settings_row_details(input_row, config)
-    assert "Type: input" in input_details
-    assert "Current page size: 80" in input_details
+    assert "Numeric Setting" in input_details
+    assert "Current value: 80" in input_details
+    assert "Left/Right adjusts by one step" in input_details
 
     value_details = render_settings_row_details(value_row, config)
     assert "Current Setting" in value_details
@@ -248,6 +250,13 @@ def test_render_playback_preference_status():
     assert render_subtitle_playback_preference(config, None) == "subtitles eng not found, Plex/default"
     assert render_audio_playback_preference(config, StreamChoice(1, "Japanese")) == "audio Japanese"
     assert render_subtitle_playback_preference(config, StreamChoice(2, "English")) == "subtitles English"
+
+
+def test_next_artwork_renderer_cycles_values():
+    assert next_artwork_renderer("block") == "auto"
+    assert next_artwork_renderer("auto") == "kitty"
+    assert next_artwork_renderer("kitty") == "block"
+    assert next_artwork_renderer("bad") == "block"
 
 
 def test_render_playback_status_includes_active_launch_context():

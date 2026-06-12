@@ -357,6 +357,14 @@ def test_numeric_settings_input_updates_preferences():
     asyncio.run(run_numeric_settings_input_check())
 
 
+def test_numeric_settings_adjust_with_left_right():
+    asyncio.run(run_numeric_settings_left_right_check())
+
+
+def test_option_settings_cycle_with_left_right():
+    asyncio.run(run_option_settings_left_right_check())
+
+
 def test_grid_density_setting_stays_in_settings_view():
     asyncio.run(run_grid_density_settings_view_check())
 
@@ -1195,8 +1203,10 @@ async def run_settings_action_check():
             assert app.config.mpv_window_size == ""
             app.run_settings_action("cycle_grid_density")
             assert app.config.grid_density == "large"
+            app.run_settings_action("cycle_artwork_renderer")
+            assert app.config.artwork_renderer == "auto"
 
-        assert save_config.call_count == 14
+        assert save_config.call_count == 15
 
 
 async def run_settings_recent_debug_log_check(tmp_path):
@@ -1365,6 +1375,48 @@ async def run_numeric_settings_input_check():
             assert app.config.grid_prefetch_pages == 3
 
         assert save_config.call_count == 6
+
+
+async def run_numeric_settings_left_right_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=80)
+        app.action_show_settings(selected_action="set_page_size")
+        await pilot.pause(0.2)
+
+        with patch("plextui.app.save_config") as save_config:
+            app.action_grid_right()
+            assert app.config.page_size == 90
+            app.action_grid_left()
+            assert app.config.page_size == 80
+
+        await pilot.pause(0.2)
+        assert save_config.call_count == 2
+        assert app.settings_visible
+        assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Settings"
+        assert app.query_one("#status").content == "Enter edits / Left-Right adjusts"
+
+
+async def run_option_settings_left_right_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", grid_density="comfortable")
+        app.action_show_settings(selected_action="cycle_grid_density")
+        await pilot.pause(0.2)
+
+        with patch("plextui.app.save_config") as save_config:
+            app.action_grid_right()
+            assert app.config.grid_density == "large"
+            app.action_grid_left()
+            assert app.config.grid_density == "compact"
+
+        await pilot.pause(0.2)
+        assert save_config.call_count == 2
+        assert app.settings_visible
+        assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Settings"
+        assert app.query_one("#status").content == "Enter or Left-Right cycles"
 
 
 async def run_grid_density_settings_view_check():
