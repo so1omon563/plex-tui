@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-06-12
+
 - Added `plex-tui --diagnostics` for collecting environment and playback setup details.
 - Added PR-merge version tagging, GitHub Release creation, and PyPI publishing workflow automation.
 - Added a local release workflow and version metadata verification target.
