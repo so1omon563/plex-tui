@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import textwrap
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, replace
@@ -72,6 +73,7 @@ GRID_DETAIL_REFRESH_DELAY = 0.65
 LIST_DETAIL_REFRESH_DELAY = 0.35
 DETAIL_ARTWORK_REFRESH_DELAY = 0.55
 GRID_PREFETCH_WORKERS = 3
+DETAIL_SUMMARY_WIDTH = 76
 
 
 @dataclass
@@ -2117,41 +2119,38 @@ def format_offset(milliseconds: int) -> str:
 def render_details(details: object, config: AppConfig | None = None, raw: object | None = None) -> str:
     lines = render_detail_header(details, config)
 
-    lines.append("Metadata")
-    for label, value in getattr(details, "metadata"):
-        lines.append(f"{label}: {value}")
+    metadata = [f"{label}: {value}" for label, value in getattr(details, "metadata")]
+    append_detail_section(lines, "Metadata", metadata or ["No metadata reported"])
 
     if config is not None:
-        lines.extend([
-            "",
+        append_detail_section(
+            lines,
             "Preferences",
-            f"Audio preference: {preference_value(config.preferred_audio_language)}",
-            f"Subtitle mode: {subtitle_mode_value(config)}",
-            f"Subtitle language: {subtitle_language_value(config)}",
-        ])
+            [
+                f"Audio: {preference_value(config.preferred_audio_language)}",
+                f"Subtitles: {subtitle_mode_value(config)} / {subtitle_language_value(config)}",
+            ],
+        )
         if raw is not None:
             effective = effective_stream_preference_rows(raw, config)
             if effective:
-                lines.extend(["", "Effective Playback"])
-                lines.extend(f"{label}: {value}" for label, value in effective)
+                append_detail_section(lines, "Effective Playback", [f"{label}: {value}" for label, value in effective])
 
-    lines.extend(["", "Audio"])
     audio = getattr(details, "audio", [])
     if audio:
-        lines.extend(f"- {track}" for track in audio)
+        append_detail_section(lines, "Audio Tracks", [f"- {track}" for track in audio])
     else:
-        lines.append("None reported")
+        append_detail_section(lines, "Audio Tracks", ["No audio tracks reported"])
 
-    lines.extend(["", "Subtitles"])
     subtitles = getattr(details, "subtitles")
     if subtitles:
-        lines.extend(f"- {subtitle}" for subtitle in subtitles)
+        append_detail_section(lines, "Subtitle Tracks", [f"- {subtitle}" for subtitle in subtitles])
     else:
-        lines.append("None reported")
+        append_detail_section(lines, "Subtitle Tracks", ["No subtitle tracks reported"])
 
     summary = getattr(details, "summary")
     if summary:
-        lines.extend(["", "Summary", summary])
+        append_detail_section(lines, "Summary", wrapped_detail_text(summary))
 
     return "\n".join(lines)
 
@@ -2159,7 +2158,7 @@ def render_details(details: object, config: AppConfig | None = None, raw: object
 def render_detail_header(details: object, config: AppConfig | None = None) -> list[str]:
     title = getattr(details, "title")
     facts = [str(fact) for fact in getattr(details, "facts", []) if fact]
-    playable = "ready to play" if getattr(details, "playable") else "opens more items"
+    playable = "Ready to play" if getattr(details, "playable") else "Opens more items"
     artwork = artwork_status(details, config)
     lines = [
         title,
@@ -2168,11 +2167,31 @@ def render_detail_header(details: object, config: AppConfig | None = None) -> li
     if facts:
         lines.append(" / ".join(facts))
     lines.extend([
-        f"Playback: {playable}",
-        f"Artwork: {artwork}",
         "",
+        "Playback",
+        f"Status: {playable}",
+        f"Artwork: {artwork}",
     ])
     return lines
+
+
+def append_detail_section(lines: list[str], heading: str, body: list[str]) -> None:
+    if lines and lines[-1] != "":
+        lines.append("")
+    lines.append(heading)
+    lines.extend(body)
+
+
+def wrapped_detail_text(value: str, width: int = DETAIL_SUMMARY_WIDTH) -> list[str]:
+    wrapped: list[str] = []
+    paragraphs = [paragraph.strip() for paragraph in value.splitlines()]
+    for paragraph in paragraphs:
+        if not paragraph:
+            if wrapped and wrapped[-1] != "":
+                wrapped.append("")
+            continue
+        wrapped.extend(textwrap.wrap(paragraph, width=width) or [""])
+    return wrapped
 
 
 def render_detail_content(
