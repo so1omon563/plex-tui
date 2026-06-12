@@ -43,7 +43,7 @@ jobs:
       - name: Generate .SRCINFO
         working-directory: packaging/aur
         run: |
-          sudo -u builder makepkg --printsrcinfo > .SRCINFO.generated
+          sudo -u builder makepkg --printsrcinfo | sudo -u builder tee .SRCINFO.generated > /dev/null
           diff -u .SRCINFO .SRCINFO.generated
 
       - name: Run namcap

@@ -117,7 +117,14 @@ Open this as a packaging-only PR without a semver bump marker.
 
 ## 7. Arch AUR
 
-Update `packaging/aur/PKGBUILD` and regenerate `.SRCINFO`:
+The `Post-release AUR Update` workflow opens a packaging-only PR after a
+successful release workflow. It can also be run manually with a release tag. The
+workflow updates `packaging/aur/PKGBUILD`, regenerates `.SRCINFO`, validates the
+package with `makepkg`, runs `namcap`, and opens a PR without a semver bump
+marker.
+
+If the automated workflow cannot run, update `packaging/aur/PKGBUILD` and
+regenerate `.SRCINFO` manually:
 
 ```bash
 cd packaging/aur
