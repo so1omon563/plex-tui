@@ -120,8 +120,13 @@ Open this as a packaging-only PR without a semver bump marker.
 The `Post-release AUR Update` workflow opens a packaging-only PR after a
 successful release workflow. It can also be run manually with a release tag. The
 workflow updates `packaging/aur/PKGBUILD`, regenerates `.SRCINFO`, validates the
-package with `makepkg`, runs `namcap`, and opens a PR without a semver bump
-marker.
+package with `makepkg`, runs `namcap`, opens a PR without a semver bump marker,
+approves it, and enables auto-merge.
+
+After that PR merges, the `AUR Package` workflow validates the merged metadata
+on `main`. A successful `AUR Package` run triggers `Publish AUR Package`, which
+pushes `PKGBUILD` and `.SRCINFO` to `ssh://aur@aur.archlinux.org/plex-tui.git`.
+This requires the `AUR_SSH_PRIVATE_KEY` repository secret.
 
 If the automated workflow cannot run, update `packaging/aur/PKGBUILD` and
 regenerate `.SRCINFO` manually:
@@ -143,7 +148,8 @@ git commit -m "Update to X.Y.Z-1"
 git push
 ```
 
-Open this as a packaging-only PR without a semver bump marker.
+Open repository metadata updates as packaging-only PRs without semver bump
+markers.
 
 ## Manual Fallbacks
 
