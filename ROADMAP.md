@@ -17,6 +17,8 @@
 
 - Keep planned releases moving through PRs so merged release PRs drive automatic
   tagging, GitHub Release creation, and PyPI publishing.
+- Add a GitHub ruleset or branch protection for `main` that requires branch
+  work, pull requests, and passing checks before merge.
 - Improve Homebrew install time; the current formula works but builds native
   Python resources such as `pillow` from source.
 - Automate Homebrew tap updates after PyPI releases, preferably by opening a

@@ -78,9 +78,10 @@ Pull requests should include:
 - Screenshots or terminal notes for TUI changes when useful.
 - Any config, packaging, or migration impact.
 
-Use PRs for planned release work. When publishing local commits, branch from
+Use PRs for repository changes. When publishing local commits, branch from
 `main` with a scoped name such as `codex/release-prep`, push that branch, and
-open a draft PR instead of pushing directly to `main`.
+open a draft PR instead of pushing directly to `main`. Treat `main` as a
+protected branch even before GitHub branch protection or rulesets are enabled.
 
 GitHub CLI notes:
 
