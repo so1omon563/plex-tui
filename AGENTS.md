@@ -78,6 +78,21 @@ Pull requests should include:
 - Screenshots or terminal notes for TUI changes when useful.
 - Any config, packaging, or migration impact.
 
+Use PRs for planned release work. When publishing local commits, branch from
+`main` with a scoped name such as `codex/release-prep`, push that branch, and
+open a draft PR instead of pushing directly to `main`.
+
+GitHub CLI notes:
+
+- `gh auth status` may fail inside the sandbox even when the user is logged in
+  via the macOS keyring. Re-run `gh` auth, PR, and push operations outside the
+  sandbox when keyring access is required.
+- Prefer the GitHub connector for PR creation when it has access. If it returns
+  `403 Resource not accessible by integration`, fall back to
+  `gh pr create --draft` using the authenticated CLI session.
+- Keep PR bodies explicit about validation, especially `make check` results and
+  release workflow checks such as `actionlint`.
+
 ## Security & Configuration Tips
 
 Never commit real Plex tokens, account tokens, debug logs, or local config files.
