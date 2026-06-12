@@ -10,8 +10,10 @@ from plextui.artwork import (
     add_token,
     artwork_url,
     cached_artwork_path,
+    kitty_graphics_commands,
     protocol_renderer_status,
     prune_artwork_cache,
+    render_kitty_artwork,
     render_artwork,
     render_protocol_artwork,
 )
@@ -84,8 +86,7 @@ def test_render_protocol_artwork_falls_back_without_explicit_native_opt_in():
     assert rendered is None
 
 
-def test_render_protocol_artwork_uses_kitty_when_enabled(monkeypatch):
-    monkeypatch.setenv("PLEX_TUI_ENABLE_NATIVE_IMAGES", "1")
+def test_render_protocol_artwork_falls_back_even_when_native_opt_in_is_enabled(monkeypatch):
     monkeypatch.setenv("KITTY_WINDOW_ID", "1")
     image = Image.new("RGB", (2, 4), "#00ff00")
     buffer = BytesIO()
@@ -93,28 +94,31 @@ def test_render_protocol_artwork_uses_kitty_when_enabled(monkeypatch):
 
     rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=2, max_height=2)
 
-    assert rendered is not None
+    assert rendered is None
+    assert protocol_renderer_status("kitty") == "Block fallback; native Kitty images are disabled inside Textual"
+
+
+def test_render_kitty_artwork_builds_protocol_bytes():
+    image = Image.new("RGB", (2, 4), "#00ff00")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+
+    rendered = render_kitty_artwork(buffer.getvalue(), width=2, max_height=2)
+
     assert "\033_Ga=T,f=100,q=2;" in rendered.plain
     assert rendered.plain.endswith("\033\\")
 
 
-def test_render_protocol_artwork_chunks_large_kitty_payload(monkeypatch):
-    monkeypatch.setenv("PLEX_TUI_ENABLE_NATIVE_IMAGES", "1")
-    monkeypatch.setenv("KITTY_WINDOW_ID", "1")
+def test_kitty_graphics_commands_chunks_large_payload(monkeypatch):
     monkeypatch.setattr(artwork, "KITTY_PAYLOAD_CHUNK_SIZE", 8)
-    image = Image.new("RGB", (12, 12), "#00ff00")
-    buffer = BytesIO()
-    image.save(buffer, format="PNG")
 
-    rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=12, max_height=6)
+    commands = kitty_graphics_commands("a" * 20)
 
-    assert rendered is not None
-    assert "\033_Ga=T,f=100,q=2,m=1;" in rendered.plain
-    assert "\033_Gm=0;" in rendered.plain
+    assert commands[0].startswith("\033_Ga=T,f=100,q=2,m=1;")
+    assert commands[-1].startswith("\033_Gm=0;")
 
 
 def test_auto_protocol_renderer_requires_kitty_terminal(monkeypatch):
-    monkeypatch.setenv("PLEX_TUI_ENABLE_NATIVE_IMAGES", "1")
     monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
     monkeypatch.setenv("TERM", "xterm-256color")
     image = Image.new("RGB", (2, 4), "#00ff00")
@@ -124,15 +128,11 @@ def test_auto_protocol_renderer_requires_kitty_terminal(monkeypatch):
     rendered = render_protocol_artwork(buffer.getvalue(), "auto", width=2, max_height=2)
 
     assert rendered is None
-    assert protocol_renderer_status("auto") == "Block fallback; Kitty terminal not detected"
+    assert protocol_renderer_status("auto") == "Block fallback; native Kitty images are disabled inside Textual"
 
 
-def test_protocol_renderer_status_explains_native_opt_in(monkeypatch):
-    monkeypatch.delenv("PLEX_TUI_ENABLE_NATIVE_IMAGES", raising=False)
-
-    assert protocol_renderer_status("kitty") == (
-        "Block fallback; set PLEX_TUI_ENABLE_NATIVE_IMAGES=1 to enable native images"
-    )
+def test_protocol_renderer_status_explains_textual_fallback():
+    assert protocol_renderer_status("kitty") == "Block fallback; native Kitty images are disabled inside Textual"
 
 
 def test_prune_artwork_cache_removes_oldest_files(tmp_path, monkeypatch):

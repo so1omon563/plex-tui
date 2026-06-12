@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import os
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -17,7 +16,6 @@ from .config import AppConfig, cache_path
 
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
 ARTWORK_CACHE_LIMIT_BYTES = 100 * 1024 * 1024
-NATIVE_IMAGE_ENV = "PLEX_TUI_ENABLE_NATIVE_IMAGES"
 KITTY_PAYLOAD_CHUNK_SIZE = 4096
 
 
@@ -138,32 +136,16 @@ def render_artwork(data: bytes, width: int = 28, max_height: int = 20) -> Text:
 
 
 def render_protocol_artwork(data: bytes, renderer: str, width: int = 28, max_height: int = 20) -> object | None:
-    resolved = resolve_protocol_renderer(renderer)
-    if resolved == "kitty":
-        return render_kitty_artwork(data, width=width, max_height=max_height)
     return None
 
 
 def resolve_protocol_renderer(renderer: str) -> str:
-    if not native_images_enabled():
-        return "block"
-    if renderer == "kitty":
-        return "kitty"
-    if renderer == "auto" and is_kitty_terminal():
-        return "kitty"
     return "block"
 
 
 def protocol_renderer_status(renderer: str) -> str:
-    resolved = resolve_protocol_renderer(renderer)
-    if resolved == "kitty":
-        return "Kitty native images"
-    if not native_images_enabled() and renderer in {"auto", "kitty"}:
-        return "Block fallback; set PLEX_TUI_ENABLE_NATIVE_IMAGES=1 to enable native images"
-    if renderer == "auto":
-        return "Block fallback; Kitty terminal not detected"
-    if renderer == "kitty":
-        return "Block fallback; Kitty terminal not detected"
+    if renderer in {"auto", "kitty"}:
+        return "Block fallback; native Kitty images are disabled inside Textual"
     return "Block art"
 
 
@@ -196,15 +178,6 @@ def kitty_graphics_commands(payload: str) -> list[str]:
             prefix = "m=1"
         commands.append(f"\033_G{prefix};{chunk}\033\\")
     return commands
-
-
-def native_images_enabled() -> bool:
-    return os.environ.get(NATIVE_IMAGE_ENV) == "1"
-
-
-def is_kitty_terminal() -> bool:
-    return bool(os.environ.get("KITTY_WINDOW_ID") or "kitty" in os.environ.get("TERM", "").lower())
-
 
 def load_image(data: bytes) -> Image.Image:
     return ImageOps.exif_transpose(Image.open(BytesIO(data))).convert("RGB")
