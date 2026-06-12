@@ -80,8 +80,9 @@ Merge the release PR after CI passes. The `Version Bump and Release` workflow:
 1. Runs `so1omon563/custom-semver-bumper@v1` on the merged PR and creates the
    next `vX.Y.Z` tag when the merged PR title or body includes `#patch`,
    `#minor`, or `#major`.
-2. Runs `so1omon563/release-creator@v1` when the merged PR title or body
-   includes `#release`, `#publish`, or `#ship`.
+2. Runs `so1omon563/release-creator@v1` when the merged PR title includes
+   `#release`, `#publish`, or `#ship`. Keep release markers out of ordinary PR
+   bodies so examples and validation notes do not publish accidentally.
 3. Publishes the tagged package to PyPI through Trusted Publishing after the
    GitHub Release is created.
 
