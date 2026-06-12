@@ -28,6 +28,7 @@ from plextui.app import (
     next_grid_density,
     next_media_view,
     next_mpv_window_size,
+    playback_failure_hints,
     playback_exit_status,
     recent_debug_log_lines,
     render_audio_playback_preference,
@@ -418,8 +419,32 @@ def test_render_playback_error_details_includes_recent_debug_log(tmp_path):
     assert "Playback Error" in rendered
     assert "failed to launch mpv" in rendered
     assert f"Debug log: {log}" in rendered
+    assert "Suggested Checks" in rendered
+    assert "mpv launch failed:" in rendered
     assert "launching mpv" not in rendered
     assert "playback error: failed" in rendered
+
+
+def test_playback_failure_hints_cover_common_failures():
+    missing = playback_failure_hints("mpv was not found in PATH")
+    assert "Install mpv:" in missing
+    assert "brew install mpv" in "\n".join(missing)
+
+    plex = playback_failure_hints("could not get stream URL from Plex: 401")
+    assert "Plex did not provide a stream URL:" in plex
+    assert "saved token still works" in "\n".join(plex)
+
+    empty = playback_failure_hints("Plex returned an empty stream URL")
+    assert "Plex returned an empty stream URL:" in empty
+    assert "Plex can play the item" in "\n".join(empty)
+
+    subtitles = playback_failure_hints("playback error: failed loading --sub-file")
+    assert "Subtitle playback may be involved:" in subtitles
+    assert "Subtitle Mode: none" in "\n".join(subtitles)
+
+    exited = playback_failure_hints("Playback exited with code 2: Movie")
+    assert "mpv exited abnormally:" in exited
+    assert "raw mpv output" in "\n".join(exited)
 
 
 def test_effective_stream_preferences_report_found_missing_and_none():

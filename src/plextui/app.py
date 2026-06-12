@@ -2878,6 +2878,55 @@ def mpv_install_hints() -> list[str]:
     ]
 
 
+def playback_failure_hints(error: str, recent_log: list[str] | None = None) -> list[str]:
+    text = "\n".join([error, *(recent_log or [])]).lower()
+    hints: list[str] = []
+    if "mpv was not found" in text or "mpv missing" in text or "no such file or directory: 'mpv'" in text:
+        hints.extend(mpv_install_hints())
+    elif "failed to launch mpv" in text or "permission denied" in text:
+        hints.extend([
+            "mpv launch failed:",
+            "  Confirm mpv is executable and available on PATH.",
+            "  Run `mpv --version` in the same shell used to start plex-tui.",
+        ])
+    if "could not get stream url" in text:
+        hints.extend([
+            "Plex did not provide a stream URL:",
+            "  Confirm the server is reachable and the saved token still works.",
+            "  Try reloading libraries or signing in again from Settings.",
+        ])
+    if "empty stream url" in text:
+        hints.extend([
+            "Plex returned an empty stream URL:",
+            "  Try a different item to separate media-specific issues from server issues.",
+            "  Check whether Plex can play the item in its own web player.",
+        ])
+    if ("sub-file" in text or "subtitle" in text) and ("failed" in text or "error" in text):
+        hints.extend([
+            "Subtitle playback may be involved:",
+            "  Try Subtitle Mode: none, then retry playback.",
+            "  If that works, choose a different subtitle track or clear the saved subtitle preference.",
+        ])
+    if "playback exited with code" in text:
+        hints.extend([
+            "mpv exited abnormally:",
+            "  Open the debug log path above and check the launch arguments.",
+            "  Retry from a terminal with the same media if you need raw mpv output.",
+        ])
+    return dedupe_lines(hints)
+
+
+def dedupe_lines(lines: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for line in lines:
+        if line in seen:
+            continue
+        seen.add(line)
+        deduped.append(line)
+    return deduped
+
+
 def render_app_diagnostics(config: AppConfig, mpv_info: tuple[str, str]) -> str:
     mpv_path, mpv_version = mpv_info
     lines = [
@@ -2928,16 +2977,25 @@ def render_app_diagnostics(config: AppConfig, mpv_info: tuple[str, str]) -> str:
 
 
 def render_playback_error_details(error: str, path: Path, max_lines: int = 12) -> str:
+    recent = recent_debug_log_lines(path, max_lines)
     lines = [
         "Playback Error",
         "",
         error,
         "",
         f"Debug log: {path}",
+    ]
+    hints = playback_failure_hints(error, recent)
+    if hints:
+        lines.extend([
+            "",
+            "Suggested Checks",
+            *hints,
+        ])
+    lines.extend([
         "",
         "Recent Debug Log",
-    ]
-    recent = recent_debug_log_lines(path, max_lines)
+    ])
     if recent:
         lines.extend(recent)
     else:
