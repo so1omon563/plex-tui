@@ -1,0 +1,99 @@
+name: Version Bump and Release
+
+on:
+  pull_request:
+    types: ["closed"]
+    branches: ["main"]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  bump-version:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      new_tag: ${{ steps.bump.outputs.new_version }}
+      previous_tag: ${{ steps.bump.outputs.previous_version }}
+      skipped: ${{ steps.bump.outputs.skipped }}
+      release_requested: ${{ steps.bump.outputs.should_release }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Bump version tag
+        id: bump
+        uses: so1omon563/custom-semver-bumper@v1
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          branch_name: ${{ github.event.pull_request.head.ref }}
+          # Floating pointer tags are owned by release-creator so they only move
+          # when a GitHub Release is intentionally published.
+
+  create-release:
+    name: Create GitHub Release
+    needs: bump-version
+    if: |
+      needs.bump-version.outputs.release_requested == 'true' &&
+      needs.bump-version.outputs.skipped != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Create release
+        uses: so1omon563/release-creator@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.bump-version.outputs.new_tag }}
+          from-tag: ${{ needs.bump-version.outputs.previous_tag }}
+          tag-prefix: v
+          notes-format: grouped
+          move-major-tag: "true"
+          move-minor-tag: "true"
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs:
+      - bump-version
+      - create-release
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.bump-version.outputs.new_tag }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Check package metadata
+        run: python -m twine check dist/*
+
+      - name: Publish package
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -17,8 +17,10 @@
 
 ## Packaging & Distribution
 
-- Integrate shared tagging/release actions when available, then add a
-  non-destructive release verification target around them.
+- Add a non-destructive release verification target around the shared
+  tagging/release workflow.
+- Keep planned releases moving through PRs so merged release PRs drive automatic
+  tagging, GitHub Release creation, and PyPI publishing.
 - Improve Homebrew install time; the current formula works but builds native
   Python resources such as `pillow` from source.
 - Automate Homebrew tap updates after PyPI releases, preferably by opening a
