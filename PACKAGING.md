@@ -91,19 +91,21 @@ For each new app release:
 
 1. Publish and validate PyPI.
 2. Update the Homebrew tap formula URL/hash and Python resources.
-3. Let the `Post-release AUR Update` workflow open the AUR metadata PR, or
-   update `packaging/aur/PKGBUILD` and `packaging/aur/.SRCINFO` manually.
-4. Run packaging validation workflows.
-5. Push the AUR package repo update after the workflow passes.
+3. Let the `Post-release AUR Update` workflow update AUR metadata, open the
+   packaging PR, approve it, and enable auto-merge.
+4. After the packaging PR merges and the `AUR Package` workflow passes on
+   `main`, the `Publish AUR Package` workflow pushes the validated `PKGBUILD`
+   and `.SRCINFO` to AUR.
 
-The AUR automation uses `PACKAGING_PR_TOKEN` when that secret is present, and
-falls back to `GITHUB_TOKEN`. Prefer a dedicated token or GitHub App token if
-branch protection requires checks on generated packaging PR branches.
+The AUR automation requires:
+
+- `PACKAGING_PR_TOKEN`: a token that can create, approve, and auto-merge the
+  generated packaging PR when branch protection requires those actions.
+- `AUR_SSH_PRIVATE_KEY`: the private SSH key for pushing to
+  `ssh://aur@aur.archlinux.org/plex-tui.git`.
 
 ## Known Follow-Up
 
 - Automate Homebrew tap updates after PyPI publishing.
-- Extend post-release packaging automation to publish the validated AUR metadata
-  into the AUR package repository.
 - Investigate faster Homebrew installs without compromising formula quality.
 - Consider standalone artifacts only after the app behavior stabilizes.

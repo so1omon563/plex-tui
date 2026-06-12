@@ -26,6 +26,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - name: Check packaging PR token
+        env:
+          PACKAGING_PR_TOKEN: ${{ secrets.PACKAGING_PR_TOKEN }}
+        run: |
+          if [ -z "$PACKAGING_PR_TOKEN" ]; then
+            echo "PACKAGING_PR_TOKEN secret is required to create, approve, and auto-merge packaging PRs" >&2
+            exit 1
+          fi
+
       - name: Determine release tag
         id: release
         env:
@@ -96,9 +105,10 @@ jobs:
             -delete
 
       - name: Create packaging pull request
+        id: create-pr
         uses: peter-evans/create-pull-request@v7
         with:
-          token: ${{ secrets.PACKAGING_PR_TOKEN || github.token }}
+          token: ${{ secrets.PACKAGING_PR_TOKEN }}
           branch: automation/aur-${{ steps.release.outputs.tag }}
           delete-branch: true
           commit-message: Update AUR package to ${{ steps.release.outputs.tag }}
@@ -113,3 +123,19 @@ jobs:
             - ran `namcap`
 
             This is a packaging-only PR and intentionally has no semver bump marker.
+
+      - name: Approve packaging pull request
+        if: steps.create-pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGING_PR_TOKEN }}
+          PR_NUMBER: ${{ steps.create-pr.outputs.pull-request-number }}
+        run: |
+          gh pr review "$PR_NUMBER" --approve
+
+      - name: Enable packaging pull request auto-merge
+        if: steps.create-pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGING_PR_TOKEN }}
+          PR_NUMBER: ${{ steps.create-pr.outputs.pull-request-number }}
+        run: |
+          gh pr merge "$PR_NUMBER" --auto --squash --delete-branch

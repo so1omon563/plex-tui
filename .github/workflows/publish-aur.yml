@@ -1,0 +1,102 @@
+name: Publish AUR Package
+
+on:
+  workflow_run:
+    workflows: ["AUR Package"]
+    types: ["completed"]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  publish:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.event == 'push'
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Read package version
+        id: package
+        run: |
+          set -euo pipefail
+
+          version="$(sed -n 's/^pkgver=//p' packaging/aur/PKGBUILD)"
+          release="$(sed -n 's/^pkgrel=//p' packaging/aur/PKGBUILD)"
+
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "pkgver must look like X.Y.Z: $version" >&2
+            exit 1
+          fi
+          if ! [[ "$release" =~ ^[0-9]+$ ]]; then
+            echo "pkgrel must be numeric: $release" >&2
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AUR SSH
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "AUR_SSH_PRIVATE_KEY secret is required to publish to AUR" >&2
+            exit 1
+          fi
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts
+
+          cat > ~/.ssh/config <<'EOF'
+          Host aur.archlinux.org
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+            User aur
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Clone AUR package repository
+        run: |
+          git clone ssh://aur@aur.archlinux.org/plex-tui.git aur-package
+
+      - name: Copy package metadata
+        run: |
+          cp packaging/aur/PKGBUILD aur-package/PKGBUILD
+          cp packaging/aur/.SRCINFO aur-package/.SRCINFO
+
+      - name: Commit and push AUR package
+        working-directory: aur-package
+        env:
+          VERSION: ${{ steps.package.outputs.version }}
+          RELEASE: ${{ steps.package.outputs.release }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- PKGBUILD .SRCINFO; then
+            echo "AUR package repository is already up to date."
+            exit 0
+          fi
+
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update to ${VERSION}-${RELEASE}"
+          git push origin master
