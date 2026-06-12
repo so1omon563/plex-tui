@@ -80,8 +80,13 @@ Pull requests should include:
 
 Use PRs for repository changes. When publishing local commits, branch from
 `main` with a scoped name such as `codex/release-prep`, push that branch, and
-open a draft PR instead of pushing directly to `main`. Treat `main` as a
-protected branch even before GitHub branch protection or rulesets are enabled.
+open a draft PR instead of pushing directly to `main`.
+
+`main` is protected by repository rulesets. Changes must flow through PRs; force
+pushes and branch deletion are blocked. `plex-tui` requires the Python 3.11 and
+3.13 CI checks before merge. The Homebrew tap also requires PRs for `main`.
+Rulesets intentionally require zero approving reviews so automation PRs can
+merge after required checks pass without self-approval.
 
 By default, PR titles or bodies should include exactly one semver bump marker:
 `#patch`, `#minor`, or `#major`. Most changes should advance tags when merged,
@@ -96,6 +101,11 @@ When preparing or estimating a release version, fetch remote tags first with
 only local tags or the latest GitHub Release. Non-release PRs with `#patch`,
 `#minor`, or `#major` still create tags, so release prep files should match the
 tag that the release PR merge will create.
+
+GitHub Release publishing is controlled by release markers in PR titles only:
+`#release`, `#publish`, or `#ship`. Keep those markers out of ordinary PR titles
+unless the merge should publish PyPI, Homebrew, and AUR. PR bodies may mention
+release markers for explanation without publishing.
 
 GitHub CLI notes:
 

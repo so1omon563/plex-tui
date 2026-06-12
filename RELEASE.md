@@ -99,6 +99,17 @@ python -m venv /tmp/plex-tui-pypi
 /tmp/plex-tui-pypi/bin/plex-tui --smoke
 ```
 
+## Repository Protection
+
+`main` is protected in both `so1omon563/plex-tui` and
+`so1omon563/homebrew-plex-tui` with active repository rulesets:
+
+- PRs are required.
+- Force pushes and branch deletion are blocked.
+- `plex-tui` requires `Python 3.11` and `Python 3.13` checks before merge.
+- Approving reviews are intentionally not required. Generated packaging PRs
+  should merge through required checks and auto-merge, not self-approval.
+
 ## 6. Homebrew Tap
 
 The `Post-release Homebrew Publish` workflow updates
@@ -133,9 +144,10 @@ tag. It updates `packaging/aur/PKGBUILD`, regenerates `.SRCINFO`, validates the
 package with `makepkg`, runs `namcap`, opens a PR without a semver bump marker,
 and enables auto-merge.
 
-Generated packaging PRs are not self-approved. If branch protection requires
-review, configure rules so these packaging-only automation branches can merge
-after required checks pass, or approve them manually.
+Generated packaging PRs are not self-approved. GitHub rejects self-approval when
+the PR author and approval token resolve to the same account. The rulesets use
+zero required approvals so packaging-only automation branches can merge after
+required checks pass.
 
 After that PR merges, the `AUR Package` workflow validates the merged metadata
 on `main`. A successful `AUR Package` run triggers `Publish AUR Package`, which
@@ -164,6 +176,17 @@ git push
 
 Open repository metadata updates as packaging-only PRs without semver bump
 markers.
+
+## Post-Release Dry Run
+
+To verify post-release packaging without publishing a new app release, manually
+dispatch the post-release workflows with the latest real release tag, for
+example `v0.3.6`. A healthy idempotent run should:
+
+- update and audit the Homebrew formula, then skip tap PR creation when there is
+  no diff;
+- regenerate and validate AUR metadata, then skip packaging PR auto-merge when
+  there is no diff.
 
 ## Manual Fallbacks
 
