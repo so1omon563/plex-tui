@@ -90,7 +90,8 @@ Validation is handled by `.github/workflows/aur.yml`, which runs inside
 For each new app release:
 
 1. Publish and validate PyPI.
-2. Update the Homebrew tap formula URL/hash and Python resources.
+2. Let the `Post-release Homebrew Publish` workflow update, validate, and merge
+   the Homebrew tap formula.
 3. Let the `Post-release AUR Update` workflow update AUR metadata, open the
    packaging PR, approve it, and enable auto-merge.
 4. After the packaging PR merges and the `AUR Package` workflow passes on
@@ -104,8 +105,10 @@ The AUR automation requires:
 - `AUR_SSH_PRIVATE_KEY`: the private SSH key for pushing to
   `ssh://aur@aur.archlinux.org/plex-tui.git`.
 
+The Homebrew automation uses `PACKAGING_PR_TOKEN`; that token must also be able
+to push branches and merge pull requests in `so1omon563/homebrew-plex-tui`.
+
 ## Known Follow-Up
 
-- Automate Homebrew tap updates after PyPI publishing.
 - Investigate faster Homebrew installs without compromising formula quality.
 - Consider standalone artifacts only after the app behavior stabilizes.

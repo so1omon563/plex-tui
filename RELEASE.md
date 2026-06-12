@@ -100,20 +100,25 @@ python -m venv /tmp/plex-tui-pypi
 
 ## 6. Homebrew Tap
 
-Update `so1omon563/homebrew-plex-tui`:
+The `Post-release Homebrew Publish` workflow updates
+`so1omon563/homebrew-plex-tui` after a successful release workflow. It can also
+be run manually with a release tag. The workflow updates:
 
 - Formula URL and sha256.
 - Python resource blocks if dependencies changed.
 - Formula test expectations if version output changed.
 
-Validate:
+It then runs `brew audit --strict --online`, opens a tap PR, and merges it. This
+uses `PACKAGING_PR_TOKEN`, which must have access to the tap repository.
+
+If the automated workflow cannot run, update and validate manually:
 
 ```bash
 brew test so1omon563/plex-tui/plex-tui
 brew audit --strict --online so1omon563/plex-tui/plex-tui
 ```
 
-Open this as a packaging-only PR without a semver bump marker.
+Open tap updates as packaging-only PRs without semver bump markers.
 
 ## 7. Arch AUR
 
