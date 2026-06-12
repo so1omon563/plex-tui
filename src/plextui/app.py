@@ -9,11 +9,12 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from rich.align import Align
 from rich.console import Group
 from rich.table import Table
 from rich.text import Text
 from textual import work
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, ScreenStackError
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.css.query import NoMatches
@@ -785,7 +786,10 @@ class PlexTuiApp(App[None]):
         self.set_focus_pane(main=True)
 
     def media_grid_visible(self) -> bool:
-        return bool(self.query_one("#media-grid-scroll", VerticalScroll).display)
+        try:
+            return bool(self.query_one("#media-grid-scroll", VerticalScroll).display)
+        except (NoMatches, ScreenStackError):
+            return False
 
     def show_media_list(self) -> ListView:
         media = self.query_one("#media", ListView)
@@ -2213,7 +2217,7 @@ def render_media_grid(
         for _ in cards:
             row.add_column(width=grid_card_width(config), no_wrap=True)
         row.add_row(*cards)
-        rows.append(row)
+        rows.append(Align.center(row))
     return Group(*rows)
 
 
@@ -2223,8 +2227,8 @@ def render_media_grid_card(
     config: AppConfig,
     artwork_overrides: dict[str, object] | None = None,
 ) -> object:
-    marker = "▸ " if selected else "  "
     title_style = "bold #e5a00d" if selected else "bold"
+    card_width = grid_card_width(config)
     content_width = grid_card_content_width(config)
     title = truncate_text(media.title, content_width)
     subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), content_width)
@@ -2233,18 +2237,20 @@ def render_media_grid_card(
     if artwork is None:
         status = "poster" if media.artwork_path else "no poster"
         artwork = grid_artwork_placeholder(status, config)
-    footer = "selected" if selected else ""
+    else:
+        artwork = center_renderable_lines(artwork, card_width)
+    footer = "▶ selected" if selected else ""
     return Group(
         artwork,
-        Text(f"{marker}{title}", style=title_style),
-        Text(f"  {subtitle}", style="dim"),
-        Text(f"  {footer}", style="#e5a00d" if selected else "dim"),
+        Text(title.center(card_width), style=title_style),
+        Text(subtitle.center(card_width), style="dim"),
+        Text(footer.center(card_width), style="#e5a00d" if selected else "dim"),
     )
 
 
 def grid_artwork_placeholder(status: str, config: AppConfig) -> Group:
     spec = grid_density_spec(config)
-    width = int(spec["art_width"])
+    width = grid_card_width(config)
     height = int(spec["art_height"])
     label = truncate_text(f"[{status}]", width).center(width)
     blank = " " * width
@@ -2253,6 +2259,25 @@ def grid_artwork_placeholder(status: str, config: AppConfig) -> Group:
     for index in range(height):
         lines.append(Text(label if index == midpoint else blank, style="dim"))
     return Group(*lines)
+
+
+def center_renderable_lines(renderable: object, width: int) -> object:
+    if isinstance(renderable, Group):
+        return Group(*(center_renderable_lines(item, width) for item in renderable.renderables))
+    if isinstance(renderable, Text):
+        plain_width = len(renderable.plain)
+        if plain_width >= width:
+            return renderable.copy()
+        left = (width - plain_width) // 2
+        right = width - plain_width - left
+        padded = Text(" " * left)
+        padded.append_text(renderable.copy())
+        padded.append(" " * right)
+        return padded
+    text = str(renderable)
+    if len(text) >= width:
+        return Text(text)
+    return Text(text.center(width))
 
 
 def copy_renderable(renderable: object | None) -> object | None:

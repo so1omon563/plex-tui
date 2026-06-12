@@ -5,6 +5,7 @@ from subprocess import CompletedProcess, TimeoutExpired
 from types import SimpleNamespace
 
 from PIL import Image
+from rich.align import Align
 from rich.console import Group
 from rich.text import Text
 
@@ -13,6 +14,7 @@ from plextui.app import (
     LoadMoreRow,
     MediaGrid,
     MediaRow,
+    PlexTuiApp,
     card_artwork_pixel_size,
     context_hint,
     detect_mpv,
@@ -40,6 +42,7 @@ from plextui.app import (
     render_debug_log_details,
     render_details,
     render_help,
+    render_media_grid,
     render_media_grid_card,
     render_picker_details,
     render_playback_details,
@@ -580,10 +583,17 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
 
     selected_text = "\n".join(str(renderable) for renderable in selected.renderables)
     unselected_text = "\n".join(str(renderable) for renderable in unselected.renderables)
-    assert "▸ Movie" in selected_text
-    assert "selected" in selected_text
+    assert "Movie" in selected_text
+    assert "▶ selected" in selected_text
     assert "┏" not in selected_text
-    assert "▸ Movie" not in unselected_text
+    assert "▶ selected" not in unselected_text
+
+
+def test_grid_rows_are_centered_in_media_pane():
+    media = MediaItem("Movie", "2024", "movie", "1", True, object(), artwork_path="")
+    rendered = render_media_grid([media], media.key, AppConfig("http://plex", "token", "client"), columns=2)
+
+    assert isinstance(rendered.renderables[0], Align)
 
 
 def test_grid_card_placeholder_matches_artwork_height():
@@ -598,6 +608,20 @@ def test_grid_card_placeholder_matches_artwork_height():
     assert any("[no poster]" in str(line) for line in placeholder.renderables)
 
 
+def test_grid_card_text_and_placeholder_are_card_width():
+    media = MediaItem("A Movie", "2024", "movie", "1", True, object(), artwork_path="")
+    config = AppConfig("http://plex", "token", "client", grid_density="compact")
+
+    rendered = render_media_grid_card(media, True, config)
+
+    width = grid_card_width(config)
+    placeholder = rendered.renderables[0]
+    assert all(len(line.plain) == width for line in placeholder.renderables)
+    assert len(rendered.renderables[1].plain) == width
+    assert len(rendered.renderables[2].plain) == width
+    assert len(rendered.renderables[3].plain) == width
+
+
 def test_grid_card_copies_cached_artwork_renderable():
     media = MediaItem("Movie", "2024", "movie", "1", True, object(), artwork_path="/thumb")
     artwork = Group(Text("line 1"), Text("line 2"))
@@ -607,6 +631,7 @@ def test_grid_card_copies_cached_artwork_renderable():
     assert isinstance(rendered.renderables[0], Group)
     assert rendered.renderables[0] is not artwork
     assert rendered.renderables[0].renderables[0] is not artwork.renderables[0]
+    assert rendered.renderables[0].renderables[0].plain.strip() == "line 1"
 
 
 def test_render_help_groups_key_bindings():
@@ -709,6 +734,10 @@ def test_media_grid_tracks_selection_and_visible_page():
     grid.set_selected_index(4)
 
     assert [item.key for item in grid.visible_page_items()] == ["4"]
+
+
+def test_media_grid_visible_handles_unmounted_app():
+    assert not PlexTuiApp().media_grid_visible()
 
 
 def test_media_grid_page_status_counts_loaded_items():
