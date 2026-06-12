@@ -1473,8 +1473,15 @@ class PlexTuiApp(App[None]):
 
     def refresh_settings_after_change(self, action: str, label: str, value: str) -> None:
         self.action_show_settings(selected_action=action)
-        self.show_detail_text(render_settings_change_details(action, label, value, self.config))
+        self.show_settings_action_details(render_settings_change_details(action, label, value, self.config))
         self.set_status(f"{label}: {value}")
+
+    def show_settings_action_details(self, content: str) -> None:
+        self.show_detail_text(content)
+        try:
+            self.query_one("#media", ListView).call_after_refresh(self.show_detail_text, content)
+        except NoMatches:
+            return
 
     def action_show_help(self) -> None:
         self.help_visible = True
@@ -1637,7 +1644,7 @@ class PlexTuiApp(App[None]):
             return
         if action == "show_debug_log":
             path = debug_log_path()
-            self.show_detail_text(
+            self.show_settings_action_details(
                 f"Debug log\n\n{path}\n\n"
                 "Set PLEX_TUI_PERF_LOG=1 before launch to include browsing performance timings.\n"
                 "Set PLEX_TUI_ARTWORK_LOG=1 as well to include verbose grid artwork internals."
@@ -1646,11 +1653,11 @@ class PlexTuiApp(App[None]):
             return
         if action == "show_recent_debug_log":
             path = debug_log_path()
-            self.show_detail_text(render_debug_log_details(path))
+            self.show_settings_action_details(render_debug_log_details(path))
             self.set_status(f"Recent debug log: {path}")
             return
         if action == "show_app_diagnostics":
-            self.show_detail_text(render_app_diagnostics(self.config, detect_mpv()))
+            self.show_settings_action_details(render_app_diagnostics(self.config, detect_mpv()))
             self.set_status("App diagnostics")
             return
         if action == "artwork_renderer_block":
