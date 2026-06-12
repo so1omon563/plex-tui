@@ -2,6 +2,9 @@
 
 ## App UX
 
+- Rework grid view presentation so poster/title blocks feel balanced across
+  terminal sizes. The current grid is functional but visually uneven: poster
+  blocks, titles, and pane content can look lopsided or off-center.
 - Continue tuning focus, row markers, and selection affordances based on real
   terminal themes.
 - Polish the details pane hierarchy for long summaries, missing metadata, and
@@ -30,6 +33,16 @@
 - Keep post-release package publishing fully automated across PyPI, Homebrew,
   and AUR.
 - Consider standalone artifacts only after the app behavior stabilizes.
+
+## Plex Integration Research
+
+- Review the Plex module in
+  [`anthonycaccese/240-MP`](https://github.com/anthonycaccese/240-MP/tree/main)
+  for ideas that fit a terminal-first Plex client. Areas to evaluate include
+  profile switching, selective library display, Continue Watching/Resume, hubs,
+  playlists, collections, categories, movie editions, pre-play audio/subtitle
+  selection, alphabet browsing, show/season browsing, and direct-play versus
+  transcode quality choices.
 
 ## Technical Follow-Up
 
