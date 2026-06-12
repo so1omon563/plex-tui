@@ -27,11 +27,14 @@
   tagging, GitHub Release creation, PyPI publishing, Homebrew tap publishing,
   and AUR publishing.
 - Keep `main` protected in both `plex-tui` and `homebrew-plex-tui`; `plex-tui`
-  requires the Python 3.11 and 3.13 checks before merge.
+  requires the Python 3.11 and 3.13 checks before merge. Rulesets require PRs
+  with zero approving reviews so automation branches can merge after checks
+  without self-approval.
 - Improve Homebrew install time; the current formula works but builds native
   Python resources such as `pillow` from source.
 - Keep post-release package publishing fully automated across PyPI, Homebrew,
-  and AUR.
+  and AUR. Periodically dry-run existing release tags through the post-release
+  workflows to confirm Homebrew and AUR no-op cleanly when already current.
 - Consider standalone artifacts only after the app behavior stabilizes.
 
 ## Plex Integration Research
