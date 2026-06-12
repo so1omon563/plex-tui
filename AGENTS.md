@@ -83,6 +83,14 @@ Use PRs for repository changes. When publishing local commits, branch from
 open a draft PR instead of pushing directly to `main`. Treat `main` as a
 protected branch even before GitHub branch protection or rulesets are enabled.
 
+By default, PR titles or bodies should include exactly one semver bump marker:
+`#patch`, `#minor`, or `#major`. Most changes should advance tags when merged,
+even when they do not publish a GitHub Release. Add `#release` only when the
+merge should create the GitHub Release and publish package channels. Exceptions
+are allowed for packaging-only follow-ups, automation repair, docs-only
+maintenance, or other changes that should not create a new version tag; call out
+the reason in the PR body when omitting a bump marker.
+
 GitHub CLI notes:
 
 - `gh auth status` may fail inside the sandbox even when the user is logged in
