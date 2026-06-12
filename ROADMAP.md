@@ -21,9 +21,9 @@
   work, pull requests, and passing checks before merge.
 - Improve Homebrew install time; the current formula works but builds native
   Python resources such as `pillow` from source.
-- Automate Homebrew tap updates after PyPI releases, preferably by opening a
-  pull request in `so1omon563/homebrew-plex-tui` with the new formula URL,
-  sha256, and Python resource updates.
+- Automate Homebrew tap and AUR metadata updates after PyPI releases by opening
+  packaging-only pull requests with the new artifact URLs and checksums. These
+  PRs must omit semver bump markers so they do not create another release tag.
 - Consider standalone artifacts only after the app behavior stabilizes.
 
 ## Technical Follow-Up

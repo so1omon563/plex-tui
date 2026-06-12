@@ -25,7 +25,7 @@ Prepare a release PR:
 - Move `CHANGELOG.md` entries from `Unreleased` to the release version and date.
 - Confirm `README.md`, `PACKAGING.md`, and `config.example.toml` match current behavior.
 - Confirm the Git remote points to `https://github.com/so1omon563/plex-tui`.
-- Make sure the PR title or merge commit includes the right bump marker:
+- Make sure the PR title or body includes the right bump marker:
   `#patch`, `#minor`, or `#major`.
 - Add `#release`, `#publish`, or `#ship` when the merge should create the
   GitHub Release and publish to PyPI.
@@ -33,6 +33,11 @@ Prepare a release PR:
 The semver bumper creates tags from merge metadata, but it does not edit project
 files. Keep the version files and changelog in the PR aligned with the tag the
 merge will create.
+
+Do not update Homebrew or AUR checksums in the release PR. Those checksums depend
+on the tag or published artifact that does not exist until after merge. Handle
+packaging repository updates in a follow-up PR that does not include `#patch`,
+`#minor`, or `#major`, so it cannot create another version tag.
 
 ## 3. Build Artifacts
 
@@ -73,7 +78,8 @@ python -m venv /tmp/plex-tui-testpypi
 Merge the release PR after CI passes. The `Version Bump and Release` workflow:
 
 1. Runs `so1omon563/custom-semver-bumper@v1` on the merged PR and creates the
-   next `vX.Y.Z` tag.
+   next `vX.Y.Z` tag when the merged PR title or body includes `#patch`,
+   `#minor`, or `#major`.
 2. Runs `so1omon563/release-creator@v1` when the merge message includes
    `#release`, `#publish`, or `#ship`.
 3. Publishes the tagged package to PyPI through Trusted Publishing after the
@@ -107,6 +113,8 @@ brew test so1omon563/plex-tui/plex-tui
 brew audit --strict --online so1omon563/plex-tui/plex-tui
 ```
 
+Open this as a packaging-only PR without a semver bump marker.
+
 ## 7. Arch AUR
 
 Update `packaging/aur/PKGBUILD` and regenerate `.SRCINFO`:
@@ -127,6 +135,8 @@ git add PKGBUILD .SRCINFO
 git commit -m "Update to X.Y.Z-1"
 git push
 ```
+
+Open this as a packaging-only PR without a semver bump marker.
 
 ## Manual Fallbacks
 

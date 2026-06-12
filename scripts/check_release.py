@@ -48,26 +48,17 @@ def check_version_metadata(root: Path) -> CheckResult:
     try:
         pyproject_version = read_pyproject_version(root / "pyproject.toml")
         init_version = read_init_version(root / "src/plextui/__init__.py")
-        aur_version = read_assignment(root / "packaging/aur/PKGBUILD", "pkgver")
-        srcinfo_version = read_srcinfo_value(root / "packaging/aur/.SRCINFO", "pkgver")
-        srcinfo_source = read_srcinfo_value(root / "packaging/aur/.SRCINFO", "source")
     except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
         return CheckResult(False, f"read version metadata: {exc}")
 
     versions = {
         "pyproject.toml": pyproject_version,
         "src/plextui/__init__.py": init_version,
-        "packaging/aur/PKGBUILD": aur_version,
-        "packaging/aur/.SRCINFO": srcinfo_version,
     }
     unique_versions = set(versions.values())
     if len(unique_versions) != 1:
         details = ", ".join(f"{name}={version}" for name, version in versions.items())
         return CheckResult(False, f"version metadata is inconsistent: {details}")
-
-    expected_tag = f"v{pyproject_version}"
-    if expected_tag not in srcinfo_source:
-        return CheckResult(False, f".SRCINFO source does not reference {expected_tag}")
 
     return CheckResult(True, f"version metadata is consistent at {pyproject_version}")
 
@@ -98,6 +89,9 @@ def check_release_workflow(root: Path) -> CheckResult:
         'types: ["closed"]',
         'branches: ["main"]',
         "github.event.pull_request.merged == true",
+        "contains(github.event.pull_request.title, '#patch')",
+        "contains(github.event.pull_request.title, '#minor')",
+        "contains(github.event.pull_request.title, '#major')",
         "contents: write",
         "fetch-depth: 0",
         "uses: so1omon563/custom-semver-bumper@v1",
