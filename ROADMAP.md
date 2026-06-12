@@ -17,8 +17,6 @@
 
 ## Packaging & Distribution
 
-- Add a non-destructive release verification target around the shared
-  tagging/release workflow.
 - Keep planned releases moving through PRs so merged release PRs drive automatic
   tagging, GitHub Release creation, and PyPI publishing.
 - Improve Homebrew install time; the current formula works but builds native
