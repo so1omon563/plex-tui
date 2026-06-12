@@ -88,6 +88,13 @@ jobs:
 
           sudo chown -R "$(id -u):$(id -g)" packaging/aur
 
+      - name: Remove generated package artifacts
+        run: |
+          rm -f source.tar.gz
+          find packaging/aur -maxdepth 1 -type f \
+            \( -name "*.pkg.tar.*" -o -name "*.tar.gz" \) \
+            -delete
+
       - name: Create packaging pull request
         uses: peter-evans/create-pull-request@v7
         with:
