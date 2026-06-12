@@ -13,6 +13,14 @@ assert SPEC.loader is not None
 sys.modules[SPEC.name] = check_release
 SPEC.loader.exec_module(check_release)
 
+UPDATE_AUR_PATH = Path(__file__).resolve().parents[1] / "scripts/update_aur_package.py"
+UPDATE_AUR_SPEC = importlib.util.spec_from_file_location("update_aur_package", UPDATE_AUR_PATH)
+assert UPDATE_AUR_SPEC is not None
+update_aur_package = importlib.util.module_from_spec(UPDATE_AUR_SPEC)
+assert UPDATE_AUR_SPEC.loader is not None
+sys.modules[UPDATE_AUR_SPEC.name] = update_aur_package
+UPDATE_AUR_SPEC.loader.exec_module(update_aur_package)
+
 
 def test_release_checks_pass_for_repository():
     root = Path(__file__).resolve().parents[1]
@@ -61,6 +69,40 @@ jobs:
     assert not result.ok
     assert "custom-semver-bumper" in result.message
     assert "release-creator" in result.message
+
+
+def test_update_aur_package_updates_pkgbuild(tmp_path):
+    pkgbuild = tmp_path / "PKGBUILD"
+    pkgbuild.write_text(
+        "\n".join(
+            [
+                "pkgname=plex-tui",
+                "pkgver=0.2.1",
+                "pkgrel=3",
+                'source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")',
+                'sha256sums=("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    update_aur_package.update_pkgbuild(
+        pkgbuild,
+        "0.3.0",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    )
+
+    assert pkgbuild.read_text(encoding="utf-8") == "\n".join(
+        [
+            "pkgname=plex-tui",
+            "pkgver=0.3.0",
+            "pkgrel=1",
+            'source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")',
+            'sha256sums=("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")',
+            "",
+        ]
+    )
 
 
 def write_release_fixture(

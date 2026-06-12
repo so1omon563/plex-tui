@@ -120,9 +120,13 @@ def check_actionlint(root: Path) -> CheckResult:
     if actionlint is None:
         return CheckResult(True, "actionlint is not installed; skipped workflow lint")
 
-    path = root / ".github/workflows/bump.yml"
+    workflow_dir = root / ".github/workflows"
+    paths = sorted([*workflow_dir.glob("*.yml"), *workflow_dir.glob("*.yaml")])
+    if not paths:
+        return CheckResult(False, ".github/workflows contains no workflow files")
+
     completed = subprocess.run(
-        [actionlint, str(path)],
+        [actionlint, *[str(path) for path in paths]],
         cwd=root,
         check=False,
         capture_output=True,
@@ -132,7 +136,7 @@ def check_actionlint(root: Path) -> CheckResult:
         output = (completed.stdout + completed.stderr).strip()
         return CheckResult(False, f"actionlint failed: {output}")
 
-    return CheckResult(True, "actionlint passed for bump.yml")
+    return CheckResult(True, f"actionlint passed for {len(paths)} workflow files")
 
 
 def read_pyproject_version(path: Path) -> str:

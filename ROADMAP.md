@@ -21,9 +21,9 @@
   work, pull requests, and passing checks before merge.
 - Improve Homebrew install time; the current formula works but builds native
   Python resources such as `pillow` from source.
-- Automate Homebrew tap and AUR metadata updates after PyPI releases by opening
-  packaging-only pull requests with the new artifact URLs and checksums. These
-  PRs must omit semver bump markers so they do not create another release tag.
+- Extend post-release packaging automation to the Homebrew tap and eventual AUR
+  package repository push. The first automation pass opens a packaging-only PR
+  for the tracked AUR metadata in this repository.
 - Consider standalone artifacts only after the app behavior stabilizes.
 
 ## Technical Follow-Up
