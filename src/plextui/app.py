@@ -2868,6 +2868,16 @@ def detect_mpv() -> tuple[str, str]:
     return path, version
 
 
+def mpv_install_hints() -> list[str]:
+    return [
+        "Install mpv:",
+        "  macOS/Homebrew: brew install mpv",
+        "  Debian/Ubuntu: sudo apt install mpv",
+        "  Fedora: sudo dnf install mpv",
+        "  Arch Linux / Manjaro: sudo pacman -S mpv",
+    ]
+
+
 def render_app_diagnostics(config: AppConfig, mpv_info: tuple[str, str]) -> str:
     mpv_path, mpv_version = mpv_info
     lines = [
@@ -2892,6 +2902,10 @@ def render_app_diagnostics(config: AppConfig, mpv_info: tuple[str, str]) -> str:
         f"mpv: {mpv_path}",
         f"mpv version: {mpv_version}",
         f"mpv window size: {mpv_window_size_value(config)}",
+    ]
+    if mpv_path == "missing" or mpv_version.startswith("version check failed"):
+        lines.extend(["", *mpv_install_hints()])
+    lines.extend([
         "",
         "Streams",
         f"Audio preference: {preference_value(config.preferred_audio_language)}",
@@ -2909,7 +2923,7 @@ def render_app_diagnostics(config: AppConfig, mpv_info: tuple[str, str]) -> str:
         f"Page size: {config.page_size}",
         f"Auto-load threshold: {config.auto_load_threshold}",
         f"Grid prefetch pages: {config.grid_prefetch_pages}",
-    ]
+    ])
     return "\n".join(lines)
 
 

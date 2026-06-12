@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added `plex-tui --diagnostics` for collecting environment and playback setup details.
+
 ## 0.2.1 - 2026-06-11
 
 - Added GitHub Actions CI and PyPI Trusted Publishing workflow scaffolding.

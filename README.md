@@ -92,6 +92,7 @@ Useful CLI checks:
 plex-tui --version
 plex-tui --config-path
 plex-tui --debug-log-path
+plex-tui --diagnostics
 plex-tui --smoke
 ```
 
@@ -221,6 +222,12 @@ Enable browsing performance timings before launch:
 
 ```bash
 PLEX_TUI_PERF_LOG=1 plex-tui
+```
+
+To collect environment information for issue reports:
+
+```bash
+plex-tui --diagnostics
 ```
 
 Verbose grid artwork internals are quieter by default. Include them only when

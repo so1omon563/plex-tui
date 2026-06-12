@@ -374,6 +374,21 @@ def test_render_app_diagnostics_summarizes_runtime_state(monkeypatch, tmp_path):
     assert "Grid prefetch pages: 4" in rendered
 
 
+def test_render_app_diagnostics_includes_mpv_hints_when_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr("plextui.app.config_path", lambda: tmp_path / "config.toml")
+    monkeypatch.setattr("plextui.app.cache_path", lambda: tmp_path / "cache")
+    monkeypatch.setattr("plextui.app.debug_log_path", lambda: tmp_path / "debug.log")
+    config = AppConfig("http://plex", "token", "client-id")
+
+    rendered = render_app_diagnostics(config, ("missing", "mpv was not found on PATH"))
+
+    assert "App Diagnostics" in rendered
+    assert "Install mpv:" in rendered
+    assert "brew install mpv" in rendered
+    assert "sudo apt install mpv" in rendered
+    assert "sudo pacman -S mpv" in rendered
+
+
 def test_detect_mpv_reports_missing_found_and_failed(monkeypatch):
     monkeypatch.setattr("plextui.app.shutil.which", lambda command: None)
     assert detect_mpv() == ("missing", "mpv was not found on PATH")
