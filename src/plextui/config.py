@@ -41,6 +41,7 @@ class AppConfig:
     page_size: int = DEFAULT_PAGE_SIZE
     auto_load_threshold: int = DEFAULT_AUTO_LOAD_THRESHOLD
     grid_prefetch_pages: int = DEFAULT_GRID_PREFETCH_PAGES
+    hidden_library_keys: tuple[str, ...] = ()
 
 
 def config_path() -> Path:
@@ -122,6 +123,7 @@ def load_config() -> AppConfig:
         MAX_GRID_PREFETCH_PAGES,
         "grid_prefetch_pages",
     )
+    hidden_library_keys = csv_values(data.get("hidden_library_keys", ""))
     return AppConfig(
         base_url=base_url.strip(),
         token=token.strip(),
@@ -140,6 +142,7 @@ def load_config() -> AppConfig:
         page_size=page_size,
         auto_load_threshold=auto_load_threshold,
         grid_prefetch_pages=grid_prefetch_pages,
+        hidden_library_keys=hidden_library_keys,
     )
 
 
@@ -179,6 +182,8 @@ def save_config(config: AppConfig) -> None:
         lines.append(f"auto_load_threshold = {config.auto_load_threshold}")
     if config.grid_prefetch_pages != DEFAULT_GRID_PREFETCH_PAGES:
         lines.append(f"grid_prefetch_pages = {config.grid_prefetch_pages}")
+    if config.hidden_library_keys:
+        lines.append(f'hidden_library_keys = "{_toml_escape(",".join(config.hidden_library_keys))}"')
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -198,6 +203,17 @@ def bounded_int(value: str, default: int, minimum: int, maximum: int, name: str)
         write_debug_log(f"invalid {name} {value!r}; using {default}")
         return default
     return parsed
+
+
+def csv_values(value: str) -> tuple[str, ...]:
+    values = []
+    seen = set()
+    for raw in value.split(","):
+        item = raw.strip()
+        if item and item not in seen:
+            values.append(item)
+            seen.add(item)
+    return tuple(values)
 
 
 def _toml_escape(value: str) -> str:

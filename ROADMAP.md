@@ -46,8 +46,8 @@
   live in `docs/plex-integration-research.md`.
 - Continue Watching now has a sidebar browse entrypoint backed by Plex on-deck
   data; watch for real-library edge cases around ordering and pagination.
-- Add selective library visibility in Settings so noisy Plex libraries can be
-  hidden from the main browser.
+- Selective library visibility is available in Settings so noisy Plex libraries
+  can be hidden from the sidebar.
 - Add optional library submenus for Library, Recommended, Collections,
   Playlists, and Categories where Plex exposes them.
 - Add alphabet navigation for large full-library views.
