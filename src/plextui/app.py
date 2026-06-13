@@ -74,6 +74,7 @@ LIST_DETAIL_REFRESH_DELAY = 0.35
 DETAIL_ARTWORK_REFRESH_DELAY = 0.55
 GRID_PREFETCH_WORKERS = 3
 DETAIL_SUMMARY_WIDTH = 38
+DETAIL_STREAM_LIMIT = 5
 
 
 @dataclass
@@ -2126,32 +2127,32 @@ def format_offset(milliseconds: int) -> str:
 def render_details(details: object, config: AppConfig | None = None, raw: object | None = None) -> str:
     lines = render_detail_header(details, config)
 
-    metadata = [f"{label}: {value}" for label, value in getattr(details, "metadata")]
+    metadata = [*detail_key_value_rows(getattr(details, "metadata"))]
     append_detail_section(lines, "Metadata", metadata or ["No metadata reported"])
 
     if config is not None:
         append_detail_section(
             lines,
             "Preferences",
-            [
-                f"Audio: {preference_value(config.preferred_audio_language)}",
-                f"Subtitles: {subtitle_mode_value(config)} / {subtitle_language_value(config)}",
-            ],
+            detail_key_value_rows([
+                ("Audio", preference_value(config.preferred_audio_language)),
+                ("Subtitles", f"{subtitle_mode_value(config)} / {subtitle_language_value(config)}"),
+            ]),
         )
         if raw is not None:
             effective = effective_stream_preference_rows(raw, config)
             if effective:
-                append_detail_section(lines, "Effective Playback", [f"{label}: {value}" for label, value in effective])
+                append_detail_section(lines, "Effective Playback", detail_key_value_rows(effective))
 
     audio = getattr(details, "audio", [])
     if audio:
-        append_detail_section(lines, "Audio Tracks", [f"- {track}" for track in audio])
+        append_detail_section(lines, stream_section_heading("Audio Tracks", audio), detail_list_rows(audio))
     else:
         append_detail_section(lines, "Audio Tracks", ["No audio tracks reported"])
 
     subtitles = getattr(details, "subtitles")
     if subtitles:
-        append_detail_section(lines, "Subtitle Tracks", [f"- {subtitle}" for subtitle in subtitles])
+        append_detail_section(lines, stream_section_heading("Subtitle Tracks", subtitles), detail_list_rows(subtitles))
     else:
         append_detail_section(lines, "Subtitle Tracks", ["No subtitle tracks reported"])
 
@@ -2186,6 +2187,32 @@ def append_detail_section(lines: list[str], heading: str, body: list[str]) -> No
         lines.append("")
     lines.append(heading)
     lines.extend(body)
+
+
+def detail_key_value_rows(values: list[tuple[str, str]]) -> list[str]:
+    rows: list[str] = []
+    for label, value in values:
+        rows.extend(wrapped_detail_text(f"{label}: {value}"))
+    return rows
+
+
+def stream_section_heading(label: str, values: list[str]) -> str:
+    return f"{label} ({len(values)})"
+
+
+def detail_list_rows(values: list[str], limit: int = DETAIL_STREAM_LIMIT) -> list[str]:
+    rows: list[str] = []
+    visible = values[:limit]
+    for value in visible:
+        wrapped = wrapped_detail_text(value, width=DETAIL_SUMMARY_WIDTH - 2)
+        if not wrapped:
+            continue
+        rows.append(f"- {wrapped[0]}")
+        rows.extend(f"  {line}" for line in wrapped[1:])
+    remaining = len(values) - len(visible)
+    if remaining > 0:
+        rows.append(f"... {remaining} more")
+    return rows
 
 
 def wrapped_detail_text(value: str, width: int = DETAIL_SUMMARY_WIDTH) -> list[str]:

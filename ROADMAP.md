@@ -7,8 +7,8 @@
 - Continue tuning focus, row markers, and selection affordances based on real
   terminal themes. Status hints should keep a compact context prefix such as
   `Media:`, `Grid:`, or `Settings:` so the active pane is clear at a glance.
-- Continue polishing the details pane hierarchy for dense metadata, stream
-  choices, and playback readiness hints.
+- Continue polishing the details pane hierarchy after the dense metadata and
+  stream-list pass, especially playback readiness and real-library edge cases.
 - Continue refining Settings ergonomics as new preferences are added, especially
   grouping, current-value scanning, and change feedback. The list rows should
   stay compact, with rules and ranges living in the details pane.
