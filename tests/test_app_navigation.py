@@ -338,6 +338,10 @@ def test_settings_actions_update_preferences():
     asyncio.run(run_settings_action_check())
 
 
+def test_settings_toggle_library_visibility_updates_sidebar():
+    asyncio.run(run_settings_library_visibility_check())
+
+
 def test_settings_recent_debug_log_action_shows_tail(tmp_path):
     asyncio.run(run_settings_recent_debug_log_check(tmp_path))
 
@@ -1268,6 +1272,28 @@ async def run_settings_action_check():
             assert app.config.artwork_renderer == "auto"
 
         assert save_config.call_count == 15
+
+
+async def run_settings_library_visibility_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        movies = LibraryItem("Movies", "1", "movie", object())
+        tv = LibraryItem("TV", "2", "show", object())
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.libraries = [movies, tv]
+        app.populate_libraries(app.libraries)
+        await pilot.pause(0.2)
+
+        with patch("plextui.app.save_config") as save_config:
+            app.run_settings_action("toggle_library_visibility:2")
+            await pilot.pause(0.2)
+
+        rows = list(app.query_one("#libraries").children)
+        assert app.config.hidden_library_keys == ("2",)
+        assert save_config.call_count == 1
+        assert isinstance(rows[0], ContinueWatchingRow)
+        assert [row.library.title for row in rows[1:]] == ["Movies"]
 
 
 async def run_settings_recent_debug_log_check(tmp_path):

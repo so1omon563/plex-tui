@@ -54,11 +54,12 @@ from plextui.app import (
     render_subtitle_playback_preference,
     settings_rows,
     subtitle_preference_value,
+    visible_libraries,
     write_artwork_performance_log,
     write_performance_log,
 )
 from plextui.config import AppConfig
-from plextui.models import MediaDetails, MediaItem
+from plextui.models import LibraryItem, MediaDetails, MediaItem
 from plextui.player import StreamChoice
 
 
@@ -253,6 +254,30 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "› Grid Prefetch Pages: 4  (edit)" in labels
     assert "› Show recent debug log  (show)" in labels
     assert "› Show app diagnostics  (show)" in labels
+
+
+def test_settings_rows_include_library_visibility_toggles():
+    config = AppConfig("http://plex", "token", "client-id", hidden_library_keys=("2",))
+    libraries = [
+        LibraryItem("Movies", "1", "movie", object()),
+        LibraryItem("TV", "2", "show", object()),
+    ]
+
+    labels = [getattr(row, "label_text") for row in settings_rows(config, libraries)]
+
+    assert "Library Visibility" in labels
+    assert "› Movies: Visible  (toggle)" in labels
+    assert "› TV: Hidden  (toggle)" in labels
+
+
+def test_visible_libraries_filters_hidden_keys():
+    config = AppConfig("http://plex", "token", "client-id", hidden_library_keys=("2", "missing"))
+    libraries = [
+        LibraryItem("Movies", "1", "movie", object()),
+        LibraryItem("TV", "2", "show", object()),
+    ]
+
+    assert [library.title for library in visible_libraries(libraries, config)] == ["Movies"]
 
 
 def test_settings_row_details_describe_action_types():

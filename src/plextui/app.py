@@ -467,6 +467,7 @@ class PlexTuiApp(App[None]):
     detail_refresh_timer: Timer | None
     detail_artwork_timer: Timer | None
     detail_cache: dict[str, MediaItem]
+    libraries: list[LibraryItem]
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -514,6 +515,7 @@ class PlexTuiApp(App[None]):
         self.detail_refresh_timer = None
         self.detail_artwork_timer = None
         self.detail_cache = {}
+        self.libraries = []
         try:
             self.config = load_config()
             self.apply_config_theme()
@@ -600,13 +602,17 @@ class PlexTuiApp(App[None]):
         def update() -> None:
             self.service = service
             self.detail_cache = {}
+            self.libraries = libraries
             self.rendered_grid_artwork_cache = {}
             self.apply_config_theme()
             self.title = f"plex-tui - {service.friendly_name}"
             self.set_status(f"Connected to {service.friendly_name}")
-            self.populate_libraries(libraries)
-            if libraries:
-                self.open_library(libraries[0])
+            visible = visible_libraries(libraries, self.config)
+            self.populate_libraries(visible)
+            if visible:
+                self.open_library(visible[0])
+            else:
+                self.open_continue_watching()
 
         self.call_from_thread(update)
 
@@ -1509,7 +1515,7 @@ class PlexTuiApp(App[None]):
         view = self.show_media_list()
         view.clear()
         selected_index = 0
-        rows = settings_rows(self.config)
+        rows = settings_rows(self.config, self.libraries)
         for index, row in enumerate(rows):
             if selected_action and isinstance(row, SettingsActionRow) and row.action == selected_action:
                 selected_index = index
@@ -1611,6 +1617,9 @@ class PlexTuiApp(App[None]):
             return
         if action == "toggle_media_view":
             self.action_toggle_media_view()
+            return
+        if action.startswith("toggle_library_visibility:"):
+            self.toggle_library_visibility(action.removeprefix("toggle_library_visibility:"))
             return
         if action == "cycle_grid_density":
             next_density = next_grid_density(self.config.grid_density)
@@ -1729,6 +1738,24 @@ class PlexTuiApp(App[None]):
                 self.refresh_settings_after_change(action, "Artwork renderer", artwork_renderer_value(self.config))
             return
         self.set_status(f"Unknown settings action: {action}")
+
+    def toggle_library_visibility(self, library_key: str) -> None:
+        hidden = set(self.config.hidden_library_keys)
+        if library_key in hidden:
+            hidden.remove(library_key)
+        else:
+            hidden.add(library_key)
+        next_hidden = tuple(key for key in self.config.hidden_library_keys if key in hidden)
+        if library_key in hidden and library_key not in next_hidden:
+            next_hidden = (*next_hidden, library_key)
+        if not self.update_preferences(hidden_library_keys=next_hidden):
+            return
+        visible = visible_libraries(self.libraries, self.config)
+        self.populate_libraries(visible)
+        library = library_by_key(self.libraries, library_key)
+        label = library.title if library is not None else library_key
+        value = "Hidden" if library_key in self.config.hidden_library_keys else "Visible"
+        self.refresh_settings_after_change(f"toggle_library_visibility:{library_key}", f"Library: {label}", value)
 
     def action_subtitle_picker(self) -> None:
         media = self.selected_media()
@@ -2496,8 +2523,37 @@ def artwork_status(details: object, config: AppConfig | None) -> str:
     return "available"
 
 
-def settings_rows(config: AppConfig) -> list[ListItem]:
-    return [
+def visible_libraries(libraries: list[LibraryItem], config: AppConfig) -> list[LibraryItem]:
+    hidden = set(config.hidden_library_keys)
+    return [library for library in libraries if library.key not in hidden]
+
+
+def library_by_key(libraries: list[LibraryItem], key: str) -> LibraryItem | None:
+    for library in libraries:
+        if library.key == key:
+            return library
+    return None
+
+
+def library_visibility_row(library: LibraryItem, config: AppConfig) -> SettingsActionRow:
+    state = "Hidden" if library.key in config.hidden_library_keys else "Visible"
+    return SettingsActionRow(
+        f"{library.title}: {state}",
+        f"toggle_library_visibility:{library.key}",
+    )
+
+
+def hidden_library_count_value(config: AppConfig) -> str:
+    count = len(config.hidden_library_keys)
+    if count == 0:
+        return "None"
+    if count == 1:
+        return "1 hidden"
+    return f"{count} hidden"
+
+
+def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None) -> list[ListItem]:
+    rows: list[ListItem] = [
         SettingsHeaderRow("Account"),
         SettingsValueRow(f"Server: {config.base_url or 'not set'}"),
         SettingsValueRow(f"Server Token: {'saved' if config.token else 'not set'}"),
@@ -2525,6 +2581,11 @@ def settings_rows(config: AppConfig) -> list[ListItem]:
         numeric_settings_row(config, "page_size"),
         numeric_settings_row(config, "auto_load_threshold"),
         numeric_settings_row(config, "grid_prefetch_pages"),
+    ]
+    if libraries:
+        rows.append(SettingsHeaderRow("Library Visibility"))
+        rows.extend(library_visibility_row(library, config) for library in libraries)
+    rows.extend([
         SettingsHeaderRow("Diagnostics"),
         SettingsValueRow(f"Config Path: {config_path()}"),
         SettingsValueRow(f"Cache Path: {cache_path()}"),
@@ -2534,7 +2595,8 @@ def settings_rows(config: AppConfig) -> list[ListItem]:
         SettingsActionRow("Show debug log path", "show_debug_log"),
         SettingsActionRow("Show recent debug log", "show_recent_debug_log"),
         SettingsActionRow("Show app diagnostics", "show_app_diagnostics"),
-    ]
+    ])
+    return rows
 
 
 def render_settings(config: AppConfig) -> str:
@@ -2573,6 +2635,7 @@ def render_settings(config: AppConfig) -> str:
         f"Page Size: {config.page_size}",
         f"Auto-load Threshold: {config.auto_load_threshold}",
         f"Grid Prefetch Pages: {config.grid_prefetch_pages}",
+        f"Hidden Libraries: {hidden_library_count_value(config)}",
         "Set custom browsing values with whole numbers inside the allowed range.",
         "",
         "Diagnostics",
@@ -2847,6 +2910,10 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         return f"Current media view: {media_view_value(config)}"
     if action == "cycle_grid_density":
         return f"Current grid density: {grid_density_value(config)}"
+    if action.startswith("toggle_library_visibility:"):
+        key = action.removeprefix("toggle_library_visibility:")
+        state = "Hidden" if key in config.hidden_library_keys else "Visible"
+        return f"Current library visibility: {state}"
     if "page_size" in action:
         return f"Current page size: {config.page_size}"
     if "auto_load_threshold" in action:
@@ -2887,6 +2954,8 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to switch between list and grid browsing."
     if action == "cycle_grid_density":
         return "Press Enter to cycle compact, comfortable, and large grid layouts."
+    if action.startswith("toggle_library_visibility:"):
+        return "Press Enter to show or hide this library in the sidebar."
     if action.startswith(("increase_", "decrease_")):
         return "Press Enter to adjust this value by one step."
     if action.startswith("reset_"):
@@ -2943,6 +3012,8 @@ def settings_action_label(action: str) -> str:
         "show_recent_debug_log": "Show recent debug log",
         "show_app_diagnostics": "Show app diagnostics",
     }
+    if action.startswith("toggle_library_visibility:"):
+        return "Library visibility"
     return labels.get(action, action)
 
 
