@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.3.14 - 2026-06-13
+
+- Validated the fully automatic release path after fixing post-release
+  packaging guards.
+- Resolved post-release package guard checks so workflow-triggered packaging
+  jobs compare release tags against squash merge commits instead of PR head
+  commits.
+
 ## 0.3.12 - 2026-06-12
 
 - Added release workflow guards so tag-only patch bumps do not republish the
