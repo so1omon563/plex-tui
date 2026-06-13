@@ -44,8 +44,8 @@
 - Research notes from
   [`anthonycaccese/240-MP`](https://github.com/anthonycaccese/240-MP/tree/main)
   live in `docs/plex-integration-research.md`.
-- Add a Continue Watching browse entrypoint backed by Plex in-progress/on-deck
-  style data.
+- Continue Watching now has a sidebar browse entrypoint backed by Plex on-deck
+  data; watch for real-library edge cases around ordering and pagination.
 - Add selective library visibility in Settings so noisy Plex libraries can be
   hidden from the main browser.
 - Add optional library submenus for Library, Recommended, Collections,

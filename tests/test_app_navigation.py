@@ -9,6 +9,7 @@ import pytest
 import plextui.app as app_module
 from plextui.app import (
     BrowseState,
+    ContinueWatchingRow,
     LoadMoreRow,
     PlexTuiApp,
     card_artwork_pixel_size,
@@ -53,6 +54,10 @@ def test_populate_libraries_highlights_first_rebuilt_row():
     asyncio.run(run_library_highlight_check())
 
 
+def test_populate_libraries_adds_continue_watching_entrypoint():
+    asyncio.run(run_continue_watching_entrypoint_check())
+
+
 def test_show_browse_state_adds_load_more_row():
     asyncio.run(run_load_more_row_check())
 
@@ -64,6 +69,10 @@ def test_render_loaded_status():
 
 def test_load_more_media_appends_next_page():
     asyncio.run(run_load_more_media_check())
+
+
+def test_load_more_media_appends_continue_watching_page():
+    asyncio.run(run_load_more_continue_watching_check())
 
 
 def test_initial_library_uses_configured_page_size():
@@ -519,11 +528,33 @@ async def run_library_highlight_check():
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
         await pilot.pause(0.2)
+        await pilot.press("down")
+        await pilot.pause(0.2)
 
         row = libraries_view.highlighted_child
         assert row is not None
         assert row.has_class("active-row")
         assert row.library.title == "Movies"
+
+
+async def run_continue_watching_entrypoint_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        libraries = [
+            LibraryItem("Movies", "1", "movie", object()),
+            LibraryItem("TV", "2", "show", object()),
+        ]
+
+        app.populate_libraries(libraries)
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+
+        rows = list(libraries_view.children)
+        assert isinstance(rows[0], ContinueWatchingRow)
+        assert [row.library.title for row in rows[1:]] == ["Movies", "TV"]
+        assert libraries_view.highlighted_child is rows[0]
 
 
 async def run_load_more_row_check():
@@ -551,6 +582,7 @@ class FakePagedService:
         self.page = page
         self.calls = []
         self.search_calls = []
+        self.continue_watching_calls = []
 
     def library_page(self, library: LibraryItem, start: int, size: int) -> MediaPage:
         self.calls.append((library, start, size))
@@ -558,6 +590,10 @@ class FakePagedService:
 
     def search_page(self, query: str, library: LibraryItem | None, start: int, size: int) -> MediaPage:
         self.search_calls.append((query, library, start, size))
+        return self.page
+
+    def continue_watching_page(self, start: int, size: int) -> MediaPage:
+        self.continue_watching_calls.append((start, size))
         return self.page
 
 
@@ -612,6 +648,31 @@ async def run_load_more_media_check():
 
         state = app.browsing_stack[-1]
         assert service.calls == [(library, 1, 50)]
+        assert [item.title for item in state.items] == ["First", "Second"]
+        assert state.next_start == 2
+        assert state.has_more
+
+
+async def run_load_more_continue_watching_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=25)
+        first = MediaItem("First", "", "movie", "1", True, Raw())
+        second = MediaItem("Second", "", "movie", "2", True, Raw())
+        page = MediaPage([second], start=1, total=3)
+        service = FakePagedService(page)
+        app.service = service
+        app.browsing_stack = [
+            BrowseState("Continue Watching", [first], source="continue_watching", next_start=1, total=3)
+        ]
+
+        app.load_more_media()
+        await pilot.pause(0.5)
+
+        state = app.browsing_stack[-1]
+        assert service.continue_watching_calls == [(1, 25)]
+        assert service.calls == []
         assert [item.title for item in state.items] == ["First", "Second"]
         assert state.next_start == 2
         assert state.has_more
