@@ -117,6 +117,8 @@ def test_render_details_includes_subtitles_and_summary():
     assert "Audio: jpn" in rendered
     assert "Subtitles: Preferred / eng" in rendered
     assert "Artwork: available" in rendered
+    assert "Audio Tracks (1)" in rendered
+    assert "Subtitle Tracks (1)" in rendered
     assert "- Japanese (aac, 2ch, selected)" in rendered
     assert "- English (srt, selected)" in rendered
     assert "Summary text" in rendered
@@ -144,6 +146,29 @@ def test_render_details_uses_clear_empty_states_and_wraps_summary():
     summary_lines = rendered.split("Summary\n", 1)[1].splitlines()
     assert len(summary_lines) > 1
     assert all(len(line) <= 38 for line in summary_lines if line)
+
+
+def test_render_details_limits_dense_stream_lists_and_wraps_rows():
+    details = MediaDetails(
+        title="Movie",
+        kind="movie",
+        facts=["movie"],
+        metadata=[("Studio", "A very long studio name that should wrap cleanly inside the details pane")],
+        audio=[f"Audio Track {index} with a long descriptive label" for index in range(7)],
+        subtitles=[f"Subtitle Track {index} with a long descriptive label" for index in range(6)],
+        summary="",
+        playable=True,
+    )
+
+    rendered = render_details(details)
+
+    assert "Audio Tracks (7)" in rendered
+    assert "Subtitle Tracks (6)" in rendered
+    assert "... 2 more" in rendered
+    assert "... 1 more" in rendered
+    assert "Audio Track 5" not in rendered
+    assert "Subtitle Track 5" not in rendered
+    assert all(len(line) <= 38 for line in rendered.splitlines())
 
 
 def test_render_settings_hides_tokens():
