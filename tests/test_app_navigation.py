@@ -35,6 +35,16 @@ def disable_startup_server_load(monkeypatch):
     monkeypatch.setattr(PlexTuiApp, "load_server", lambda self: None)
 
 
+async def wait_for_selected_title(app: PlexTuiApp, pilot: object, expected: str, attempts: int = 20) -> MediaItem | None:
+    selected = app.selected_media()
+    for _ in range(attempts):
+        if selected is not None and selected.title == expected:
+            return selected
+        await pilot.pause(0.1)
+        selected = app.selected_media()
+    return selected
+
+
 def test_picker_return_preserves_highlighted_media():
     asyncio.run(run_picker_return_check())
 
@@ -973,16 +983,19 @@ async def run_alphabet_jump_list_check():
         await pilot.pause(0.2)
 
         app.action_jump_alpha_next()
-        await pilot.pause(0.2)
-        assert app.selected_media().title == "Casablanca"
+        selected = await wait_for_selected_title(app, pilot, "Casablanca")
+        assert selected is not None
+        assert selected.title == "Casablanca"
 
         app.action_jump_alpha_next()
-        await pilot.pause(0.2)
-        assert app.selected_media().title == "Blade Runner"
+        selected = await wait_for_selected_title(app, pilot, "Blade Runner")
+        assert selected is not None
+        assert selected.title == "Blade Runner"
 
         app.action_jump_alpha_previous()
-        await pilot.pause(0.2)
-        assert app.selected_media().title == "Casablanca"
+        selected = await wait_for_selected_title(app, pilot, "Casablanca")
+        assert selected is not None
+        assert selected.title == "Casablanca"
 
 
 async def run_alphabet_jump_load_more_check():
@@ -1009,13 +1022,14 @@ async def run_alphabet_jump_load_more_check():
         app.service = service
         app.browsing_stack = [BrowseState("Movies", items, library, next_start=4, total=6)]
         app.show_browse_state(app.browsing_stack[-1], selected_key="4")
-        await pilot.pause(0.2)
+        selected = await wait_for_selected_title(app, pilot, "Bad Taste")
+        assert selected is not None
+        assert selected.title == "Bad Taste"
 
         app.action_jump_alpha_next()
-        await pilot.pause(0.6)
+        selected = await wait_for_selected_title(app, pilot, "Children of Men")
 
         assert service.calls == [(library, 4, 2)]
-        selected = app.selected_media()
         assert selected is not None
         assert selected.title == "Children of Men"
         assert [item.title for item in app.browsing_stack[-1].items] == [
