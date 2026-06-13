@@ -41,13 +41,20 @@
 
 ## Plex Integration Research
 
-- Review the Plex module in
+- Research notes from
   [`anthonycaccese/240-MP`](https://github.com/anthonycaccese/240-MP/tree/main)
-  for ideas that fit a terminal-first Plex client. Areas to evaluate include
-  profile switching, selective library display, Continue Watching/Resume, hubs,
-  playlists, collections, categories, movie editions, pre-play audio/subtitle
-  selection, alphabet browsing, show/season browsing, and direct-play versus
-  transcode quality choices.
+  live in `docs/plex-integration-research.md`.
+- Add a Continue Watching browse entrypoint backed by Plex in-progress/on-deck
+  style data.
+- Add selective library visibility in Settings so noisy Plex libraries can be
+  hidden from the main browser.
+- Add optional library submenus for Library, Recommended, Collections,
+  Playlists, and Categories where Plex exposes them.
+- Add alphabet navigation for large full-library views.
+- Add explicit playback quality controls for direct/default playback versus
+  selected transcode qualities.
+- Later design passes: profile switching with auto sign-in, visible movie
+  edition handling, and in-playback audio/subtitle switching through mpv IPC.
 
 ## Technical Follow-Up
 

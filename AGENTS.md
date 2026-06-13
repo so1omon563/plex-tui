@@ -90,7 +90,7 @@ contracts for these durable areas:
 - `scripts/`: release/package maintenance scripts used by checks and
   post-release automation.
 - `packaging/`: Homebrew and AUR notes plus source AUR metadata.
-- `docs/assets/`: README visual assets.
+- `docs/`: research notes and README visual assets.
 - Root docs and config examples: README, PACKAGING, RELEASE, ROADMAP,
   CHANGELOG, Makefile, pyproject, and `config.example.toml`.
 
