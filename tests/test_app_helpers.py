@@ -12,6 +12,7 @@ from rich.text import Text
 from plextui.app import (
     alphabet_group_label,
     alphabet_jump_index,
+    alphabet_section_groups,
     BrowseState,
     LoadMoreRow,
     LibraryMenuRow,
@@ -849,16 +850,15 @@ def test_alphabet_jump_index_moves_between_loaded_title_groups():
 
     assert alphabet_jump_index(items, 0, 1) == 2
     assert alphabet_jump_index(items, 2, 1) == 3
-    assert alphabet_jump_index(items, 3, 1) is None
-    assert alphabet_jump_index(items, 4, 1) == 0
-    assert alphabet_jump_index(items, 0, -1) == 4
+    assert alphabet_jump_index(items, 3, 1) == 4
+    assert alphabet_jump_index(items, 4, 1) is None
     assert alphabet_jump_index(items, 3, -1) == 2
     assert alphabet_jump_index(items, 2, -1) == 0
-    assert alphabet_jump_index(items, 4, -1) is None
+    assert alphabet_jump_index(items, 0, -1) is None
     assert alphabet_group_label(items[4]) == "#"
 
 
-def test_alphabet_jump_index_uses_available_letters_not_row_order():
+def test_alphabet_jump_index_follows_loaded_section_order():
     items = [
         MediaItem("Alien", "", "movie", "1", True, object()),
         MediaItem("Casablanca", "", "movie", "2", True, object()),
@@ -867,9 +867,25 @@ def test_alphabet_jump_index_uses_available_letters_not_row_order():
         MediaItem("2001", "", "movie", "5", True, object()),
     ]
 
-    assert alphabet_jump_index(items, 0, 1) == 2
-    assert alphabet_jump_index(items, 1, -1) == 2
-    assert alphabet_jump_index(items, 2, -1) == 0
+    assert alphabet_section_groups(items) == ["A", "C", "B", "A", "#"]
+    assert alphabet_jump_index(items, 0, 1) == 1
+    assert alphabet_jump_index(items, 1, -1) == 0
+    assert alphabet_jump_index(items, 2, -1) == 1
+
+
+def test_alphabet_jump_index_handles_duplicate_movie_sections():
+    items = [
+        MediaItem("*batteries not included", "", "movie", "1", True, object()),
+        MediaItem("8MM", "", "movie", "2", True, object()),
+        MediaItem("Abigail", "", "movie", "3", True, object()),
+        MediaItem("Bad Taste", "", "movie", "4", True, object()),
+    ]
+
+    assert alphabet_section_groups(items) == ["B", "#", "A", "B"]
+    assert alphabet_jump_index(items, 0, 1) == 1
+    assert alphabet_jump_index(items, 1, 1) == 2
+    assert alphabet_jump_index(items, 2, 1) == 3
+    assert alphabet_jump_index(items, 3, -1) == 2
 
 
 def test_alphabet_jump_index_prefers_plex_sort_title():
@@ -901,6 +917,7 @@ def test_alphabet_jump_log_includes_sort_title_decision(monkeypatch):
     assert "current_title='Jaws'" in messages[0]
     assert "target_title='The Matrix'" in messages[0]
     assert "target_sort_title='Matrix, The'" in messages[0]
+    assert "section_groups='J,M'" in messages[0]
 
 
 def test_media_row_includes_progress_marker():

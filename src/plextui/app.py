@@ -3212,17 +3212,31 @@ def alphabet_jump_index(items: list[MediaItem], current_index: int, direction: i
         return None
     current_index = min(max(0, current_index), len(items) - 1)
     current_group = alphabet_group_label(items[current_index])
-    target_group = alphabet_target_group(
-        [alphabet_group_label(item) for item in items],
-        current_group,
-        direction,
-    )
-    if target_group is None:
+    if direction > 0:
+        for index in range(current_index + 1, len(items)):
+            if alphabet_group_label(items[index]) != current_group:
+                return index
         return None
-    for index, item in enumerate(items):
-        if alphabet_group_label(item) == target_group:
-            return index
-    return None
+
+    group_start = current_index
+    while group_start > 0 and alphabet_group_label(items[group_start - 1]) == current_group:
+        group_start -= 1
+    if group_start == 0:
+        return None
+    previous_group = alphabet_group_label(items[group_start - 1])
+    index = group_start - 1
+    while index > 0 and alphabet_group_label(items[index - 1]) == previous_group:
+        index -= 1
+    return index
+
+
+def alphabet_section_groups(items: list[MediaItem]) -> list[str]:
+    groups: list[str] = []
+    for item in items:
+        group = alphabet_group_label(item)
+        if not groups or groups[-1] != group:
+            groups.append(group)
+    return groups
 
 
 def write_alphabet_jump_log(
@@ -3237,7 +3251,7 @@ def write_alphabet_jump_log(
     current = items[current_index]
     target = items[target_index] if target_index is not None else None
     direction_label = "next" if direction > 0 else "previous"
-    groups = ",".join(sorted(set(alphabet_group_label(item) for item in items), key=alphabet_group_sort_key))
+    groups = ",".join(alphabet_section_groups(items))
     target_detail = (
         "target_index=None"
         if target is None or target_index is None
@@ -3250,30 +3264,8 @@ def write_alphabet_jump_log(
         f"nav alphabet_jump direction={direction_label} loaded={len(items)} "
         f"current_index={current_index} current_group={alphabet_group_label(current)!r} "
         f"current_title={current.title!r} current_sort_title={alphabet_title(current)!r} "
-        f"groups={groups!r} {target_detail}"
+        f"section_groups={groups!r} {target_detail}"
     )
-
-
-def alphabet_target_group(groups: list[str], current_group: str, direction: int) -> str | None:
-    available = sorted(set(groups), key=alphabet_group_sort_key)
-    if direction > 0:
-        for group in available:
-            if alphabet_group_sort_key(group) > alphabet_group_sort_key(current_group):
-                return group
-        return None
-
-    for group in reversed(available):
-        if alphabet_group_sort_key(group) < alphabet_group_sort_key(current_group):
-            return group
-    return None
-
-
-def alphabet_group_sort_key(group: str) -> int:
-    if group == "#":
-        return 0
-    if len(group) == 1 and "A" <= group <= "Z":
-        return ord(group) - ord("A") + 1
-    return 27
 
 
 def alphabet_group_label(item: MediaItem) -> str:

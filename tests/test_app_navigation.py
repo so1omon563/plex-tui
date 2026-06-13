@@ -970,15 +970,15 @@ async def run_alphabet_jump_list_check():
 
         app.action_jump_alpha_next()
         await pilot.pause(0.2)
-        assert app.selected_media().title == "Blade Runner"
+        assert app.selected_media().title == "Casablanca"
 
         app.action_jump_alpha_next()
         await pilot.pause(0.2)
-        assert app.selected_media().title == "Casablanca"
+        assert app.selected_media().title == "Blade Runner"
 
         app.action_jump_alpha_previous()
         await pilot.pause(0.2)
-        assert app.selected_media().title == "Blade Runner"
+        assert app.selected_media().title == "Casablanca"
 
 
 async def run_alphabet_jump_grid_check():
@@ -999,7 +999,7 @@ async def run_alphabet_jump_grid_check():
         app.action_jump_alpha_next()
         await pilot.pause(0.2)
         grid = app.query_one("#media-grid")
-        assert grid.selected_media.title == "Blade Runner"
+        assert grid.selected_media.title == "Casablanca"
 
         app.action_jump_alpha_previous()
         await pilot.pause(0.2)
