@@ -437,6 +437,8 @@ class PlexTuiApp(App[None]):
         Binding("m", "focus_media", "Focus media list"),
         Binding("d", "focus_details", "Focus details"),
         Binding("v", "toggle_media_view", "View"),
+        Binding("left_square_bracket", "jump_alpha_previous", "Prev letter"),
+        Binding("right_square_bracket", "jump_alpha_next", "Next letter"),
         Binding("left", "grid_left", "Left"),
         Binding("right", "grid_right", "Right"),
         Binding("comma", "show_settings", "Settings"),
@@ -899,7 +901,7 @@ class PlexTuiApp(App[None]):
         return grid
 
     @work(thread=True, exclusive=True)
-    def load_more_media(self, selected_key: str | None = None) -> None:
+    def load_more_media(self, selected_key: str | None = None, alphabet_direction: int = 0) -> None:
         if self.service is None or not self.browsing_stack:
             return
         state = self.browsing_stack[-1]
@@ -942,9 +944,19 @@ class PlexTuiApp(App[None]):
             state.total = page.total
             self.loading_more = False
             self.suppress_auto_load = True
-            self.show_browse_state(state, selected_key=selected_key or first_new_key)
+            target_key = selected_key or first_new_key
+            status = render_loaded_status(state.title, len(state.items), state.total, state.has_more)
+            if alphabet_direction and selected_key:
+                current_index = selected_media_index(state.items, selected_key)
+                next_index = alphabet_jump_index(state.items, current_index, alphabet_direction)
+                write_alphabet_jump_log(state.items, current_index, alphabet_direction, next_index)
+                if next_index is not None:
+                    item = state.items[next_index]
+                    target_key = item.key
+                    status = f"Jumped to {alphabet_group_label(item)}: {item.title}"
+            self.show_browse_state(state, selected_key=target_key)
             self.focus_media_browser()
-            self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more))
+            self.set_status(status)
 
         self.call_from_thread(update)
 
@@ -1305,6 +1317,42 @@ class PlexTuiApp(App[None]):
         if self.adjust_highlighted_setting(1):
             return
         self.move_grid_selection(1)
+
+    def action_jump_alpha_previous(self) -> None:
+        self.jump_alphabet(-1)
+
+    def action_jump_alpha_next(self) -> None:
+        self.jump_alphabet(1)
+
+    def jump_alphabet(self, direction: int) -> None:
+        if self.settings_visible or self.picker_visible or not self.browsing_stack:
+            self.set_status("Alphabet jump is available while browsing media")
+            return
+        state = self.browsing_stack[-1]
+        if not state.items:
+            self.set_status("No media items to jump")
+            return
+        current_index = self.current_media_index(state)
+        next_index = alphabet_jump_index(state.items, current_index, direction)
+        write_alphabet_jump_log(state.items, current_index, direction, next_index)
+        if next_index is None:
+            if direction > 0 and state.has_more:
+                selected = self.selected_media()
+                self.set_status(f"Loading more {state.title} for alphabet jump...")
+                self.load_more_media(selected_key=selected.key if selected is not None else None, alphabet_direction=direction)
+                return
+            self.set_status("No more alphabet sections")
+            return
+        item = state.items[next_index]
+        self.show_browse_state(state, selected_key=item.key)
+        self.focus_media_browser()
+        self.set_status(f"Jumped to {alphabet_group_label(item)}: {item.title}")
+
+    def current_media_index(self, state: BrowseState) -> int:
+        selected = self.selected_media()
+        if selected is None:
+            return 0
+        return selected_media_index(state.items, selected.key)
 
     def adjust_highlighted_setting(self, direction: int) -> bool:
         if not self.settings_visible:
@@ -2725,6 +2773,8 @@ def render_help() -> str:
         "m: focus media list",
         "d: focus details",
         "v: toggle list/grid view",
+        "[: jump to previous alphabet section",
+        "]: jump to next alphabet section",
         "left/right: move across grid cards",
         "pageup/pagedown: move one grid page",
         "",
@@ -2745,7 +2795,7 @@ def render_help() -> str:
         "Settings",
         ",: show settings",
         "r: reconnect / reload libraries",
-        "PLEX_TUI_PERF_LOG=1: write browsing timings to the debug log",
+        "PLEX_TUI_PERF_LOG=1: write browsing timings and navigation diagnostics",
         "PLEX_TUI_ARTWORK_LOG=1: include verbose grid artwork internals",
         "?: show help",
         "q: quit",
@@ -3170,6 +3220,83 @@ def render_loaded_status(title: str, loaded: int, total: int | None, has_more: b
     if has_more:
         return f"{title}: {loaded} of {total} items loaded"
     return f"{title}: {loaded} items"
+
+
+def alphabet_jump_index(items: list[MediaItem], current_index: int, direction: int) -> int | None:
+    if not items or direction == 0:
+        return None
+    current_index = min(max(0, current_index), len(items) - 1)
+    current_group = alphabet_group_label(items[current_index])
+    if direction > 0:
+        for index in range(current_index + 1, len(items)):
+            if alphabet_group_label(items[index]) != current_group:
+                return index
+        return None
+
+    group_start = current_index
+    while group_start > 0 and alphabet_group_label(items[group_start - 1]) == current_group:
+        group_start -= 1
+    if group_start == 0:
+        return None
+    previous_group = alphabet_group_label(items[group_start - 1])
+    index = group_start - 1
+    while index > 0 and alphabet_group_label(items[index - 1]) == previous_group:
+        index -= 1
+    return index
+
+
+def alphabet_section_groups(items: list[MediaItem]) -> list[str]:
+    groups: list[str] = []
+    for item in items:
+        group = alphabet_group_label(item)
+        if not groups or groups[-1] != group:
+            groups.append(group)
+    return groups
+
+
+def write_alphabet_jump_log(
+    items: list[MediaItem],
+    current_index: int,
+    direction: int,
+    target_index: int | None,
+) -> None:
+    if os.environ.get("PLEX_TUI_PERF_LOG") != "1" or not items:
+        return
+    current_index = min(max(0, current_index), len(items) - 1)
+    current = items[current_index]
+    target = items[target_index] if target_index is not None else None
+    direction_label = "next" if direction > 0 else "previous"
+    groups = ",".join(alphabet_section_groups(items))
+    target_detail = (
+        "target_index=None"
+        if target is None or target_index is None
+        else (
+            f"target_index={target_index} target_group={alphabet_group_label(target)!r} "
+            f"target_title={target.title!r} target_sort_title={alphabet_title(target)!r}"
+        )
+    )
+    write_debug_log(
+        f"nav alphabet_jump direction={direction_label} loaded={len(items)} "
+        f"current_index={current_index} current_group={alphabet_group_label(current)!r} "
+        f"current_title={current.title!r} current_sort_title={alphabet_title(current)!r} "
+        f"section_groups={groups!r} {target_detail}"
+    )
+
+
+def alphabet_group_label(item: MediaItem) -> str:
+    title = alphabet_title(item).strip()
+    for character in title:
+        if character.isalnum():
+            return character.upper() if character.isalpha() else "#"
+    return "#"
+
+
+def alphabet_title(item: MediaItem) -> str:
+    for attr in ("titleSort", "sortTitle", "title_sort"):
+        value = getattr(item.raw, attr, None)
+        if value:
+            return str(value)
+    return item.title
 
 
 def grid_status(grid: MediaGrid, state: BrowseState | None) -> str:

@@ -51,7 +51,8 @@
 - Library submenus are available for Library, Recommended, Collections, and
   Playlists. Revisit Categories after mapping PlexAPI support against a real
   server response.
-- Add alphabet navigation for large full-library views.
+- Alphabet navigation is available for loaded browse lists and grids with
+  previous/next section jumps.
 - Add explicit playback quality controls for direct/default playback versus
   selected transcode qualities.
 - Later design passes: profile switching with auto sign-in, visible movie

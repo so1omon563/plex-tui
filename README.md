@@ -233,6 +233,9 @@ Enable browsing performance timings before launch:
 PLEX_TUI_PERF_LOG=1 plex-tui
 ```
 
+This also records alphabet-jump decisions, including the current title, Plex
+sort title, loaded alphabet buckets, and selected target row.
+
 To collect environment information for issue reports:
 
 ```bash

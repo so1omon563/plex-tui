@@ -10,6 +10,9 @@ from rich.console import Console, Group
 from rich.text import Text
 
 from plextui.app import (
+    alphabet_group_label,
+    alphabet_jump_index,
+    alphabet_section_groups,
     BrowseState,
     LoadMoreRow,
     LibraryMenuRow,
@@ -57,6 +60,7 @@ from plextui.app import (
     settings_rows,
     subtitle_preference_value,
     visible_libraries,
+    write_alphabet_jump_log,
     write_artwork_performance_log,
     write_performance_log,
 )
@@ -833,6 +837,87 @@ def test_media_rows_returns_list_rows():
     assert isinstance(rows[0], MediaRow)
     assert next_media_view("list") == "grid"
     assert next_media_view("grid") == "list"
+
+
+def test_alphabet_jump_index_moves_between_loaded_title_groups():
+    items = [
+        MediaItem("Alien", "", "movie", "1", True, object()),
+        MediaItem("Aliens", "", "movie", "2", True, object()),
+        MediaItem("Blade Runner", "", "movie", "3", True, object()),
+        MediaItem("Casablanca", "", "movie", "4", True, object()),
+        MediaItem("2001", "", "movie", "5", True, object()),
+    ]
+
+    assert alphabet_jump_index(items, 0, 1) == 2
+    assert alphabet_jump_index(items, 2, 1) == 3
+    assert alphabet_jump_index(items, 3, 1) == 4
+    assert alphabet_jump_index(items, 4, 1) is None
+    assert alphabet_jump_index(items, 3, -1) == 2
+    assert alphabet_jump_index(items, 2, -1) == 0
+    assert alphabet_jump_index(items, 0, -1) is None
+    assert alphabet_group_label(items[4]) == "#"
+
+
+def test_alphabet_jump_index_follows_loaded_section_order():
+    items = [
+        MediaItem("Alien", "", "movie", "1", True, object()),
+        MediaItem("Casablanca", "", "movie", "2", True, object()),
+        MediaItem("Blade Runner", "", "movie", "3", True, object()),
+        MediaItem("Arrival", "", "movie", "4", True, object()),
+        MediaItem("2001", "", "movie", "5", True, object()),
+    ]
+
+    assert alphabet_section_groups(items) == ["A", "C", "B", "A", "#"]
+    assert alphabet_jump_index(items, 0, 1) == 1
+    assert alphabet_jump_index(items, 1, -1) == 0
+    assert alphabet_jump_index(items, 2, -1) == 1
+
+
+def test_alphabet_jump_index_handles_duplicate_movie_sections():
+    items = [
+        MediaItem("*batteries not included", "", "movie", "1", True, object()),
+        MediaItem("8MM", "", "movie", "2", True, object()),
+        MediaItem("Abigail", "", "movie", "3", True, object()),
+        MediaItem("Bad Taste", "", "movie", "4", True, object()),
+    ]
+
+    assert alphabet_section_groups(items) == ["B", "#", "A", "B"]
+    assert alphabet_jump_index(items, 0, 1) == 1
+    assert alphabet_jump_index(items, 1, 1) == 2
+    assert alphabet_jump_index(items, 2, 1) == 3
+    assert alphabet_jump_index(items, 3, -1) == 2
+
+
+def test_alphabet_jump_index_prefers_plex_sort_title():
+    items = [
+        MediaItem("Jaws", "", "movie", "1", True, SimpleNamespace(titleSort="Jaws")),
+        MediaItem("The Matrix", "", "movie", "2", True, SimpleNamespace(titleSort="Matrix, The")),
+        MediaItem("Nope", "", "movie", "3", True, SimpleNamespace(titleSort="Nope")),
+    ]
+
+    assert alphabet_group_label(items[1]) == "M"
+    assert alphabet_jump_index(items, 0, 1) == 1
+    assert alphabet_jump_index(items, 1, 1) == 2
+    assert alphabet_jump_index(items, 2, -1) == 1
+
+
+def test_alphabet_jump_log_includes_sort_title_decision(monkeypatch):
+    messages = []
+    items = [
+        MediaItem("Jaws", "", "movie", "1", True, SimpleNamespace(titleSort="Jaws")),
+        MediaItem("The Matrix", "", "movie", "2", True, SimpleNamespace(titleSort="Matrix, The")),
+    ]
+    monkeypatch.setenv("PLEX_TUI_PERF_LOG", "1")
+    monkeypatch.setattr("plextui.app.write_debug_log", messages.append)
+
+    write_alphabet_jump_log(items, 0, 1, 1)
+
+    assert messages
+    assert "nav alphabet_jump direction=next" in messages[0]
+    assert "current_title='Jaws'" in messages[0]
+    assert "target_title='The Matrix'" in messages[0]
+    assert "target_sort_title='Matrix, The'" in messages[0]
+    assert "section_groups='J,M'" in messages[0]
 
 
 def test_media_row_includes_progress_marker():

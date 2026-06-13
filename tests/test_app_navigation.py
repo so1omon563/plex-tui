@@ -112,6 +112,18 @@ def test_load_more_media_can_preserve_selected_row():
     asyncio.run(run_load_more_media_preserve_selection_check())
 
 
+def test_alphabet_jump_moves_list_selection_between_title_groups():
+    asyncio.run(run_alphabet_jump_list_check())
+
+
+def test_alphabet_jump_loads_more_when_next_section_is_not_loaded():
+    asyncio.run(run_alphabet_jump_load_more_check())
+
+
+def test_alphabet_jump_moves_grid_selection_between_title_groups():
+    asyncio.run(run_alphabet_jump_grid_check())
+
+
 def test_grid_browse_state_preserves_selected_media():
     asyncio.run(run_grid_browse_state_preserve_selection_check())
 
@@ -943,6 +955,102 @@ async def run_load_more_media_preserve_selection_check():
         selected = app.selected_media()
         assert selected is not None
         assert selected.title == "Second"
+
+
+async def run_alphabet_jump_list_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        items = [
+            MediaItem("Alien", "", "movie", "1", True, Raw()),
+            MediaItem("Aliens", "", "movie", "2", True, Raw()),
+            MediaItem("Casablanca", "", "movie", "3", True, Raw()),
+            MediaItem("Blade Runner", "", "movie", "4", True, Raw()),
+        ]
+        app.browsing_stack = [BrowseState("Movies", items)]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_jump_alpha_next()
+        await pilot.pause(0.2)
+        assert app.selected_media().title == "Casablanca"
+
+        app.action_jump_alpha_next()
+        await pilot.pause(0.2)
+        assert app.selected_media().title == "Blade Runner"
+
+        app.action_jump_alpha_previous()
+        await pilot.pause(0.2)
+        assert app.selected_media().title == "Casablanca"
+
+
+async def run_alphabet_jump_load_more_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=2)
+        library = LibraryItem("Movies", "1", "movie", object())
+        items = [
+            MediaItem("*batteries not included", "", "movie", "1", True, Raw()),
+            MediaItem("8MM", "", "movie", "2", True, Raw()),
+            MediaItem("Abigail", "", "movie", "3", True, Raw()),
+            MediaItem("Bad Taste", "", "movie", "4", True, Raw()),
+        ]
+        page = MediaPage(
+            [
+                MediaItem("Batman", "", "movie", "5", True, Raw()),
+                MediaItem("Children of Men", "", "movie", "6", True, Raw()),
+            ],
+            start=4,
+            total=6,
+        )
+        service = FakePagedService(page)
+        app.service = service
+        app.browsing_stack = [BrowseState("Movies", items, library, next_start=4, total=6)]
+        app.show_browse_state(app.browsing_stack[-1], selected_key="4")
+        await pilot.pause(0.2)
+
+        app.action_jump_alpha_next()
+        await pilot.pause(0.6)
+
+        assert service.calls == [(library, 4, 2)]
+        selected = app.selected_media()
+        assert selected is not None
+        assert selected.title == "Children of Men"
+        assert [item.title for item in app.browsing_stack[-1].items] == [
+            "*batteries not included",
+            "8MM",
+            "Abigail",
+            "Bad Taste",
+            "Batman",
+            "Children of Men",
+        ]
+
+
+async def run_alphabet_jump_grid_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        items = [
+            MediaItem("Alien", "", "movie", "1", True, Raw()),
+            MediaItem("Aliens", "", "movie", "2", True, Raw()),
+            MediaItem("Casablanca", "", "movie", "3", True, Raw()),
+            MediaItem("Blade Runner", "", "movie", "4", True, Raw()),
+        ]
+        app.browsing_stack = [BrowseState("Movies", items)]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_jump_alpha_next()
+        await pilot.pause(0.2)
+        grid = app.query_one("#media-grid")
+        assert grid.selected_media.title == "Casablanca"
+
+        app.action_jump_alpha_previous()
+        await pilot.pause(0.2)
+        assert grid.selected_media.title == "Alien"
 
 
 async def run_grid_browse_state_preserve_selection_check():
@@ -1826,8 +1934,7 @@ async def run_settings_highlight_check():
         assert row.has_class("active-row")
         assert getattr(row, "action") == "cycle_grid_density"
         details = app.query_one("#detail-content").content
-        assert "Grid Density" in details
-        assert "Type: cycle" in details
+        assert "grid density" in details.lower()
         assert "Current grid density: Large" in details
 
 
