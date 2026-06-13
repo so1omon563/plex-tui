@@ -3247,11 +3247,19 @@ def alphabet_group_sort_key(group: str) -> int:
 
 
 def alphabet_group_label(item: MediaItem) -> str:
-    title = item.title.strip()
+    title = alphabet_title(item).strip()
     for character in title:
         if character.isalnum():
             return character.upper() if character.isalpha() else "#"
     return "#"
+
+
+def alphabet_title(item: MediaItem) -> str:
+    for attr in ("titleSort", "sortTitle", "title_sort"):
+        value = getattr(item.raw, attr, None)
+        if value:
+            return str(value)
+    return item.title
 
 
 def grid_status(grid: MediaGrid, state: BrowseState | None) -> str:

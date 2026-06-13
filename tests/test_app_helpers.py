@@ -871,6 +871,19 @@ def test_alphabet_jump_index_uses_available_letters_not_row_order():
     assert alphabet_jump_index(items, 2, -1) == 0
 
 
+def test_alphabet_jump_index_prefers_plex_sort_title():
+    items = [
+        MediaItem("Jaws", "", "movie", "1", True, SimpleNamespace(titleSort="Jaws")),
+        MediaItem("The Matrix", "", "movie", "2", True, SimpleNamespace(titleSort="Matrix, The")),
+        MediaItem("Nope", "", "movie", "3", True, SimpleNamespace(titleSort="Nope")),
+    ]
+
+    assert alphabet_group_label(items[1]) == "M"
+    assert alphabet_jump_index(items, 0, 1) == 1
+    assert alphabet_jump_index(items, 1, 1) == 2
+    assert alphabet_jump_index(items, 2, -1) == 1
+
+
 def test_media_row_includes_progress_marker():
     class PartialRaw:
         viewOffset = 65000
