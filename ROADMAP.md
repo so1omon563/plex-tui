@@ -5,7 +5,8 @@
 - Continue refining grid view presentation after the initial card/detail
   balance pass, especially against real terminal themes and wide/narrow panes.
 - Continue tuning focus, row markers, and selection affordances based on real
-  terminal themes.
+  terminal themes. Status hints should keep a compact context prefix such as
+  `Media:`, `Grid:`, or `Settings:` so the active pane is clear at a glance.
 - Continue polishing the details pane hierarchy for dense metadata, stream
   choices, and playback readiness hints.
 - Continue refining Settings ergonomics as new preferences are added, especially

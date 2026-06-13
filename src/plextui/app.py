@@ -2541,46 +2541,46 @@ def render_help() -> str:
 
 def context_hint(row: object) -> str:
     if isinstance(row, LibraryRow):
-        return "Enter opens library"
+        return "Libraries: Enter opens library"
     if isinstance(row, LoadMoreRow):
-        return "Enter loads next page"
+        return "Media: Enter loads next page"
     if isinstance(row, MediaRow):
         if row.media.playable:
-            return "Enter selects item / p plays / a audio / s subtitles"
-        return "Enter opens item"
+            return "Media: Enter selects / p plays / a audio / s subtitles"
+        return "Media: Enter opens item"
     if isinstance(row, MediaGrid):
         media = row.selected_media
         if media is not None and media.playable:
-            return "Arrows/page select card / p plays / a audio / s subtitles"
-        return "Arrows/page select card / Enter opens item"
+            return "Grid: Arrows/page select card / p plays / a audio / s subtitles"
+        return "Grid: Arrows/page select card / Enter opens item"
     if isinstance(row, ServerRow):
-        return "Enter selects server"
+        return "Servers: Enter selects server"
     if isinstance(row, StreamRow):
-        return "Enter saves preference"
+        return "Streams: Enter saves preference"
     if isinstance(row, SettingsNumericRow):
-        return "Enter edits / Left-Right adjusts"
+        return "Settings: Enter edits / Left-Right adjusts"
     if isinstance(row, SettingsActionRow):
         if row.action_kind == "confirm":
-            return "Enter once to arm / Enter again to confirm"
+            return "Settings: Enter arms / Enter again confirms"
         if row.action_kind == "input":
-            return "Enter edits value"
+            return "Settings: Enter edits value"
         if row.action_kind == "toggle":
-            return "Enter or Left-Right toggles"
+            return "Settings: Enter or Left-Right toggles"
         if row.action_kind == "cycle":
-            return "Enter or Left-Right cycles"
+            return "Settings: Enter or Left-Right cycles"
         if row.action_kind == "step":
-            return "Enter adjusts setting"
+            return "Settings: Enter adjusts setting"
         if row.action_kind == "reset":
-            return "Enter resets setting"
+            return "Settings: Enter resets setting"
         if row.action_kind == "show":
-            return "Enter shows details"
+            return "Settings: Enter shows details"
         if row.action_kind == "set":
-            return "Enter sets value"
-        return "Enter runs action"
+            return "Settings: Enter sets value"
+        return "Settings: Enter runs action"
     if isinstance(row, SettingsHeaderRow):
-        return "Settings section"
+        return "Settings: Section header"
     if isinstance(row, SettingsValueRow):
-        return "Current setting value"
+        return "Settings: Current value"
     return "Enter selects row"
 
 
