@@ -45,11 +45,21 @@ class StreamChoice:
     stream: Any = None
 
 
+TRANSCODE_QUALITY_OPTIONS: dict[str, tuple[str, int | None, str]] = {
+    "original": ("Original", None, ""),
+    "1080p_8": ("1080p 8 Mbps", 8000, "1920x1080"),
+    "720p_4": ("720p 4 Mbps", 4000, "1280x720"),
+    "480p_2": ("480p 2 Mbps", 2000, "720x480"),
+}
+
+
 def play_with_mpv(
     item: Any,
     subtitle_choice: StreamChoice | None = None,
     audio_choice: StreamChoice | None = None,
     window_size: str = "",
+    playback_mode: str = "auto",
+    transcode_quality: str = "original",
 ) -> PlayerHandle:
     if shutil.which("mpv") is None:
         log_debug("playback error: mpv was not found in PATH")
@@ -60,12 +70,15 @@ def play_with_mpv(
     selected_audio = resolve_audio_choice(item, audio_choice)
     subtitles = external_subtitle_urls(item, selected_subtitle)
     stream_kwargs = {}
-    direct_url = direct_play_url(item, selected_subtitle)
+    force_transcode = playback_mode == "transcode"
+    direct_url = None if force_transcode else direct_play_url(item, selected_subtitle)
     fallback_subtitle_id = selected_subtitle_stream_id(item, selected_subtitle) if not subtitles and not direct_url else None
     if fallback_subtitle_id is not None:
         stream_kwargs["subtitleStreamID"] = fallback_subtitle_id
     if selected_audio is not None:
         stream_kwargs["audioStreamID"] = getattr(selected_audio, "id", selected_audio)
+    if force_transcode:
+        stream_kwargs.update(transcode_quality_kwargs(transcode_quality))
 
     try:
         url = direct_url or item.getStreamURL(**stream_kwargs)
@@ -94,9 +107,11 @@ def play_with_mpv(
     args.append(url)
     command = sanitize_command(args)
     stream_mode = "direct" if direct_url else "transcode"
+    quality_label = transcode_quality_label(transcode_quality) if stream_mode == "transcode" else "original"
     log_debug(
         "launching mpv: "
         f"title={title!r} mode={stream_mode} "
+        f"quality={quality_label!r} "
         f"audio={stream_debug_label(selected_audio)} "
         f"subtitle={stream_debug_label(selected_subtitle)} "
         f"args={command!r}"
@@ -241,6 +256,20 @@ def resolve_audio_choice(item: Any, choice: StreamChoice | None) -> Any:
     if choice is None:
         return None
     return find_stream_by_id(audio_streams(item), choice.stream_id) or choice.stream
+
+
+def transcode_quality_kwargs(value: str) -> dict[str, object]:
+    _label, bitrate, resolution = TRANSCODE_QUALITY_OPTIONS.get(value, TRANSCODE_QUALITY_OPTIONS["original"])
+    kwargs: dict[str, object] = {}
+    if bitrate is not None:
+        kwargs["maxVideoBitrate"] = bitrate
+    if resolution:
+        kwargs["videoResolution"] = resolution
+    return kwargs
+
+
+def transcode_quality_label(value: str) -> str:
+    return TRANSCODE_QUALITY_OPTIONS.get(value, TRANSCODE_QUALITY_OPTIONS["original"])[0]
 
 
 def external_subtitle_urls(item: Any, selected_subtitle: Any = None) -> list[str]:

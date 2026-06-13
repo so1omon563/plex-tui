@@ -1584,6 +1584,8 @@ async def run_settings_action_check():
             preferred_audio_language="jpn",
             preferred_subtitle_language="eng",
             subtitle_mode="preferred",
+            playback_mode="transcode",
+            transcode_quality="720p_4",
         )
 
         with patch("plextui.app.save_config") as save_config:
@@ -1722,6 +1724,8 @@ async def run_playback_footer_check():
             preferred_audio_language="jpn",
             preferred_subtitle_language="eng",
             subtitle_mode="preferred",
+            playback_mode="transcode",
+            transcode_quality="720p_4",
         )
         app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, Raw())])
         await pilot.pause(0.2)
@@ -1729,18 +1733,21 @@ async def run_playback_footer_check():
         player = SimpleNamespace(
             title="Movie",
             start_offset_ms=65_000,
-            stream_mode="direct",
+            stream_mode="transcode",
             subtitle_count=2,
             process=SimpleNamespace(poll=lambda: None),
         )
-        with patch("plextui.app.play_with_mpv", return_value=player):
+        with patch("plextui.app.play_with_mpv", return_value=player) as launch:
             app.action_play_selected()
         await pilot.pause(0.2)
 
+        assert launch.call_args.kwargs["playback_mode"] == "transcode"
+        assert launch.call_args.kwargs["transcode_quality"] == "720p_4"
         footer = app.query_one("#playback-footer")
         assert footer.display
         assert footer.content == (
-            "Playing Movie / resume 1:05 / mode direct / 2 subtitles / audio jpn not found, Plex/default; "
+            "Playing Movie / resume 1:05 / mode transcode / quality 720p 4 Mbps / 2 subtitles / "
+            "audio jpn not found, Plex/default; "
             "subtitles eng not found, Plex/default"
         )
 

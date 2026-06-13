@@ -27,6 +27,8 @@ def test_config_example_parses_and_uses_known_fields():
         "preferred_subtitle_language",
         "subtitle_mode",
         "mpv_window_size",
+        "playback_mode",
+        "transcode_quality",
         "page_size",
         "auto_load_threshold",
         "grid_prefetch_pages",
@@ -53,6 +55,8 @@ def test_invalid_subtitle_mode_logs_and_normalizes(tmp_path, monkeypatch):
             'client_identifier = "client"',
             'subtitle_mode = "bad"',
             'mpv_window_size = "huge"',
+            'playback_mode = "bad"',
+            'transcode_quality = "bad"',
             'page_size = "5"',
             'auto_load_threshold = "500"',
             'grid_prefetch_pages = "20"',
@@ -67,12 +71,16 @@ def test_invalid_subtitle_mode_logs_and_normalizes(tmp_path, monkeypatch):
 
     assert loaded.subtitle_mode == "auto"
     assert loaded.mpv_window_size == ""
+    assert loaded.playback_mode == "auto"
+    assert loaded.transcode_quality == "original"
     assert loaded.page_size == config.DEFAULT_PAGE_SIZE
     assert loaded.auto_load_threshold == config.DEFAULT_AUTO_LOAD_THRESHOLD
     assert loaded.grid_prefetch_pages == config.DEFAULT_GRID_PREFETCH_PAGES
     log = debug_file.read_text(encoding="utf-8")
     assert "invalid subtitle_mode" in log
     assert "invalid mpv_window_size" in log
+    assert "invalid playback_mode" in log
+    assert "invalid transcode_quality" in log
     assert "invalid page_size" in log
     assert "invalid auto_load_threshold" in log
     assert "invalid grid_prefetch_pages" in log
@@ -135,6 +143,27 @@ def test_mpv_window_size_round_trips_through_config(tmp_path, monkeypatch):
 
     assert loaded.mpv_window_size == "1280x720"
     assert 'mpv_window_size = "1280x720"' in config_file.read_text(encoding="utf-8")
+
+
+def test_playback_quality_settings_round_trip(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    monkeypatch.setattr(config, "config_path", lambda: config_file)
+
+    saved = config.AppConfig(
+        "http://plex",
+        "token",
+        "client",
+        playback_mode="transcode",
+        transcode_quality="720p_4",
+    )
+    config.save_config(saved)
+    loaded = config.load_config()
+
+    assert loaded.playback_mode == "transcode"
+    assert loaded.transcode_quality == "720p_4"
+    text = config_file.read_text(encoding="utf-8")
+    assert 'playback_mode = "transcode"' in text
+    assert 'transcode_quality = "720p_4"' in text
 
 
 def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):

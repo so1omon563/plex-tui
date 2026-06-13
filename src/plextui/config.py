@@ -20,6 +20,8 @@ MAX_AUTO_LOAD_THRESHOLD = 100
 DEFAULT_GRID_PREFETCH_PAGES = 3
 MIN_GRID_PREFETCH_PAGES = 0
 MAX_GRID_PREFETCH_PAGES = 5
+PLAYBACK_MODES = {"auto", "transcode"}
+TRANSCODE_QUALITIES = {"original", "1080p_8", "720p_4", "480p_2"}
 
 
 @dataclass(frozen=True)
@@ -38,6 +40,8 @@ class AppConfig:
     media_view: str = "list"
     theme: str = "textual-dark"
     mpv_window_size: str = ""
+    playback_mode: str = "auto"
+    transcode_quality: str = "original"
     page_size: int = DEFAULT_PAGE_SIZE
     auto_load_threshold: int = DEFAULT_AUTO_LOAD_THRESHOLD
     grid_prefetch_pages: int = DEFAULT_GRID_PREFETCH_PAGES
@@ -102,6 +106,14 @@ def load_config() -> AppConfig:
     if mpv_window_size and not valid_mpv_window_size(mpv_window_size):
         write_debug_log(f"invalid mpv_window_size {mpv_window_size!r}; using default")
         mpv_window_size = ""
+    playback_mode = data.get("playback_mode", "auto")
+    if playback_mode not in PLAYBACK_MODES:
+        write_debug_log(f"invalid playback_mode {playback_mode!r}; using 'auto'")
+        playback_mode = "auto"
+    transcode_quality = data.get("transcode_quality", "original")
+    if transcode_quality not in TRANSCODE_QUALITIES:
+        write_debug_log(f"invalid transcode_quality {transcode_quality!r}; using 'original'")
+        transcode_quality = "original"
     page_size = bounded_int(
         data.get("page_size", ""),
         DEFAULT_PAGE_SIZE,
@@ -139,6 +151,8 @@ def load_config() -> AppConfig:
         media_view=media_view.strip(),
         theme=theme.strip() or "textual-dark",
         mpv_window_size=mpv_window_size.strip(),
+        playback_mode=playback_mode.strip(),
+        transcode_quality=transcode_quality.strip(),
         page_size=page_size,
         auto_load_threshold=auto_load_threshold,
         grid_prefetch_pages=grid_prefetch_pages,
@@ -176,6 +190,10 @@ def save_config(config: AppConfig) -> None:
         lines.append(f'theme = "{_toml_escape(config.theme)}"')
     if config.mpv_window_size:
         lines.append(f'mpv_window_size = "{_toml_escape(config.mpv_window_size)}"')
+    if config.playback_mode != "auto":
+        lines.append(f'playback_mode = "{_toml_escape(config.playback_mode)}"')
+    if config.transcode_quality != "original":
+        lines.append(f'transcode_quality = "{_toml_escape(config.transcode_quality)}"')
     if config.page_size != DEFAULT_PAGE_SIZE:
         lines.append(f"page_size = {config.page_size}")
     if config.auto_load_threshold != DEFAULT_AUTO_LOAD_THRESHOLD:

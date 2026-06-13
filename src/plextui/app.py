@@ -61,6 +61,7 @@ from .player import (
     stream_language_key,
     stream_language_label,
     subtitle_choices,
+    transcode_quality_label,
 )
 from .plex_service import PlexService, media_details, row_progress_marker
 GRID_CARD_GAP = 2
@@ -1719,6 +1720,16 @@ class PlexTuiApp(App[None]):
         if action == "cycle_mpv_window_size":
             self.action_cycle_mpv_window_size()
             return
+        if action == "cycle_playback_mode":
+            next_mode = next_playback_mode(self.config.playback_mode)
+            if self.update_preferences(playback_mode=next_mode):
+                self.refresh_settings_after_change(action, "Playback mode", playback_mode_value(self.config))
+            return
+        if action == "cycle_transcode_quality":
+            next_quality = next_transcode_quality(self.config.transcode_quality)
+            if self.update_preferences(transcode_quality=next_quality):
+                self.refresh_settings_after_change(action, "Transcode quality", transcode_quality_value(self.config))
+            return
         if action == "set_mpv_window_size":
             self.prompt_mpv_window_size()
             return
@@ -2191,6 +2202,8 @@ class PlexTuiApp(App[None]):
                 subtitle_choice=subtitle_choice,
                 audio_choice=audio_choice,
                 window_size=self.config.mpv_window_size,
+                playback_mode=self.config.playback_mode,
+                transcode_quality=self.config.transcode_quality,
             )
         except PlayerError as exc:
             self.clear_playback_footer()
@@ -2310,6 +2323,8 @@ def render_details(details: object, config: AppConfig | None = None, raw: object
             detail_key_value_rows([
                 ("Audio", preference_value(config.preferred_audio_language)),
                 ("Subtitles", f"{subtitle_mode_value(config)} / {subtitle_language_value(config)}"),
+                ("Playback Mode", playback_mode_value(config)),
+                ("Transcode Quality", transcode_quality_value(config)),
             ]),
         )
         if raw is not None:
@@ -2683,6 +2698,8 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsActionRow("Clear subtitle preference", "clear_subtitle"),
         SettingsActionRow("Clear audio/subtitle preferences", "clear_tracks"),
         SettingsHeaderRow("Playback"),
+        SettingsActionRow(f"Playback Mode: {playback_mode_value(config)}", "cycle_playback_mode"),
+        SettingsActionRow(f"Transcode Quality: {transcode_quality_value(config)}", "cycle_transcode_quality"),
         SettingsActionRow(f"mpv Window Size: {mpv_window_size_value(config)}", "set_mpv_window_size"),
         SettingsHeaderRow("Artwork"),
         SettingsActionRow(f"Artwork: {artwork_mode_value(config)}", "toggle_artwork"),
@@ -2734,7 +2751,10 @@ def render_settings(config: AppConfig) -> str:
         "Clear audio/subtitle preferences",
         "",
         "Playback",
+        f"Playback Mode: {playback_mode_value(config)}",
+        f"Transcode Quality: {transcode_quality_value(config)}",
         f"mpv Window Size: {mpv_window_size_value(config)}",
+        "Use Force transcode with a selected quality when direct/default playback is not desired.",
         "Set custom mpv window size with values like 1280x720, 80%, or 80%x80%.",
         "",
         "Artwork",
@@ -3053,6 +3073,10 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         )
     if action in {"cycle_mpv_window_size", "set_mpv_window_size", "reset_mpv_window_size"}:
         return f"Current mpv window size: {mpv_window_size_value(config)}"
+    if action == "cycle_playback_mode":
+        return f"Current playback mode: {playback_mode_value(config)}"
+    if action == "cycle_transcode_quality":
+        return f"Current transcode quality: {transcode_quality_value(config)}"
     if action == "toggle_artwork":
         return f"Current artwork: {artwork_mode_value(config)}"
     if action == "cycle_detail_artwork":
@@ -3095,6 +3119,10 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to cycle subtitle mode. Use subtitle picker to save a preferred language."
     if action == "cycle_mpv_window_size":
         return "Press Enter to cycle through default window-size presets."
+    if action == "cycle_playback_mode":
+        return "Press Enter to choose auto/direct-default playback or force Plex transcoding."
+    if action == "cycle_transcode_quality":
+        return "Press Enter to choose the quality used when playback mode forces transcoding."
     if action == "set_mpv_window_size":
         return "Press Enter to type a custom size such as 1280x720, 80%, or 80%x80%."
     if action == "toggle_artwork":
@@ -3138,6 +3166,8 @@ def settings_action_label(action: str) -> str:
         "subtitle_auto": "Set subtitles to Auto",
         "subtitle_none": "Set subtitles to None",
         "cycle_subtitle_mode": "Subtitle Mode",
+        "cycle_playback_mode": "Playback Mode",
+        "cycle_transcode_quality": "Transcode Quality",
         "cycle_mpv_window_size": "mpv Window Size",
         "set_mpv_window_size": "mpv Window Size",
         "reset_mpv_window_size": "mpv Window Size: reset to Default",
@@ -3438,6 +3468,29 @@ def mpv_window_size_value(config: AppConfig) -> str:
     return config.mpv_window_size or "Default"
 
 
+def playback_mode_value(config: AppConfig) -> str:
+    if config.playback_mode == "transcode":
+        return "Force transcode"
+    return "Auto / direct default"
+
+
+def next_playback_mode(value: str) -> str:
+    return "transcode" if value == "auto" else "auto"
+
+
+def transcode_quality_value(config: AppConfig) -> str:
+    return transcode_quality_label(config.transcode_quality)
+
+
+def next_transcode_quality(value: str) -> str:
+    qualities = ["original", "1080p_8", "720p_4", "480p_2"]
+    try:
+        index = qualities.index(value)
+    except ValueError:
+        return "original"
+    return qualities[(index + 1) % len(qualities)]
+
+
 def next_mpv_window_size(value: str) -> str:
     sizes = ["", "1280x720", "1600x900", "1920x1080", "80%"]
     try:
@@ -3469,6 +3522,8 @@ def render_playback_status(
     if player.start_offset_ms:
         details.append(f"resume {format_offset(player.start_offset_ms)}")
     details.append(f"mode {player.stream_mode}")
+    if config.playback_mode == "transcode":
+        details.append(f"quality {transcode_quality_value(config)}")
     if player.subtitle_count:
         details.append(f"{player.subtitle_count} subtitles")
     details.append(render_playback_preferences(config, audio_choice, subtitle_choice))
@@ -3488,6 +3543,8 @@ def render_playback_details(
         "Playback",
         "Status: Playing",
         f"Mode: {player.stream_mode}",
+        f"Playback preference: {playback_mode_value(config)}",
+        f"Transcode quality: {transcode_quality_value(config)}",
         f"Resume: {format_offset(player.start_offset_ms) if player.start_offset_ms else 'start'}",
         f"Subtitles available: {player.subtitle_count}",
         f"mpv window: {mpv_window_size_value(config)}",
@@ -3637,6 +3694,8 @@ def render_app_diagnostics(config: AppConfig, mpv_info: tuple[str, str]) -> str:
         f"mpv: {mpv_path}",
         f"mpv version: {mpv_version}",
         f"mpv window size: {mpv_window_size_value(config)}",
+        f"Playback mode: {playback_mode_value(config)}",
+        f"Transcode quality: {transcode_quality_value(config)}",
     ]
     if mpv_path == "missing" or mpv_version.startswith("version check failed"):
         lines.extend(["", *mpv_install_hints()])
@@ -3701,6 +3760,8 @@ def effective_stream_preference_rows(raw: object, config: AppConfig) -> list[tup
         config.subtitle_mode,
     )
     return [
+        ("Playback Mode", playback_mode_value(config)),
+        ("Transcode Quality", transcode_quality_value(config)),
         ("Audio", render_audio_playback_preference(config, audio_choice).removeprefix("audio ")),
         ("Subtitles", render_subtitle_playback_preference(config, subtitle_choice).removeprefix("subtitles ")),
     ]

@@ -194,6 +194,59 @@ def test_direct_play_gets_mpv_track_hints_for_embedded_streams():
     assert "--sid=1" in args
 
 
+def test_force_transcode_bypasses_direct_play_and_applies_quality():
+    class EmbeddedSubtitle(SubtitleStream):
+        key = None
+        codec = "vobsub"
+        index = 3
+
+    class EmbeddedPart(Part):
+        def subtitleStreams(self):
+            return [EmbeddedSubtitle()]
+
+    class EmbeddedItem(Item):
+        def iterParts(self):
+            return [EmbeddedPart()]
+
+    item = EmbeddedItem()
+    subtitle = EmbeddedPart().subtitleStreams()[0]
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        handle = play_with_mpv(
+            item,
+            subtitle_choice=StreamChoice(1, "English", subtitle),
+            playback_mode="transcode",
+            transcode_quality="720p_4",
+        )
+
+    args = popen.call_args.args[0]
+    assert handle.stream_mode == "transcode"
+    assert item.kwargs == {
+        "subtitleStreamID": 1,
+        "maxVideoBitrate": 4000,
+        "videoResolution": "1280x720",
+    }
+    assert not any(arg.startswith("--sid=") for arg in args)
+
+
+def test_force_transcode_original_quality_omits_quality_kwargs():
+    item = Item()
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()),
+    ):
+        handle = play_with_mpv(item, playback_mode="transcode", transcode_quality="original")
+
+    assert handle.stream_mode == "transcode"
+    assert item.kwargs == {}
+
+
 def test_preferred_choices_match_stream_language():
     item = Item()
 
