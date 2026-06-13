@@ -1324,6 +1324,7 @@ class PlexTuiApp(App[None]):
             return
         current_index = self.current_media_index(state)
         next_index = alphabet_jump_index(state.items, current_index, direction)
+        write_alphabet_jump_log(state.items, current_index, direction, next_index)
         if next_index is None:
             self.set_status("No more alphabet sections")
             return
@@ -2779,7 +2780,7 @@ def render_help() -> str:
         "Settings",
         ",: show settings",
         "r: reconnect / reload libraries",
-        "PLEX_TUI_PERF_LOG=1: write browsing timings to the debug log",
+        "PLEX_TUI_PERF_LOG=1: write browsing timings and navigation diagnostics",
         "PLEX_TUI_ARTWORK_LOG=1: include verbose grid artwork internals",
         "?: show help",
         "q: quit",
@@ -3222,6 +3223,35 @@ def alphabet_jump_index(items: list[MediaItem], current_index: int, direction: i
         if alphabet_group_label(item) == target_group:
             return index
     return None
+
+
+def write_alphabet_jump_log(
+    items: list[MediaItem],
+    current_index: int,
+    direction: int,
+    target_index: int | None,
+) -> None:
+    if os.environ.get("PLEX_TUI_PERF_LOG") != "1" or not items:
+        return
+    current_index = min(max(0, current_index), len(items) - 1)
+    current = items[current_index]
+    target = items[target_index] if target_index is not None else None
+    direction_label = "next" if direction > 0 else "previous"
+    groups = ",".join(sorted(set(alphabet_group_label(item) for item in items), key=alphabet_group_sort_key))
+    target_detail = (
+        "target_index=None"
+        if target is None or target_index is None
+        else (
+            f"target_index={target_index} target_group={alphabet_group_label(target)!r} "
+            f"target_title={target.title!r} target_sort_title={alphabet_title(target)!r}"
+        )
+    )
+    write_debug_log(
+        f"nav alphabet_jump direction={direction_label} loaded={len(items)} "
+        f"current_index={current_index} current_group={alphabet_group_label(current)!r} "
+        f"current_title={current.title!r} current_sort_title={alphabet_title(current)!r} "
+        f"groups={groups!r} {target_detail}"
+    )
 
 
 def alphabet_target_group(groups: list[str], current_group: str, direction: int) -> str | None:

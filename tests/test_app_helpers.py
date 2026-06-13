@@ -59,6 +59,7 @@ from plextui.app import (
     settings_rows,
     subtitle_preference_value,
     visible_libraries,
+    write_alphabet_jump_log,
     write_artwork_performance_log,
     write_performance_log,
 )
@@ -882,6 +883,24 @@ def test_alphabet_jump_index_prefers_plex_sort_title():
     assert alphabet_jump_index(items, 0, 1) == 1
     assert alphabet_jump_index(items, 1, 1) == 2
     assert alphabet_jump_index(items, 2, -1) == 1
+
+
+def test_alphabet_jump_log_includes_sort_title_decision(monkeypatch):
+    messages = []
+    items = [
+        MediaItem("Jaws", "", "movie", "1", True, SimpleNamespace(titleSort="Jaws")),
+        MediaItem("The Matrix", "", "movie", "2", True, SimpleNamespace(titleSort="Matrix, The")),
+    ]
+    monkeypatch.setenv("PLEX_TUI_PERF_LOG", "1")
+    monkeypatch.setattr("plextui.app.write_debug_log", messages.append)
+
+    write_alphabet_jump_log(items, 0, 1, 1)
+
+    assert messages
+    assert "nav alphabet_jump direction=next" in messages[0]
+    assert "current_title='Jaws'" in messages[0]
+    assert "target_title='The Matrix'" in messages[0]
+    assert "target_sort_title='Matrix, The'" in messages[0]
 
 
 def test_media_row_includes_progress_marker():
