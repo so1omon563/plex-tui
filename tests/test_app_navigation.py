@@ -1022,7 +1022,9 @@ async def run_alphabet_jump_load_more_check():
         app.service = service
         app.browsing_stack = [BrowseState("Movies", items, library, next_start=4, total=6)]
         app.show_browse_state(app.browsing_stack[-1], selected_key="4")
-        await pilot.pause(0.2)
+        selected = await wait_for_selected_title(app, pilot, "Bad Taste")
+        assert selected is not None
+        assert selected.title == "Bad Taste"
 
         app.action_jump_alpha_next()
         selected = await wait_for_selected_title(app, pilot, "Children of Men")
