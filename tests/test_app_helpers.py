@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from PIL import Image
 from rich.align import Align
-from rich.console import Group
+from rich.console import Console, Group
 from rich.text import Text
 
 from plextui.app import (
@@ -709,6 +709,24 @@ def test_grid_card_uses_semantic_placeholder_for_hub_rows():
     assert "open" in rendered_text
 
 
+def test_render_media_grid_text_snapshot_for_media_and_hub_placeholders():
+    config = AppConfig("http://plex", "token", "client", grid_density="compact")
+    items = [
+        MediaItem("Blade Runner", "1982", "movie", "movie-1", True, object(), artwork_path=""),
+        MediaItem("Recently Added", "", "hub", "hub-1", False, object(), artwork_path=""),
+    ]
+
+    rendered = render_media_grid(items, "hub-1", config, columns=2)
+    text = render_plain(rendered, width=80)
+
+    assert "[no poster]" in text
+    assert "[hub]" in text
+    assert "Blade Runner" in text
+    assert "Recently Added" in text
+    assert "playable" in text
+    assert "▶ selected" in text
+
+
 def test_grid_rows_are_centered_in_media_pane():
     media = MediaItem("Movie", "2024", "movie", "1", True, object(), artwork_path="")
     rendered = render_media_grid([media], media.key, AppConfig("http://plex", "token", "client"), columns=2)
@@ -903,3 +921,9 @@ def test_library_menu_rows_list_supported_entrypoints():
 
     assert [row.entry for row in rows] == ["library", "recommended", "collections", "playlists"]
     assert [row.label_text for row in rows] == ["Library", "Recommended", "Collections", "Playlists"]
+
+
+def render_plain(renderable: object, width: int = 100) -> str:
+    console = Console(width=width, record=True, color_system=None)
+    console.print(renderable)
+    return console.export_text(styles=False)
