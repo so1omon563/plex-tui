@@ -1485,7 +1485,7 @@ async def run_settings_highlight_check():
         row = media.highlighted_child
         assert row is not None
         assert row.has_class("active-row")
-        assert getattr(row, "label_text") == "[ Account ]"
+        assert getattr(row, "label_text") == "Account"
         assert "Settings Section" in app.query_one("#detail-content").content
 
         with patch("plextui.app.save_config"):

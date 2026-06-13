@@ -284,7 +284,7 @@ class SettingsActionRow(ListItem):
     def __init__(self, label: str, action: str) -> None:
         self.action = action
         self.action_kind = settings_action_kind(action)
-        self.label_text = f"{label}  [{self.action_kind}]"
+        self.label_text = f"› {label}  ({settings_action_badge(self.action_kind)})"
         super().__init__(Label(self.label_text))
 
 
@@ -296,14 +296,14 @@ class SettingsNumericRow(SettingsActionRow):
 
 class SettingsHeaderRow(ListItem):
     def __init__(self, label: str) -> None:
-        self.label_text = f"[ {label} ]"
+        self.label_text = label
         super().__init__(Label(self.label_text))
 
 
 class SettingsValueRow(ListItem):
     def __init__(self, label: str) -> None:
-        self.label_text = label
-        super().__init__(Label(label))
+        self.label_text = f"  {label}"
+        super().__init__(Label(self.label_text))
 
 
 class StatusChanged(Message):
@@ -2606,6 +2606,21 @@ def settings_action_kind(action: str) -> str:
     return "run"
 
 
+def settings_action_badge(action_kind: str) -> str:
+    badges = {
+        "confirm": "confirm",
+        "input": "edit",
+        "step": "step",
+        "reset": "reset",
+        "toggle": "toggle",
+        "cycle": "cycle",
+        "show": "show",
+        "set": "set",
+        "run": "run",
+    }
+    return badges.get(action_kind, action_kind)
+
+
 def render_settings_row_details(
     row: SettingsActionRow | SettingsHeaderRow | SettingsValueRow,
     config: AppConfig,
@@ -2844,10 +2859,7 @@ def settings_action_label(action: str) -> str:
 def numeric_settings_row(config: AppConfig, name: str) -> SettingsNumericRow:
     spec = numeric_setting_spec(name)
     value = int(getattr(config, name))
-    label = (
-        f"{spec['label']}: {value} "
-        f"(range {spec['minimum']}-{spec['maximum']}, step {spec['step']}, default {spec['default']})"
-    )
+    label = f"{spec['label']}: {value}"
     return SettingsNumericRow(label, f"set_{name}", name)
 
 

@@ -210,21 +210,22 @@ def test_settings_rows_are_grouped_with_action_values():
 
     labels = [getattr(row, "label_text") for row in settings_rows(config)]
 
-    assert "[ Account ]" in labels
-    assert "[ Streams ]" in labels
-    assert "[ Playback ]" in labels
-    assert "[ Artwork ]" in labels
-    assert "[ Browsing ]" in labels
-    assert "[ Diagnostics ]" in labels
-    assert "Subtitle Mode: Auto  [cycle]" in labels
-    assert "mpv Window Size: 1280x720  [input]" in labels
-    assert "Grid Density: Comfortable  [cycle]" in labels
-    assert "Artwork Renderer: Block  [cycle]" in labels
-    assert "Page Size: 80 (range 25-500, step 10, default 40)  [input]" in labels
-    assert "Auto-load Threshold: 20 (range 1-100, step 5, default 10)  [input]" in labels
-    assert "Grid Prefetch Pages: 4 (range 0-5, step 1, default 3)  [input]" in labels
-    assert "Show recent debug log  [show]" in labels
-    assert "Show app diagnostics  [show]" in labels
+    assert "Account" in labels
+    assert "Streams" in labels
+    assert "Playback" in labels
+    assert "Artwork" in labels
+    assert "Browsing" in labels
+    assert "Diagnostics" in labels
+    assert "  Server: http://plex" in labels
+    assert "› Subtitle Mode: Auto  (cycle)" in labels
+    assert "› mpv Window Size: 1280x720  (edit)" in labels
+    assert "› Grid Density: Comfortable  (cycle)" in labels
+    assert "› Artwork Renderer: Block  (cycle)" in labels
+    assert "› Page Size: 80  (edit)" in labels
+    assert "› Auto-load Threshold: 20  (edit)" in labels
+    assert "› Grid Prefetch Pages: 4  (edit)" in labels
+    assert "› Show recent debug log  (show)" in labels
+    assert "› Show app diagnostics  (show)" in labels
 
 
 def test_settings_row_details_describe_action_types():
@@ -233,7 +234,7 @@ def test_settings_row_details_describe_action_types():
     grid_row = next(row for row in rows if getattr(row, "action", "") == "cycle_grid_density")
     clear_row = next(row for row in rows if getattr(row, "action", "") == "clear_audio")
     input_row = next(row for row in rows if getattr(row, "action", "") == "set_page_size")
-    value_row = next(row for row in rows if getattr(row, "label_text", "").startswith("Server:"))
+    value_row = next(row for row in rows if getattr(row, "label_text", "").strip().startswith("Server:"))
 
     grid_details = render_settings_row_details(grid_row, config)
     assert "Setting Control" in grid_details
