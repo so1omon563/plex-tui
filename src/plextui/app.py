@@ -85,6 +85,7 @@ class BrowseState:
     search: bool = False
     search_query: str = ""
     global_search: bool = False
+    source: str = "library"
     next_start: int = 0
     total: int | None = None
 
@@ -92,6 +93,8 @@ class BrowseState:
     def has_more(self) -> bool:
         if self.total is None or self.next_start >= self.total:
             return False
+        if self.source == "continue_watching":
+            return True
         if self.search:
             return bool(self.search_query and self.selected_library is not None and not self.global_search)
         return self.selected_library is not None
@@ -101,6 +104,12 @@ class LibraryRow(ListItem):
     def __init__(self, library: LibraryItem) -> None:
         super().__init__(Label(library.title))
         self.library = library
+
+
+class ContinueWatchingRow(ListItem):
+    def __init__(self) -> None:
+        self.label_text = "Continue Watching"
+        super().__init__(Label(self.label_text))
 
 
 class MediaRow(ListItem):
@@ -650,14 +659,16 @@ class PlexTuiApp(App[None]):
     def populate_libraries(self, libraries: list[LibraryItem]) -> None:
         self.replace_list_rows_async(
             "#libraries",
-            [LibraryRow(library) for library in libraries],
-            0 if libraries else None,
+            [ContinueWatchingRow(), *[LibraryRow(library) for library in libraries]],
+            0,
             "library-list",
         )
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         row = event.item
-        if isinstance(row, LibraryRow):
+        if isinstance(row, ContinueWatchingRow):
+            self.open_continue_watching()
+        elif isinstance(row, LibraryRow):
             self.open_library(row.library)
         elif isinstance(row, MediaRow):
             self.open_media(row.media)
@@ -678,7 +689,11 @@ class PlexTuiApp(App[None]):
             return
         if row is not None and event.list_view.highlighted_child is not row:
             return
-        if isinstance(row, LibraryRow):
+        if isinstance(row, ContinueWatchingRow):
+            mark_active_row(event.list_view, row)
+            self.show_detail_text("Resume movies and episodes Plex reports as ready to continue.")
+            self.set_status(context_hint(row))
+        elif isinstance(row, LibraryRow):
             mark_active_row(event.list_view, row)
             self.set_status(context_hint(row))
         elif isinstance(row, MediaRow):
@@ -765,6 +780,39 @@ class PlexTuiApp(App[None]):
 
         self.call_from_thread(update)
 
+    @work(thread=True)
+    def open_continue_watching(self) -> None:
+        if self.service is None:
+            return
+        title = "Continue Watching"
+        self.post_message(StatusChanged(f"Loading {title}..."))
+        started = time.perf_counter()
+        try:
+            page = self.service.continue_watching_page(0, self.config.page_size)
+        except Exception as exc:
+            self.call_from_thread(self.show_error, str(exc))
+            return
+        write_performance_log(
+            "continue_watching_page",
+            started,
+            f"start=0 size={self.config.page_size} items={len(page.items)} total={page.total}",
+        )
+
+        def update() -> None:
+            state = BrowseState(
+                title,
+                page.items,
+                source="continue_watching",
+                next_start=page.next_start,
+                total=page.total,
+            )
+            self.browsing_stack = [state]
+            self.show_browse_state(state)
+            self.focus_media_browser()
+            self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more))
+
+        self.call_from_thread(update)
+
     def maybe_auto_load_more(self, media: MediaItem) -> None:
         if self.suppress_auto_load:
             self.suppress_auto_load = False
@@ -825,6 +873,8 @@ class PlexTuiApp(App[None]):
         try:
             if state.search:
                 page = self.service.search_page(state.search_query, state.selected_library, state.next_start, self.config.page_size)
+            elif state.source == "continue_watching":
+                page = self.service.continue_watching_page(state.next_start, self.config.page_size)
             else:
                 page = self.service.library_page(state.selected_library, state.next_start, self.config.page_size)
         except Exception as exc:
@@ -2578,6 +2628,8 @@ def render_help() -> str:
 
 
 def context_hint(row: object) -> str:
+    if isinstance(row, ContinueWatchingRow):
+        return "Libraries: Enter opens Continue Watching"
     if isinstance(row, LibraryRow):
         return "Libraries: Enter opens library"
     if isinstance(row, LoadMoreRow):

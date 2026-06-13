@@ -56,11 +56,7 @@ class PlexService:
 
     def library_page(self, library: LibraryItem, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
         raw_items = library.raw.all(maxresults=size, container_start=start, container_size=size)
-        items = [to_media_item(item) for item in raw_items]
-        total = getattr(raw_items, "totalSize", None)
-        if total is None:
-            total = start + len(items)
-        return MediaPage(items=items, start=start, total=int(total))
+        return media_page_from_raw(raw_items, start)
 
     def library_items(self, library: LibraryItem) -> list[MediaItem]:
         return self.library_page(library, 0, DEFAULT_PAGE_SIZE).items
@@ -79,17 +75,18 @@ class PlexService:
                 container_start=start,
                 container_size=size,
             )
-            items = [to_media_item(item) for item in raw_items]
-            total = getattr(raw_items, "totalSize", None)
-            if total is None:
-                total = start + len(items)
-            return MediaPage(items=items, start=start, total=int(total))
+            return media_page_from_raw(raw_items, start)
 
         if start:
             return MediaPage(items=[], start=start, total=start)
         raw_items = self.server.search(query, limit=size)
         items = [to_media_item(item) for item in raw_items]
         return MediaPage(items=items, start=0, total=len(items))
+
+    def continue_watching_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
+        raw_items = list(self.server.library.onDeck())
+        items = [to_media_item(item) for item in raw_items[start:start + size]]
+        return MediaPage(items=items, start=start, total=len(raw_items))
 
     def children(self, item: MediaItem) -> list[MediaItem]:
         raw = item.raw
@@ -106,6 +103,14 @@ class PlexService:
             return self.search_page(query, library, 0, DEFAULT_PAGE_SIZE).items
         source: Iterable[Any] = self.server.search(query, limit=DEFAULT_PAGE_SIZE)
         return [to_media_item(item) for item in source]
+
+
+def media_page_from_raw(raw_items: Iterable[Any], start: int) -> MediaPage:
+    items = [to_media_item(item) for item in raw_items]
+    total = getattr(raw_items, "totalSize", None)
+    if total is None:
+        total = start + len(items)
+    return MediaPage(items=items, start=start, total=int(total))
 
 
 def to_media_item(raw: Any) -> MediaItem:

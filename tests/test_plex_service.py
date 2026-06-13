@@ -13,6 +13,11 @@ class RawItem:
         return "http://plex/movie"
 
 
+class SecondRawItem(RawItem):
+    title = "Second Movie"
+    ratingKey = "2"
+
+
 class AudioStream:
     displayTitle = "Japanese"
     codec = "aac"
@@ -71,6 +76,15 @@ class RawLibrary:
         return RawPage([RawItem()])
 
 
+class RawLibraryHub:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def onDeck(self):
+        self.calls.append(())
+        return [RawItem(), SecondRawItem()]
+
+
 class RawServer:
     def __init__(self) -> None:
         self.calls = []
@@ -111,6 +125,21 @@ def test_search_page_fetches_single_library_search_page():
     assert page.start == 50
     assert page.total == 250
     assert page.has_more
+
+
+def test_continue_watching_page_fetches_on_deck_page():
+    raw_library = RawLibraryHub()
+    service = object.__new__(PlexService)
+    service.server = type("Server", (), {"library": raw_library})()
+
+    page = service.continue_watching_page(start=1, size=1)
+
+    assert raw_library.calls == [()]
+    assert len(page.items) == 1
+    assert page.items[0].title == "Second Movie"
+    assert page.start == 1
+    assert page.total == 2
+    assert not page.has_more
 
 
 def test_global_search_page_is_bounded_and_not_paged():
