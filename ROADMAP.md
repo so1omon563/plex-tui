@@ -2,15 +2,15 @@
 
 ## App UX
 
-- Rework grid view presentation so poster/title blocks feel balanced across
-  terminal sizes. The current grid is functional but visually uneven: poster
-  blocks, titles, and pane content can look lopsided or off-center.
+- Continue refining grid view presentation after the initial card/detail
+  balance pass, especially against real terminal themes and wide/narrow panes.
 - Continue tuning focus, row markers, and selection affordances based on real
   terminal themes.
-- Polish the details pane hierarchy for long summaries, missing metadata, and
-  playback readiness hints.
+- Continue polishing the details pane hierarchy for dense metadata, stream
+  choices, and playback readiness hints.
 - Continue refining Settings ergonomics as new preferences are added, especially
-  grouping, current-value scanning, and change feedback.
+  grouping, current-value scanning, and change feedback. The list rows should
+  stay compact, with rules and ranges living in the details pane.
 - Tune real-library browsing only when verification shows a specific issue; the
   latest perf pass showed fast grid rendering and poster fetches dominated by
   network/cache timing.
