@@ -63,6 +63,10 @@ def test_open_library_shows_browse_modes():
     asyncio.run(run_library_menu_check())
 
 
+def test_back_from_library_entry_returns_to_browse_modes():
+    asyncio.run(run_library_entry_back_to_menu_check())
+
+
 def test_show_browse_state_adds_load_more_row():
     asyncio.run(run_load_more_row_check())
 
@@ -649,6 +653,33 @@ async def run_library_menu_check():
             "Playlists",
         ]
         assert app.selected_library == library
+        assert app.browsing_stack == []
+
+
+async def run_library_entry_back_to_menu_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        library = LibraryItem("Movies", "1", "movie", object())
+        item = MediaItem("First", "", "movie", "1", True, Raw())
+        app.selected_library = library
+        app.browsing_stack = [
+            BrowseState("Movies", [item], library, source="library:library", next_start=1, total=1)
+        ]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_back_or_clear()
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert [row.label_text for row in rows if isinstance(row, LibraryMenuRow)] == [
+            "Library",
+            "Recommended",
+            "Collections",
+            "Playlists",
+        ]
         assert app.browsing_stack == []
 
 

@@ -619,7 +619,7 @@ class PlexTuiApp(App[None]):
             visible = visible_libraries(libraries, self.config)
             self.populate_libraries(visible)
             if visible:
-                self.open_library_menu(visible[0])
+                self.open_library_entry(visible[0])
             else:
                 self.open_continue_watching()
 
@@ -684,7 +684,7 @@ class PlexTuiApp(App[None]):
         if isinstance(row, ContinueWatchingRow):
             self.open_continue_watching()
         elif isinstance(row, LibraryRow):
-            self.open_library_menu(row.library)
+            self.open_library_entry(row.library)
         elif isinstance(row, LibraryMenuRow):
             self.open_library_entry(row.library, row.entry, row.label_text)
         elif isinstance(row, MediaRow):
@@ -2107,6 +2107,12 @@ class PlexTuiApp(App[None]):
             self.show_browse_state(state)
             self.focus_media_browser()
             self.set_status(state.title)
+            return
+
+        if self.browsing_stack:
+            state = self.browsing_stack[-1]
+            if state.source.startswith("library:") and state.selected_library is not None:
+                self.open_library_menu(state.selected_library)
 
     def action_play_selected(self) -> None:
         media = self.selected_media()
@@ -2763,7 +2769,7 @@ def context_hint(row: object) -> str:
     if isinstance(row, ContinueWatchingRow):
         return "Libraries: Enter opens Continue Watching"
     if isinstance(row, LibraryRow):
-        return "Libraries: Enter opens browse modes"
+        return "Libraries: Enter opens library / Escape shows browse modes"
     if isinstance(row, LibraryMenuRow):
         return "Library: Enter opens browse mode"
     if isinstance(row, LoadMoreRow):
