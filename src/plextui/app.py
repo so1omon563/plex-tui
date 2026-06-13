@@ -2167,7 +2167,6 @@ def render_detail_header(details: object, config: AppConfig | None = None) -> li
     title = getattr(details, "title")
     title_lines = textwrap.wrap(title, width=DETAIL_SUMMARY_WIDTH) or [title]
     facts = [str(fact) for fact in getattr(details, "facts", []) if fact]
-    playable = "Ready to play" if getattr(details, "playable") else "Opens more items"
     artwork = artwork_status(details, config)
     title_width = max(len(line) for line in title_lines)
     lines = [*title_lines, "-" * min(max(title_width, 8), DETAIL_SUMMARY_WIDTH)]
@@ -2176,10 +2175,22 @@ def render_detail_header(details: object, config: AppConfig | None = None) -> li
     lines.extend([
         "",
         "Playback",
-        f"Status: {playable}",
+        *playback_readiness_rows(bool(getattr(details, "playable"))),
         f"Artwork: {artwork}",
     ])
     return lines
+
+
+def playback_readiness_rows(playable: bool) -> list[str]:
+    if playable:
+        return [
+            "Status: Ready to play",
+            "Action: Press p to play",
+        ]
+    return [
+        "Status: Opens more items",
+        "Action: Press Enter to open",
+    ]
 
 
 def append_detail_section(lines: list[str], heading: str, body: list[str]) -> None:

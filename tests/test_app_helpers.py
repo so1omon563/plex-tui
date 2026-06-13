@@ -112,6 +112,7 @@ def test_render_details_includes_subtitles_and_summary():
     assert "Title\n--------" in rendered
     assert "movie" in rendered
     assert "Playback\nStatus: Ready to play" in rendered
+    assert "Action: Press p to play" in rendered
     assert "Metadata" in rendered
     assert "Preferences" in rendered
     assert "Audio: jpn" in rendered
@@ -139,6 +140,7 @@ def test_render_details_uses_clear_empty_states_and_wraps_summary():
     rendered = render_details(details)
 
     assert "Status: Opens more items" in rendered
+    assert "Action: Press Enter to open" in rendered
     assert "No metadata reported" in rendered
     assert "No audio tracks reported" in rendered
     assert "No subtitle tracks reported" in rendered
