@@ -983,16 +983,19 @@ async def run_alphabet_jump_list_check():
         await pilot.pause(0.2)
 
         app.action_jump_alpha_next()
-        await pilot.pause(0.2)
-        assert app.selected_media().title == "Casablanca"
+        selected = await wait_for_selected_title(app, pilot, "Casablanca")
+        assert selected is not None
+        assert selected.title == "Casablanca"
 
         app.action_jump_alpha_next()
-        await pilot.pause(0.2)
-        assert app.selected_media().title == "Blade Runner"
+        selected = await wait_for_selected_title(app, pilot, "Blade Runner")
+        assert selected is not None
+        assert selected.title == "Blade Runner"
 
         app.action_jump_alpha_previous()
-        await pilot.pause(0.2)
-        assert app.selected_media().title == "Casablanca"
+        selected = await wait_for_selected_title(app, pilot, "Casablanca")
+        assert selected is not None
+        assert selected.title == "Casablanca"
 
 
 async def run_alphabet_jump_load_more_check():
