@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.3.20 - 2026-06-13
+
+- Polished grid and details layout so poster placeholders, card text, long
+  titles, facts, summaries, and detail rows fit their panes more consistently.
+- Simplified Settings list scanning with compact action badges, plain section
+  headers, indented value rows, and numeric ranges kept in the detail pane.
+- Clarified focused-row status hints with context prefixes such as `Media:`,
+  `Grid:`, and `Settings:`.
+- Improved dense detail sections by wrapping metadata and preference rows,
+  showing audio/subtitle stream counts, and limiting long stream lists with a
+  clear remaining-count line.
+- Added explicit details-pane playback readiness actions for playable items and
+  openable container items.
+
 ## 0.3.14 - 2026-06-13
 
 - Validated the fully automatic release path after fixing post-release

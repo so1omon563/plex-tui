@@ -1,3 +1,3 @@
 """Plex TUI prototype."""
 
-__version__ = "0.3.14"
+__version__ = "0.3.20"
