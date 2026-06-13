@@ -810,9 +810,16 @@ def test_media_grid_page_status_counts_loaded_items():
 
 def test_context_hints_for_media_and_load_more():
     playable = MediaItem("Movie", "", "movie", "1", True, object())
+    container = MediaItem("Show", "", "show", "2", False, object())
     grid = MediaGrid()
     grid.set_items([playable], selected_index=0, config=AppConfig("http://plex", "token", "client"), columns=1)
+    settings = settings_rows(AppConfig("http://plex", "token", "client"))
+    setting_action = next(row for row in settings if getattr(row, "action", "") == "cycle_grid_density")
+    setting_value = next(row for row in settings if getattr(row, "label_text", "").strip().startswith("Server:"))
 
-    assert context_hint(MediaRow(playable)) == "Enter selects item / p plays / a audio / s subtitles"
-    assert context_hint(grid) == "Arrows/page select card / p plays / a audio / s subtitles"
-    assert context_hint(LoadMoreRow(100, 200)) == "Enter loads next page"
+    assert context_hint(MediaRow(playable)) == "Media: Enter selects / p plays / a audio / s subtitles"
+    assert context_hint(MediaRow(container)) == "Media: Enter opens item"
+    assert context_hint(grid) == "Grid: Arrows/page select card / p plays / a audio / s subtitles"
+    assert context_hint(LoadMoreRow(100, 200)) == "Media: Enter loads next page"
+    assert context_hint(setting_action) == "Settings: Enter or Left-Right cycles"
+    assert context_hint(setting_value) == "Settings: Current value"
