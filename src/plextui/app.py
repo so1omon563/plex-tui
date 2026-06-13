@@ -3211,22 +3211,39 @@ def alphabet_jump_index(items: list[MediaItem], current_index: int, direction: i
         return None
     current_index = min(max(0, current_index), len(items) - 1)
     current_group = alphabet_group_label(items[current_index])
+    target_group = alphabet_target_group(
+        [alphabet_group_label(item) for item in items],
+        current_group,
+        direction,
+    )
+    if target_group is None:
+        return None
+    for index, item in enumerate(items):
+        if alphabet_group_label(item) == target_group:
+            return index
+    return None
+
+
+def alphabet_target_group(groups: list[str], current_group: str, direction: int) -> str | None:
+    available = sorted(set(groups), key=alphabet_group_sort_key)
     if direction > 0:
-        for index in range(current_index + 1, len(items)):
-            if alphabet_group_label(items[index]) != current_group:
-                return index
+        for group in available:
+            if alphabet_group_sort_key(group) > alphabet_group_sort_key(current_group):
+                return group
         return None
 
-    group_start = current_index
-    while group_start > 0 and alphabet_group_label(items[group_start - 1]) == current_group:
-        group_start -= 1
-    if group_start == 0:
-        return None
-    previous_group = alphabet_group_label(items[group_start - 1])
-    index = group_start - 1
-    while index > 0 and alphabet_group_label(items[index - 1]) == previous_group:
-        index -= 1
-    return index
+    for group in reversed(available):
+        if alphabet_group_sort_key(group) < alphabet_group_sort_key(current_group):
+            return group
+    return None
+
+
+def alphabet_group_sort_key(group: str) -> int:
+    if group == "#":
+        return 0
+    if len(group) == 1 and "A" <= group <= "Z":
+        return ord(group) - ord("A") + 1
+    return 27
 
 
 def alphabet_group_label(item: MediaItem) -> str:

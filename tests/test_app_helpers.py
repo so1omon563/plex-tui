@@ -848,12 +848,27 @@ def test_alphabet_jump_index_moves_between_loaded_title_groups():
 
     assert alphabet_jump_index(items, 0, 1) == 2
     assert alphabet_jump_index(items, 2, 1) == 3
-    assert alphabet_jump_index(items, 3, 1) == 4
-    assert alphabet_jump_index(items, 4, 1) is None
+    assert alphabet_jump_index(items, 3, 1) is None
+    assert alphabet_jump_index(items, 4, 1) == 0
+    assert alphabet_jump_index(items, 0, -1) == 4
     assert alphabet_jump_index(items, 3, -1) == 2
     assert alphabet_jump_index(items, 2, -1) == 0
-    assert alphabet_jump_index(items, 0, -1) is None
+    assert alphabet_jump_index(items, 4, -1) is None
     assert alphabet_group_label(items[4]) == "#"
+
+
+def test_alphabet_jump_index_uses_available_letters_not_row_order():
+    items = [
+        MediaItem("Alien", "", "movie", "1", True, object()),
+        MediaItem("Casablanca", "", "movie", "2", True, object()),
+        MediaItem("Blade Runner", "", "movie", "3", True, object()),
+        MediaItem("Arrival", "", "movie", "4", True, object()),
+        MediaItem("2001", "", "movie", "5", True, object()),
+    ]
+
+    assert alphabet_jump_index(items, 0, 1) == 2
+    assert alphabet_jump_index(items, 1, -1) == 2
+    assert alphabet_jump_index(items, 2, -1) == 0
 
 
 def test_media_row_includes_progress_marker():

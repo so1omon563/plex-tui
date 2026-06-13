@@ -961,8 +961,8 @@ async def run_alphabet_jump_list_check():
         items = [
             MediaItem("Alien", "", "movie", "1", True, Raw()),
             MediaItem("Aliens", "", "movie", "2", True, Raw()),
-            MediaItem("Blade Runner", "", "movie", "3", True, Raw()),
-            MediaItem("Casablanca", "", "movie", "4", True, Raw()),
+            MediaItem("Casablanca", "", "movie", "3", True, Raw()),
+            MediaItem("Blade Runner", "", "movie", "4", True, Raw()),
         ]
         app.browsing_stack = [BrowseState("Movies", items)]
         app.show_browse_state(app.browsing_stack[-1])
@@ -989,8 +989,8 @@ async def run_alphabet_jump_grid_check():
         items = [
             MediaItem("Alien", "", "movie", "1", True, Raw()),
             MediaItem("Aliens", "", "movie", "2", True, Raw()),
-            MediaItem("Blade Runner", "", "movie", "3", True, Raw()),
-            MediaItem("Casablanca", "", "movie", "4", True, Raw()),
+            MediaItem("Casablanca", "", "movie", "3", True, Raw()),
+            MediaItem("Blade Runner", "", "movie", "4", True, Raw()),
         ]
         app.browsing_stack = [BrowseState("Movies", items)]
         app.show_browse_state(app.browsing_stack[-1])
