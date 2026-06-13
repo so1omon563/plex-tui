@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.3.28 - 2026-06-13
+
+- Added a DOX-aligned project agent model and documented repository operating
+  guidance for future work.
+- Added Plex integration research notes for library, collection, playlist, and
+  richer metadata opportunities.
+- Added Continue Watching as a first-class library entrypoint and selective
+  library visibility controls.
+- Restored browsable library submenus and added UI regression coverage for
+  library tree navigation.
+- Added paged alphabet navigation jumps for loaded media lists and grids.
+- Added explicit playback quality controls for auto/direct-default playback
+  versus forced Plex transcode quality presets.
+
 ## 0.3.20 - 2026-06-13
 
 - Polished grid and details layout so poster placeholders, card text, long
