@@ -505,6 +505,13 @@ async def run_focus_pane_check():
         assert app.query_one("#details-title").content == "[FOCUS] Details"
         assert not app.query_one("#main").has_class("focused-pane")
 
+        app.action_focus_media()
+        await pilot.press("d")
+        await pilot.pause(0.1)
+        assert app.query_one("#details").has_class("focused-pane")
+        assert app.query_one("#details-title").content == "[FOCUS] Details"
+        assert not app.query_one("#main").has_class("focused-pane")
+
 
 async def run_tab_focus_pane_check():
     app = PlexTuiApp()

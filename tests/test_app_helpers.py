@@ -764,6 +764,7 @@ def test_render_help_groups_key_bindings():
     assert "Settings" in rendered
     assert "Paths" in rendered
     assert "Debug log:" in rendered
+    assert "d: focus details" in rendered
     assert "v: toggle list/grid view" in rendered
     assert "left/right: move across grid cards" in rendered
     assert "PLEX_TUI_ARTWORK_LOG=1" in rendered
