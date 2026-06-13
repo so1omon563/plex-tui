@@ -59,6 +59,10 @@ def test_populate_libraries_adds_continue_watching_entrypoint():
     asyncio.run(run_continue_watching_entrypoint_check())
 
 
+def test_populate_libraries_can_highlight_selected_library():
+    asyncio.run(run_selected_library_highlight_check())
+
+
 def test_open_library_shows_browse_modes():
     asyncio.run(run_library_menu_check())
 
@@ -576,6 +580,26 @@ async def run_continue_watching_entrypoint_check():
         assert isinstance(rows[0], ContinueWatchingRow)
         assert [row.library.title for row in rows[1:]] == ["Movies", "TV"]
         assert libraries_view.highlighted_child is rows[0]
+
+
+async def run_selected_library_highlight_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        libraries = [
+            LibraryItem("Movies", "1", "movie", object()),
+            LibraryItem("TV", "2", "show", object()),
+        ]
+
+        app.populate_libraries(libraries, selected_library_key="1")
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+
+        rows = list(libraries_view.children)
+        assert isinstance(rows[0], ContinueWatchingRow)
+        assert libraries_view.highlighted_child is rows[1]
+        assert rows[1].library.title == "Movies"
 
 
 async def run_load_more_row_check():

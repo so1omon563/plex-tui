@@ -617,10 +617,11 @@ class PlexTuiApp(App[None]):
             self.title = f"plex-tui - {service.friendly_name}"
             self.set_status(f"Connected to {service.friendly_name}")
             visible = visible_libraries(libraries, self.config)
-            self.populate_libraries(visible)
             if visible:
+                self.populate_libraries(visible, selected_library_key=visible[0].key)
                 self.open_library_entry(visible[0])
             else:
+                self.populate_libraries(visible)
                 self.open_continue_watching()
 
         self.call_from_thread(update)
@@ -671,11 +672,17 @@ class PlexTuiApp(App[None]):
 
         self.call_from_thread(show_choices)
 
-    def populate_libraries(self, libraries: list[LibraryItem]) -> None:
+    def populate_libraries(self, libraries: list[LibraryItem], selected_library_key: str | None = None) -> None:
+        selected_index = 0
+        if selected_library_key is not None:
+            for index, library in enumerate(libraries, start=1):
+                if library.key == selected_library_key:
+                    selected_index = index
+                    break
         self.replace_list_rows_async(
             "#libraries",
             [ContinueWatchingRow(), *[LibraryRow(library) for library in libraries]],
-            0,
+            selected_index,
             "library-list",
         )
 
