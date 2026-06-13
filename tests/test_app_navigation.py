@@ -116,6 +116,10 @@ def test_alphabet_jump_moves_list_selection_between_title_groups():
     asyncio.run(run_alphabet_jump_list_check())
 
 
+def test_alphabet_jump_loads_more_when_next_section_is_not_loaded():
+    asyncio.run(run_alphabet_jump_load_more_check())
+
+
 def test_alphabet_jump_moves_grid_selection_between_title_groups():
     asyncio.run(run_alphabet_jump_grid_check())
 
@@ -979,6 +983,49 @@ async def run_alphabet_jump_list_check():
         app.action_jump_alpha_previous()
         await pilot.pause(0.2)
         assert app.selected_media().title == "Casablanca"
+
+
+async def run_alphabet_jump_load_more_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=2)
+        library = LibraryItem("Movies", "1", "movie", object())
+        items = [
+            MediaItem("*batteries not included", "", "movie", "1", True, Raw()),
+            MediaItem("8MM", "", "movie", "2", True, Raw()),
+            MediaItem("Abigail", "", "movie", "3", True, Raw()),
+            MediaItem("Bad Taste", "", "movie", "4", True, Raw()),
+        ]
+        page = MediaPage(
+            [
+                MediaItem("Batman", "", "movie", "5", True, Raw()),
+                MediaItem("Children of Men", "", "movie", "6", True, Raw()),
+            ],
+            start=4,
+            total=6,
+        )
+        service = FakePagedService(page)
+        app.service = service
+        app.browsing_stack = [BrowseState("Movies", items, library, next_start=4, total=6)]
+        app.show_browse_state(app.browsing_stack[-1], selected_key="4")
+        await pilot.pause(0.2)
+
+        app.action_jump_alpha_next()
+        await pilot.pause(0.6)
+
+        assert service.calls == [(library, 4, 2)]
+        selected = app.selected_media()
+        assert selected is not None
+        assert selected.title == "Children of Men"
+        assert [item.title for item in app.browsing_stack[-1].items] == [
+            "*batteries not included",
+            "8MM",
+            "Abigail",
+            "Bad Taste",
+            "Batman",
+            "Children of Men",
+        ]
 
 
 async def run_alphabet_jump_grid_check():

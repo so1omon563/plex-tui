@@ -901,7 +901,7 @@ class PlexTuiApp(App[None]):
         return grid
 
     @work(thread=True, exclusive=True)
-    def load_more_media(self, selected_key: str | None = None) -> None:
+    def load_more_media(self, selected_key: str | None = None, alphabet_direction: int = 0) -> None:
         if self.service is None or not self.browsing_stack:
             return
         state = self.browsing_stack[-1]
@@ -944,9 +944,19 @@ class PlexTuiApp(App[None]):
             state.total = page.total
             self.loading_more = False
             self.suppress_auto_load = True
-            self.show_browse_state(state, selected_key=selected_key or first_new_key)
+            target_key = selected_key or first_new_key
+            status = render_loaded_status(state.title, len(state.items), state.total, state.has_more)
+            if alphabet_direction and selected_key:
+                current_index = selected_media_index(state.items, selected_key)
+                next_index = alphabet_jump_index(state.items, current_index, alphabet_direction)
+                write_alphabet_jump_log(state.items, current_index, alphabet_direction, next_index)
+                if next_index is not None:
+                    item = state.items[next_index]
+                    target_key = item.key
+                    status = f"Jumped to {alphabet_group_label(item)}: {item.title}"
+            self.show_browse_state(state, selected_key=target_key)
             self.focus_media_browser()
-            self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more))
+            self.set_status(status)
 
         self.call_from_thread(update)
 
@@ -1326,6 +1336,11 @@ class PlexTuiApp(App[None]):
         next_index = alphabet_jump_index(state.items, current_index, direction)
         write_alphabet_jump_log(state.items, current_index, direction, next_index)
         if next_index is None:
+            if direction > 0 and state.has_more:
+                selected = self.selected_media()
+                self.set_status(f"Loading more {state.title} for alphabet jump...")
+                self.load_more_media(selected_key=selected.key if selected is not None else None, alphabet_direction=direction)
+                return
             self.set_status("No more alphabet sections")
             return
         item = state.items[next_index]
