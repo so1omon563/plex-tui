@@ -10,6 +10,8 @@ from rich.console import Console, Group
 from rich.text import Text
 
 from plextui.app import (
+    alphabet_group_label,
+    alphabet_jump_index,
     BrowseState,
     LoadMoreRow,
     LibraryMenuRow,
@@ -833,6 +835,25 @@ def test_media_rows_returns_list_rows():
     assert isinstance(rows[0], MediaRow)
     assert next_media_view("list") == "grid"
     assert next_media_view("grid") == "list"
+
+
+def test_alphabet_jump_index_moves_between_loaded_title_groups():
+    items = [
+        MediaItem("Alien", "", "movie", "1", True, object()),
+        MediaItem("Aliens", "", "movie", "2", True, object()),
+        MediaItem("Blade Runner", "", "movie", "3", True, object()),
+        MediaItem("Casablanca", "", "movie", "4", True, object()),
+        MediaItem("2001", "", "movie", "5", True, object()),
+    ]
+
+    assert alphabet_jump_index(items, 0, 1) == 2
+    assert alphabet_jump_index(items, 2, 1) == 3
+    assert alphabet_jump_index(items, 3, 1) == 4
+    assert alphabet_jump_index(items, 4, 1) is None
+    assert alphabet_jump_index(items, 3, -1) == 2
+    assert alphabet_jump_index(items, 2, -1) == 0
+    assert alphabet_jump_index(items, 0, -1) is None
+    assert alphabet_group_label(items[4]) == "#"
 
 
 def test_media_row_includes_progress_marker():
