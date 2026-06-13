@@ -10,6 +10,7 @@ import plextui.app as app_module
 from plextui.app import (
     BrowseState,
     ContinueWatchingRow,
+    LibraryMenuRow,
     LoadMoreRow,
     PlexTuiApp,
     card_artwork_pixel_size,
@@ -58,6 +59,10 @@ def test_populate_libraries_adds_continue_watching_entrypoint():
     asyncio.run(run_continue_watching_entrypoint_check())
 
 
+def test_open_library_shows_browse_modes():
+    asyncio.run(run_library_menu_check())
+
+
 def test_show_browse_state_adds_load_more_row():
     asyncio.run(run_load_more_row_check())
 
@@ -73,6 +78,10 @@ def test_load_more_media_appends_next_page():
 
 def test_load_more_media_appends_continue_watching_page():
     asyncio.run(run_load_more_continue_watching_check())
+
+
+def test_load_more_media_appends_library_submenu_page():
+    asyncio.run(run_load_more_library_submenu_check())
 
 
 def test_initial_library_uses_configured_page_size():
@@ -585,11 +594,16 @@ class FakePagedService:
     def __init__(self, page: MediaPage) -> None:
         self.page = page
         self.calls = []
+        self.entry_calls = []
         self.search_calls = []
         self.continue_watching_calls = []
 
     def library_page(self, library: LibraryItem, start: int, size: int) -> MediaPage:
         self.calls.append((library, start, size))
+        return self.page
+
+    def library_entry_page(self, library: LibraryItem, entry: str, start: int, size: int) -> MediaPage:
+        self.entry_calls.append((library, entry, start, size))
         return self.page
 
     def search_page(self, query: str, library: LibraryItem | None, start: int, size: int) -> MediaPage:
@@ -611,10 +625,31 @@ async def run_initial_library_page_size_check():
         app.config = AppConfig("http://plex", "token", "client-id", page_size=45)
         app.service = service
 
-        app.open_library(library)
+        app.open_library_entry(library)
         await pilot.pause(0.5)
 
-        assert service.calls == [(library, 0, 45)]
+        assert service.entry_calls == [(library, "library", 0, 45)]
+
+
+async def run_library_menu_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        library = LibraryItem("Movies", "1", "movie", object())
+
+        app.open_library_menu(library)
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert [row.label_text for row in rows if isinstance(row, LibraryMenuRow)] == [
+            "Library",
+            "Recommended",
+            "Collections",
+            "Playlists",
+        ]
+        assert app.selected_library == library
+        assert app.browsing_stack == []
 
 
 async def run_initial_search_page_size_check():
@@ -677,6 +712,31 @@ async def run_load_more_continue_watching_check():
         state = app.browsing_stack[-1]
         assert service.continue_watching_calls == [(1, 25)]
         assert service.calls == []
+        assert [item.title for item in state.items] == ["First", "Second"]
+        assert state.next_start == 2
+        assert state.has_more
+
+
+async def run_load_more_library_submenu_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=30)
+        library = LibraryItem("Movies", "1", "movie", object())
+        first = MediaItem("First", "", "collection", "1", False, Raw())
+        second = MediaItem("Second", "", "collection", "2", False, Raw())
+        page = MediaPage([second], start=1, total=3)
+        service = FakePagedService(page)
+        app.service = service
+        app.browsing_stack = [
+            BrowseState("Movies: Collections", [first], library, source="library:collections", next_start=1, total=3)
+        ]
+
+        app.load_more_media()
+        await pilot.pause(0.5)
+
+        state = app.browsing_stack[-1]
+        assert service.entry_calls == [(library, "collections", 1, 30)]
         assert [item.title for item in state.items] == ["First", "Second"]
         assert state.next_start == 2
         assert state.has_more

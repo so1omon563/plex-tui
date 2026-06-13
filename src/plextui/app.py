@@ -112,6 +112,15 @@ class ContinueWatchingRow(ListItem):
         super().__init__(Label(self.label_text))
 
 
+class LibraryMenuRow(ListItem):
+    def __init__(self, library: LibraryItem, entry: str, label: str, description: str) -> None:
+        self.library = library
+        self.entry = entry
+        self.label_text = label
+        self.description = description
+        super().__init__(Label(f"› {label}"))
+
+
 class MediaRow(ListItem):
     def __init__(self, media: MediaItem) -> None:
         marker = "▶" if media.playable else "›"
@@ -610,7 +619,7 @@ class PlexTuiApp(App[None]):
             visible = visible_libraries(libraries, self.config)
             self.populate_libraries(visible)
             if visible:
-                self.open_library(visible[0])
+                self.open_library_menu(visible[0])
             else:
                 self.open_continue_watching()
 
@@ -675,7 +684,9 @@ class PlexTuiApp(App[None]):
         if isinstance(row, ContinueWatchingRow):
             self.open_continue_watching()
         elif isinstance(row, LibraryRow):
-            self.open_library(row.library)
+            self.open_library_menu(row.library)
+        elif isinstance(row, LibraryMenuRow):
+            self.open_library_entry(row.library, row.entry, row.label_text)
         elif isinstance(row, MediaRow):
             self.open_media(row.media)
         elif isinstance(row, LoadMoreRow):
@@ -701,6 +712,10 @@ class PlexTuiApp(App[None]):
             self.set_status(context_hint(row))
         elif isinstance(row, LibraryRow):
             mark_active_row(event.list_view, row)
+            self.set_status(context_hint(row))
+        elif isinstance(row, LibraryMenuRow):
+            mark_active_row(event.list_view, row)
+            self.show_detail_text(row.description)
             self.set_status(context_hint(row))
         elif isinstance(row, MediaRow):
             mark_active_row(event.list_view, row)
@@ -753,36 +768,48 @@ class PlexTuiApp(App[None]):
         self.set_status(f"Saved server {choice.name}. Connecting...")
         self.load_server()
 
+    def open_library_menu(self, library: LibraryItem) -> None:
+        self.selected_library = library
+        self.browsing_stack = []
+        self.set_media_title(library.title)
+        self.show_media_list()
+        self.replace_media_rows(library_menu_rows(library), 0)
+        self.show_detail_text(library_menu_description(library))
+        self.focus_media_browser()
+        self.set_status(f"{library.title}: choose a browse mode")
+
     @work(thread=True)
-    def open_library(self, library: LibraryItem) -> None:
+    def open_library_entry(self, library: LibraryItem, entry: str = "library", label: str | None = None) -> None:
         if self.service is None:
             return
-        self.post_message(StatusChanged(f"Loading {library.title}..."))
+        title = library.title if entry == "library" else f"{library.title}: {label or library_entry_label(entry)}"
+        self.post_message(StatusChanged(f"Loading {title}..."))
         started = time.perf_counter()
         try:
-            page = self.service.library_page(library, 0, self.config.page_size)
+            page = self.service.library_entry_page(library, entry, 0, self.config.page_size)
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return
         write_performance_log(
             "library_page",
             started,
-            f"title={library.title!r} start=0 size={self.config.page_size} items={len(page.items)} total={page.total}",
+            f"title={title!r} entry={entry!r} start=0 size={self.config.page_size} items={len(page.items)} total={page.total}",
         )
 
         def update() -> None:
             self.selected_library = library
             state = BrowseState(
-                library.title,
+                title,
                 page.items,
                 library,
+                source=f"library:{entry}",
                 next_start=page.next_start,
                 total=page.total,
             )
             self.browsing_stack = [state]
             self.show_browse_state(state)
             self.focus_media_browser()
-            self.set_status(render_loaded_status(library.title, len(page.items), page.total, page.has_more))
+            self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more))
 
         self.call_from_thread(update)
 
@@ -881,6 +908,13 @@ class PlexTuiApp(App[None]):
                 page = self.service.search_page(state.search_query, state.selected_library, state.next_start, self.config.page_size)
             elif state.source == "continue_watching":
                 page = self.service.continue_watching_page(state.next_start, self.config.page_size)
+            elif state.source.startswith("library:"):
+                page = self.service.library_entry_page(
+                    state.selected_library,
+                    state.source.removeprefix("library:"),
+                    state.next_start,
+                    self.config.page_size,
+                )
             else:
                 page = self.service.library_page(state.selected_library, state.next_start, self.config.page_size)
         except Exception as exc:
@@ -2690,11 +2724,48 @@ def render_help() -> str:
     ])
 
 
+LIBRARY_MENU_ENTRIES = (
+    ("library", "Library", "Browse every item in this Plex library."),
+    ("recommended", "Recommended", "Browse Plex hub rows such as recently added or promoted groups."),
+    ("collections", "Collections", "Browse collections from this Plex library."),
+    ("playlists", "Playlists", "Browse playlists connected to this Plex library."),
+)
+
+
+def library_menu_rows(library: LibraryItem) -> list[LibraryMenuRow]:
+    return [
+        LibraryMenuRow(library, entry, label, description)
+        for entry, label, description in LIBRARY_MENU_ENTRIES
+    ]
+
+
+def library_entry_label(entry: str) -> str:
+    for candidate, label, _description in LIBRARY_MENU_ENTRIES:
+        if candidate == entry:
+            return label
+    return entry.replace("_", " ").title()
+
+
+def library_menu_description(library: LibraryItem) -> str:
+    return "\n".join([
+        library.title,
+        "",
+        "Choose how to browse this Plex library.",
+        "",
+        "Library: all items.",
+        "Recommended: Plex hub rows.",
+        "Collections: library collections.",
+        "Playlists: library playlists.",
+    ])
+
+
 def context_hint(row: object) -> str:
     if isinstance(row, ContinueWatchingRow):
         return "Libraries: Enter opens Continue Watching"
     if isinstance(row, LibraryRow):
-        return "Libraries: Enter opens library"
+        return "Libraries: Enter opens browse modes"
+    if isinstance(row, LibraryMenuRow):
+        return "Library: Enter opens browse mode"
     if isinstance(row, LoadMoreRow):
         return "Media: Enter loads next page"
     if isinstance(row, MediaRow):

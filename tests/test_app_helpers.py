@@ -12,6 +12,7 @@ from rich.text import Text
 from plextui.app import (
     BrowseState,
     LoadMoreRow,
+    LibraryMenuRow,
     MediaGrid,
     MediaRow,
     PlexTuiApp,
@@ -26,6 +27,7 @@ from plextui.app import (
     grid_geometry_for_size,
     grid_page_key,
     grid_status,
+    library_menu_rows,
     media_row,
     media_rows,
     next_detail_artwork_mode,
@@ -873,5 +875,17 @@ def test_context_hints_for_media_and_load_more():
     assert context_hint(MediaRow(container)) == "Media: Enter opens item"
     assert context_hint(grid) == "Grid: Arrows/page select card / p plays / a audio / s subtitles"
     assert context_hint(LoadMoreRow(100, 200)) == "Media: Enter loads next page"
+    assert context_hint(LibraryMenuRow(LibraryItem("Movies", "1", "movie", object()), "library", "Library", "All items")) == (
+        "Library: Enter opens browse mode"
+    )
     assert context_hint(setting_action) == "Settings: Enter or Left-Right cycles"
     assert context_hint(setting_value) == "Settings: Current value"
+
+
+def test_library_menu_rows_list_supported_entrypoints():
+    library = LibraryItem("Movies", "1", "movie", object())
+
+    rows = library_menu_rows(library)
+
+    assert [row.entry for row in rows] == ["library", "recommended", "collections", "playlists"]
+    assert [row.label_text for row in rows] == ["Library", "Recommended", "Collections", "Playlists"]
