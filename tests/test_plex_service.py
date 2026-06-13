@@ -75,6 +75,18 @@ class RawLibrary:
         self.calls.append((query, kwargs))
         return RawPage([RawItem()])
 
+    def hubs(self):
+        self.calls.append(("hubs", {}))
+        return [RawItem(), SecondRawItem()]
+
+    def collections(self, **kwargs):
+        self.calls.append(("collections", kwargs))
+        return RawPage([RawItem()])
+
+    def playlists(self, **kwargs):
+        self.calls.append(("playlists", kwargs))
+        return RawPage([RawItem()])
+
 
 class RawLibraryHub:
     def __init__(self) -> None:
@@ -109,6 +121,29 @@ def test_library_page_fetches_single_plex_page():
     assert page.total == 250
     assert page.next_start == 101
     assert page.has_more
+
+
+def test_library_entry_page_fetches_supported_submenus():
+    raw_library = RawLibrary()
+    service = object.__new__(PlexService)
+    library = LibraryItem("Movies", "1", "movie", raw_library)
+
+    recommended = service.library_entry_page(library, "recommended", start=1, size=1)
+    collections = service.library_entry_page(library, "collections", start=50, size=25)
+    playlists = service.library_entry_page(library, "playlists", start=75, size=25)
+
+    assert raw_library.calls == [
+        ("hubs", {}),
+        ("collections", {"maxresults": 25, "container_start": 50, "container_size": 25}),
+        ("playlists", {"maxresults": 25, "container_start": 75, "container_size": 25}),
+    ]
+    assert [item.title for item in recommended.items] == ["Second Movie"]
+    assert recommended.start == 1
+    assert recommended.total == 2
+    assert len(collections.items) == 1
+    assert collections.has_more
+    assert len(playlists.items) == 1
+    assert playlists.has_more
 
 
 def test_search_page_fetches_single_library_search_page():

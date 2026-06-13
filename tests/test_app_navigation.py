@@ -10,6 +10,7 @@ import plextui.app as app_module
 from plextui.app import (
     BrowseState,
     ContinueWatchingRow,
+    LibraryMenuRow,
     LoadMoreRow,
     PlexTuiApp,
     card_artwork_pixel_size,
@@ -58,6 +59,26 @@ def test_populate_libraries_adds_continue_watching_entrypoint():
     asyncio.run(run_continue_watching_entrypoint_check())
 
 
+def test_populate_libraries_can_highlight_selected_library():
+    asyncio.run(run_selected_library_highlight_check())
+
+
+def test_open_library_shows_browse_modes():
+    asyncio.run(run_library_menu_check())
+
+
+def test_sidebar_library_selection_shows_browse_modes():
+    asyncio.run(run_sidebar_library_selection_menu_check())
+
+
+def test_back_from_library_entry_returns_to_browse_modes():
+    asyncio.run(run_library_entry_back_to_menu_check())
+
+
+def test_library_submenu_keyboard_flow_with_fake_service():
+    asyncio.run(run_library_submenu_keyboard_flow_check())
+
+
 def test_show_browse_state_adds_load_more_row():
     asyncio.run(run_load_more_row_check())
 
@@ -73,6 +94,10 @@ def test_load_more_media_appends_next_page():
 
 def test_load_more_media_appends_continue_watching_page():
     asyncio.run(run_load_more_continue_watching_check())
+
+
+def test_load_more_media_appends_library_submenu_page():
+    asyncio.run(run_load_more_library_submenu_check())
 
 
 def test_initial_library_uses_configured_page_size():
@@ -484,6 +509,13 @@ async def run_focus_pane_check():
         assert app.query_one("#details-title").content == "[FOCUS] Details"
         assert not app.query_one("#main").has_class("focused-pane")
 
+        app.action_focus_media()
+        await pilot.press("d")
+        await pilot.pause(0.1)
+        assert app.query_one("#details").has_class("focused-pane")
+        assert app.query_one("#details-title").content == "[FOCUS] Details"
+        assert not app.query_one("#main").has_class("focused-pane")
+
 
 async def run_tab_focus_pane_check():
     app = PlexTuiApp()
@@ -561,6 +593,26 @@ async def run_continue_watching_entrypoint_check():
         assert libraries_view.highlighted_child is rows[0]
 
 
+async def run_selected_library_highlight_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        libraries = [
+            LibraryItem("Movies", "1", "movie", object()),
+            LibraryItem("TV", "2", "show", object()),
+        ]
+
+        app.populate_libraries(libraries, selected_library_key="1")
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+
+        rows = list(libraries_view.children)
+        assert isinstance(rows[0], ContinueWatchingRow)
+        assert libraries_view.highlighted_child is rows[1]
+        assert rows[1].library.title == "Movies"
+
+
 async def run_load_more_row_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
@@ -585,11 +637,16 @@ class FakePagedService:
     def __init__(self, page: MediaPage) -> None:
         self.page = page
         self.calls = []
+        self.entry_calls = []
         self.search_calls = []
         self.continue_watching_calls = []
 
     def library_page(self, library: LibraryItem, start: int, size: int) -> MediaPage:
         self.calls.append((library, start, size))
+        return self.page
+
+    def library_entry_page(self, library: LibraryItem, entry: str, start: int, size: int) -> MediaPage:
+        self.entry_calls.append((library, entry, start, size))
         return self.page
 
     def search_page(self, query: str, library: LibraryItem | None, start: int, size: int) -> MediaPage:
@@ -599,6 +656,26 @@ class FakePagedService:
     def continue_watching_page(self, start: int, size: int) -> MediaPage:
         self.continue_watching_calls.append((start, size))
         return self.page
+
+
+class FakeFlowService:
+    def __init__(
+        self,
+        pages: dict[tuple[str, int], MediaPage],
+        children: dict[str, list[MediaItem]] | None = None,
+    ) -> None:
+        self.pages = pages
+        self.children_by_key = children or {}
+        self.entry_calls = []
+        self.children_calls = []
+
+    def library_entry_page(self, library: LibraryItem, entry: str, start: int, size: int) -> MediaPage:
+        self.entry_calls.append((library, entry, start, size))
+        return self.pages[(entry, start)]
+
+    def children(self, item: MediaItem) -> list[MediaItem]:
+        self.children_calls.append(item.key)
+        return self.children_by_key.get(item.key, [])
 
 
 async def run_initial_library_page_size_check():
@@ -611,10 +688,150 @@ async def run_initial_library_page_size_check():
         app.config = AppConfig("http://plex", "token", "client-id", page_size=45)
         app.service = service
 
-        app.open_library(library)
+        app.open_library_entry(library)
         await pilot.pause(0.5)
 
-        assert service.calls == [(library, 0, 45)]
+        assert service.entry_calls == [(library, "library", 0, 45)]
+
+
+async def run_library_menu_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        library = LibraryItem("Movies", "1", "movie", object())
+
+        app.open_library_menu(library)
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert [row.label_text for row in rows if isinstance(row, LibraryMenuRow)] == [
+            "Library",
+            "Recommended",
+            "Collections",
+            "Playlists",
+        ]
+        assert app.selected_library == library
+        assert app.browsing_stack == []
+
+
+async def run_sidebar_library_selection_menu_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        library = LibraryItem("Movies", "1", "movie", object())
+        app.populate_libraries([library])
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert [row.label_text for row in rows if isinstance(row, LibraryMenuRow)] == [
+            "Library",
+            "Recommended",
+            "Collections",
+            "Playlists",
+        ]
+        assert app.selected_library == library
+        assert app.browsing_stack == []
+
+
+async def run_library_entry_back_to_menu_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        library = LibraryItem("Movies", "1", "movie", object())
+        item = MediaItem("First", "", "movie", "1", True, Raw())
+        app.selected_library = library
+        app.browsing_stack = [
+            BrowseState("Movies", [item], library, source="library:library", next_start=1, total=1)
+        ]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_back_or_clear()
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert [row.label_text for row in rows if isinstance(row, LibraryMenuRow)] == [
+            "Library",
+            "Recommended",
+            "Collections",
+            "Playlists",
+        ]
+        assert app.browsing_stack == []
+
+
+async def run_library_submenu_keyboard_flow_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        library = LibraryItem("Movies", "1", "movie", object())
+        movie = MediaItem("Blade Runner", "1982", "movie", "movie-1", True, Raw(), artwork_path="/thumb")
+        hub = MediaItem("Recently Added", "", "hub", "hub-1", False, object(), artwork_path="")
+        service = FakeFlowService(
+            {
+                ("library", 0): MediaPage([movie], start=0, total=1),
+                ("recommended", 0): MediaPage([hub], start=0, total=1),
+            },
+            {"hub-1": [movie]},
+        )
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        app.service = service
+
+        app.populate_libraries([library], selected_library_key="1")
+        app.open_library_entry(library)
+        await pilot.pause(0.5)
+
+        libraries_view = app.query_one("#libraries")
+        rows = list(libraries_view.children)
+        assert libraries_view.highlighted_child is rows[1]
+        assert rows[1].library.title == "Movies"
+        assert app.query_one("#media-grid").selected_media.title == "Blade Runner"
+
+        libraries_view.focus()
+        await pilot.press("enter")
+        await pilot.pause(0.2)
+        menu_rows = list(app.query_one("#media").children)
+        assert [row.label_text for row in menu_rows if isinstance(row, LibraryMenuRow)] == [
+            "Library",
+            "Recommended",
+            "Collections",
+            "Playlists",
+        ]
+
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.5)
+        assert service.entry_calls[-1] == (library, "recommended", 0, 40)
+        assert app.query_one("#media-grid").selected_media.title == "Recently Added"
+        assert app.query_one("#media-grid").selected_media.kind == "hub"
+
+        await pilot.press("enter")
+        await pilot.pause(0.5)
+        assert service.children_calls == ["hub-1"]
+        assert app.browsing_stack[-1].title == "Recently Added"
+        assert app.query_one("#media-grid").selected_media.title == "Blade Runner"
+
+        await pilot.press("escape")
+        await pilot.pause(0.2)
+        assert app.browsing_stack[-1].title == "Movies: Recommended"
+
+        await pilot.press("escape")
+        await pilot.pause(0.2)
+        menu_rows = list(app.query_one("#media").children)
+        assert [row.label_text for row in menu_rows if isinstance(row, LibraryMenuRow)] == [
+            "Library",
+            "Recommended",
+            "Collections",
+            "Playlists",
+        ]
+        assert app.browsing_stack == []
 
 
 async def run_initial_search_page_size_check():
@@ -677,6 +894,31 @@ async def run_load_more_continue_watching_check():
         state = app.browsing_stack[-1]
         assert service.continue_watching_calls == [(1, 25)]
         assert service.calls == []
+        assert [item.title for item in state.items] == ["First", "Second"]
+        assert state.next_start == 2
+        assert state.has_more
+
+
+async def run_load_more_library_submenu_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=30)
+        library = LibraryItem("Movies", "1", "movie", object())
+        first = MediaItem("First", "", "collection", "1", False, Raw())
+        second = MediaItem("Second", "", "collection", "2", False, Raw())
+        page = MediaPage([second], start=1, total=3)
+        service = FakePagedService(page)
+        app.service = service
+        app.browsing_stack = [
+            BrowseState("Movies: Collections", [first], library, source="library:collections", next_start=1, total=3)
+        ]
+
+        app.load_more_media()
+        await pilot.pause(0.5)
+
+        state = app.browsing_stack[-1]
+        assert service.entry_calls == [(library, "collections", 1, 30)]
         assert [item.title for item in state.items] == ["First", "Second"]
         assert state.next_start == 2
         assert state.has_more

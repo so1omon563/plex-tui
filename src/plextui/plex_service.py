@@ -58,6 +58,34 @@ class PlexService:
         raw_items = library.raw.all(maxresults=size, container_start=start, container_size=size)
         return media_page_from_raw(raw_items, start)
 
+    def library_entry_page(
+        self,
+        library: LibraryItem,
+        entry: str = "library",
+        start: int = 0,
+        size: int = DEFAULT_PAGE_SIZE,
+    ) -> MediaPage:
+        if entry == "library":
+            return self.library_page(library, start, size)
+        if entry == "recommended":
+            raw_items = list(library.raw.hubs())
+            return sliced_media_page(raw_items, start, size)
+        if entry == "collections":
+            raw_items = library.raw.collections(
+                maxresults=size,
+                container_start=start,
+                container_size=size,
+            )
+            return media_page_from_raw(raw_items, start)
+        if entry == "playlists":
+            raw_items = library.raw.playlists(
+                maxresults=size,
+                container_start=start,
+                container_size=size,
+            )
+            return media_page_from_raw(raw_items, start)
+        raise ValueError(f"unknown library entry: {entry}")
+
     def library_items(self, library: LibraryItem) -> list[MediaItem]:
         return self.library_page(library, 0, DEFAULT_PAGE_SIZE).items
 
@@ -111,6 +139,11 @@ def media_page_from_raw(raw_items: Iterable[Any], start: int) -> MediaPage:
     if total is None:
         total = start + len(items)
     return MediaPage(items=items, start=start, total=int(total))
+
+
+def sliced_media_page(raw_items: list[Any], start: int, size: int) -> MediaPage:
+    items = [to_media_item(item) for item in raw_items[start:start + size]]
+    return MediaPage(items=items, start=start, total=len(raw_items))
 
 
 def to_media_item(raw: Any) -> MediaItem:

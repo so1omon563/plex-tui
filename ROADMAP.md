@@ -48,8 +48,9 @@
   data; watch for real-library edge cases around ordering and pagination.
 - Selective library visibility is available in Settings so noisy Plex libraries
   can be hidden from the sidebar.
-- Add optional library submenus for Library, Recommended, Collections,
-  Playlists, and Categories where Plex exposes them.
+- Library submenus are available for Library, Recommended, Collections, and
+  Playlists. Revisit Categories after mapping PlexAPI support against a real
+  server response.
 - Add alphabet navigation for large full-library views.
 - Add explicit playback quality controls for direct/default playback versus
   selected transcode qualities.

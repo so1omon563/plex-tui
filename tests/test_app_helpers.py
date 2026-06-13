@@ -6,12 +6,13 @@ from types import SimpleNamespace
 
 from PIL import Image
 from rich.align import Align
-from rich.console import Group
+from rich.console import Console, Group
 from rich.text import Text
 
 from plextui.app import (
     BrowseState,
     LoadMoreRow,
+    LibraryMenuRow,
     MediaGrid,
     MediaRow,
     PlexTuiApp,
@@ -26,6 +27,7 @@ from plextui.app import (
     grid_geometry_for_size,
     grid_page_key,
     grid_status,
+    library_menu_rows,
     media_row,
     media_rows,
     next_detail_artwork_mode,
@@ -690,8 +692,39 @@ def test_grid_card_marks_container_items_as_openable():
 
     rendered = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"))
     rendered_text = "\n".join(str(renderable) for renderable in rendered.renderables)
+    placeholder = rendered.renderables[0]
 
     assert "open" in rendered_text
+    assert any("[season]" in str(line) for line in placeholder.renderables)
+
+
+def test_grid_card_uses_semantic_placeholder_for_hub_rows():
+    media = MediaItem("Recently Added", "", "hub", "1", False, object(), artwork_path="")
+
+    rendered = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"))
+    rendered_text = "\n".join(str(renderable) for renderable in rendered.renderables)
+    placeholder = rendered.renderables[0]
+
+    assert any("[hub]" in str(line) for line in placeholder.renderables)
+    assert "open" in rendered_text
+
+
+def test_render_media_grid_text_snapshot_for_media_and_hub_placeholders():
+    config = AppConfig("http://plex", "token", "client", grid_density="compact")
+    items = [
+        MediaItem("Blade Runner", "1982", "movie", "movie-1", True, object(), artwork_path=""),
+        MediaItem("Recently Added", "", "hub", "hub-1", False, object(), artwork_path=""),
+    ]
+
+    rendered = render_media_grid(items, "hub-1", config, columns=2)
+    text = render_plain(rendered, width=80)
+
+    assert "[no poster]" in text
+    assert "[hub]" in text
+    assert "Blade Runner" in text
+    assert "Recently Added" in text
+    assert "playable" in text
+    assert "▶ selected" in text
 
 
 def test_grid_rows_are_centered_in_media_pane():
@@ -749,6 +782,7 @@ def test_render_help_groups_key_bindings():
     assert "Settings" in rendered
     assert "Paths" in rendered
     assert "Debug log:" in rendered
+    assert "d: focus details" in rendered
     assert "v: toggle list/grid view" in rendered
     assert "left/right: move across grid cards" in rendered
     assert "PLEX_TUI_ARTWORK_LOG=1" in rendered
@@ -873,5 +907,23 @@ def test_context_hints_for_media_and_load_more():
     assert context_hint(MediaRow(container)) == "Media: Enter opens item"
     assert context_hint(grid) == "Grid: Arrows/page select card / p plays / a audio / s subtitles"
     assert context_hint(LoadMoreRow(100, 200)) == "Media: Enter loads next page"
+    assert context_hint(LibraryMenuRow(LibraryItem("Movies", "1", "movie", object()), "library", "Library", "All items")) == (
+        "Library: Enter opens browse mode"
+    )
     assert context_hint(setting_action) == "Settings: Enter or Left-Right cycles"
     assert context_hint(setting_value) == "Settings: Current value"
+
+
+def test_library_menu_rows_list_supported_entrypoints():
+    library = LibraryItem("Movies", "1", "movie", object())
+
+    rows = library_menu_rows(library)
+
+    assert [row.entry for row in rows] == ["library", "recommended", "collections", "playlists"]
+    assert [row.label_text for row in rows] == ["Library", "Recommended", "Collections", "Playlists"]
+
+
+def render_plain(renderable: object, width: int = 100) -> str:
+    console = Console(width=width, record=True, color_system=None)
+    console.print(renderable)
+    return console.export_text(styles=False)
