@@ -692,7 +692,20 @@ def test_grid_card_marks_container_items_as_openable():
 
     rendered = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"))
     rendered_text = "\n".join(str(renderable) for renderable in rendered.renderables)
+    placeholder = rendered.renderables[0]
 
+    assert "open" in rendered_text
+    assert any("[season]" in str(line) for line in placeholder.renderables)
+
+
+def test_grid_card_uses_semantic_placeholder_for_hub_rows():
+    media = MediaItem("Recently Added", "", "hub", "1", False, object(), artwork_path="")
+
+    rendered = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"))
+    rendered_text = "\n".join(str(renderable) for renderable in rendered.renderables)
+    placeholder = rendered.renderables[0]
+
+    assert any("[hub]" in str(line) for line in placeholder.renderables)
     assert "open" in rendered_text
 
 

@@ -2414,8 +2414,7 @@ def render_media_grid_card(
     artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
     artwork = copy_renderable(artwork)
     if artwork is None:
-        status = "poster" if media.artwork_path else "no poster"
-        artwork = grid_artwork_placeholder(status, config)
+        artwork = grid_artwork_placeholder(grid_artwork_placeholder_label(media), config)
     else:
         artwork = center_renderable_lines(artwork, card_width)
     footer = grid_card_footer(media, selected)
@@ -2438,6 +2437,24 @@ def grid_artwork_placeholder(status: str, config: AppConfig) -> Group:
     for index in range(height):
         lines.append(grid_card_line(label, width, "dim") if index == midpoint else Text(blank, style="dim"))
     return Group(*lines)
+
+
+def grid_artwork_placeholder_label(media: MediaItem) -> str:
+    if media.artwork_path:
+        return "poster"
+    if media.playable:
+        return "no poster"
+    labels = {
+        "hub": "hub",
+        "collection": "collection",
+        "playlist": "playlist",
+        "show": "show",
+        "season": "season",
+        "artist": "artist",
+        "album": "album",
+        "photoalbum": "album",
+    }
+    return labels.get(media.kind, "browse")
 
 
 def grid_card_text(value: str, config: AppConfig) -> str:
