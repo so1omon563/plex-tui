@@ -63,6 +63,10 @@ def test_open_library_shows_browse_modes():
     asyncio.run(run_library_menu_check())
 
 
+def test_sidebar_library_selection_shows_browse_modes():
+    asyncio.run(run_sidebar_library_selection_menu_check())
+
+
 def test_back_from_library_entry_returns_to_browse_modes():
     asyncio.run(run_library_entry_back_to_menu_check())
 
@@ -643,6 +647,31 @@ async def run_library_menu_check():
         library = LibraryItem("Movies", "1", "movie", object())
 
         app.open_library_menu(library)
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert [row.label_text for row in rows if isinstance(row, LibraryMenuRow)] == [
+            "Library",
+            "Recommended",
+            "Collections",
+            "Playlists",
+        ]
+        assert app.selected_library == library
+        assert app.browsing_stack == []
+
+
+async def run_sidebar_library_selection_menu_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        library = LibraryItem("Movies", "1", "movie", object())
+        app.populate_libraries([library])
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+        await pilot.press("down")
+        await pilot.press("enter")
         await pilot.pause(0.2)
 
         rows = list(app.query_one("#media").children)

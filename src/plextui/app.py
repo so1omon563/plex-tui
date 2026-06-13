@@ -684,7 +684,7 @@ class PlexTuiApp(App[None]):
         if isinstance(row, ContinueWatchingRow):
             self.open_continue_watching()
         elif isinstance(row, LibraryRow):
-            self.open_library_entry(row.library)
+            self.open_library_menu(row.library)
         elif isinstance(row, LibraryMenuRow):
             self.open_library_entry(row.library, row.entry, row.label_text)
         elif isinstance(row, MediaRow):
