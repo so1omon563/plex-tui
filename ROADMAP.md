@@ -53,8 +53,8 @@
   server response.
 - Alphabet navigation is available for loaded browse lists and grids with
   previous/next section jumps.
-- Add explicit playback quality controls for direct/default playback versus
-  selected transcode qualities.
+- Explicit playback controls are available for direct/default playback versus
+  selected transcode quality presets.
 - Later design passes: profile switching with auto sign-in, visible movie
   edition handling, and in-playback audio/subtitle switching through mpv IPC.
 

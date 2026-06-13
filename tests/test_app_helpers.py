@@ -38,6 +38,8 @@ from plextui.app import (
     next_grid_density,
     next_media_view,
     next_mpv_window_size,
+    next_playback_mode,
+    next_transcode_quality,
     playback_failure_hints,
     playback_exit_status,
     recent_debug_log_lines,
@@ -223,6 +225,8 @@ def test_render_settings_includes_stream_preferences():
     assert "Media View: List" in rendered
     assert "Theme: textual-light" in rendered
     assert "mpv Window Size: Default" in rendered
+    assert "Playback Mode: Auto / direct default" in rendered
+    assert "Transcode Quality: Original" in rendered
     assert "Page Size: 250" in rendered
     assert "Auto-load Threshold: 25" in rendered
     assert "Grid Prefetch Pages: 4" in rendered
@@ -252,6 +256,8 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "Diagnostics" in labels
     assert "  Server: http://plex" in labels
     assert "› Subtitle Mode: Auto  (cycle)" in labels
+    assert "› Playback Mode: Auto / direct default  (cycle)" in labels
+    assert "› Transcode Quality: Original  (cycle)" in labels
     assert "› mpv Window Size: 1280x720  (edit)" in labels
     assert "› Grid Density: Comfortable  (cycle)" in labels
     assert "› Artwork Renderer: Block  (cycle)" in labels
@@ -365,6 +371,16 @@ def test_next_artwork_renderer_cycles_values():
     assert next_artwork_renderer("bad") == "block"
 
 
+def test_playback_quality_helpers_cycle_values():
+    assert next_playback_mode("auto") == "transcode"
+    assert next_playback_mode("transcode") == "auto"
+    assert next_transcode_quality("original") == "1080p_8"
+    assert next_transcode_quality("1080p_8") == "720p_4"
+    assert next_transcode_quality("720p_4") == "480p_2"
+    assert next_transcode_quality("480p_2") == "original"
+    assert next_transcode_quality("bad") == "original"
+
+
 def test_render_playback_status_includes_active_launch_context():
     config = AppConfig(
         base_url="http://plex",
@@ -398,6 +414,8 @@ def test_render_playback_details_includes_streams_and_diagnostics():
         preferred_subtitle_language="eng",
         subtitle_mode="preferred",
         mpv_window_size="1280x720",
+        playback_mode="transcode",
+        transcode_quality="720p_4",
     )
     player = SimpleNamespace(start_offset_ms=0, stream_mode="transcode", subtitle_count=1)
 
@@ -412,6 +430,8 @@ def test_render_playback_details_includes_streams_and_diagnostics():
     assert "Playback" in rendered
     assert "Status: Playing" in rendered
     assert "Mode: transcode" in rendered
+    assert "Playback preference: Force transcode" in rendered
+    assert "Transcode quality: 720p 4 Mbps" in rendered
     assert "Resume: start" in rendered
     assert "Subtitles available: 1" in rendered
     assert "mpv window: 1280x720" in rendered
@@ -588,12 +608,24 @@ def test_effective_stream_preferences_report_found_missing_and_none():
     missing = AppConfig("http://plex", "token", "client", preferred_audio_language="spa", preferred_subtitle_language="fre", subtitle_mode="preferred")
     none = AppConfig("http://plex", "token", "client", subtitle_mode="none")
 
-    assert effective_stream_preference_rows(Raw(), found) == [("Audio", "Japanese"), ("Subtitles", "English")]
+    assert effective_stream_preference_rows(Raw(), found) == [
+        ("Playback Mode", "Auto / direct default"),
+        ("Transcode Quality", "Original"),
+        ("Audio", "Japanese"),
+        ("Subtitles", "English"),
+    ]
     assert effective_stream_preference_rows(Raw(), missing) == [
+        ("Playback Mode", "Auto / direct default"),
+        ("Transcode Quality", "Original"),
         ("Audio", "spa not found, Plex/default"),
         ("Subtitles", "fre not found, Plex/default"),
     ]
-    assert effective_stream_preference_rows(Raw(), none) == [("Audio", "Plex/default"), ("Subtitles", "none")]
+    assert effective_stream_preference_rows(Raw(), none) == [
+        ("Playback Mode", "Auto / direct default"),
+        ("Transcode Quality", "Original"),
+        ("Audio", "Plex/default"),
+        ("Subtitles", "none"),
+    ]
 
 
 def test_render_details_includes_effective_playback_rows():
