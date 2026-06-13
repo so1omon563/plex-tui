@@ -124,9 +124,9 @@ def test_render_details_includes_subtitles_and_summary():
 
 def test_render_details_uses_clear_empty_states_and_wraps_summary():
     details = MediaDetails(
-        title="Long Movie",
+        title="A Long Movie Title That Should Stay Inside The Details Pane",
         kind="movie",
-        facts=[],
+        facts=["movie", "2024", "a very long studio name that should wrap with the facts line"],
         metadata=[],
         audio=[],
         subtitles=[],
@@ -140,9 +140,10 @@ def test_render_details_uses_clear_empty_states_and_wraps_summary():
     assert "No metadata reported" in rendered
     assert "No audio tracks reported" in rendered
     assert "No subtitle tracks reported" in rendered
+    assert all(len(line) <= 38 for line in rendered.splitlines())
     summary_lines = rendered.split("Summary\n", 1)[1].splitlines()
     assert len(summary_lines) > 1
-    assert all(len(line) <= 76 for line in summary_lines if line)
+    assert all(len(line) <= 38 for line in summary_lines if line)
 
 
 def test_render_settings_hides_tokens():
@@ -628,6 +629,16 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
     assert "▶ selected" in selected_text
     assert "┏" not in selected_text
     assert "▶ selected" not in unselected_text
+    assert "playable" in unselected_text
+
+
+def test_grid_card_marks_container_items_as_openable():
+    media = MediaItem("Season 1", "10 episodes", "season", "1", False, object(), artwork_path="")
+
+    rendered = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"))
+    rendered_text = "\n".join(str(renderable) for renderable in rendered.renderables)
+
+    assert "open" in rendered_text
 
 
 def test_grid_rows_are_centered_in_media_pane():
