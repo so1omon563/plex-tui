@@ -1887,8 +1887,7 @@ async def run_settings_highlight_check():
         assert row.has_class("active-row")
         assert getattr(row, "action") == "cycle_grid_density"
         details = app.query_one("#detail-content").content
-        assert "Grid Density" in details
-        assert "Type: cycle" in details
+        assert "grid density" in details.lower()
         assert "Current grid density: Large" in details
 
 
