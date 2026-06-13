@@ -73,7 +73,7 @@ GRID_DETAIL_REFRESH_DELAY = 0.65
 LIST_DETAIL_REFRESH_DELAY = 0.35
 DETAIL_ARTWORK_REFRESH_DELAY = 0.55
 GRID_PREFETCH_WORKERS = 3
-DETAIL_SUMMARY_WIDTH = 76
+DETAIL_SUMMARY_WIDTH = 38
 
 
 @dataclass
@@ -2164,15 +2164,14 @@ def render_details(details: object, config: AppConfig | None = None, raw: object
 
 def render_detail_header(details: object, config: AppConfig | None = None) -> list[str]:
     title = getattr(details, "title")
+    title_lines = textwrap.wrap(title, width=DETAIL_SUMMARY_WIDTH) or [title]
     facts = [str(fact) for fact in getattr(details, "facts", []) if fact]
     playable = "Ready to play" if getattr(details, "playable") else "Opens more items"
     artwork = artwork_status(details, config)
-    lines = [
-        title,
-        "-" * min(max(len(title), 8), 36),
-    ]
+    title_width = max(len(line) for line in title_lines)
+    lines = [*title_lines, "-" * min(max(title_width, 8), DETAIL_SUMMARY_WIDTH)]
     if facts:
-        lines.append(" / ".join(facts))
+        lines.extend(textwrap.wrap(" / ".join(facts), width=DETAIL_SUMMARY_WIDTH) or [""])
     lines.extend([
         "",
         "Playback",
@@ -2255,9 +2254,8 @@ def render_media_grid_card(
 ) -> object:
     title_style = "bold #e5a00d" if selected else "bold"
     card_width = grid_card_width(config)
-    content_width = grid_card_content_width(config)
-    title = truncate_text(media.title, content_width)
-    subtitle = truncate_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), content_width)
+    title = grid_card_text(media.title, config)
+    subtitle = grid_card_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), config)
     artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
     artwork = copy_renderable(artwork)
     if artwork is None:
@@ -2265,12 +2263,12 @@ def render_media_grid_card(
         artwork = grid_artwork_placeholder(status, config)
     else:
         artwork = center_renderable_lines(artwork, card_width)
-    footer = "▶ selected" if selected else ""
+    footer = grid_card_footer(media, selected)
     return Group(
         artwork,
-        Text(title.center(card_width), style=title_style),
-        Text(subtitle.center(card_width), style="dim"),
-        Text(footer.center(card_width), style="#e5a00d" if selected else "dim"),
+        grid_card_line(title, card_width, title_style),
+        grid_card_line(subtitle, card_width, "dim"),
+        grid_card_line(footer, card_width, "#e5a00d" if selected else "dim"),
     )
 
 
@@ -2278,13 +2276,29 @@ def grid_artwork_placeholder(status: str, config: AppConfig) -> Group:
     spec = grid_density_spec(config)
     width = grid_card_width(config)
     height = int(spec["art_height"])
-    label = truncate_text(f"[{status}]", width).center(width)
+    label = truncate_text(f"[{status}]", grid_card_content_width(config))
     blank = " " * width
     lines = []
     midpoint = height // 2
     for index in range(height):
-        lines.append(Text(label if index == midpoint else blank, style="dim"))
+        lines.append(grid_card_line(label, width, "dim") if index == midpoint else Text(blank, style="dim"))
     return Group(*lines)
+
+
+def grid_card_text(value: str, config: AppConfig) -> str:
+    return truncate_text(value.strip(), grid_card_content_width(config))
+
+
+def grid_card_footer(media: MediaItem, selected: bool) -> str:
+    if selected:
+        return "▶ selected"
+    if media.playable:
+        return "playable"
+    return "open"
+
+
+def grid_card_line(value: str, width: int, style: str) -> Text:
+    return Text(value.center(width), style=style)
 
 
 def center_renderable_lines(renderable: object, width: int) -> object:
