@@ -1,6 +1,7 @@
-.PHONY: install-dev run test compile smoke build check-package check-release check clean
+.PHONY: install-dev run test compile smoke build check-package check-release stage-release check clean
 
 PYTHON ?= .venv/bin/python
+BUMP ?= patch
 
 install-dev:
 	$(PYTHON) -m pip install -e ".[dev]"
@@ -25,6 +26,9 @@ check-package: build
 
 check-release:
 	$(PYTHON) scripts/check_release.py
+
+stage-release:
+	$(PYTHON) scripts/stage_release.py --bump $(BUMP)
 
 check: smoke test compile check-release check-package
 

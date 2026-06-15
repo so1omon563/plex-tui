@@ -29,6 +29,14 @@ assert UPDATE_HOMEBREW_SPEC.loader is not None
 sys.modules[UPDATE_HOMEBREW_SPEC.name] = update_homebrew_formula
 UPDATE_HOMEBREW_SPEC.loader.exec_module(update_homebrew_formula)
 
+STAGE_RELEASE_PATH = Path(__file__).resolve().parents[1] / "scripts/stage_release.py"
+STAGE_RELEASE_SPEC = importlib.util.spec_from_file_location("stage_release", STAGE_RELEASE_PATH)
+assert STAGE_RELEASE_SPEC is not None
+stage_release = importlib.util.module_from_spec(STAGE_RELEASE_SPEC)
+assert STAGE_RELEASE_SPEC.loader is not None
+sys.modules[STAGE_RELEASE_SPEC.name] = stage_release
+STAGE_RELEASE_SPEC.loader.exec_module(stage_release)
+
 
 def test_release_checks_pass_for_repository():
     root = Path(__file__).resolve().parents[1]
@@ -77,6 +85,78 @@ jobs:
     assert not result.ok
     assert "custom-semver-bumper" in result.message
     assert "release-creator" in result.message
+
+
+def test_stage_release_updates_version_files_and_moves_changelog(tmp_path):
+    write_release_fixture(tmp_path)
+    (tmp_path / "CHANGELOG.md").write_text(
+        "\n".join(
+            [
+                "# Changelog",
+                "",
+                "## Unreleased",
+                "",
+                "- Improved release staging.",
+                "",
+                "## 0.2.1 - 2026-06-11",
+                "",
+                "- Previous entry.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    init_git_fixture(tmp_path, "v0.2.1")
+
+    stage_release.stage_release(tmp_path, "patch", None, "2026-06-15", fetch_tags=False)
+
+    assert check_release.read_pyproject_version(tmp_path / "pyproject.toml") == "0.2.2"
+    assert check_release.read_init_version(tmp_path / "src/plextui/__init__.py") == "0.2.2"
+    assert (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8") == "\n".join(
+        [
+            "# Changelog",
+            "",
+            "## Unreleased",
+            "",
+            "## 0.2.2 - 2026-06-15",
+            "",
+            "- Improved release staging.",
+            "",
+            "## 0.2.1 - 2026-06-11",
+            "",
+            "- Previous entry.",
+            "",
+        ]
+    )
+
+
+def test_stage_release_requires_unreleased_changelog_entries(tmp_path):
+    write_release_fixture(tmp_path)
+    (tmp_path / "CHANGELOG.md").write_text(
+        "\n".join(
+            [
+                "# Changelog",
+                "",
+                "## Unreleased",
+                "",
+                "## 0.2.1 - 2026-06-11",
+                "",
+                "- Previous entry.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    init_git_fixture(tmp_path, "v0.2.1")
+
+    try:
+        stage_release.stage_release(tmp_path, "patch", None, "2026-06-15", fetch_tags=False)
+    except stage_release.ReleaseStageError as exc:
+        assert "Unreleased section is empty" in str(exc)
+    else:
+        raise AssertionError("expected empty changelog to fail release staging")
+
+    assert check_release.read_pyproject_version(tmp_path / "pyproject.toml") == "0.2.1"
 
 
 def test_update_aur_package_updates_pkgbuild(tmp_path):
@@ -208,3 +288,14 @@ def write_release_fixture(
         (Path(__file__).resolve().parents[1] / ".github/workflows/bump.yml").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
+
+
+def init_git_fixture(root: Path, tag: str) -> None:
+    import subprocess
+
+    subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "fixture"], cwd=root, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "tag", tag], cwd=root, check=True)

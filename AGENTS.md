@@ -87,8 +87,8 @@ contracts for these durable areas:
   config/auth, mpv playback, and smoke entry points.
 - `tests/`: pytest coverage for app helpers/navigation, service mapping,
   config/auth/player/artwork behavior, and release workflow checks.
-- `scripts/`: release/package maintenance scripts used by checks and
-  post-release automation.
+- `scripts/`: release/package maintenance scripts used by checks, deterministic
+  release staging, and post-release automation.
 - `packaging/`: Homebrew and AUR notes plus source AUR metadata.
 - `docs/`: research notes and README visual assets.
 - Root docs and config examples: README, PACKAGING, RELEASE, ROADMAP,
@@ -126,6 +126,7 @@ make test          # run pytest
 make compile       # compile src and tests
 make build         # build sdist and wheel
 make check-package # build and validate package metadata
+make stage-release # stage version and changelog updates for next release
 make check         # smoke, tests, compile, and package validation
 ```
 
@@ -168,6 +169,11 @@ Git history uses short imperative subjects, such as `Speed up grid navigation`
 and `Polish settings and grid navigation`. Keep commits scoped to one logical
 change and include docs/tests with behavior changes.
 
+For behavior changes that users or future release notes should know about, add
+or update the `CHANGELOG.md` `Unreleased` section as part of the work. Do not
+leave release-note reconstruction to the release staging step unless the change
+is intentionally internal-only and that reason is clear in the PR.
+
 Pull requests should include:
 
 - A concise summary of user-visible behavior.
@@ -198,6 +204,14 @@ When preparing or estimating a release version, fetch remote tags first with
 only local tags or the latest GitHub Release. Non-release PRs with `#patch`,
 `#minor`, or `#major` still create tags, so release prep files should match the
 tag that the release PR merge will create.
+
+Use `make stage-release BUMP=patch`, `BUMP=minor`, or `BUMP=major` to stage a
+planned release. Agents must use this script-backed target for normal release
+prep instead of hand-editing version files and moving changelog entries. The
+target fetches tags, chooses the next version from the latest semver tag, updates
+`pyproject.toml`, `src/plextui/__init__.py`, and `CHANGELOG.md`, and fails if
+`CHANGELOG.md` has no `Unreleased` notes to release. After staging, run
+`make check-release` and the relevant validation before opening the release PR.
 
 GitHub Release publishing is controlled by release markers in PR titles only:
 `#release`, `#publish`, or `#ship`. Keep those markers out of ordinary PR titles
