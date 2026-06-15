@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Documented Homebrew 6 tap trust requirements for installing from the
+  `so1omon563/plex-tui` tap.
+
 ## 0.3.31 - 2026-06-15
 
 - Polished media type labels so list and grid rows describe Plex media kinds
