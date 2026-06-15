@@ -13,6 +13,34 @@ from .models import LibraryItem, MediaDetails, MediaItem
 PLAYABLE_TYPES = {"movie", "episode", "track", "clip"}
 DEFAULT_PAGE_SIZE = 100
 
+KIND_LABELS: dict[str, str] = {
+    "movie": "Movie",
+    "show": "TV Show",
+    "season": "Season",
+    "episode": "Episode",
+    "track": "Track",
+    "album": "Album",
+    "artist": "Artist",
+    "collection": "Collection",
+    "playlist": "Playlist",
+    "clip": "Clip",
+    "photoalbum": "Photo Album",
+}
+
+
+def kind_label(kind: str) -> str:
+    return KIND_LABELS.get(kind, kind.capitalize())
+
+
+def rating_compact(raw: Any) -> str:
+    rating = getattr(raw, "audienceRating", None) or getattr(raw, "rating", None)
+    if rating is None:
+        return ""
+    try:
+        return f"Rating {float(rating):.1f}"
+    except (TypeError, ValueError):
+        return f"Rating {rating}"
+
 
 @dataclass(frozen=True)
 class MediaPage:
@@ -166,26 +194,23 @@ def to_media_item(raw: Any) -> MediaItem:
 
 def media_details(item: MediaItem) -> MediaDetails:
     raw = item.raw
-    facts = [item.kind]
+    facts = [kind_label(item.kind)]
     for value in (
         getattr(raw, "year", None),
         format_duration(getattr(raw, "duration", None)),
         watched_state(raw),
         episode_label(raw),
-        subtitle_label(raw),
         getattr(raw, "contentRating", None),
-        rating_label(raw),
+        rating_compact(raw),
+        getattr(raw, "grandparentTitle", None),
+        getattr(raw, "parentTitle", None),
+        getattr(raw, "studio", None),
     ):
         if value:
             facts.append(str(value))
-
-    for label, value in (
-        ("Show", getattr(raw, "grandparentTitle", None)),
-        ("Season", getattr(raw, "parentTitle", None)),
-        ("Studio", getattr(raw, "studio", None)),
-    ):
-        if value:
-            facts.append(f"{label}: {value}")
+    sub_count = subtitle_label(raw)
+    if sub_count:
+        facts.append(sub_count)
 
     return MediaDetails(
         title=item.title,

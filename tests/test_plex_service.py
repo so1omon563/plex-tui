@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from plextui.models import LibraryItem, MediaItem
-from plextui.plex_service import PlexService, media_details, progress_label, row_progress_marker, watched_state
+from plextui.plex_service import PlexService, kind_label, media_details, progress_label, row_progress_marker, watched_state
 
 
 class RawItem:
@@ -54,6 +54,9 @@ class DetailedRawItem(RawItem):
     thumb = "/library/metadata/movie/thumb"
     duration = 600000
     viewOffset = 120000
+    audienceRating = 8.5
+    contentRating = "PG-13"
+    studio = "Studio"
 
     def iterParts(self):
         return [Part()]
@@ -197,6 +200,15 @@ def test_media_details_include_audio_and_subtitle_locations():
 
     details = media_details(item)
 
+    assert details.facts == [
+        "Movie",
+        "10m",
+        "in progress",
+        "PG-13",
+        "Rating 8.5",
+        "Studio",
+        "2 subtitles",
+    ]
     assert ("Status", "in progress") in details.metadata
     assert ("Progress", "2m / 10m (20%)") in details.metadata
     assert details.audio == ["Japanese (aac, 2ch, selected)"]
@@ -205,6 +217,13 @@ def test_media_details_include_audio_and_subtitle_locations():
         "Signs (vobsub, embedded, forced)",
     ]
     assert details.artwork_path == "/library/metadata/show/thumb"
+
+
+def test_kind_label_humanizes_known_and_unknown_media_types():
+    assert kind_label("movie") == "Movie"
+    assert kind_label("show") == "TV Show"
+    assert kind_label("photoalbum") == "Photo Album"
+    assert kind_label("weird") == "Weird"
 
 
 def test_progress_helpers_report_watched_resume_and_unwatched():
