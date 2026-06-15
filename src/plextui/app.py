@@ -286,8 +286,10 @@ class LoadMoreRow(ListItem):
 
 
 class ServerRow(ListItem):
-    def __init__(self, choice: ServerChoice) -> None:
-        super().__init__(Label(f"{choice.name}  {choice.uri}"))
+    def __init__(self, choice: ServerChoice, is_recommended: bool = False) -> None:
+        marker = "* " if is_recommended else "  "
+        suffix = " (recommended)" if is_recommended else ""
+        super().__init__(Label(f"{marker}{choice.name}  {choice.uri}  [{choice.row_label}]{suffix}"))
         self.choice = choice
 
 
@@ -668,10 +670,10 @@ class PlexTuiApp(App[None]):
             self.set_media_title("Select Server")
             view = self.show_media_list()
             view.clear()
-            for choice in choices:
-                view.append(ServerRow(choice))
+            for index, choice in enumerate(choices):
+                view.append(ServerRow(choice, is_recommended=index == 0))
             view.focus()
-            self.show_detail_text("Choose the connection you want this app to use.")
+            self.show_detail_text("Choose the connection you want this app to use. The first option is the recommended starting point.")
             self.set_status("Select a Plex server connection and press Enter")
 
         self.call_from_thread(show_choices)
@@ -739,7 +741,17 @@ class PlexTuiApp(App[None]):
             self.set_status(context_hint(row))
         elif isinstance(row, ServerRow):
             mark_active_row(event.list_view, row)
-            self.show_detail_text(f"{row.choice.name}\n\n{row.choice.uri}\n\nSource: {row.choice.source}")
+            self.show_detail_text(
+                "\n".join(
+                    [
+                        row.choice.name,
+                        "",
+                        row.choice.uri,
+                        f"Type: {row.choice.connection_label}",
+                        f"Source: {row.choice.source}",
+                    ]
+                )
+            )
             self.set_status(context_hint(row))
         elif isinstance(row, StreamRow):
             mark_active_row(event.list_view, row)
@@ -2282,12 +2294,13 @@ class PlexTuiApp(App[None]):
 
     def show_error(self, text: str) -> None:
         config_hint = f"Config: {config_path()}"
+        recovery_hint = "Use Settings > Plex > Relogin with Plex to try another server URL."
         self.set_status(f"Error: {text}")
         self.set_media_title("Error")
         view = self.show_media_list()
         view.clear()
-        view.append(ListItem(Label(f"{text}\n{config_hint}")))
-        self.show_detail_text(config_hint)
+        view.append(ListItem(Label(f"{text}\n{config_hint}\n{recovery_hint}")))
+        self.show_detail_text(f"{config_hint}\n{recovery_hint}")
 
     def show_playback_error(self, text: str) -> None:
         self.detail_refresh_token += 1
