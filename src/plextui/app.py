@@ -63,7 +63,7 @@ from .player import (
     subtitle_choices,
     transcode_quality_label,
 )
-from .plex_service import PlexService, media_details, row_progress_marker
+from .plex_service import PlexService, kind_label, media_details, row_progress_marker
 GRID_CARD_GAP = 2
 GRID_DENSITY_SPECS = {
     "compact": {"width": 18, "content_width": 15, "art_width": 14, "art_height": 7, "height": 10, "max_columns": 6},
@@ -125,7 +125,7 @@ class LibraryMenuRow(ListItem):
 class MediaRow(ListItem):
     def __init__(self, media: MediaItem) -> None:
         marker = "▶" if media.playable else "›"
-        subtitle = f" [{media.kind}] {media.subtitle}".rstrip()
+        subtitle = f" [{kind_label(media.kind)}] {media.subtitle}".rstrip()
         progress = row_progress_marker(media.raw)
         progress_text = f" {progress}" if progress else ""
         self.label_text = f"{marker} {media.title}{subtitle}{progress_text}"
@@ -2481,7 +2481,7 @@ def render_media_grid_card(
     title_style = "bold #e5a00d" if selected else "bold"
     card_width = grid_card_width(config)
     title = grid_card_text(media.title, config)
-    subtitle = grid_card_text("  ".join(bit for bit in (media.kind, media.subtitle) if bit), config)
+    subtitle = grid_card_text("  ".join(bit for bit in (kind_label(media.kind), media.subtitle) if bit), config)
     artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
     artwork = copy_renderable(artwork)
     if artwork is None:

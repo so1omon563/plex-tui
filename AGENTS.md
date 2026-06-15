@@ -220,3 +220,11 @@ GitHub CLI notes:
 Never commit real Plex tokens, account tokens, debug logs, or local config files.
 Use `config.example.toml` for examples. Logs should redact tokens; preserve that
 behavior when changing playback or request diagnostics.
+
+
+## Optional Local Tooling
+
+If `rtk` is installed, it can be used to reduce noisy command output while
+preserving command behavior, for example `rtk git status`, `rtk git diff`, or
+`rtk pytest tests/`. Do not require `rtk` for repository work; fall back to the
+normal command when it is unavailable or when raw debugging output is needed.

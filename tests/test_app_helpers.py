@@ -97,7 +97,7 @@ def test_render_details_includes_subtitles_and_summary():
     details = MediaDetails(
         title="Title",
         kind="movie",
-        facts=["movie"],
+        facts=["Movie"],
         metadata=[("Type", "movie")],
         audio=["Japanese (aac, 2ch, selected)"],
         subtitles=["English (srt, selected)"],
@@ -119,7 +119,7 @@ def test_render_details_includes_subtitles_and_summary():
     )
 
     assert "Title\n--------" in rendered
-    assert "movie" in rendered
+    assert "Movie" in rendered
     assert "Playback\nStatus: Ready to play" in rendered
     assert "Action: Press p to play" in rendered
     assert "Metadata" in rendered
@@ -138,7 +138,7 @@ def test_render_details_uses_clear_empty_states_and_wraps_summary():
     details = MediaDetails(
         title="A Long Movie Title That Should Stay Inside The Details Pane",
         kind="movie",
-        facts=["movie", "2024", "a very long studio name that should wrap with the facts line"],
+        facts=["Movie", "2024", "a very long studio name that should wrap with the facts line"],
         metadata=[],
         audio=[],
         subtitles=[],
@@ -163,7 +163,7 @@ def test_render_details_limits_dense_stream_lists_and_wraps_rows():
     details = MediaDetails(
         title="Movie",
         kind="movie",
-        facts=["movie"],
+        facts=["Movie"],
         metadata=[("Studio", "A very long studio name that should wrap cleanly inside the details pane")],
         audio=[f"Audio Track {index} with a long descriptive label" for index in range(7)],
         subtitles=[f"Subtitle Track {index} with a long descriptive label" for index in range(6)],
@@ -632,7 +632,7 @@ def test_render_details_includes_effective_playback_rows():
     details = MediaDetails(
         title="Title",
         kind="movie",
-        facts=["movie"],
+        facts=["Movie"],
         metadata=[],
         audio=[],
         subtitles=[],
@@ -717,6 +717,7 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
     selected_text = "\n".join(str(renderable) for renderable in selected.renderables)
     unselected_text = "\n".join(str(renderable) for renderable in unselected.renderables)
     assert "Movie" in selected_text
+    assert "Movie  2024" in selected_text
     assert "▶ selected" in selected_text
     assert "┏" not in selected_text
     assert "▶ selected" not in unselected_text
@@ -731,6 +732,7 @@ def test_grid_card_marks_container_items_as_openable():
     placeholder = rendered.renderables[0]
 
     assert "open" in rendered_text
+    assert "Season  10 episodes" in rendered_text
     assert any("[season]" in str(line) for line in placeholder.renderables)
 
 
@@ -960,6 +962,7 @@ def test_media_row_includes_progress_marker():
     row = MediaRow(MediaItem("Movie", "2024", "movie", "1", True, PartialRaw()))
 
     assert row.label_text.startswith("▶ Movie")
+    assert "[Movie] 2024" in row.label_text
     assert "[resume 1m]" in row.label_text
 
 
@@ -967,6 +970,7 @@ def test_media_row_marks_container_items():
     row = MediaRow(MediaItem("Show", "2 seasons", "show", "1", False, object()))
 
     assert row.label_text.startswith("› Show")
+    assert "[TV Show] 2 seasons" in row.label_text
 
 
 def test_media_grid_tracks_selection_and_visible_page():
