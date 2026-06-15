@@ -20,9 +20,9 @@ make check
 
 Prepare a release PR:
 
-- Update `version` in `pyproject.toml`.
-- Update `src/plextui/__init__.py`.
-- Move `CHANGELOG.md` entries from `Unreleased` to the release version and date.
+- Confirm `CHANGELOG.md` has accurate `Unreleased` entries for the changes being
+  released. Add or revise those notes before staging the release.
+- Run `make stage-release BUMP=patch`, `BUMP=minor`, or `BUMP=major`.
 - Confirm `README.md`, `PACKAGING.md`, and `config.example.toml` match current behavior.
 - Confirm the Git remote points to `https://github.com/so1omon563/plex-tui`.
 - Make sure the PR title or body includes the right bump marker:
@@ -31,8 +31,11 @@ Prepare a release PR:
   GitHub Release and publish to PyPI.
 
 The semver bumper creates tags from merge metadata, but it does not edit project
-files. Keep the version files and changelog in the PR aligned with the tag the
-merge will create.
+files. `make stage-release` fetches tags, chooses the next version from the
+latest semver tag, updates `pyproject.toml` and `src/plextui/__init__.py`, and
+moves `CHANGELOG.md` `Unreleased` entries into a dated version section. It fails
+when `Unreleased` is empty so release notes are fixed before the release PR is
+opened. Keep the staged files aligned with the tag the merge will create.
 
 Do not update Homebrew or AUR checksums in the release PR. Those checksums depend
 on the tag or published artifact that does not exist until after merge. Handle
