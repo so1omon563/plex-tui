@@ -673,8 +673,8 @@ class PlexTuiApp(App[None]):
             for index, choice in enumerate(choices):
                 view.append(ServerRow(choice, is_recommended=index == 0))
             view.focus()
-            self.show_detail_text("Choose the connection you want this app to use. The first option is the recommended starting point.")
-            self.set_status("Select a Plex server connection and press Enter")
+            self.show_detail_text("Choose the reachable connection you want this app to use. The first option is the recommended starting point.")
+            self.set_status("Select a reachable Plex server connection and press Enter")
 
         self.call_from_thread(show_choices)
 
