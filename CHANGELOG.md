@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made post-release Homebrew publishing wait for PyPI package availability before
+  resolving formula resources.
+
 ## 0.3.37 - 2026-06-15
 
 - Fell back to direct Plex root checks during browser login when PlexAPI's

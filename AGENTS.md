@@ -218,6 +218,11 @@ GitHub Release publishing is controlled by release markers in PR titles only:
 unless the merge should publish PyPI, Homebrew, and AUR. PR bodies may mention
 release markers for explanation without publishing.
 
+Post-release package workflows may depend on newly published PyPI artifacts.
+Keep Homebrew tap publication waiting for `pip` to resolve the new
+`plex-tui==VERSION` before updating formula resources, so PyPI indexing lag does
+not break otherwise successful releases.
+
 GitHub CLI notes:
 
 - `gh auth status` may fail inside the sandbox even when the user is logged in
