@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added deterministic release staging through `make stage-release` so version
+  metadata and changelog promotion are scripted instead of agent-hand-edited.
+- Documented that agents should keep `CHANGELOG.md` `Unreleased` current during
+  feature work and use the release staging target for planned releases.
+
 ## 0.3.28 - 2026-06-13
 
 - Added a DOX-aligned project agent model and documented repository operating
