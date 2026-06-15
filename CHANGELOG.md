@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.35 - 2026-06-15
+
 - Documented Homebrew 6 tap trust requirements for installing from the
   `so1omon563/plex-tui` tap.
 - Verified Plex server reachability during browser login before saving a server
