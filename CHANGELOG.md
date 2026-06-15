@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.3.31 - 2026-06-15
+
+- Polished media type labels so list and grid rows describe Plex media kinds
+  more clearly.
+- Improved first-run Plex server selection by preferring usable local/private
+  connection URLs, labeling connection types, marking the recommended endpoint,
+  and adding relogin recovery guidance for unreachable saved URLs.
+
 ## 0.3.28 - 2026-06-13
 
 - Added a DOX-aligned project agent model and documented repository operating
