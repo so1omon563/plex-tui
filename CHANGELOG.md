@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fell back to direct Plex root checks during browser login when PlexAPI's
+  resource connection probe rejects URLs that are reachable from the machine.
+
 ## 0.3.35 - 2026-06-15
 
 - Documented Homebrew 6 tap trust requirements for installing from the

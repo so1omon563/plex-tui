@@ -5,6 +5,7 @@ import webbrowser
 from dataclasses import dataclass
 from urllib.parse import SplitResult, urlparse
 
+import requests
 from plexapi.myplex import MyPlexAccount, MyPlexPinLogin, MyPlexResource
 
 from . import __version__
@@ -168,28 +169,55 @@ def reachable_server_choices(resources: list[MyPlexResource], timeout: int = 5) 
     choices = []
     seen: set[tuple[str, str]] = set()
     for resource in resources:
-        try:
-            server = resource.connect(timeout=timeout)
-        except Exception:
-            continue
-
-        uri = str(getattr(server, "_baseurl", "") or getattr(server, "baseurl", "") or "").rstrip("/")
-        if not uri:
-            continue
-        key = (resource.name, uri)
-        if key in seen:
-            continue
-        seen.add(key)
-        choices.append(
-            ServerChoice(
-                name=resource.name,
-                uri=uri,
-                source=resource.sourceTitle or "owned",
-                resource=resource,
-                verified=True,
+        for uri in reachable_resource_urls(resource, timeout):
+            key = (resource.name, uri)
+            if key in seen:
+                continue
+            seen.add(key)
+            choices.append(
+                ServerChoice(
+                    name=resource.name,
+                    uri=uri,
+                    source=resource.sourceTitle or "owned",
+                    resource=resource,
+                    verified=True,
+                )
             )
-        )
     return choices
+
+
+def reachable_resource_urls(resource: MyPlexResource, timeout: int) -> list[str]:
+    try:
+        server = resource.connect(timeout=timeout)
+    except Exception:
+        return reachable_advertised_urls(resource, timeout)
+
+    uri = str(getattr(server, "_baseurl", "") or getattr(server, "baseurl", "") or "").rstrip("/")
+    return [uri] if uri else reachable_advertised_urls(resource, timeout)
+
+
+def reachable_advertised_urls(resource: MyPlexResource, timeout: int) -> list[str]:
+    reachable = []
+    for uri in resource.preferred_connections():
+        normalized = uri.rstrip("/")
+        if normalized and plex_root_responds(normalized, resource.accessToken, timeout):
+            reachable.append(normalized)
+    return reachable
+
+
+def plex_root_responds(uri: str, token: str, timeout: int) -> bool:
+    try:
+        response = requests.get(
+            uri,
+            headers={"X-Plex-Token": token},
+            params={"X-Plex-Token": token},
+            timeout=timeout,
+        )
+    except requests.RequestException:
+        return False
+    if response.status_code not in {200, 201, 204}:
+        return False
+    return "MediaContainer" in response.text or response.headers.get("X-Plex-Protocol") == "1.0"
 
 
 def plex_headers(config: AppConfig) -> dict[str, str]:
