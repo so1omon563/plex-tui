@@ -65,6 +65,7 @@ or follow the pipx installation guide.
 ### Homebrew
 
 ```bash
+brew trust --tap so1omon563/plex-tui
 brew tap so1omon563/plex-tui
 brew install plex-tui
 plex-tui --smoke
@@ -73,6 +74,9 @@ plex-tui --smoke
 The Homebrew formula installs `mpv` automatically. The first install can take
 several minutes because native Python dependencies such as `pillow` are built
 from source.
+Homebrew 6 requires non-official taps to be trusted before Homebrew loads
+formulae from them. `plex-tui` only depends on formulae from Homebrew/core, so no
+additional tap trust is required for its dependencies.
 
 ### Arch Linux
 

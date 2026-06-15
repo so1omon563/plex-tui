@@ -45,6 +45,7 @@ https://github.com/so1omon563/homebrew-plex-tui
 User install:
 
 ```bash
+brew trust --tap so1omon563/plex-tui
 brew tap so1omon563/plex-tui
 brew install plex-tui
 ```
@@ -52,6 +53,10 @@ brew install plex-tui
 The formula depends on `mpv` and `python@3.13`, then installs the Python app in
 a Homebrew-managed virtualenv. The first install can take several minutes
 because native Python resources such as `pillow` are built from source.
+Homebrew 6 requires non-official taps to be trusted before Homebrew loads
+formulae from them. The `plex-tui` formula only uses Homebrew/core formula
+dependencies, so users do not need to trust any additional taps for `mpv`,
+`python@3.13`, or the bundled Python resources.
 
 Validation commands:
 
