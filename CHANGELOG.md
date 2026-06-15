@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.37 - 2026-06-15
+
 - Fell back to direct Plex root checks during browser login when PlexAPI's
   resource connection probe rejects URLs that are reachable from the machine.
 
