@@ -4,6 +4,9 @@
 
 - Documented Homebrew 6 tap trust requirements for installing from the
   `so1omon563/plex-tui` tap.
+- Verified Plex server reachability during browser login before saving a server
+  URL, so first-run auth no longer offers endpoints that cannot be reached from
+  the current machine.
 
 ## 0.3.31 - 2026-06-15
 

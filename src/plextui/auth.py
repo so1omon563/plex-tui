@@ -17,6 +17,7 @@ class ServerChoice:
     uri: str
     source: str
     resource: MyPlexResource
+    verified: bool = False
 
     @property
     def parsed_uri(self) -> SplitResult:
@@ -54,23 +55,25 @@ class ServerChoice:
             return "local"
         if self.is_plex_direct:
             return "plex.direct"
-        return self.scheme
+        return "remote"
 
     @property
     def row_label(self) -> str:
-        return f"{self.scheme.upper()} ({self.connection_label})"
+        verified = ", reachable" if self.verified else ""
+        return f"{self.scheme.upper()} ({self.connection_label}{verified})"
 
     @property
-    def sort_key(self) -> tuple[int, str, int | None, str]:
+    def sort_key(self) -> tuple[int, str, str, int | None, str]:
+        verified_rank = 0 if self.verified else 1
         if self.is_local and self.scheme == "http":
-            return (0, self.host, self.port, self.uri)
+            return (verified_rank, "0", self.host, self.port, self.uri)
         if self.is_local:
-            return (1, self.host, self.port, self.uri)
+            return (verified_rank, "1", self.host, self.port, self.uri)
         if self.scheme == "http":
-            return (2, self.host, self.port, self.uri)
+            return (verified_rank, "2", self.host, self.port, self.uri)
         if self.is_plex_direct:
-            return (3, self.host, self.port, self.uri)
-        return (4, self.host, self.port, self.uri)
+            return (verified_rank, "3", self.host, self.port, self.uri)
+        return (verified_rank, "4", self.host, self.port, self.uri)
 
     @staticmethod
     def _looks_like_private_host(host: str) -> bool:
@@ -113,29 +116,22 @@ class LoginSession:
 
         account_token = self.pin_login.token
         account = MyPlexAccount(token=account_token)
-        choices: list[ServerChoice] = []
-        seen: set[tuple[str, str]] = set()
+        resources = []
         for resource in account.resources():
             if "server" not in str(resource.provides):
                 continue
-            for uri in resource.preferred_connections():
-                key = (resource.name, uri)
-                if key in seen:
-                    continue
-                seen.add(key)
-                choices.append(
-                    ServerChoice(
-                        name=resource.name,
-                        uri=uri,
-                        source=resource.sourceTitle or "owned",
-                        resource=resource,
-                    )
-                )
-        if not choices:
+            resources.append(resource)
+        if not resources:
             raise RuntimeError("No Plex Media Server resources found for this account")
 
-        non_direct_choices = [choice for choice in choices if not choice.is_plex_direct]
-        return account_token, sorted(non_direct_choices or choices, key=lambda c: c.sort_key)
+        choices = reachable_server_choices(resources)
+        if not choices:
+            raise RuntimeError(
+                "No reachable Plex Media Server connections found for this account. "
+                "Plex reported servers, but none responded from this machine. "
+                "Check Plex remote access, VPN/firewall rules, and whether the server is online."
+            )
+        return account_token, sorted(choices, key=lambda c: c.sort_key)
 
     def stop(self) -> None:
         self.pin_login.stop()
@@ -157,12 +153,43 @@ def save_server_choice(config: AppConfig, account_token: str, choice: ServerChoi
         media_view=config.media_view,
         theme=config.theme,
         mpv_window_size=config.mpv_window_size,
+        playback_mode=config.playback_mode,
+        transcode_quality=config.transcode_quality,
         page_size=config.page_size,
         auto_load_threshold=config.auto_load_threshold,
         grid_prefetch_pages=config.grid_prefetch_pages,
+        hidden_library_keys=config.hidden_library_keys,
     )
     save_config(saved)
     return saved
+
+
+def reachable_server_choices(resources: list[MyPlexResource], timeout: int = 5) -> list[ServerChoice]:
+    choices = []
+    seen: set[tuple[str, str]] = set()
+    for resource in resources:
+        try:
+            server = resource.connect(timeout=timeout)
+        except Exception:
+            continue
+
+        uri = str(getattr(server, "_baseurl", "") or getattr(server, "baseurl", "") or "").rstrip("/")
+        if not uri:
+            continue
+        key = (resource.name, uri)
+        if key in seen:
+            continue
+        seen.add(key)
+        choices.append(
+            ServerChoice(
+                name=resource.name,
+                uri=uri,
+                source=resource.sourceTitle or "owned",
+                resource=resource,
+                verified=True,
+            )
+        )
+    return choices
 
 
 def plex_headers(config: AppConfig) -> dict[str, str]:
