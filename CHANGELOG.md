@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.39 - 2026-06-16
+
 - Fixed playback resume so videos launched from in-progress rows start at the
   displayed Plex resume position even when full metadata reloads omit it.
 - Made post-release Homebrew publishing wait for PyPI package availability before
