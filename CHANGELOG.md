@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Kept the footer command bar focused on core actions while leaving the full
+  keyboard reference discoverable from Help.
+
 ## 0.3.41 - 2026-06-16
 
 - Fixed Plex-transcoded resume playback by passing the resume offset into the
