@@ -56,6 +56,7 @@ from .player import (
     play_with_mpv,
     preferred_audio_choice,
     preferred_subtitle_choice,
+    resume_offset_ms,
     same_stream,
     stop_mpv,
     stream_language_key,
@@ -430,7 +431,7 @@ class PlexTuiApp(App[None]):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("r", "reload", "Reload"),
+        Binding("ctrl+r", "reload", "Reload"),
         Binding("/", "focus_search", "Search"),
         Binding("g", "focus_global_search", "Global"),
         Binding("tab", "focus_next", "Next"),
@@ -447,6 +448,7 @@ class PlexTuiApp(App[None]):
         Binding("comma", "show_settings", "Settings"),
         Binding("escape", "back_or_clear", "Back"),
         Binding("p", "play_selected", "Play"),
+        Binding("r", "resume_selected", "Resume"),
         Binding("a", "audio_picker", "Audio"),
         Binding("s", "subtitle_picker", "Subtitles"),
         Binding("A", "clear_audio_preference", "Clear audio"),
@@ -2194,12 +2196,21 @@ class PlexTuiApp(App[None]):
                 self.open_library_menu(state.selected_library)
 
     def action_play_selected(self) -> None:
+        self.play_selected_media(resume=False)
+
+    def action_resume_selected(self) -> None:
+        self.play_selected_media(resume=True)
+
+    def play_selected_media(self, resume: bool) -> None:
         media = self.selected_media()
         if media is None:
             self.set_status("No media selected")
             return
         if not media.playable:
             self.set_status("Selected item is not directly playable")
+            return
+        if resume and not resume_offset_ms(media.raw):
+            self.set_status("No resume position for selected media; press p to play from the beginning")
             return
         subtitle_choice = preferred_subtitle_choice(
             media.raw,
@@ -2216,6 +2227,7 @@ class PlexTuiApp(App[None]):
                 window_size=self.config.mpv_window_size,
                 playback_mode=self.config.playback_mode,
                 transcode_quality=self.config.transcode_quality,
+                resume=resume,
             )
         except PlayerError as exc:
             self.clear_playback_footer()
@@ -2816,7 +2828,8 @@ def render_help() -> str:
         "g: search all libraries",
         "",
         "Playback",
-        "p: play selected media with mpv",
+        "p: play selected media from beginning",
+        "r: resume selected media",
         "x: stop launched mpv",
         "",
         "Streams",
@@ -2827,7 +2840,7 @@ def render_help() -> str:
         "",
         "Settings",
         ",: show settings",
-        "r: reconnect / reload libraries",
+        "ctrl+r: reconnect / reload libraries",
         "PLEX_TUI_PERF_LOG=1: write browsing timings and navigation diagnostics",
         "PLEX_TUI_ARTWORK_LOG=1: include verbose grid artwork internals",
         "?: show help",
@@ -2885,12 +2898,12 @@ def context_hint(row: object) -> str:
         return "Media: Enter loads next page"
     if isinstance(row, MediaRow):
         if row.media.playable:
-            return "Media: Enter selects / p plays / a audio / s subtitles"
+            return "Media: Enter selects / p plays from start / r resumes / a audio / s subtitles"
         return "Media: Enter opens item"
     if isinstance(row, MediaGrid):
         media = row.selected_media
         if media is not None and media.playable:
-            return "Grid: Arrows/page select card / p plays / a audio / s subtitles"
+            return "Grid: Arrows/page select card / p plays from start / r resumes / a audio / s subtitles"
         return "Grid: Arrows/page select card / Enter opens item"
     if isinstance(row, ServerRow):
         return "Servers: Enter selects server"

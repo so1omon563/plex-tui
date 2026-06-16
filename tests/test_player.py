@@ -119,6 +119,22 @@ def test_playback_applies_selected_streams_and_resume_offset(debug_log_path):
     assert "launching mpv" in debug_log_path.read_text(encoding="utf-8")
 
 
+def test_playback_can_start_from_beginning_instead_of_resuming():
+    item = Item()
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        handle = play_with_mpv(item, resume=False)
+
+    args = popen.call_args.args[0]
+    assert handle.start_offset_ms == 0
+    assert "--start=65.000" not in args
+    assert item.kwargs == {}
+
+
 def test_playback_keeps_selected_resume_offset_when_reload_omits_it():
     class FullItem(Item):
         viewOffset = 0

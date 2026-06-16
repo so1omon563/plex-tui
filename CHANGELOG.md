@@ -4,6 +4,8 @@
 
 - Fixed Plex-transcoded resume playback by passing the resume offset into the
   Plex stream request instead of relying only on mpv seeking.
+- Split playback controls so `p` starts selected media from the beginning and
+  `r` resumes from the saved Plex position when available.
 
 ## 0.3.39 - 2026-06-16
 

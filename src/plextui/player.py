@@ -60,6 +60,7 @@ def play_with_mpv(
     window_size: str = "",
     playback_mode: str = "auto",
     transcode_quality: str = "original",
+    resume: bool = True,
 ) -> PlayerHandle:
     if shutil.which("mpv") is None:
         log_debug("playback error: mpv was not found in PATH")
@@ -82,7 +83,7 @@ def play_with_mpv(
         stream_kwargs.update(transcode_quality_kwargs(transcode_quality))
 
     title = getattr(item, "title", "Plex")
-    start_offset = resume_offset_ms(item) or selected_start_offset
+    start_offset = (resume_offset_ms(item) or selected_start_offset) if resume else 0
     if start_offset and direct_url is None:
         stream_kwargs["offset"] = plex_stream_offset(start_offset)
 

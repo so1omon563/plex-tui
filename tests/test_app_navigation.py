@@ -405,6 +405,18 @@ def test_playback_footer_shows_active_playback():
     asyncio.run(run_playback_footer_check())
 
 
+def test_playback_action_starts_from_beginning():
+    asyncio.run(run_playback_starts_from_beginning_check())
+
+
+def test_resume_action_uses_saved_position():
+    asyncio.run(run_resume_action_check())
+
+
+def test_resume_action_requires_saved_position():
+    asyncio.run(run_resume_requires_position_check())
+
+
 def test_quick_preference_actions_update_config():
     asyncio.run(run_quick_preference_action_check())
 
@@ -1757,6 +1769,7 @@ async def run_playback_footer_check():
 
         assert launch.call_args.kwargs["playback_mode"] == "transcode"
         assert launch.call_args.kwargs["transcode_quality"] == "720p_4"
+        assert launch.call_args.kwargs["resume"] is False
         footer = app.query_one("#playback-footer")
         assert footer.display
         assert footer.content == (
@@ -1764,6 +1777,74 @@ async def run_playback_footer_check():
             "audio jpn not found, Plex/default; "
             "subtitles eng not found, Plex/default"
         )
+
+
+async def run_playback_starts_from_beginning_check():
+    class ResumableRaw(Raw):
+        viewOffset = 65_000
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, ResumableRaw())])
+        await pilot.pause(0.2)
+
+        player = SimpleNamespace(
+            title="Movie",
+            start_offset_ms=0,
+            stream_mode="transcode",
+            subtitle_count=0,
+            process=SimpleNamespace(poll=lambda: None),
+        )
+        with patch("plextui.app.play_with_mpv", return_value=player) as launch:
+            app.action_play_selected()
+        await pilot.pause(0.2)
+
+        assert launch.call_args.kwargs["resume"] is False
+        assert "resume" not in app.query_one("#playback-footer").content
+
+
+async def run_resume_action_check():
+    class ResumableRaw(Raw):
+        viewOffset = 65_000
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, ResumableRaw())])
+        await pilot.pause(0.2)
+
+        player = SimpleNamespace(
+            title="Movie",
+            start_offset_ms=65_000,
+            stream_mode="transcode",
+            subtitle_count=0,
+            process=SimpleNamespace(poll=lambda: None),
+        )
+        with patch("plextui.app.play_with_mpv", return_value=player) as launch:
+            app.action_resume_selected()
+        await pilot.pause(0.2)
+
+        assert launch.call_args.kwargs["resume"] is True
+        assert "resume 1:05" in app.query_one("#playback-footer").content
+
+
+async def run_resume_requires_position_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, Raw())])
+        await pilot.pause(0.2)
+
+        with patch("plextui.app.play_with_mpv") as launch:
+            app.action_resume_selected()
+        await pilot.pause(0.2)
+
+        assert not launch.called
+        assert app.query_one("#status").content == "No resume position for selected media; press p to play from the beginning"
 
 
 async def run_quick_preference_action_check():
