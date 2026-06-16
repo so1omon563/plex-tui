@@ -101,6 +101,31 @@ jobs:
           brew tap so1omon563/plex-tui "https://x-access-token:${PACKAGING_PR_TOKEN}@github.com/so1omon563/homebrew-plex-tui.git"
           echo "path=$(brew --repo so1omon563/plex-tui)" >> "$GITHUB_OUTPUT"
 
+      - name: Wait for PyPI package availability
+        if: steps.release.outputs.publish == 'true'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          for attempt in {1..30}; do
+            if python -m pip install \
+              --dry-run \
+              --ignore-installed \
+              --no-cache-dir \
+              --disable-pip-version-check \
+              "plex-tui==${VERSION}" >/dev/null 2>&1; then
+              echo "plex-tui ${VERSION} is available from PyPI."
+              exit 0
+            fi
+
+            echo "plex-tui ${VERSION} is not available from PyPI yet; retrying (${attempt}/30)."
+            sleep 10
+          done
+
+          echo "plex-tui ${VERSION} did not become available from PyPI in time." >&2
+          exit 1
+
       - name: Update formula source
         if: steps.release.outputs.publish == 'true'
         run: |
