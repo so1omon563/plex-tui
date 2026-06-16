@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed Plex-transcoded resume playback by passing the resume offset into the
+  Plex stream request instead of relying only on mpv seeking.
+
 ## 0.3.39 - 2026-06-16
 
 - Fixed playback resume so videos launched from in-progress rows start at the

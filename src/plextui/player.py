@@ -81,6 +81,11 @@ def play_with_mpv(
     if force_transcode:
         stream_kwargs.update(transcode_quality_kwargs(transcode_quality))
 
+    title = getattr(item, "title", "Plex")
+    start_offset = resume_offset_ms(item) or selected_start_offset
+    if start_offset and direct_url is None:
+        stream_kwargs["offset"] = plex_stream_offset(start_offset)
+
     try:
         url = direct_url or item.getStreamURL(**stream_kwargs)
     except Exception as exc:
@@ -90,15 +95,15 @@ def play_with_mpv(
         log_debug("playback error: Plex returned an empty stream URL")
         raise PlayerError("Plex returned an empty stream URL")
 
-    title = getattr(item, "title", "Plex")
-    start_offset = resume_offset_ms(item) or selected_start_offset
+    stream_mode = "direct" if direct_url else "transcode"
+    monitor_base_offset = start_offset if stream_mode == "transcode" and stream_kwargs.get("offset") else 0
     socket_path = Path(tempfile.gettempdir()) / f"plex-tui-mpv-{os.getpid()}-{int(time.time() * 1000)}.sock"
     args = [
         "mpv",
         "--force-media-title=" + title,
         "--input-ipc-server=" + str(socket_path),
     ]
-    if start_offset:
+    if start_offset and not monitor_base_offset:
         args.append(f"--start={start_offset / 1000:.3f}")
     if window_size:
         args.append(f"--autofit={window_size}")
@@ -107,7 +112,6 @@ def play_with_mpv(
         args.append("--sub-file=" + subtitle)
     args.append(url)
     command = sanitize_command(args)
-    stream_mode = "direct" if direct_url else "transcode"
     quality_label = transcode_quality_label(transcode_quality) if stream_mode == "transcode" else "original"
     log_debug(
         "launching mpv: "
@@ -128,7 +132,7 @@ def play_with_mpv(
         log_debug(f"playback error: failed to launch mpv: {exc}; args={command!r}")
         raise PlayerError(f"failed to launch mpv: {exc}") from exc
     subtitle_count = active_subtitle_count(item, selected_subtitle)
-    monitor = ProgressMonitor(item, process, socket_path, start_offset)
+    monitor = ProgressMonitor(item, process, socket_path, start_offset, base_offset=monitor_base_offset)
     monitor.start()
     return PlayerHandle(
         title=title,
@@ -143,11 +147,19 @@ def play_with_mpv(
 
 
 class ProgressMonitor:
-    def __init__(self, item: Any, process: subprocess.Popen[bytes], socket_path: Path, start_offset: int) -> None:
+    def __init__(
+        self,
+        item: Any,
+        process: subprocess.Popen[bytes],
+        socket_path: Path,
+        start_offset: int,
+        base_offset: int = 0,
+    ) -> None:
         self.item = item
         self.process = process
         self.socket_path = socket_path
         self.last_ms = start_offset
+        self.base_offset = base_offset
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name="plex-tui-progress", daemon=True)
 
@@ -187,7 +199,7 @@ class ProgressMonitor:
         if value is None:
             return None
         try:
-            return max(0, int(float(value) * 1000))
+            return max(0, self.base_offset + int(float(value) * 1000))
         except (TypeError, ValueError):
             return None
 
@@ -234,6 +246,10 @@ def resume_offset_ms(item: Any) -> int:
         return max(0, int(getattr(item, "viewOffset", 0) or 0))
     except (TypeError, ValueError):
         return 0
+
+
+def plex_stream_offset(milliseconds: int) -> int:
+    return max(0, milliseconds // 1000)
 
 
 def full_metadata(item: Any) -> Any:

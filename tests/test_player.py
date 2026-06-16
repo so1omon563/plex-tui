@@ -9,6 +9,7 @@ from plextui.player import (
     PlayerError,
     ProgressMonitor,
     StreamChoice,
+    plex_stream_offset,
     play_with_mpv,
     preferred_audio_choice,
     preferred_subtitle_choice,
@@ -112,9 +113,9 @@ def test_playback_applies_selected_streams_and_resume_offset(debug_log_path):
     args = popen.call_args.args[0]
     assert handle.start_offset_ms == 65000
     assert handle.command[0] == "mpv"
-    assert "--start=65.000" in args
+    assert "--start=65.000" not in args
     assert "--sub-file=http://plex/library/streams/1" in args
-    assert item.kwargs == {"audioStreamID": 42}
+    assert item.kwargs == {"audioStreamID": 42, "offset": 65}
     assert "launching mpv" in debug_log_path.read_text(encoding="utf-8")
 
 
@@ -140,8 +141,8 @@ def test_playback_keeps_selected_resume_offset_when_reload_omits_it():
 
     args = popen.call_args.args[0]
     assert handle.start_offset_ms == 65000
-    assert "--start=65.000" in args
-    assert item.full_item.kwargs == {}
+    assert "--start=65.000" not in args
+    assert item.full_item.kwargs == {"offset": 65}
 
 
 def test_playback_applies_configured_mpv_window_size():
@@ -170,7 +171,7 @@ def test_subtitle_none_disables_subtitle_selection():
 
     args = popen.call_args.args[0]
     assert handle.subtitle_count == 0
-    assert item.kwargs == {"subtitleStreamID": 0}
+    assert item.kwargs == {"subtitleStreamID": 0, "offset": 65}
     assert not any(arg.startswith("--sub-file=") for arg in args)
 
 
@@ -183,6 +184,19 @@ def test_progress_monitor_reports_progress_and_timeline():
 
     assert item.progress == (123000, "playing")
     assert item.timeline == (123000, "playing")
+
+
+def test_progress_monitor_adds_base_offset_to_transcode_time():
+    item = Item()
+    monitor = ProgressMonitor(item, Proc(), Path("/tmp/socket"), 65000, base_offset=65000)
+
+    with patch("plextui.player.mpv_get_property", return_value=12.5):
+        assert monitor.current_time_ms() == 77500
+
+
+def test_plex_stream_offset_converts_milliseconds_to_seconds():
+    assert plex_stream_offset(65_999) == 65
+    assert plex_stream_offset(-1) == 0
 
 
 def test_direct_play_gets_mpv_track_hints_for_embedded_streams():
@@ -216,6 +230,7 @@ def test_direct_play_gets_mpv_track_hints_for_embedded_streams():
 
     args = popen.call_args.args[0]
     assert handle.stream_mode == "direct"
+    assert "--start=65.000" in args
     assert "--aid=1" in args
     assert "--sid=1" in args
 
@@ -255,8 +270,10 @@ def test_force_transcode_bypasses_direct_play_and_applies_quality():
         "subtitleStreamID": 1,
         "maxVideoBitrate": 4000,
         "videoResolution": "1280x720",
+        "offset": 65,
     }
     assert not any(arg.startswith("--sid=") for arg in args)
+    assert "--start=65.000" not in args
 
 
 def test_force_transcode_original_quality_omits_quality_kwargs():
@@ -270,7 +287,7 @@ def test_force_transcode_original_quality_omits_quality_kwargs():
         handle = play_with_mpv(item, playback_mode="transcode", transcode_quality="original")
 
     assert handle.stream_mode == "transcode"
-    assert item.kwargs == {}
+    assert item.kwargs == {"offset": 65}
 
 
 def test_preferred_choices_match_stream_language():
