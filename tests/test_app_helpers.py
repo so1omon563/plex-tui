@@ -830,6 +830,29 @@ def test_render_help_groups_key_bindings():
     assert "?: show help" in rendered
 
 
+def test_footer_shows_core_bindings_and_help_keeps_full_reference():
+    shown = {binding.action for binding in PlexTuiApp.BINDINGS if binding.show}
+    hidden = {binding.action for binding in PlexTuiApp.BINDINGS if not binding.show}
+    rendered = render_help()
+
+    assert shown == {
+        "quit",
+        "focus_search",
+        "focus_global_search",
+        "show_help",
+        "toggle_media_view",
+        "show_settings",
+        "back_or_clear",
+        "play_selected",
+        "resume_selected",
+    }
+    assert "audio_picker" in hidden
+    assert "subtitle_picker" in hidden
+    assert "a: choose and save audio preference" in rendered
+    assert "s: choose and save subtitle preference" in rendered
+    assert "ctrl+r: reconnect / reload libraries" in rendered
+
+
 def test_performance_log_requires_perf_env(monkeypatch):
     messages = []
     monkeypatch.delenv("PLEX_TUI_PERF_LOG", raising=False)
