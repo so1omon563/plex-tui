@@ -38,54 +38,42 @@ Already covered:
 
 - Plex PIN login and server selection.
 - Library list browsing with paged loading and automatic load-more.
+- Continue Watching as a top-level browse entry.
+- Selective library display in Settings.
+- Library submenus for Library, Recommended, Collections, and Playlists.
+- Alphabet navigation for loaded browse lists and grids.
 - Current-library and global search.
 - Show/season/episode child browsing through PlexAPI child helpers.
-- Resume offset playback and progress reporting.
+- Separate play-from-start and resume controls, including Plex-side resume
+  offsets for transcoded streams and progress reporting.
 - Saved audio/subtitle language preferences plus per-item stream pickers.
 - Direct playback paths where possible, with transcode fallback through PlexAPI.
+- Explicit video quality/direct/transcode preference in Settings and playback.
 - Details pane metadata, audio/subtitle stream display, and playback readiness.
 
 Not yet covered:
 
-- Continue Watching as a top-level browse entry.
-- Selective library display in Settings.
 - User/profile switching and auto sign-in.
-- Library submenus for Recommended, Collections, Playlists, and Categories.
-- Alphabet side navigation for full-library browsing.
+- Library Categories where PlexAPI exposes them cleanly.
 - Movie editions as distinct, visible item variants.
-- Explicit video quality/direct/transcode preference in Settings and playback.
 - In-playback audio/subtitle switching after mpv has launched.
 
 ## Recommended Sequence
 
-1. Continue Watching entrypoint.
-   Add a top-level browse row backed by Plex in-progress/on-deck style data.
-   This is the highest-value 240-MP idea because it is small, terminal-friendly,
-   and matches how users resume media.
+1. Library Categories.
+   Add Categories to the library submenu after mapping PlexAPI support against
+   real server responses. Keep the default browse path simple so
+   Enter-on-library behavior stays fast.
 
-2. Selective library visibility.
-   Add a Settings multiselect-style workflow for hiding noisy Plex libraries.
-   This reduces browse clutter without changing playback behavior.
-
-3. Library submenu mode.
-   Add optional library entrypoints for Library, Collections, Playlists,
-   Categories, and Recommended where Plex exposes them. Keep the default path
-   simple so existing Enter-on-library behavior stays fast.
-
-4. Alphabet navigation for full-library views.
-   Add a keyboard-friendly jump mode for large libraries. This should come after
-   library submenu work so it is only active in full-library lists.
-
-5. Playback quality controls.
-   Add a setting for direct/default versus selected transcode qualities. This
-   needs careful testing because plex-tui currently relies on PlexAPI stream URL
-   behavior and direct track arguments.
-
-6. Profile switching and auto sign-in.
+2. Profile switching and auto sign-in.
    Useful, but more invasive than the browse entrypoints because it changes auth
    and account-token assumptions. Treat it as a separate design pass.
 
-7. In-playback track switching.
+3. Movie editions.
+   Surface editions as distinct item variants once enough real-library examples
+   are available to keep the UI compact.
+
+4. In-playback track switching.
    Defer until there is a clear design for driving mpv IPC track changes and
    reconciling Plex stream state after launch.
 
