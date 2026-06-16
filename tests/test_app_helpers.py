@@ -823,6 +823,9 @@ def test_render_help_groups_key_bindings():
     assert "d: focus details" in rendered
     assert "v: toggle list/grid view" in rendered
     assert "left/right: move across grid cards" in rendered
+    assert "p: play selected media from beginning" in rendered
+    assert "r: resume selected media" in rendered
+    assert "ctrl+r: reconnect / reload libraries" in rendered
     assert "PLEX_TUI_ARTWORK_LOG=1" in rendered
     assert "?: show help" in rendered
 
@@ -1024,9 +1027,9 @@ def test_context_hints_for_media_and_load_more():
     setting_action = next(row for row in settings if getattr(row, "action", "") == "cycle_grid_density")
     setting_value = next(row for row in settings if getattr(row, "label_text", "").strip().startswith("Server:"))
 
-    assert context_hint(MediaRow(playable)) == "Media: Enter selects / p plays / a audio / s subtitles"
+    assert context_hint(MediaRow(playable)) == "Media: Enter selects / p plays from start / r resumes / a audio / s subtitles"
     assert context_hint(MediaRow(container)) == "Media: Enter opens item"
-    assert context_hint(grid) == "Grid: Arrows/page select card / p plays / a audio / s subtitles"
+    assert context_hint(grid) == "Grid: Arrows/page select card / p plays from start / r resumes / a audio / s subtitles"
     assert context_hint(LoadMoreRow(100, 200)) == "Media: Enter loads next page"
     assert context_hint(LibraryMenuRow(LibraryItem("Movies", "1", "movie", object()), "library", "Library", "All items")) == (
         "Library: Enter opens browse mode"

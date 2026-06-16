@@ -53,8 +53,9 @@
   server response.
 - Alphabet navigation is available for loaded browse lists and grids with
   previous/next section jumps.
-- Explicit playback controls are available for direct/default playback versus
-  selected transcode quality presets.
+- Explicit playback controls are available for play-from-start versus resume,
+  direct/default playback versus selected transcode quality presets, and
+  Plex-side resume offsets for transcoded streams.
 - Later design passes: profile switching with auto sign-in, visible movie
   edition handling, and in-playback audio/subtitle switching through mpv IPC.
 

@@ -160,19 +160,21 @@ See `config.example.toml` for optional settings.
 ## Playback
 
 Playback is launched through `mpv`; plex-tui does not embed a video player.
-While playback is active, Plex progress is updated in the background. Saved
-audio/subtitle language preferences are applied when matching streams are
-available, and the details pane shows the effective playback choices. Playback
-mode defaults to direct/default behavior and can be changed in Settings to force
-Plex transcoding with Original, 1080p 8 Mbps, 720p 4 Mbps, or 480p 2 Mbps
-quality presets.
+Use `p` to start the selected item from the beginning, or `r` to resume from
+the saved Plex position when one is available. While playback is active, Plex
+progress is updated in the background. Saved audio/subtitle language
+preferences are applied when matching streams are available, and the details
+pane shows the effective playback choices. Playback mode defaults to
+direct/default behavior and can be changed in Settings to force Plex
+transcoding with Original, 1080p 8 Mbps, 720p 4 Mbps, or 480p 2 Mbps quality
+presets.
 
 ## Key Bindings
 
 | Key | Action |
 | --- | --- |
 | `q` | Quit |
-| `r` | Reload Plex connection |
+| `ctrl+r` | Reload Plex connection |
 | `/` | Search current library |
 | `g` | Search all libraries |
 | `?` | Show help |
@@ -184,7 +186,8 @@ quality presets.
 | `,` | Show settings |
 | `escape` | Clear search, go back, or close current view |
 | `enter` | Open selected item |
-| `p` | Play selected item with `mpv` |
+| `p` | Play selected item from the beginning |
+| `r` | Resume selected item from the saved Plex position |
 | `a` / `s` | Choose audio / subtitle preference |
 | `A` / `S` | Clear audio preference / cycle subtitle mode |
 | `x` | Stop launched `mpv` |
@@ -197,7 +200,7 @@ quality presets.
 - List view plus configurable-density grid view with terminal poster artwork.
 - External subtitle support and direct playback for embedded PGS/VOBSUB tracks.
 - Audio and subtitle pickers with saved language preferences.
-- Plex resume support and playback progress reporting.
+- Separate play-from-start and resume actions with Plex progress reporting.
 - Settings screen for stream preferences, playback mode and transcode quality,
   artwork modes, grid density, page size, auto-load threshold, grid artwork
   prefetching, media view, and `mpv` window size.
