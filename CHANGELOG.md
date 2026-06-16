@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.43 - 2026-06-16
+
 - Kept the footer command bar focused on core actions while leaving the full
   keyboard reference discoverable from Help.
 
