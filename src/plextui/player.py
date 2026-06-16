@@ -65,6 +65,7 @@ def play_with_mpv(
         log_debug("playback error: mpv was not found in PATH")
         raise PlayerError("mpv was not found in PATH. Install mpv and make sure it is available on PATH.")
 
+    selected_start_offset = resume_offset_ms(item)
     item = full_metadata(item)
     selected_subtitle = resolve_subtitle_choice(item, subtitle_choice)
     selected_audio = resolve_audio_choice(item, audio_choice)
@@ -90,7 +91,7 @@ def play_with_mpv(
         raise PlayerError("Plex returned an empty stream URL")
 
     title = getattr(item, "title", "Plex")
-    start_offset = resume_offset_ms(item)
+    start_offset = resume_offset_ms(item) or selected_start_offset
     socket_path = Path(tempfile.gettempdir()) / f"plex-tui-mpv-{os.getpid()}-{int(time.time() * 1000)}.sock"
     args = [
         "mpv",
