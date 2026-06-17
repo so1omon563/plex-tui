@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added native Kitty poster artwork via Unicode placeholders for terminals that
+  advertise Kitty graphics support, with higher-resolution native image fetches
+  and block art kept as the fallback.
+
 ## 0.3.43 - 2026-06-16
 
 - Kept the footer command bar focused on core actions while leaving the full

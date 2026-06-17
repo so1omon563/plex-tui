@@ -26,7 +26,16 @@ from textual.timer import Timer
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 
 from . import __version__
-from .artwork import artwork_is_cached, fetch_artwork, protocol_renderer_status, render_artwork, render_protocol_artwork
+from .artwork import (
+    KittyImage,
+    artwork_is_cached,
+    fetch_artwork,
+    kitty_pixel_size,
+    protocol_renderer_status,
+    render_artwork,
+    render_protocol_artwork,
+    resolve_protocol_renderer,
+)
 from .auth import LoginSession, ServerChoice, save_server_choice
 from .config import (
     DEFAULT_AUTO_LOAD_THRESHOLD,
@@ -1197,8 +1206,9 @@ class PlexTuiApp(App[None]):
             artwork_path = getattr(details, "artwork_path")
             if detail_size is not None:
                 width, height = detail_size
+                fetch_width, fetch_height = artwork_fetch_pixel_size(self.config, width, height)
                 detail_fetch_started = time.perf_counter()
-                data = fetch_artwork(full_item.raw, artwork_path, self.config, width=width, height=height * 2)
+                data = fetch_artwork(full_item.raw, artwork_path, self.config, width=fetch_width, height=fetch_height)
                 detail_fetch_ms = (time.perf_counter() - detail_fetch_started) * 1000
                 detail_render_started = time.perf_counter()
                 artwork = (
@@ -1212,7 +1222,7 @@ class PlexTuiApp(App[None]):
                 if card_artwork is not None:
                     card_cache_hit = True
                 else:
-                    card_width, card_height = card_artwork_pixel_size(self.config)
+                    card_width, card_height = card_artwork_fetch_size(self.config)
                     card_fetch_started = time.perf_counter()
                     card_data = fetch_artwork(
                         full_item.raw,
@@ -1515,7 +1525,7 @@ class PlexTuiApp(App[None]):
         failed_count = 0
         try:
             prefetch_items = [item for item in items if item.artwork_path]
-            width, height = card_artwork_pixel_size(self.config)
+            width, height = card_artwork_fetch_size(self.config)
             cached_count = sum(
                 1 for item in prefetch_items if artwork_is_cached(item.artwork_path, self.config, width=width, height=height)
             )
@@ -2580,6 +2590,13 @@ def grid_card_line(value: str, width: int, style: str) -> Text:
 
 
 def center_renderable_lines(renderable: object, width: int) -> object:
+    if isinstance(renderable, KittyImage):
+        plain_width = renderable.columns + renderable.left_padding + renderable.right_padding
+        if plain_width >= width:
+            return renderable.copy()
+        left = (width - plain_width) // 2
+        right = width - plain_width - left
+        return renderable.padded(left, right)
     if isinstance(renderable, Group):
         return Group(*(center_renderable_lines(item, width) for item in renderable.renderables))
     if isinstance(renderable, Text):
@@ -2608,7 +2625,12 @@ def copy_renderable(renderable: object | None) -> object | None:
 
 def render_card_artwork(data: bytes, config: AppConfig) -> object:
     spec = grid_density_spec(config)
-    artwork = render_artwork(data, width=int(spec["art_width"]), max_height=int(spec["art_height"]))
+    width = int(spec["art_width"])
+    height = int(spec["art_height"])
+    protocol_artwork = render_protocol_artwork(data, config.artwork_renderer, width=width, max_height=height)
+    if protocol_artwork is not None:
+        return protocol_artwork
+    artwork = render_artwork(data, width=width, max_height=height)
     return Group(*artwork.split("\n"))
 
 
@@ -2617,8 +2639,21 @@ def card_artwork_pixel_size(config: AppConfig) -> tuple[int, int]:
     return int(spec["art_width"]), int(spec["art_height"]) * 2
 
 
-def grid_artwork_cache_key(item: MediaItem, config: AppConfig) -> tuple[str, str]:
-    return item.artwork_path, config.grid_density
+def card_artwork_fetch_size(config: AppConfig) -> tuple[int, int]:
+    spec = grid_density_spec(config)
+    width = int(spec["art_width"])
+    height = int(spec["art_height"])
+    return artwork_fetch_pixel_size(config, width, height)
+
+
+def artwork_fetch_pixel_size(config: AppConfig, width: int, height: int) -> tuple[int, int]:
+    if resolve_protocol_renderer(config.artwork_renderer) == "kitty":
+        return kitty_pixel_size(width, height)
+    return width, height * 2
+
+
+def grid_artwork_cache_key(item: MediaItem, config: AppConfig) -> tuple[str, str, str]:
+    return item.artwork_path, config.grid_density, config.artwork_renderer
 
 
 def grid_density_spec(config: AppConfig | None) -> dict[str, int]:

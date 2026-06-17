@@ -9,6 +9,7 @@ from rich.align import Align
 from rich.console import Console, Group
 from rich.text import Text
 
+from plextui.artwork import KittyImage
 from plextui.app import (
     alphabet_group_label,
     alphabet_jump_index,
@@ -19,6 +20,7 @@ from plextui.app import (
     MediaGrid,
     MediaRow,
     PlexTuiApp,
+    card_artwork_fetch_size,
     card_artwork_pixel_size,
     context_hint,
     detect_mpv,
@@ -686,6 +688,16 @@ def test_card_artwork_pixel_size_tracks_terminal_render_size():
     assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="large")) == (24, 24)
 
 
+def test_card_artwork_fetch_size_uses_higher_resolution_for_kitty(monkeypatch):
+    monkeypatch.setenv("KITTY_WINDOW_ID", "1")
+
+    block = AppConfig("http://plex", "token", "client", grid_density="comfortable")
+    kitty = AppConfig("http://plex", "token", "client", artwork_renderer="kitty", grid_density="comfortable")
+
+    assert card_artwork_fetch_size(block) == (18, 18)
+    assert card_artwork_fetch_size(kitty) == (216, 216)
+
+
 def test_render_card_artwork_uses_per_line_renderables():
     image = Image.new("RGB", (2, 4), "#ff0000")
     buffer = BytesIO()
@@ -695,6 +707,22 @@ def test_render_card_artwork_uses_per_line_renderables():
 
     assert isinstance(rendered, Group)
     assert all(isinstance(line, Text) for line in rendered.renderables)
+
+
+def test_render_card_artwork_uses_kitty_placeholders_when_enabled(monkeypatch):
+    monkeypatch.setenv("KITTY_WINDOW_ID", "1")
+    monkeypatch.setattr("plextui.artwork.emit_kitty_graphics_commands", lambda commands: None)
+    image = Image.new("RGB", (2, 4), "#ff0000")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+
+    rendered = render_card_artwork(
+        buffer.getvalue(),
+        AppConfig("http://plex", "token", "client", artwork_renderer="kitty", grid_density="compact"),
+    )
+
+    assert isinstance(rendered, KittyImage)
+    assert rendered.commands
 
 
 def test_render_subtitle_none_playback_status():
