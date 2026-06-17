@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-06-17
+
 - Added native Kitty poster artwork via Unicode placeholders for terminals that
   advertise Kitty graphics support, with higher-resolution native image fetches
   and block art kept as the fallback.
