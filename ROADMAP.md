@@ -64,9 +64,6 @@
 - Use `PLEX_TUI_PERF_LOG=1` for focused regression checks when changing grid,
   artwork, pagination, or detail-loading behavior.
 - Revisit whether verbose `PLEX_TUI_ARTWORK_LOG=1` should expose more structured artwork counters.
-- Revisit native terminal image support with a Kitty Unicode-placeholder
-  prototype. Direct Kitty graphics protocol placement inside Textual caused UI
-  hangs, so any future implementation should transmit images quietly, render
-  normal placeholder text that Textual can redraw safely, and keep block art as
-  the mandatory fallback.
+- Continue validating Kitty Unicode-placeholder artwork in real terminals.
+  Block art remains the mandatory fallback outside Kitty.
 - Add focused regression tests for any real-world Plex media edge cases discovered during use.

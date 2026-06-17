@@ -209,12 +209,12 @@ presets.
 
 ## Artwork
 
-Poster artwork renders as portable colored block art, so it works in ordinary
-terminals without Kitty, iTerm2, or Sixel support. Native Kitty image output is
-disabled inside the Textual app because direct Kitty graphics protocol placement
-can destabilize the UI. If `artwork_renderer` is set to `auto` or `kitty`, the
-app falls back to block art and summarizes the fallback in
-`plex-tui --diagnostics`.
+Poster artwork renders as portable colored block art by default, so it works in
+ordinary terminals without native image support. In Kitty, set
+`artwork_renderer` to `auto` or `kitty` to render native terminal images through
+Kitty Unicode placeholders. This keeps Textual in charge of layout and redraws
+while Kitty paints the poster inside those cells. Outside Kitty, `auto` falls
+back to block art; `plex-tui --diagnostics` reports the active renderer status.
 
 Grid view prefetches artwork for the visible page immediately and, by default,
 prepares three pages ahead in the background. `grid_prefetch_pages` can be set

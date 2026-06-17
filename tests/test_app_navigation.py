@@ -13,6 +13,7 @@ from plextui.app import (
     LibraryMenuRow,
     LoadMoreRow,
     PlexTuiApp,
+    artwork_fetch_pixel_size,
     card_artwork_pixel_size,
     grid_artwork_cache_key,
     grid_page_key,
@@ -290,6 +291,41 @@ def test_detail_artwork_fetches_resized_detail_and_card_artwork(monkeypatch):
     )
 
     assert requested_sizes == [(30, 40), card_artwork_pixel_size(app.config)]
+    assert app.rendered_grid_artwork_cache[grid_artwork_cache_key(full_item, app.config)] == "card-art"
+
+
+def test_detail_artwork_fetches_higher_resolution_for_kitty(monkeypatch):
+    monkeypatch.setenv("KITTY_WINDOW_ID", "1")
+    app = PlexTuiApp()
+    app.config = AppConfig("http://plex", "token", "client-id", artwork_renderer="kitty", media_view="grid")
+    app.detail_refresh_token = 1
+    app.rendered_grid_artwork_cache = {}
+    full_item = MediaItem("Movie", "", "movie", "1", True, Raw(), artwork_path="/thumb")
+    details = SimpleNamespace(artwork_path="/thumb")
+    requested_sizes = []
+
+    def capture_fetch(raw, path, config, width=None, height=None):
+        requested_sizes.append((width, height))
+        return b"image"
+
+    monkeypatch.setattr(app_module, "fetch_artwork", capture_fetch)
+    monkeypatch.setattr(app_module, "render_protocol_artwork", lambda *args, **kwargs: "detail-art")
+    monkeypatch.setattr(app_module, "render_card_artwork", lambda *args, **kwargs: "card-art")
+    app.call_from_thread = lambda callback, *args: None
+
+    PlexTuiApp.fetch_media_detail_artwork.__wrapped__(
+        app,
+        full_item,
+        details,
+        token=1,
+        detail_size=(30, 20),
+        include_card_artwork=True,
+    )
+
+    assert requested_sizes == [
+        artwork_fetch_pixel_size(app.config, 30, 20),
+        artwork_fetch_pixel_size(app.config, 18, 9),
+    ]
     assert app.rendered_grid_artwork_cache[grid_artwork_cache_key(full_item, app.config)] == "card-art"
 
 

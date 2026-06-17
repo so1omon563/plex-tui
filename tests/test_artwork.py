@@ -7,15 +7,19 @@ from PIL import Image
 
 from plextui import artwork
 from plextui.artwork import (
+    KITTY_PLACEHOLDER,
+    KittyImage,
     add_token,
     artwork_url,
     cached_artwork_path,
     kitty_graphics_commands,
+    kitty_placeholder_lines,
     protocol_renderer_status,
     prune_artwork_cache,
     render_kitty_artwork,
     render_artwork,
     render_protocol_artwork,
+    write_all,
 )
 from plextui.config import AppConfig
 
@@ -76,7 +80,9 @@ def test_render_artwork_returns_halfcell_text():
     assert rendered.spans
 
 
-def test_render_protocol_artwork_falls_back_without_explicit_native_opt_in():
+def test_render_protocol_artwork_falls_back_without_explicit_native_opt_in(monkeypatch):
+    monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
+    monkeypatch.delenv("KITTY_PID", raising=False)
     image = Image.new("RGB", (2, 4), "#00ff00")
     buffer = BytesIO()
     image.save(buffer, format="PNG")
@@ -86,40 +92,50 @@ def test_render_protocol_artwork_falls_back_without_explicit_native_opt_in():
     assert rendered is None
 
 
-def test_render_protocol_artwork_falls_back_even_when_native_opt_in_is_enabled(monkeypatch):
+def test_render_protocol_artwork_uses_unicode_placeholders_when_kitty_is_detected(monkeypatch):
     monkeypatch.setenv("KITTY_WINDOW_ID", "1")
+    transmitted = []
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: transmitted.extend(commands))
     image = Image.new("RGB", (2, 4), "#00ff00")
     buffer = BytesIO()
     image.save(buffer, format="PNG")
 
     rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=2, max_height=2)
 
-    assert rendered is None
-    assert protocol_renderer_status("kitty") == "Block fallback; native Kitty images are disabled inside Textual"
+    assert isinstance(rendered, KittyImage)
+    assert rendered.commands[0].startswith("\033_Ga=T,f=100,q=2,i=")
+    assert ",U=1,c=2,r=2;" in rendered.commands[0]
+    assert rendered.plain.count(KITTY_PLACEHOLDER) == 4
+    assert transmitted == list(rendered.commands)
+    assert protocol_renderer_status("kitty") == "Kitty native images via Unicode placeholders"
 
 
-def test_render_kitty_artwork_builds_protocol_bytes():
+def test_render_kitty_artwork_builds_virtual_placement_and_placeholder_text():
     image = Image.new("RGB", (2, 4), "#00ff00")
     buffer = BytesIO()
     image.save(buffer, format="PNG")
 
     rendered = render_kitty_artwork(buffer.getvalue(), width=2, max_height=2)
 
-    assert "\033_Ga=T,f=100,q=2;" in rendered.plain
-    assert rendered.plain.endswith("\033\\")
+    assert isinstance(rendered, KittyImage)
+    assert rendered.commands[0].startswith("\033_Ga=T,f=100,q=2,i=")
+    assert rendered.commands[0].endswith("\033\\")
+    assert rendered.plain.count(KITTY_PLACEHOLDER) == 4
+    assert len(rendered.lines) == 2
 
 
 def test_kitty_graphics_commands_chunks_large_payload(monkeypatch):
     monkeypatch.setattr(artwork, "KITTY_PAYLOAD_CHUNK_SIZE", 8)
 
-    commands = kitty_graphics_commands("a" * 20)
+    commands = kitty_graphics_commands("a" * 20, image_id=42, columns=2, rows=2)
 
-    assert commands[0].startswith("\033_Ga=T,f=100,q=2,m=1;")
+    assert commands[0].startswith("\033_Ga=T,f=100,q=2,i=42,U=1,c=2,r=2,m=1;")
     assert commands[-1].startswith("\033_Gm=0;")
 
 
 def test_auto_protocol_renderer_requires_kitty_terminal(monkeypatch):
     monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
+    monkeypatch.delenv("KITTY_PID", raising=False)
     monkeypatch.setenv("TERM", "xterm-256color")
     image = Image.new("RGB", (2, 4), "#00ff00")
     buffer = BytesIO()
@@ -128,11 +144,38 @@ def test_auto_protocol_renderer_requires_kitty_terminal(monkeypatch):
     rendered = render_protocol_artwork(buffer.getvalue(), "auto", width=2, max_height=2)
 
     assert rendered is None
-    assert protocol_renderer_status("auto") == "Block fallback; native Kitty images are disabled inside Textual"
+    assert protocol_renderer_status("auto") == "Block art; Kitty terminal not detected"
 
 
-def test_protocol_renderer_status_explains_textual_fallback():
-    assert protocol_renderer_status("kitty") == "Block fallback; native Kitty images are disabled inside Textual"
+def test_protocol_renderer_status_explains_textual_fallback(monkeypatch):
+    monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
+    monkeypatch.delenv("KITTY_PID", raising=False)
+
+    assert protocol_renderer_status("kitty") == "Block fallback; Kitty terminal not detected"
+
+
+def test_kitty_placeholder_lines_encode_row_and_column_cells():
+    lines = kitty_placeholder_lines(42, columns=2, rows=2)
+
+    assert lines[0].startswith(f"{KITTY_PLACEHOLDER}\u0305\u0305")
+    assert lines[0].endswith(f"{KITTY_PLACEHOLDER}\u0305\u030d")
+    assert lines[1].startswith(f"{KITTY_PLACEHOLDER}\u030d\u0305")
+
+
+def test_write_all_retries_short_terminal_writes(monkeypatch):
+    chunks = []
+
+    def short_write(fd, payload):
+        del fd
+        chunk = bytes(payload[:3])
+        chunks.append(chunk)
+        return len(chunk)
+
+    monkeypatch.setattr(artwork.os, "write", short_write)
+
+    write_all(1, b"abcdefgh")
+
+    assert b"".join(chunks) == b"abcdefgh"
 
 
 def test_prune_artwork_cache_removes_oldest_files(tmp_path, monkeypatch):
