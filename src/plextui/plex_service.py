@@ -226,7 +226,13 @@ def media_details(item: MediaItem) -> MediaDetails:
 
 
 def artwork_path(raw: Any) -> str:
-    for attr in ("grandparentThumb", "parentThumb", "thumb", "art"):
+    kind = str(getattr(raw, "TYPE", raw.__class__.__name__)).lower()
+    attrs = (
+        ("thumb", "parentThumb", "grandparentThumb", "art")
+        if kind in {"show", "season", "episode"}
+        else ("grandparentThumb", "parentThumb", "thumb", "art")
+    )
+    for attr in attrs:
         value = getattr(raw, attr, None)
         if value:
             return str(value)

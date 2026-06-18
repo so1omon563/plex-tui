@@ -1,7 +1,16 @@
 from __future__ import annotations
 
 from plextui.models import LibraryItem, MediaItem
-from plextui.plex_service import PlexService, kind_label, media_details, progress_label, row_progress_marker, watched_state
+from plextui.plex_service import (
+    PlexService,
+    artwork_path,
+    kind_label,
+    media_details,
+    progress_label,
+    row_progress_marker,
+    to_media_item,
+    watched_state,
+)
 
 
 class RawItem:
@@ -60,6 +69,18 @@ class DetailedRawItem(RawItem):
 
     def iterParts(self):
         return [Part()]
+
+
+class TvEpisodeRawItem(DetailedRawItem):
+    TYPE = "episode"
+    title = "Episode"
+    thumb = "/library/metadata/episode/thumb"
+
+
+class TvSeasonRawItem(DetailedRawItem):
+    TYPE = "season"
+    title = "Season 1"
+    thumb = "/library/metadata/season-own/thumb"
 
 
 class RawPage(list):
@@ -217,6 +238,32 @@ def test_media_details_include_audio_and_subtitle_locations():
         "Signs (vobsub, embedded, forced)",
     ]
     assert details.artwork_path == "/library/metadata/show/thumb"
+
+
+def test_tv_episode_artwork_prefers_episode_still():
+    assert artwork_path(TvEpisodeRawItem()) == "/library/metadata/episode/thumb"
+    assert to_media_item(TvEpisodeRawItem()).artwork_path == "/library/metadata/episode/thumb"
+
+
+def test_tv_season_artwork_prefers_season_poster():
+    assert artwork_path(TvSeasonRawItem()) == "/library/metadata/season-own/thumb"
+    assert to_media_item(TvSeasonRawItem()).artwork_path == "/library/metadata/season-own/thumb"
+
+
+def test_tv_artwork_falls_back_to_parent_then_show_art():
+    class EpisodeWithoutStill(TvEpisodeRawItem):
+        thumb = ""
+
+    class SeasonWithoutPoster(TvSeasonRawItem):
+        thumb = ""
+
+    class EpisodeWithoutSeasonArt(TvEpisodeRawItem):
+        thumb = ""
+        parentThumb = ""
+
+    assert artwork_path(EpisodeWithoutStill()) == "/library/metadata/season/thumb"
+    assert artwork_path(SeasonWithoutPoster()) == "/library/metadata/season/thumb"
+    assert artwork_path(EpisodeWithoutSeasonArt()) == "/library/metadata/show/thumb"
 
 
 def test_kind_label_humanizes_known_and_unknown_media_types():
