@@ -133,14 +133,111 @@ jobs:
             "${{ steps.tap.outputs.path }}/Formula/plex-tui.rb" \
             "${{ steps.release.outputs.version }}"
 
-      - name: Audit formula
+      - name: Check tap update need
         if: steps.release.outputs.publish == 'true'
+        id: tap-update
+        working-directory: ${{ steps.tap.outputs.path }}
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          bottle_release="plex-tui-${VERSION}"
+          bottle_root_url="https://github.com/so1omon563/homebrew-plex-tui/releases/download/${bottle_release}"
+          needed=false
+
+          if ! git diff --quiet -- Formula/plex-tui.rb; then
+            needed=true
+          fi
+
+          if ! grep -Fq "root_url \"${bottle_root_url}\"" Formula/plex-tui.rb; then
+            needed=true
+          fi
+
+          {
+            echo "needed=${needed}"
+            echo "bottle_release=${bottle_release}"
+            echo "bottle_root_url=${bottle_root_url}"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$needed" = "false" ]; then
+            echo "Homebrew tap is already up to date with bottle metadata."
+          fi
+
+      - name: Build Homebrew bottle
+        if: steps.release.outputs.publish == 'true' && steps.tap-update.outputs.needed == 'true'
+        id: bottle
+        working-directory: ${{ steps.tap.outputs.path }}
+        env:
+          BOTTLE_ROOT_URL: ${{ steps.tap-update.outputs.bottle_root_url }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          brew uninstall --ignore-dependencies so1omon563/plex-tui/plex-tui >/dev/null 2>&1 || true
+          brew install --build-bottle so1omon563/plex-tui/plex-tui
+
+          rm -f plex-tui--*.bottle.json plex-tui--*.bottle.tar.gz
+          brew bottle \
+            --json \
+            --no-rebuild \
+            --root-url "$BOTTLE_ROOT_URL" \
+            so1omon563/plex-tui/plex-tui
+
+          bottle_json="$(find "$PWD" -maxdepth 1 -name 'plex-tui--*.bottle.json' -print -quit)"
+          if [ -z "$bottle_json" ]; then
+            echo "brew bottle did not produce bottle JSON" >&2
+            exit 1
+          fi
+
+          bottle_dir="${RUNNER_TEMP}/homebrew-bottles"
+          rm -rf "$bottle_dir"
+          mkdir -p "$bottle_dir"
+          python "${GITHUB_WORKSPACE}/scripts/prepare_homebrew_bottle_assets.py" \
+            "$bottle_json" \
+            --output-dir "$bottle_dir"
+
+          brew bottle --merge --write --no-commit "$bottle_json"
+
+          {
+            echo "json_path=${bottle_json}"
+            echo "upload_dir=${bottle_dir}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish Homebrew bottle assets
+        if: steps.release.outputs.publish == 'true' && steps.tap-update.outputs.needed == 'true'
+        working-directory: ${{ steps.bottle.outputs.upload_dir }}
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGING_PR_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
+          BOTTLE_RELEASE: ${{ steps.tap-update.outputs.bottle_release }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "$BOTTLE_RELEASE" --repo so1omon563/homebrew-plex-tui >/dev/null 2>&1; then
+            gh release edit "$BOTTLE_RELEASE" \
+              --repo so1omon563/homebrew-plex-tui \
+              --title "plex-tui ${VERSION} Homebrew bottle"
+          else
+            gh release create "$BOTTLE_RELEASE" \
+              --repo so1omon563/homebrew-plex-tui \
+              --target main \
+              --title "plex-tui ${VERSION} Homebrew bottle" \
+              --notes "Homebrew bottle assets for plex-tui ${VERSION}."
+          fi
+
+          gh release upload "$BOTTLE_RELEASE" ./* \
+            --repo so1omon563/homebrew-plex-tui \
+            --clobber
+
+      - name: Audit formula
+        if: steps.release.outputs.publish == 'true' && steps.tap-update.outputs.needed == 'true'
         working-directory: ${{ steps.tap.outputs.path }}
         run: |
           brew audit --strict --online so1omon563/plex-tui/plex-tui
 
       - name: Commit tap update
-        if: steps.release.outputs.publish == 'true'
+        if: steps.release.outputs.publish == 'true' && steps.tap-update.outputs.needed == 'true'
         id: commit
         working-directory: ${{ steps.tap.outputs.path }}
         env:
@@ -172,15 +269,18 @@ jobs:
           GH_TOKEN: ${{ secrets.PACKAGING_PR_TOKEN }}
           VERSION: ${{ steps.release.outputs.version }}
           BRANCH: ${{ steps.commit.outputs.branch }}
+          BOTTLE_RELEASE: ${{ steps.tap-update.outputs.bottle_release }}
         run: |
           set -euo pipefail
+
+          pr_body="$(printf 'Automated Homebrew tap update for plex-tui %s.\n\nIncludes the generated bottle metadata for %s.\n' "$VERSION" "$BOTTLE_RELEASE")"
 
           pr_url="$(gh pr create \
             --repo so1omon563/homebrew-plex-tui \
             --base main \
             --head "$BRANCH" \
             --title "Update plex-tui to ${VERSION}" \
-            --body "Automated Homebrew tap update for plex-tui ${VERSION}.")"
+            --body "$pr_body")"
 
           gh pr merge "$pr_url" \
             --repo so1omon563/homebrew-plex-tui \

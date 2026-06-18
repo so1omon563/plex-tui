@@ -158,7 +158,8 @@ unless app packaging requirements change.
 2. Prototype bottle creation in the tap repo and compare bottle-pour timing
    against the baseline. Done locally for `arm64_tahoe`.
 3. Add tap automation that builds bottles, uploads them to a release asset, and
-   merges the generated `bottle do` block.
+   merges the generated `bottle do` block. Implemented in the post-release
+   Homebrew workflow.
 4. Keep optional `pillow` dependency reduction as a secondary path if bottle
    automation proves too brittle.
 5. Update `PACKAGING.md` and the tap README once bottle automation is proven.

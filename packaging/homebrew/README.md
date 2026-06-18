@@ -22,15 +22,18 @@ For each `plex-tui` release:
 
 1. Update the formula URL and sha256 for the new PyPI sdist.
 2. Refresh Python resource blocks if dependencies changed.
-3. Run:
+3. Build and publish a Homebrew bottle, then merge the generated `bottle do`
+   block into the formula.
+4. Run:
 
    ```bash
    brew test so1omon563/plex-tui/plex-tui
    brew audit --strict --online so1omon563/plex-tui/plex-tui
    ```
 
-The current formula is correct but slow on first install because native Python
-resources such as `pillow` are built from source.
+The source formula is correct but slow on first install because native Python
+resources such as `pillow` are built from source. Release automation should
+publish bottles so supported macOS installs can pour a prebuilt virtualenv.
 
 Install-time investigation notes and the baseline measurement helper live in the
 main repo at `docs/homebrew-install-time.md` and
