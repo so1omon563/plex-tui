@@ -51,8 +51,10 @@ brew install plex-tui
 ```
 
 The formula depends on `mpv` and `python@3.13`, then installs the Python app in
-a Homebrew-managed virtualenv. The first install can take several minutes
-because native Python resources such as `pillow` are built from source.
+a Homebrew-managed virtualenv. Post-release automation publishes Homebrew
+bottles so supported macOS installs can pour the prebuilt app virtualenv instead
+of rebuilding Python resources such as `pillow` from source. If no matching
+bottle is available, Homebrew falls back to the source install path.
 Homebrew 6 requires non-official taps to be trusted before Homebrew loads
 formulae from them. The `plex-tui` formula only uses Homebrew/core formula
 dependencies, so users do not need to trust any additional taps for `mpv`,
@@ -99,8 +101,8 @@ Validation is handled by `.github/workflows/aur.yml`, which runs inside
 For each new app release:
 
 1. Publish and validate PyPI.
-2. Let the `Post-release Homebrew Publish` workflow update, validate, and merge
-   the Homebrew tap formula.
+2. Let the `Post-release Homebrew Publish` workflow update, bottle, validate,
+   and merge the Homebrew tap formula.
 3. Let the `Post-release AUR Update` workflow update AUR metadata, open the
    packaging PR, approve it, and enable auto-merge.
 4. After the packaging PR merges and the `AUR Package` workflow passes on
@@ -115,10 +117,11 @@ The AUR automation requires:
   `ssh://aur@aur.archlinux.org/plex-tui.git`.
 
 The Homebrew automation uses `PACKAGING_PR_TOKEN`; that token must also be able
-to push branches and merge pull requests in `so1omon563/homebrew-plex-tui`.
+to create or update GitHub Releases, upload bottle assets, push branches, and
+merge pull requests in `so1omon563/homebrew-plex-tui`.
 
 ## Known Follow-Up
 
-- Investigate faster Homebrew installs without compromising formula quality;
-  start from the measurement plan in `docs/homebrew-install-time.md`.
+- Continue validating Homebrew bottle publishing on release dry-runs and
+  follow-up packaging PRs.
 - Consider standalone artifacts only after the app behavior stabilizes.

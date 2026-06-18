@@ -40,6 +40,7 @@ def run_checks(root: Path) -> list[CheckResult]:
         check_version_metadata(root),
         check_changelog_version(root),
         check_release_workflow(root),
+        check_homebrew_workflow(root),
         check_actionlint(root),
     ]
 
@@ -114,6 +115,38 @@ def check_release_workflow(root: Path) -> CheckResult:
         return CheckResult(False, "bump.yml must publish PyPI after creating a release")
 
     return CheckResult(True, "bump.yml contains PR merge tagging, release creation, and PyPI publish wiring")
+
+
+def check_homebrew_workflow(root: Path) -> CheckResult:
+    path = root / ".github/workflows/post-release-homebrew.yml"
+    try:
+        workflow = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return CheckResult(False, f"read {path}: {exc}")
+
+    required_snippets = [
+        "Wait for PyPI package availability",
+        "python scripts/update_homebrew_formula.py",
+        "id: tap-update",
+        "bottle_root_url=\"https://github.com/so1omon563/homebrew-plex-tui/releases/download/${bottle_release}\"",
+        "grep -Fq",
+        "brew install --build-bottle so1omon563/plex-tui/plex-tui",
+        "brew bottle \\",
+        "--json \\",
+        "--root-url \"$BOTTLE_ROOT_URL\"",
+        "scripts/prepare_homebrew_bottle_assets.py",
+        "brew bottle --merge --write --no-commit",
+        "gh release create \"$BOTTLE_RELEASE\"",
+        "gh release upload \"$BOTTLE_RELEASE\"",
+        "brew audit --strict --online so1omon563/plex-tui/plex-tui",
+        "gh pr create \\",
+        "gh pr merge \"$pr_url\"",
+    ]
+    missing = [snippet for snippet in required_snippets if snippet not in workflow]
+    if missing:
+        return CheckResult(False, f"post-release-homebrew.yml is missing bottle publish wiring: {', '.join(missing)}")
+
+    return CheckResult(True, "post-release-homebrew.yml updates formulae and publishes Homebrew bottles")
 
 
 def check_actionlint(root: Path) -> CheckResult:

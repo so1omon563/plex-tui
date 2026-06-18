@@ -87,6 +87,27 @@ jobs:
     assert "release-creator" in result.message
 
 
+def test_homebrew_workflow_requires_bottle_publish_wiring(tmp_path):
+    write_release_fixture(tmp_path)
+    (tmp_path / ".github/workflows/post-release-homebrew.yml").write_text(
+        """
+name: Post-release Homebrew Publish
+jobs:
+  publish-tap:
+    steps:
+      - name: Update formula source
+        run: python scripts/update_homebrew_formula.py Formula/plex-tui.rb 0.4.2
+""",
+        encoding="utf-8",
+    )
+
+    result = check_release.check_homebrew_workflow(tmp_path)
+
+    assert not result.ok
+    assert "bottle publish wiring" in result.message
+    assert "brew install --build-bottle" in result.message
+
+
 def test_stage_release_updates_version_files_and_moves_changelog(tmp_path):
     write_release_fixture(tmp_path)
     (tmp_path / "CHANGELOG.md").write_text(
@@ -286,6 +307,12 @@ def write_release_fixture(
     )
     (root / ".github/workflows/bump.yml").write_text(
         (Path(__file__).resolve().parents[1] / ".github/workflows/bump.yml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (root / ".github/workflows/post-release-homebrew.yml").write_text(
+        (Path(__file__).resolve().parents[1] / ".github/workflows/post-release-homebrew.yml").read_text(
+            encoding="utf-8"
+        ),
         encoding="utf-8",
     )
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added Homebrew bottle publishing to the post-release tap automation so macOS
+  installs can pour a prebuilt `plex-tui` virtualenv instead of rebuilding
+  Python resources from source.
+
 ## 0.4.2 - 2026-06-18
 
 - Prefer episode stills and season posters for TV artwork while keeping show art

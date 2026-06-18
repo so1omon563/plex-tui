@@ -124,9 +124,15 @@ be run manually with a release tag. It updates:
 - Formula URL and sha256.
 - Python resource blocks if dependencies changed.
 - Formula test expectations if version output changed.
+- Homebrew bottle assets and the generated formula `bottle do` block.
 
-It then runs `brew audit --strict --online`, opens a tap PR, and merges it. This
-uses `PACKAGING_PR_TOKEN`, which must have access to the tap repository.
+It builds the formula with `brew install --build-bottle`, generates bottle
+metadata with `brew bottle --json`, uploads the bottle tarball to a
+`plex-tui-X.Y.Z` GitHub Release in the tap repository, merges the generated
+`bottle do` block into the formula, runs `brew audit --strict --online`, opens a
+tap PR, and merges it. This uses `PACKAGING_PR_TOKEN`, which must have access to
+create releases, upload assets, push branches, and merge pull requests in the
+tap repository.
 
 If the automated workflow cannot run, update and validate manually:
 
@@ -186,8 +192,9 @@ To verify post-release packaging without publishing a new app release, manually
 dispatch the post-release workflows with the latest real release tag, for
 example `v0.3.6`. A healthy idempotent run should:
 
-- update and audit the Homebrew formula, then skip tap PR creation when there is
-  no diff;
+- update, bottle, and audit the Homebrew formula when bottle metadata is
+  missing; then skip tap PR creation on later reruns when the formula and bottle
+  block are already current;
 - regenerate and validate AUR metadata, then skip packaging PR auto-merge when
   there is no diff.
 
