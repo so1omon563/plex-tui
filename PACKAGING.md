@@ -65,6 +65,10 @@ brew test so1omon563/plex-tui/plex-tui
 brew audit --strict --online so1omon563/plex-tui/plex-tui
 ```
 
+Install-time investigation lives in `docs/homebrew-install-time.md`. Use
+`scripts/measure_homebrew_install.py` to capture no-op upgrade, reinstall,
+fresh-install, and bottle-pour timings before changing the tap formula.
+
 ### Arch AUR
 
 AUR package:
@@ -115,5 +119,6 @@ to push branches and merge pull requests in `so1omon563/homebrew-plex-tui`.
 
 ## Known Follow-Up
 
-- Investigate faster Homebrew installs without compromising formula quality.
+- Investigate faster Homebrew installs without compromising formula quality;
+  start from the measurement plan in `docs/homebrew-install-time.md`.
 - Consider standalone artifacts only after the app behavior stabilizes.

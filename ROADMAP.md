@@ -32,8 +32,10 @@
   requires the Python 3.11 and 3.13 checks before merge. Rulesets require PRs
   with zero approving reviews so automation branches can merge after checks
   without self-approval.
-- Improve Homebrew install time; the current formula works but builds native
-  Python resources such as `pillow` from source.
+- Improve Homebrew install time; baseline the current install/update paths with
+  `scripts/measure_homebrew_install.py`, then prioritize tap bottle automation.
+  The current formula works but builds Python resources from source, with
+  native compilation concentrated in `pillow`.
 - Keep post-release package publishing fully automated across PyPI, Homebrew,
   and AUR. Periodically dry-run existing release tags through the post-release
   workflows to confirm Homebrew and AUR no-op cleanly when already current.

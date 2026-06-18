@@ -31,3 +31,7 @@ For each `plex-tui` release:
 
 The current formula is correct but slow on first install because native Python
 resources such as `pillow` are built from source.
+
+Install-time investigation notes and the baseline measurement helper live in the
+main repo at `docs/homebrew-install-time.md` and
+`scripts/measure_homebrew_install.py`.
