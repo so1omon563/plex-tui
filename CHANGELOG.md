@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.2 - 2026-06-18
+
+- Prefer episode stills and season posters for TV artwork while keeping show art
+  as the fallback.
+
 ## 0.4.1 - 2026-06-18
 
 - Let explicit `artwork_renderer = "kitty"` try Kitty graphics even when
