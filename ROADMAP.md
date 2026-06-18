@@ -65,5 +65,12 @@
   artwork, pagination, or detail-loading behavior.
 - Revisit whether verbose `PLEX_TUI_ARTWORK_LOG=1` should expose more structured artwork counters.
 - Continue validating Kitty Unicode-placeholder artwork in real terminals.
-  Block art remains the mandatory fallback outside Kitty.
+  Block art remains the mandatory fallback outside known native-image paths.
+- Continue expanding Kitty graphics support beyond Kitty itself after the
+  initial Ghostty path. `artwork_renderer = "kitty"` is the explicit "try Kitty
+  protocol" override, while `auto` should stay conservative until terminal
+  support is verified.
+- Research explicit iTerm inline-image protocol support as a separate renderer
+  path rather than assuming iTerm speaks Kitty graphics. Include WezTerm in that
+  research because its documented image path follows the iTerm image protocol.
 - Add focused regression tests for any real-world Plex media edge cases discovered during use.

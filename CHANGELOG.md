@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.1 - 2026-06-18
+
+- Let explicit `artwork_renderer = "kitty"` try Kitty graphics even when
+  Kitty-specific environment variables are absent, and let `auto` enable the
+  Kitty graphics path in Ghostty.
+
 ## 0.4.0 - 2026-06-17
 
 - Added native Kitty poster artwork via Unicode placeholders for terminals that
