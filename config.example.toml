@@ -40,8 +40,9 @@ client_identifier = "plex-tui-your-stable-client-id"
 # Optional artwork settings.
 # artwork_mode can be "on" or "off".
 # artwork_mode = "on"
-# artwork_renderer can be "block", "auto", or "kitty". Auto uses native Kitty
-# images when Kitty is detected, otherwise it falls back to block art.
+# artwork_renderer can be "block", "auto", or "kitty". Auto uses Kitty graphics
+# in detected compatible terminals such as Kitty and Ghostty, otherwise it falls
+# back to block art. "kitty" explicitly tries the Kitty graphics protocol.
 # artwork_renderer = "block"
 # detail_artwork_mode can be "list_only", "on", or "off".
 # detail_artwork_mode = "list_only"

@@ -210,7 +210,7 @@ def render_protocol_artwork(data: bytes, renderer: str, width: int = 28, max_hei
 
 
 def resolve_protocol_renderer(renderer: str) -> str:
-    if renderer == "kitty" and kitty_graphics_supported():
+    if renderer == "kitty":
         return "kitty"
     if renderer == "auto" and kitty_graphics_supported():
         return "kitty"
@@ -222,20 +222,28 @@ def protocol_renderer_status(renderer: str) -> str:
     if resolved == "kitty":
         return "Kitty native images via Unicode placeholders"
     if renderer == "auto":
-        return "Block art; Kitty terminal not detected"
+        return "Block art; Kitty-compatible terminal not detected"
     if renderer == "kitty":
-        return "Block fallback; Kitty terminal not detected"
+        return "Kitty native images via Unicode placeholders"
     return "Block art"
 
 
 def kitty_graphics_supported() -> bool:
-    return bool(os.environ.get("KITTY_WINDOW_ID") or os.environ.get("KITTY_PID"))
+    return bool(os.environ.get("KITTY_WINDOW_ID") or os.environ.get("KITTY_PID") or ghostty_terminal_detected())
+
+
+def ghostty_terminal_detected() -> bool:
+    term_program = os.environ.get("TERM_PROGRAM", "").lower()
+    term = os.environ.get("TERM", "").lower()
+    return term_program == "ghostty" or term.startswith("xterm-ghostty")
 
 
 def kitty_environment_status() -> str:
     fields = [
         f"KITTY_WINDOW_ID={int(bool(os.environ.get('KITTY_WINDOW_ID')))}",
         f"KITTY_PID={int(bool(os.environ.get('KITTY_PID')))}",
+        f"TERM_PROGRAM={os.environ.get('TERM_PROGRAM', '')!r}",
+        f"TERM_PROGRAM_VERSION={os.environ.get('TERM_PROGRAM_VERSION', '')!r}",
         f"TERM={os.environ.get('TERM', '')!r}",
         f"COLORTERM={os.environ.get('COLORTERM', '')!r}",
     ]

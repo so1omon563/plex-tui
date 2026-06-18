@@ -80,16 +80,20 @@ def test_render_artwork_returns_halfcell_text():
     assert rendered.spans
 
 
-def test_render_protocol_artwork_falls_back_without_explicit_native_opt_in(monkeypatch):
+def test_render_protocol_artwork_tries_kitty_when_explicitly_enabled(monkeypatch):
     monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
     monkeypatch.delenv("KITTY_PID", raising=False)
+    monkeypatch.delenv("TERM_PROGRAM", raising=False)
+    transmitted = []
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: transmitted.extend(commands))
     image = Image.new("RGB", (2, 4), "#00ff00")
     buffer = BytesIO()
     image.save(buffer, format="PNG")
 
     rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=2, max_height=2)
 
-    assert rendered is None
+    assert isinstance(rendered, KittyImage)
+    assert transmitted == list(rendered.commands)
 
 
 def test_render_protocol_artwork_uses_unicode_placeholders_when_kitty_is_detected(monkeypatch):
@@ -136,6 +140,7 @@ def test_kitty_graphics_commands_chunks_large_payload(monkeypatch):
 def test_auto_protocol_renderer_requires_kitty_terminal(monkeypatch):
     monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
     monkeypatch.delenv("KITTY_PID", raising=False)
+    monkeypatch.delenv("TERM_PROGRAM", raising=False)
     monkeypatch.setenv("TERM", "xterm-256color")
     image = Image.new("RGB", (2, 4), "#00ff00")
     buffer = BytesIO()
@@ -144,14 +149,32 @@ def test_auto_protocol_renderer_requires_kitty_terminal(monkeypatch):
     rendered = render_protocol_artwork(buffer.getvalue(), "auto", width=2, max_height=2)
 
     assert rendered is None
-    assert protocol_renderer_status("auto") == "Block art; Kitty terminal not detected"
+    assert protocol_renderer_status("auto") == "Block art; Kitty-compatible terminal not detected"
 
 
-def test_protocol_renderer_status_explains_textual_fallback(monkeypatch):
+def test_auto_protocol_renderer_uses_kitty_placeholders_in_ghostty(monkeypatch):
     monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
     monkeypatch.delenv("KITTY_PID", raising=False)
+    monkeypatch.setenv("TERM_PROGRAM", "ghostty")
+    transmitted = []
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: transmitted.extend(commands))
+    image = Image.new("RGB", (2, 4), "#00ff00")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
 
-    assert protocol_renderer_status("kitty") == "Block fallback; Kitty terminal not detected"
+    rendered = render_protocol_artwork(buffer.getvalue(), "auto", width=2, max_height=2)
+
+    assert isinstance(rendered, KittyImage)
+    assert transmitted == list(rendered.commands)
+    assert protocol_renderer_status("auto") == "Kitty native images via Unicode placeholders"
+
+
+def test_protocol_renderer_status_explains_explicit_kitty_force(monkeypatch):
+    monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
+    monkeypatch.delenv("KITTY_PID", raising=False)
+    monkeypatch.delenv("TERM_PROGRAM", raising=False)
+
+    assert protocol_renderer_status("kitty") == "Kitty native images via Unicode placeholders"
 
 
 def test_kitty_placeholder_lines_encode_row_and_column_cells():
