@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.4 - 2026-06-18
+
 - Added a keyboard action to mark the selected playable Plex item watched or
   unwatched from the browse view.
 - Added Plex library Categories browsing, visible movie-edition variants, and
