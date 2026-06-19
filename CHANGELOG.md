@@ -4,7 +4,8 @@
 
 - Added Homebrew bottle publishing to the post-release tap automation so macOS
   installs can pour a prebuilt `plex-tui` virtualenv instead of rebuilding
-  Python resources from source.
+  Python resources from source, with bounded verbose CI diagnostics for bottle
+  builds.
 
 ## 0.4.2 - 2026-06-18
 

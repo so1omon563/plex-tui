@@ -105,7 +105,7 @@ jobs:
 
     assert not result.ok
     assert "bottle publish wiring" in result.message
-    assert "brew install --build-bottle" in result.message
+    assert "brew install --verbose --build-bottle" in result.message
 
 
 def test_stage_release_updates_version_files_and_moves_changelog(tmp_path):
