@@ -186,6 +186,9 @@ Use PRs for repository changes. When publishing local commits, branch from
 open a draft PR instead of pushing directly to `main`.
 Create or switch to a scoped branch before doing repo work; do not keep feature
 work in the local `main` working tree.
+Repo work is not complete when a branch is merely pushed. Treat the workflow as
+open until there is a draft PR for the branch or the work is explicitly
+canceled.
 
 `main` is protected by repository rulesets. Changes must flow through PRs; force
 pushes and branch deletion are blocked. `plex-tui` requires the Python 3.11 and
