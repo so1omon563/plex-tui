@@ -200,7 +200,7 @@ matching track.
 | `p` | Play selected item from the beginning |
 | `r` | Resume selected item from the saved Plex position |
 | `w` | Mark selected item watched / unwatched |
-| `delete` | Remove selected item from Continue Watching |
+| `backspace` / `delete` | Remove selected item from Continue Watching |
 | `a` / `s` | Choose audio / subtitle preference |
 | `A` / `S` | Clear audio preference / cycle subtitle mode |
 | `x` | Stop launched `mpv` |

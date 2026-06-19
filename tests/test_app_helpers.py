@@ -864,7 +864,7 @@ def test_render_help_groups_key_bindings():
     assert "p: play selected media from beginning" in rendered
     assert "r: resume selected media" in rendered
     assert "w: mark selected media watched / unwatched" in rendered
-    assert "delete: remove selected Continue Watching item" in rendered
+    assert "backspace/delete: remove selected Continue Watching item" in rendered
     assert "ctrl+r: reconnect / reload libraries" in rendered
     assert "PLEX_TUI_ARTWORK_LOG=1" in rendered
     assert "?: show help" in rendered
@@ -873,6 +873,10 @@ def test_render_help_groups_key_bindings():
 def test_footer_shows_core_bindings_and_help_keeps_full_reference():
     shown = {binding.action for binding in PlexTuiApp.BINDINGS if binding.show}
     hidden = {binding.action for binding in PlexTuiApp.BINDINGS if not binding.show}
+    hidden_keys_by_action = {}
+    for binding in PlexTuiApp.BINDINGS:
+        if not binding.show:
+            hidden_keys_by_action.setdefault(binding.action, set()).add(binding.key)
     rendered = render_help()
 
     assert shown == {
@@ -889,6 +893,7 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
     assert "alternate_library_action" in hidden
     assert "toggle_watched" in hidden
     assert "remove_continue_watching" in hidden
+    assert hidden_keys_by_action["remove_continue_watching"] == {"backspace", "delete"}
     assert "audio_picker" in hidden
     assert "subtitle_picker" in hidden
     assert "a: choose and save audio preference" in rendered

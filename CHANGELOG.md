@@ -10,8 +10,8 @@
 - Made library rows open the full Library view by default, with Space opening
   the browse-mode menu as the alternate action, and added a Settings option to
   swap those actions.
-- Added a Continue Watching removal action for selected items in the Continue
-  Watching view.
+- Added a Backspace/Delete Continue Watching removal action for selected items
+  in the Continue Watching view.
 
 ## 0.4.3 - 2026-06-18
 
