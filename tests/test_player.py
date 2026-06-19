@@ -15,6 +15,7 @@ from plextui.player import (
     preferred_subtitle_choice,
     log_debug,
     sanitize_command,
+    switch_mpv_stream,
 )
 
 
@@ -249,6 +250,41 @@ def test_direct_play_gets_mpv_track_hints_for_embedded_streams():
     assert "--start=65.000" in args
     assert "--aid=1" in args
     assert "--sid=1" in args
+
+
+def test_switch_mpv_stream_sets_audio_track():
+    item = Item()
+    handle = type(
+        "Handle",
+        (),
+        {
+            "active": True,
+            "socket_path": Path("/tmp/socket"),
+        },
+    )()
+    audio = Part().audioStreams()[0]
+
+    with patch("plextui.player.mpv_set_property", return_value=True) as set_property:
+        assert switch_mpv_stream(handle, item, StreamChoice(42, "Japanese", audio), "audio")
+
+    set_property.assert_called_once_with(Path("/tmp/socket"), "aid", 1)
+
+
+def test_switch_mpv_stream_can_disable_subtitles():
+    item = Item()
+    handle = type(
+        "Handle",
+        (),
+        {
+            "active": True,
+            "socket_path": Path("/tmp/socket"),
+        },
+    )()
+
+    with patch("plextui.player.mpv_set_property", return_value=True) as set_property:
+        assert switch_mpv_stream(handle, item, StreamChoice(0, "None"), "subtitle")
+
+    set_property.assert_called_once_with(Path("/tmp/socket"), "sid", "no")
 
 
 def test_force_transcode_bypasses_direct_play_and_applies_quality():

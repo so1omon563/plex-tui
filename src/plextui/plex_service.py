@@ -57,6 +57,16 @@ class MediaPage:
         return self.next_start < self.total
 
 
+@dataclass(frozen=True)
+class CategoryRef:
+    title: str
+    key: str
+    library: LibraryItem
+    raw: Any
+    filter_name: str = "genre"
+    filter_value: str = ""
+
+
 class PlexService:
     def __init__(self, config: AppConfig) -> None:
         if not config.base_url or not config.token:
@@ -112,6 +122,8 @@ class PlexService:
                 container_size=size,
             )
             return media_page_from_raw(raw_items, start)
+        if entry == "categories":
+            return sliced_media_page(category_items(library), start, size)
         raise ValueError(f"unknown library entry: {entry}")
 
     def library_items(self, library: LibraryItem) -> list[MediaItem]:
@@ -146,6 +158,11 @@ class PlexService:
 
     def children(self, item: MediaItem) -> list[MediaItem]:
         raw = item.raw
+        if isinstance(raw, CategoryRef):
+            return self.category_page(raw, 0, DEFAULT_PAGE_SIZE).items
+        editions = movie_edition_items(raw)
+        if len(editions) > 1:
+            return editions
         if hasattr(raw, "seasons"):
             return [to_media_item(child) for child in raw.seasons()]
         if hasattr(raw, "episodes"):
@@ -160,6 +177,22 @@ class PlexService:
         source: Iterable[Any] = self.server.search(query, limit=DEFAULT_PAGE_SIZE)
         return [to_media_item(item) for item in source]
 
+    def category_page(self, category: CategoryRef, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
+        raw = category.raw
+        category_children = getattr(raw, "items", None)
+        if callable(category_children):
+            return sliced_media_page([to_media_item(item) for item in category_children()], start, size)
+        if category_children:
+            return sliced_media_page([to_media_item(item) for item in category_children], start, size)
+        filters = {category.filter_name: category.filter_value or category.title}
+        raw_items = category.library.raw.search(
+            maxresults=size,
+            container_start=start,
+            container_size=size,
+            **filters,
+        )
+        return media_page_from_raw(raw_items, start)
+
 
 def media_page_from_raw(raw_items: Iterable[Any], start: int) -> MediaPage:
     items = [to_media_item(item) for item in raw_items]
@@ -170,15 +203,25 @@ def media_page_from_raw(raw_items: Iterable[Any], start: int) -> MediaPage:
 
 
 def sliced_media_page(raw_items: list[Any], start: int, size: int) -> MediaPage:
-    items = [to_media_item(item) for item in raw_items[start:start + size]]
+    items = [item if isinstance(item, MediaItem) else to_media_item(item) for item in raw_items[start:start + size]]
     return MediaPage(items=items, start=start, total=len(raw_items))
 
 
 def to_media_item(raw: Any) -> MediaItem:
+    if isinstance(raw, CategoryRef):
+        return MediaItem(
+            title=raw.title,
+            subtitle="Category",
+            kind="category",
+            key=raw.key,
+            playable=False,
+            raw=raw,
+        )
     kind = str(getattr(raw, "TYPE", raw.__class__.__name__)).lower()
     year = getattr(raw, "year", None)
     duration = format_duration(getattr(raw, "duration", None))
-    bits = [str(year) if year else "", duration]
+    edition = edition_label(raw)
+    bits = [str(year) if year else "", edition, duration]
     subtitle = "  ".join(bit for bit in bits if bit)
     key = str(getattr(raw, "ratingKey", getattr(raw, "key", "")))
     return MediaItem(
@@ -198,6 +241,7 @@ def media_details(item: MediaItem) -> MediaDetails:
     for value in (
         getattr(raw, "year", None),
         format_duration(getattr(raw, "duration", None)),
+        edition_label(raw),
         watched_state(raw),
         episode_label(raw),
         getattr(raw, "contentRating", None),
@@ -245,6 +289,7 @@ def metadata_fields(raw: Any) -> list[tuple[str, str]]:
         ("Type", getattr(raw, "TYPE", "")),
         ("Year", getattr(raw, "year", None)),
         ("Duration", format_duration(getattr(raw, "duration", None))),
+        ("Edition", edition_label(raw)),
         ("Status", watched_state(raw)),
         ("Progress", progress_label(raw)),
         ("Episode", episode_label(raw)),
@@ -257,6 +302,80 @@ def metadata_fields(raw: Any) -> list[tuple[str, str]]:
         if value:
             fields.append((label, str(value)))
     return fields
+
+
+def category_items(library: LibraryItem) -> list[MediaItem]:
+    categories: list[Any] = []
+    native_categories = getattr(library.raw, "categories", None)
+    if callable(native_categories):
+        try:
+            categories = list(native_categories())
+        except Exception:
+            categories = []
+    if not categories:
+        choices = getattr(library.raw, "listFilterChoices", None)
+        if callable(choices):
+            try:
+                categories = list(choices("genre"))
+            except Exception:
+                categories = []
+    refs = []
+    seen = set()
+    for index, category in enumerate(categories):
+        title = category_title(category)
+        if not title:
+            continue
+        filter_value = category_filter_value(category) or title
+        key = f"{library.key}:category:{filter_value or index}"
+        if key in seen:
+            continue
+        seen.add(key)
+        refs.append(
+            to_media_item(
+                CategoryRef(
+                    title=title,
+                    key=key,
+                    library=library,
+                    raw=category,
+                    filter_value=filter_value,
+                )
+            )
+        )
+    return refs
+
+
+def category_title(category: Any) -> str:
+    for attr in ("title", "tag", "name", "key"):
+        value = getattr(category, attr, "")
+        if value:
+            return str(value)
+    return str(category or "")
+
+
+def category_filter_value(category: Any) -> str:
+    for attr in ("key", "tag", "title", "name"):
+        value = getattr(category, attr, "")
+        if value:
+            return str(value)
+    return ""
+
+
+def movie_edition_items(raw: Any) -> list[MediaItem]:
+    editions = getattr(raw, "editions", None)
+    if not callable(editions):
+        return []
+    try:
+        return [to_media_item(item) for item in editions()]
+    except Exception:
+        return []
+
+
+def edition_label(raw: Any) -> str:
+    for attr in ("editionTitle", "edition"):
+        value = getattr(raw, attr, "")
+        if value:
+            return str(value)
+    return ""
 
 
 def audio_details(raw: Any) -> list[str]:

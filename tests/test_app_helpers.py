@@ -856,6 +856,7 @@ def test_render_help_groups_key_bindings():
     assert "left/right: move across grid cards" in rendered
     assert "p: play selected media from beginning" in rendered
     assert "r: resume selected media" in rendered
+    assert "w: mark selected media watched / unwatched" in rendered
     assert "ctrl+r: reconnect / reload libraries" in rendered
     assert "PLEX_TUI_ARTWORK_LOG=1" in rendered
     assert "?: show help" in rendered
@@ -877,6 +878,7 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
         "play_selected",
         "resume_selected",
     }
+    assert "toggle_watched" in hidden
     assert "audio_picker" in hidden
     assert "subtitle_picker" in hidden
     assert "a: choose and save audio preference" in rendered
@@ -1081,9 +1083,13 @@ def test_context_hints_for_media_and_load_more():
     setting_action = next(row for row in settings if getattr(row, "action", "") == "cycle_grid_density")
     setting_value = next(row for row in settings if getattr(row, "label_text", "").strip().startswith("Server:"))
 
-    assert context_hint(MediaRow(playable)) == "Media: Enter selects / p plays from start / r resumes / a audio / s subtitles"
+    assert context_hint(MediaRow(playable)) == (
+        "Media: Enter selects / p plays from start / r resumes / w watched / a audio / s subtitles"
+    )
     assert context_hint(MediaRow(container)) == "Media: Enter opens item"
-    assert context_hint(grid) == "Grid: Arrows/page select card / p plays from start / r resumes / a audio / s subtitles"
+    assert context_hint(grid) == (
+        "Grid: Arrows/page select card / p plays from start / r resumes / w watched / a audio / s subtitles"
+    )
     assert context_hint(LoadMoreRow(100, 200)) == "Media: Enter loads next page"
     assert context_hint(LibraryMenuRow(LibraryItem("Movies", "1", "movie", object()), "library", "Library", "All items")) == (
         "Library: Enter opens browse mode"
@@ -1097,8 +1103,8 @@ def test_library_menu_rows_list_supported_entrypoints():
 
     rows = library_menu_rows(library)
 
-    assert [row.entry for row in rows] == ["library", "recommended", "collections", "playlists"]
-    assert [row.label_text for row in rows] == ["Library", "Recommended", "Collections", "Playlists"]
+    assert [row.entry for row in rows] == ["library", "recommended", "collections", "playlists", "categories"]
+    assert [row.label_text for row in rows] == ["Library", "Recommended", "Collections", "Playlists", "Categories"]
 
 
 def render_plain(renderable: object, width: int = 100) -> str:

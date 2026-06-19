@@ -71,10 +71,11 @@ from .player import (
     stop_mpv,
     stream_language_key,
     stream_language_label,
+    switch_mpv_stream,
     subtitle_choices,
     transcode_quality_label,
 )
-from .plex_service import PlexService, kind_label, media_details, row_progress_marker
+from .plex_service import PlexService, kind_label, media_details, row_progress_marker, watched_state
 GRID_CARD_GAP = 2
 GRID_DENSITY_SPECS = {
     "compact": {"width": 18, "content_width": 15, "art_width": 14, "art_height": 7, "height": 10, "max_columns": 6},
@@ -469,6 +470,7 @@ class PlexTuiApp(App[None]):
         Binding("escape", "back_or_clear", "Back"),
         Binding("p", "play_selected", "Play"),
         Binding("r", "resume_selected", "Resume"),
+        Binding("w", "toggle_watched", "Watched", show=False),
         Binding("a", "audio_picker", "Audio", show=False),
         Binding("s", "subtitle_picker", "Subtitles", show=False),
         Binding("A", "clear_audio_preference", "Clear audio", show=False),
@@ -1000,19 +1002,25 @@ class PlexTuiApp(App[None]):
         if self.service is None:
             return
         if media.playable:
-            self.call_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
-            return
-        self.post_message(StatusChanged(f"Opening {media.title}..."))
-        try:
-            children = self.service.children(media)
-        except Exception as exc:
-            self.call_from_thread(self.show_error, str(exc))
+            try:
+                children = self.service.children(media)
+            except Exception:
+                children = []
+            if not children:
+                self.call_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
+                return
+        else:
+            self.post_message(StatusChanged(f"Opening {media.title}..."))
+            try:
+                children = self.service.children(media)
+            except Exception as exc:
+                self.call_from_thread(self.show_error, str(exc))
+                return
+        if not children:
+            self.call_from_thread(self.set_status, f"No child items for {media.title}")
             return
 
         def update() -> None:
-            if not children:
-                self.set_status(f"No child items for {media.title}")
-                return
             state = BrowseState(media.title, children, self.selected_library)
             self.browsing_stack.append(state)
             self.show_browse_state(state)
@@ -1970,18 +1978,49 @@ class PlexTuiApp(App[None]):
         except OSError as exc:
             self.show_error(f"failed to save preference: {exc}")
             return
+        live_updated = self.apply_live_stream_choice(choice, stream_type)
+        active_unchanged = bool(self.player is not None and self.player.active and not live_updated)
         if stream_type == "subtitle":
             self.selected_subtitle = None
-            self.set_status(f"Subtitle preference: {choice.label}")
+            status = f"Subtitle preference: {choice.label}"
         elif stream_type == "audio":
             self.selected_audio = None
-            self.set_status(f"Audio preference: {choice.label}")
+            status = f"Audio preference: {choice.label}"
+        else:
+            status = f"Stream preference: {choice.label}"
+        if live_updated:
+            status += " / active playback updated"
+        elif active_unchanged:
+            status += " / active playback unchanged"
         self.picker_visible = False
         if self.browsing_stack:
             state = self.browsing_stack[-1]
             self.show_browse_state(state, selected_key=self.picker_media_key)
         self.picker_media_key = None
         self.focus_media_browser()
+        self.set_status(status)
+        self.set_timer(0.05, lambda: self.set_status(status), name="stream-choice-status")
+
+    def apply_live_stream_choice(self, choice: StreamChoice, stream_type: str) -> bool:
+        if self.player is None or not self.player.active or not self.picker_media_key:
+            return False
+        media = self.media_by_key(self.picker_media_key)
+        if media is None:
+            return False
+        try:
+            updated = switch_mpv_stream(self.player, media.raw, choice, stream_type)
+        except Exception:
+            return False
+        if updated:
+            self.set_playback_footer(f"{self.player.title}: {stream_type} {choice.label}")
+        return updated
+
+    def media_by_key(self, media_key: str) -> MediaItem | None:
+        for state in reversed(self.browsing_stack):
+            for item in state.items:
+                if item.key == media_key:
+                    return item
+        return None
 
     def save_stream_preference(self, choice: StreamChoice, stream_type: str) -> None:
         if stream_type == "audio":
@@ -2232,6 +2271,79 @@ class PlexTuiApp(App[None]):
 
     def action_resume_selected(self) -> None:
         self.play_selected_media(resume=True)
+
+    def action_toggle_watched(self) -> None:
+        media = self.selected_media()
+        if media is None:
+            self.set_status("No media selected")
+            return
+        if not media.playable:
+            self.set_status("Selected item cannot be marked watched")
+            return
+        state = watched_state(media.raw)
+        target = "unwatched" if state == "watched" else "watched"
+        self.set_status(f"Marking {media.title} {target}...")
+        self.toggle_watched_state(media)
+
+    @work(thread=True, exclusive=True)
+    def toggle_watched_state(self, media: MediaItem) -> None:
+        target_watched = watched_state(media.raw) != "watched"
+        method_name = "markWatched" if target_watched else "markUnwatched"
+        method = getattr(media.raw, method_name, None)
+        if not callable(method):
+            self.call_from_thread(self.set_status, "Selected item does not support watched state changes")
+            return
+        try:
+            result = method()
+            updated_raw = result or media.raw
+        except Exception as exc:
+            self.call_from_thread(self.show_error, f"failed to update watched state: {exc}")
+            return
+        reload_method = getattr(updated_raw, "reload", None)
+        if callable(reload_method):
+            try:
+                updated_raw = reload_method()
+            except Exception:
+                pass
+        updated_media = replace(media, raw=updated_raw)
+        self.call_from_thread(self.apply_watched_state, updated_media, target_watched)
+
+    def apply_watched_state(self, media: MediaItem, watched: bool) -> None:
+        self.detail_cache.pop(media.key, None)
+        selected = self.selected_media()
+        selected_key = selected.key if selected is not None else media.key
+        if self.browsing_stack:
+            state = self.browsing_stack[-1]
+            for index, item in enumerate(state.items):
+                if item.key == media.key:
+                    state.items[index] = media
+                    break
+            if selected_key == media.key:
+                self.show_browse_state(state, selected_key=media.key)
+                self.focus_media_browser()
+            else:
+                self.show_browse_state(state, selected_key=selected_key)
+        else:
+            self.refresh_visible_media_item(media)
+            self.show_media_details(media)
+        label = "watched" if watched else "unwatched"
+        self.set_status(f"Marked {media.title} {label}")
+
+    def refresh_visible_media_item(self, media: MediaItem) -> None:
+        if self.media_grid_visible():
+            grid = self.query_one("#media-grid", MediaGrid)
+            for index, item in enumerate(grid.items):
+                if item.key == media.key:
+                    grid.items[index] = media
+                    grid.refresh_grid()
+                    return
+        row = self.query_one("#media", ListView).highlighted_child
+        if isinstance(row, MediaRow) and row.media.key == media.key:
+            updated_row = MediaRow(media)
+            row.media = updated_row.media
+            row.label_text = updated_row.label_text
+            label = row.query_one(Label)
+            label.update(updated_row.label_text)
 
     def play_selected_media(self, resume: bool) -> None:
         media = self.selected_media()
@@ -2888,6 +3000,7 @@ def render_help() -> str:
         "Playback",
         "p: play selected media from beginning",
         "r: resume selected media",
+        "w: mark selected media watched / unwatched",
         "x: stop launched mpv",
         "",
         "Streams",
@@ -2915,6 +3028,7 @@ LIBRARY_MENU_ENTRIES = (
     ("recommended", "Recommended", "Browse Plex hub rows such as recently added or promoted groups."),
     ("collections", "Collections", "Browse collections from this Plex library."),
     ("playlists", "Playlists", "Browse playlists connected to this Plex library."),
+    ("categories", "Categories", "Browse genre/category groupings from this Plex library."),
 )
 
 
@@ -2942,6 +3056,7 @@ def library_menu_description(library: LibraryItem) -> str:
         "Recommended: Plex hub rows.",
         "Collections: library collections.",
         "Playlists: library playlists.",
+        "Categories: genre/category groupings.",
     ])
 
 
@@ -2956,12 +3071,12 @@ def context_hint(row: object) -> str:
         return "Media: Enter loads next page"
     if isinstance(row, MediaRow):
         if row.media.playable:
-            return "Media: Enter selects / p plays from start / r resumes / a audio / s subtitles"
+            return "Media: Enter selects / p plays from start / r resumes / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
     if isinstance(row, MediaGrid):
         media = row.selected_media
         if media is not None and media.playable:
-            return "Grid: Arrows/page select card / p plays from start / r resumes / a audio / s subtitles"
+            return "Grid: Arrows/page select card / p plays from start / r resumes / w watched / a audio / s subtitles"
         return "Grid: Arrows/page select card / Enter opens item"
     if isinstance(row, ServerRow):
         return "Servers: Enter selects server"

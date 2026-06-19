@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added a keyboard action to mark the selected playable Plex item watched or
+  unwatched from the browse view.
+- Added Plex library Categories browsing, visible movie-edition variants, and
+  live mpv audio/subtitle switching when the active playback exposes matching
+  tracks.
+
 ## 0.4.3 - 2026-06-18
 
 - Made the default `mpv` window open with `--autofit=80%`, keeping custom

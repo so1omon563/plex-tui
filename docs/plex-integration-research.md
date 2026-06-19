@@ -41,12 +41,15 @@ Already covered:
 - Continue Watching as a top-level browse entry.
 - Selective library display in Settings.
 - Library submenus for Library, Recommended, Collections, and Playlists.
+- Library Categories through PlexAPI category helpers or genre filter choices.
 - Alphabet navigation for loaded browse lists and grids.
 - Current-library and global search.
 - Show/season/episode child browsing through PlexAPI child helpers.
 - Separate play-from-start and resume controls, including Plex-side resume
   offsets for transcoded streams and progress reporting.
 - Saved audio/subtitle language preferences plus per-item stream pickers.
+- Live audio/subtitle switching through mpv IPC when the active stream exposes
+  matching tracks.
 - Direct playback paths where possible, with transcode fallback through PlexAPI.
 - Explicit video quality/direct/transcode preference in Settings and playback.
 - Details pane metadata, audio/subtitle stream display, and playback readiness.
@@ -54,28 +57,13 @@ Already covered:
 Not yet covered:
 
 - User/profile switching and auto sign-in.
-- Library Categories where PlexAPI exposes them cleanly.
-- Movie editions as distinct, visible item variants.
-- In-playback audio/subtitle switching after mpv has launched.
+- Fuller profile switching and auto sign-in.
 
 ## Recommended Sequence
 
-1. Library Categories.
-   Add Categories to the library submenu after mapping PlexAPI support against
-   real server responses. Keep the default browse path simple so
-   Enter-on-library behavior stays fast.
-
-2. Profile switching and auto sign-in.
+1. Profile switching and auto sign-in.
    Useful, but more invasive than the browse entrypoints because it changes auth
    and account-token assumptions. Treat it as a separate design pass.
-
-3. Movie editions.
-   Surface editions as distinct item variants once enough real-library examples
-   are available to keep the UI compact.
-
-4. In-playback track switching.
-   Defer until there is a clear design for driving mpv IPC track changes and
-   reconciling Plex stream state after launch.
 
 ## Design Notes for plex-tui
 

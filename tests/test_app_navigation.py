@@ -454,6 +454,22 @@ def test_resume_action_requires_saved_position():
     asyncio.run(run_resume_requires_position_check())
 
 
+def test_toggle_watched_marks_unwatched_media_watched():
+    asyncio.run(run_toggle_watched_marks_unwatched_check())
+
+
+def test_toggle_watched_marks_watched_media_unwatched():
+    asyncio.run(run_toggle_watched_marks_watched_check())
+
+
+def test_toggle_watched_rejects_unsupported_media():
+    asyncio.run(run_toggle_watched_unsupported_check())
+
+
+def test_stream_picker_updates_active_playback():
+    asyncio.run(run_stream_picker_live_switch_check())
+
+
 def test_quick_preference_actions_update_config():
     asyncio.run(run_quick_preference_action_check())
 
@@ -781,6 +797,7 @@ async def run_library_menu_check():
             "Recommended",
             "Collections",
             "Playlists",
+            "Categories",
         ]
         assert app.selected_library == library
         assert app.browsing_stack == []
@@ -806,6 +823,7 @@ async def run_sidebar_library_selection_menu_check():
             "Recommended",
             "Collections",
             "Playlists",
+            "Categories",
         ]
         assert app.selected_library == library
         assert app.browsing_stack == []
@@ -834,6 +852,7 @@ async def run_library_entry_back_to_menu_check():
             "Recommended",
             "Collections",
             "Playlists",
+            "Categories",
         ]
         assert app.browsing_stack == []
 
@@ -874,6 +893,7 @@ async def run_library_submenu_keyboard_flow_check():
             "Recommended",
             "Collections",
             "Playlists",
+            "Categories",
         ]
 
         await pilot.press("down")
@@ -901,6 +921,7 @@ async def run_library_submenu_keyboard_flow_check():
             "Recommended",
             "Collections",
             "Playlists",
+            "Categories",
         ]
         assert app.browsing_stack == []
 
@@ -1883,6 +1904,114 @@ async def run_resume_requires_position_check():
 
         assert not launch.called
         assert app.query_one("#status").content == "No resume position for selected media; press p to play from the beginning"
+
+
+class WatchStateRaw(Raw):
+    duration = 600000
+
+    def __init__(self, view_count: int = 0, view_offset: int = 0):
+        self.viewCount = view_count
+        self.viewOffset = view_offset
+        self.mark_watched_calls = 0
+        self.mark_unwatched_calls = 0
+
+    def markWatched(self):
+        self.mark_watched_calls += 1
+        self.viewCount = 1
+        self.viewOffset = 0
+        return self
+
+    def markUnwatched(self):
+        self.mark_unwatched_calls += 1
+        self.viewCount = 0
+        self.viewOffset = 0
+        return self
+
+    def isWatched(self):
+        return bool(self.viewCount)
+
+
+async def run_toggle_watched_marks_unwatched_check():
+    raw = WatchStateRaw(view_offset=65_000)
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, raw)])
+        await pilot.pause(0.2)
+
+        app.action_toggle_watched()
+        await pilot.pause(0.5)
+
+        row = app.query_one("#media").highlighted_child
+        selected = app.selected_media()
+        assert raw.mark_watched_calls == 1
+        assert raw.mark_unwatched_calls == 0
+        assert selected is not None
+        assert selected.raw.viewCount == 1
+        assert "[watched]" in row.label_text
+        assert app.query_one("#status").content == "Marked Movie watched"
+
+
+async def run_toggle_watched_marks_watched_check():
+    raw = WatchStateRaw(view_count=1)
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, raw)])
+        await pilot.pause(0.2)
+
+        app.action_toggle_watched()
+        await pilot.pause(0.5)
+
+        row = app.query_one("#media").highlighted_child
+        selected = app.selected_media()
+        assert raw.mark_watched_calls == 0
+        assert raw.mark_unwatched_calls == 1
+        assert selected is not None
+        assert selected.raw.viewCount == 0
+        assert "[watched]" not in row.label_text
+        assert app.query_one("#status").content == "Marked Movie unwatched"
+
+
+async def run_toggle_watched_unsupported_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, Raw())])
+        await pilot.pause(0.2)
+
+        app.action_toggle_watched()
+        await pilot.pause(0.5)
+
+        assert app.query_one("#status").content == "Selected item does not support watched state changes"
+
+
+async def run_stream_picker_live_switch_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        item = MediaItem("Movie", "", "movie", "1", True, Raw())
+        choice = StreamChoice(0, "None (disable subtitles)")
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.browsing_stack = [BrowseState("Movies", [item])]
+        app.show_browse_state(app.browsing_stack[-1])
+        app.player = SimpleNamespace(active=True, title="Movie")
+        app.picker_media_key = "1"
+        app.picker_visible = True
+        await pilot.pause(0.2)
+
+        with (
+            patch("plextui.app.save_config"),
+            patch("plextui.app.switch_mpv_stream", return_value=True) as switch,
+        ):
+            app.choose_stream(choice, "subtitle")
+        await pilot.pause(0.2)
+
+        switch.assert_called_once_with(app.player, item.raw, choice, "subtitle")
+        assert app.query_one("#status").content == "Subtitle preference: None (disable subtitles) / active playback updated"
 
 
 async def run_quick_preference_action_check():
