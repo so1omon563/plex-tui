@@ -169,7 +169,11 @@ preferences are applied when matching streams are available, and the details
 pane shows the effective playback choices. Playback mode defaults to
 direct/default behavior and can be changed in Settings to force Plex
 transcoding with Original, 1080p 8 Mbps, 720p 4 Mbps, or 480p 2 Mbps quality
-presets.
+presets. The default `mpv` launch uses `--autofit=80%` so videos open at a
+comfortable size on modern displays; Settings can override this with values
+such as `90%`, `1280x720`, or `80%x80%`. If an older config has an exact
+`mpv_window_size = "1280x720"` override, cycle the mpv window-size setting once
+to return to the Default preset.
 
 ## Key Bindings
 

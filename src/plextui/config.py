@@ -22,6 +22,7 @@ MIN_GRID_PREFETCH_PAGES = 0
 MAX_GRID_PREFETCH_PAGES = 5
 PLAYBACK_MODES = {"auto", "transcode"}
 TRANSCODE_QUALITIES = {"original", "1080p_8", "720p_4", "480p_2"}
+DEFAULT_MPV_WINDOW_SIZE = "80%"
 
 
 @dataclass(frozen=True)

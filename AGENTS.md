@@ -184,6 +184,8 @@ Pull requests should include:
 Use PRs for repository changes. When publishing local commits, branch from
 `main` with a scoped name such as `codex/release-prep`, push that branch, and
 open a draft PR instead of pushing directly to `main`.
+Create or switch to a scoped branch before doing repo work; do not keep feature
+work in the local `main` working tree.
 
 `main` is protected by repository rulesets. Changes must flow through PRs; force
 pushes and branch deletion are blocked. `plex-tui` requires the Python 3.11 and

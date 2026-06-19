@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made the default `mpv` window open with `--autofit=80%`, keeping custom
+  Settings overrides for exact pixel sizes or other percentage presets, and
+  made the old `1280x720` preset cycle back to Default.
 - Added Homebrew bottle publishing to the post-release tap automation so macOS
   installs can pour a prebuilt `plex-tui` virtualenv instead of rebuilding
   Python resources from source, with bounded verbose CI diagnostics for bottle
