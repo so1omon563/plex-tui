@@ -47,6 +47,16 @@ async def wait_for_selected_title(app: PlexTuiApp, pilot: object, expected: str,
     return selected
 
 
+async def wait_for_status(app: PlexTuiApp, pilot: object, expected: str, attempts: int = 20) -> str:
+    status = str(app.query_one("#status").content)
+    for _ in range(attempts):
+        if status == expected:
+            return status
+        await pilot.pause(0.1)
+        status = str(app.query_one("#status").content)
+    return status
+
+
 def test_picker_return_preserves_highlighted_media():
     asyncio.run(run_picker_return_check())
 
@@ -80,7 +90,15 @@ def test_open_library_shows_browse_modes():
 
 
 def test_sidebar_library_selection_shows_browse_modes():
-    asyncio.run(run_sidebar_library_selection_menu_check())
+    asyncio.run(run_sidebar_library_selection_opens_default_library_check())
+
+
+def test_space_on_sidebar_library_shows_browse_modes():
+    asyncio.run(run_sidebar_library_space_menu_check())
+
+
+def test_sidebar_library_selection_can_default_to_browse_modes():
+    asyncio.run(run_sidebar_library_selection_menu_default_check())
 
 
 def test_back_from_library_entry_returns_to_browse_modes():
@@ -454,6 +472,30 @@ def test_resume_action_requires_saved_position():
     asyncio.run(run_resume_requires_position_check())
 
 
+def test_toggle_watched_marks_unwatched_media_watched():
+    asyncio.run(run_toggle_watched_marks_unwatched_check())
+
+
+def test_toggle_watched_marks_watched_media_unwatched():
+    asyncio.run(run_toggle_watched_marks_watched_check())
+
+
+def test_toggle_watched_rejects_unsupported_media():
+    asyncio.run(run_toggle_watched_unsupported_check())
+
+
+def test_remove_continue_watching_removes_selected_item():
+    asyncio.run(run_remove_continue_watching_check())
+
+
+def test_remove_continue_watching_requires_continue_watching_view():
+    asyncio.run(run_remove_continue_watching_requires_view_check())
+
+
+def test_stream_picker_updates_active_playback():
+    asyncio.run(run_stream_picker_live_switch_check())
+
+
 def test_quick_preference_actions_update_config():
     asyncio.run(run_quick_preference_action_check())
 
@@ -781,16 +823,65 @@ async def run_library_menu_check():
             "Recommended",
             "Collections",
             "Playlists",
+            "Categories",
         ]
         assert app.selected_library == library
         assert app.browsing_stack == []
 
 
-async def run_sidebar_library_selection_menu_check():
+async def run_sidebar_library_selection_opens_default_library_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        page = MediaPage([MediaItem("First", "", "movie", "1", True, Raw())], start=0, total=1)
+        service = FakePagedService(page)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        library = LibraryItem("Movies", "1", "movie", object())
+        app.populate_libraries([library])
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.5)
+
+        assert service.entry_calls == [(library, "library", 0, 40)]
+        assert app.browsing_stack[-1].title == "Movies"
+        assert app.query_one("#media").highlighted_child.media.title == "First"
+
+
+async def run_sidebar_library_space_menu_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
         app.config = AppConfig("http://plex", "token", "client-id")
+        library = LibraryItem("Movies", "1", "movie", object())
+        app.populate_libraries([library])
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+        await pilot.press("down")
+        await pilot.press("space")
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert [row.label_text for row in rows if isinstance(row, LibraryMenuRow)] == [
+            "Library",
+            "Recommended",
+            "Collections",
+            "Playlists",
+            "Categories",
+        ]
+        assert app.selected_library == library
+        assert app.browsing_stack == []
+
+
+async def run_sidebar_library_selection_menu_default_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", library_enter_action="browse_modes")
         library = LibraryItem("Movies", "1", "movie", object())
         app.populate_libraries([library])
         libraries_view = app.query_one("#libraries")
@@ -806,6 +897,7 @@ async def run_sidebar_library_selection_menu_check():
             "Recommended",
             "Collections",
             "Playlists",
+            "Categories",
         ]
         assert app.selected_library == library
         assert app.browsing_stack == []
@@ -834,6 +926,7 @@ async def run_library_entry_back_to_menu_check():
             "Recommended",
             "Collections",
             "Playlists",
+            "Categories",
         ]
         assert app.browsing_stack == []
 
@@ -866,7 +959,7 @@ async def run_library_submenu_keyboard_flow_check():
         assert app.query_one("#media-grid").selected_media.title == "Blade Runner"
 
         libraries_view.focus()
-        await pilot.press("enter")
+        await pilot.press("space")
         await pilot.pause(0.2)
         menu_rows = list(app.query_one("#media").children)
         assert [row.label_text for row in menu_rows if isinstance(row, LibraryMenuRow)] == [
@@ -874,6 +967,7 @@ async def run_library_submenu_keyboard_flow_check():
             "Recommended",
             "Collections",
             "Playlists",
+            "Categories",
         ]
 
         await pilot.press("down")
@@ -901,6 +995,7 @@ async def run_library_submenu_keyboard_flow_check():
             "Recommended",
             "Collections",
             "Playlists",
+            "Categories",
         ]
         assert app.browsing_stack == []
 
@@ -1720,8 +1815,6 @@ async def run_settings_recent_debug_log_check(tmp_path):
         log.write_text("first\nsecond\nthird\n", encoding="utf-8")
 
         with patch("plextui.app.debug_log_path", return_value=log):
-            app.action_show_settings()
-            await pilot.pause(0.2)
             app.run_settings_action("show_recent_debug_log")
         await pilot.pause(0.2)
 
@@ -1739,8 +1832,6 @@ async def run_settings_app_diagnostics_check():
         app.config = AppConfig("http://plex", "token", "client-id")
 
         with patch("plextui.app.detect_mpv", return_value=("/usr/bin/mpv", "mpv 0.40.0")):
-            app.action_show_settings()
-            await pilot.pause(0.2)
             app.run_settings_action("show_app_diagnostics")
         await pilot.pause(0.2)
 
@@ -1883,6 +1974,164 @@ async def run_resume_requires_position_check():
 
         assert not launch.called
         assert app.query_one("#status").content == "No resume position for selected media; press p to play from the beginning"
+
+
+class WatchStateRaw(Raw):
+    duration = 600000
+
+    def __init__(self, view_count: int = 0, view_offset: int = 0):
+        self.viewCount = view_count
+        self.viewOffset = view_offset
+        self.mark_watched_calls = 0
+        self.mark_unwatched_calls = 0
+
+    def markWatched(self):
+        self.mark_watched_calls += 1
+        self.viewCount = 1
+        self.viewOffset = 0
+        return self
+
+    def markUnwatched(self):
+        self.mark_unwatched_calls += 1
+        self.viewCount = 0
+        self.viewOffset = 0
+        return self
+
+    def isWatched(self):
+        return bool(self.viewCount)
+
+
+class ContinueWatchingRaw(Raw):
+    def __init__(self):
+        self.remove_calls = 0
+
+    def removeFromContinueWatching(self):
+        self.remove_calls += 1
+
+
+async def run_toggle_watched_marks_unwatched_check():
+    raw = WatchStateRaw(view_offset=65_000)
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, raw)])
+        await pilot.pause(0.2)
+
+        app.action_toggle_watched()
+        status = await wait_for_status(app, pilot, "Marked Movie watched")
+
+        row = app.query_one("#media").highlighted_child
+        selected = app.selected_media()
+        assert raw.mark_watched_calls == 1
+        assert raw.mark_unwatched_calls == 0
+        assert selected is not None
+        assert selected.raw.viewCount == 1
+        assert "[watched]" in row.label_text
+        assert status == "Marked Movie watched"
+
+
+async def run_toggle_watched_marks_watched_check():
+    raw = WatchStateRaw(view_count=1)
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, raw)])
+        await pilot.pause(0.2)
+
+        app.action_toggle_watched()
+        status = await wait_for_status(app, pilot, "Marked Movie unwatched")
+
+        row = app.query_one("#media").highlighted_child
+        selected = app.selected_media()
+        assert raw.mark_watched_calls == 0
+        assert raw.mark_unwatched_calls == 1
+        assert selected is not None
+        assert selected.raw.viewCount == 0
+        assert "[watched]" not in row.label_text
+        assert status == "Marked Movie unwatched"
+
+
+async def run_toggle_watched_unsupported_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, Raw())])
+        await pilot.pause(0.2)
+
+        app.action_toggle_watched()
+        status = await wait_for_status(app, pilot, "Selected item does not support watched state changes")
+
+        assert status == "Selected item does not support watched state changes"
+
+
+async def run_remove_continue_watching_check():
+    raw = ContinueWatchingRaw()
+    removed = MediaItem("Movie", "", "movie", "1", True, raw)
+    remaining = MediaItem("Second", "", "movie", "2", True, Raw())
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.browsing_stack = [
+            BrowseState("Continue Watching", [removed, remaining], source="continue_watching", next_start=2, total=2)
+        ]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_remove_continue_watching()
+        await pilot.pause(0.5)
+
+        assert raw.remove_calls == 1
+        assert [item.title for item in app.browsing_stack[-1].items] == ["Second"]
+        assert app.selected_media() is not None
+        assert app.selected_media().title == "Second"
+        assert app.query_one("#status").content == "Removed Movie from Continue Watching"
+
+
+async def run_remove_continue_watching_requires_view_check():
+    raw = ContinueWatchingRaw()
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.browsing_stack = [BrowseState("Movies", [MediaItem("Movie", "", "movie", "1", True, raw)])]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_remove_continue_watching()
+        await pilot.pause(0.2)
+
+        assert raw.remove_calls == 0
+        assert app.query_one("#status").content == "Open Continue Watching before removing an item"
+
+
+async def run_stream_picker_live_switch_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        item = MediaItem("Movie", "", "movie", "1", True, Raw())
+        choice = StreamChoice(0, "None (disable subtitles)")
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.browsing_stack = [BrowseState("Movies", [item])]
+        app.show_browse_state(app.browsing_stack[-1])
+        app.player = SimpleNamespace(active=True, title="Movie")
+        app.picker_media_key = "1"
+        app.picker_visible = True
+        await pilot.pause(0.2)
+
+        with (
+            patch("plextui.app.save_config"),
+            patch("plextui.app.switch_mpv_stream", return_value=True) as switch,
+        ):
+            app.choose_stream(choice, "subtitle")
+
+        expected_status = "Subtitle preference: None (disable subtitles) / active playback updated"
+        status = await wait_for_status(app, pilot, expected_status)
+        switch.assert_called_once_with(app.player, item.raw, choice, "subtitle")
+        assert status == expected_status
 
 
 async def run_quick_preference_action_check():

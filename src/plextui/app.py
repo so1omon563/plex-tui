@@ -71,10 +71,11 @@ from .player import (
     stop_mpv,
     stream_language_key,
     stream_language_label,
+    switch_mpv_stream,
     subtitle_choices,
     transcode_quality_label,
 )
-from .plex_service import PlexService, kind_label, media_details, row_progress_marker
+from .plex_service import PlexService, kind_label, media_details, row_progress_marker, watched_state
 GRID_CARD_GAP = 2
 GRID_DENSITY_SPECS = {
     "compact": {"width": 18, "content_width": 15, "art_width": 14, "art_height": 7, "height": 10, "max_columns": 6},
@@ -446,6 +447,7 @@ class PlexTuiApp(App[None]):
         Binding("g", "focus_global_search", "Global"),
         Binding("tab", "focus_next", "Next", show=False),
         Binding("shift+tab", "focus_previous", "Prev", show=False),
+        Binding("space", "alternate_library_action", "Library modes", show=False),
         Binding("question_mark", "show_help", "Help"),
         Binding("l", "focus_libraries", "Focus libraries", show=False),
         Binding("m", "focus_media", "Focus media list", show=False),
@@ -469,6 +471,9 @@ class PlexTuiApp(App[None]):
         Binding("escape", "back_or_clear", "Back"),
         Binding("p", "play_selected", "Play"),
         Binding("r", "resume_selected", "Resume"),
+        Binding("w", "toggle_watched", "Watched", show=False),
+        Binding("backspace", "remove_continue_watching", "Remove continue", show=False),
+        Binding("delete", "remove_continue_watching", "Remove continue", show=False),
         Binding("a", "audio_picker", "Audio", show=False),
         Binding("s", "subtitle_picker", "Subtitles", show=False),
         Binding("A", "clear_audio_preference", "Clear audio", show=False),
@@ -719,7 +724,7 @@ class PlexTuiApp(App[None]):
         if isinstance(row, ContinueWatchingRow):
             self.open_continue_watching()
         elif isinstance(row, LibraryRow):
-            self.open_library_menu(row.library)
+            self.open_library_primary(row.library)
         elif isinstance(row, LibraryMenuRow):
             self.open_library_entry(row.library, row.entry, row.label_text)
         elif isinstance(row, MediaRow):
@@ -822,6 +827,28 @@ class PlexTuiApp(App[None]):
         self.show_detail_text(library_menu_description(library))
         self.focus_media_browser()
         self.set_status(f"{library.title}: choose a browse mode")
+
+    def open_library_primary(self, library: LibraryItem) -> None:
+        if self.config.library_enter_action == "browse_modes":
+            self.open_library_menu(library)
+            return
+        self.open_library_entry(library)
+
+    def open_library_alternate(self, library: LibraryItem) -> None:
+        if self.config.library_enter_action == "browse_modes":
+            self.open_library_entry(library)
+            return
+        self.open_library_menu(library)
+
+    def action_alternate_library_action(self) -> None:
+        row = self.query_one("#libraries", ListView).highlighted_child
+        if isinstance(row, LibraryRow):
+            self.open_library_alternate(row.library)
+            return
+        if isinstance(row, ContinueWatchingRow):
+            self.set_status("Continue Watching opens directly with Enter")
+            return
+        self.set_status("Select a library first")
 
     @work(thread=True)
     def open_library_entry(self, library: LibraryItem, entry: str = "library", label: str | None = None) -> None:
@@ -1000,19 +1027,25 @@ class PlexTuiApp(App[None]):
         if self.service is None:
             return
         if media.playable:
-            self.call_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
-            return
-        self.post_message(StatusChanged(f"Opening {media.title}..."))
-        try:
-            children = self.service.children(media)
-        except Exception as exc:
-            self.call_from_thread(self.show_error, str(exc))
+            try:
+                children = self.service.children(media)
+            except Exception:
+                children = []
+            if not children:
+                self.call_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
+                return
+        else:
+            self.post_message(StatusChanged(f"Opening {media.title}..."))
+            try:
+                children = self.service.children(media)
+            except Exception as exc:
+                self.call_from_thread(self.show_error, str(exc))
+                return
+        if not children:
+            self.call_from_thread(self.set_status, f"No child items for {media.title}")
             return
 
         def update() -> None:
-            if not children:
-                self.set_status(f"No child items for {media.title}")
-                return
             state = BrowseState(media.title, children, self.selected_library)
             self.browsing_stack.append(state)
             self.show_browse_state(state)
@@ -1747,6 +1780,11 @@ class PlexTuiApp(App[None]):
         if action == "toggle_media_view":
             self.action_toggle_media_view()
             return
+        if action == "cycle_library_enter_action":
+            next_action = next_library_enter_action(self.config.library_enter_action)
+            if self.update_preferences(library_enter_action=next_action):
+                self.refresh_settings_after_change(action, "Library Enter", library_enter_action_value(self.config))
+            return
         if action.startswith("toggle_library_visibility:"):
             self.toggle_library_visibility(action.removeprefix("toggle_library_visibility:"))
             return
@@ -1970,18 +2008,49 @@ class PlexTuiApp(App[None]):
         except OSError as exc:
             self.show_error(f"failed to save preference: {exc}")
             return
+        live_updated = self.apply_live_stream_choice(choice, stream_type)
+        active_unchanged = bool(self.player is not None and self.player.active and not live_updated)
         if stream_type == "subtitle":
             self.selected_subtitle = None
-            self.set_status(f"Subtitle preference: {choice.label}")
+            status = f"Subtitle preference: {choice.label}"
         elif stream_type == "audio":
             self.selected_audio = None
-            self.set_status(f"Audio preference: {choice.label}")
+            status = f"Audio preference: {choice.label}"
+        else:
+            status = f"Stream preference: {choice.label}"
+        if live_updated:
+            status += " / active playback updated"
+        elif active_unchanged:
+            status += " / active playback unchanged"
         self.picker_visible = False
         if self.browsing_stack:
             state = self.browsing_stack[-1]
             self.show_browse_state(state, selected_key=self.picker_media_key)
         self.picker_media_key = None
         self.focus_media_browser()
+        self.set_status(status)
+        self.set_timer(0.05, lambda: self.set_status(status), name="stream-choice-status")
+
+    def apply_live_stream_choice(self, choice: StreamChoice, stream_type: str) -> bool:
+        if self.player is None or not self.player.active or not self.picker_media_key:
+            return False
+        media = self.media_by_key(self.picker_media_key)
+        if media is None:
+            return False
+        try:
+            updated = switch_mpv_stream(self.player, media.raw, choice, stream_type)
+        except Exception:
+            return False
+        if updated:
+            self.set_playback_footer(f"{self.player.title}: {stream_type} {choice.label}")
+        return updated
+
+    def media_by_key(self, media_key: str) -> MediaItem | None:
+        for state in reversed(self.browsing_stack):
+            for item in state.items:
+                if item.key == media_key:
+                    return item
+        return None
 
     def save_stream_preference(self, choice: StreamChoice, stream_type: str) -> None:
         if stream_type == "audio":
@@ -2233,6 +2302,126 @@ class PlexTuiApp(App[None]):
     def action_resume_selected(self) -> None:
         self.play_selected_media(resume=True)
 
+    def action_toggle_watched(self) -> None:
+        media = self.selected_media()
+        if media is None:
+            self.set_status("No media selected")
+            return
+        if not media.playable:
+            self.set_status("Selected item cannot be marked watched")
+            return
+        state = watched_state(media.raw)
+        target = "unwatched" if state == "watched" else "watched"
+        self.set_status(f"Marking {media.title} {target}...")
+        self.toggle_watched_state(media)
+
+    def action_remove_continue_watching(self) -> None:
+        media = self.selected_media()
+        if media is None:
+            self.set_status("No media selected")
+            return
+        if not self.browsing_stack or self.browsing_stack[-1].source != "continue_watching":
+            self.set_status("Open Continue Watching before removing an item")
+            return
+        self.set_status(f"Removing {media.title} from Continue Watching...")
+        self.remove_continue_watching_item(media)
+
+    @work(thread=True, exclusive=True)
+    def remove_continue_watching_item(self, media: MediaItem) -> None:
+        method = getattr(media.raw, "removeFromContinueWatching", None)
+        if not callable(method):
+            self.call_from_thread(self.set_status, "Selected item cannot be removed from Continue Watching")
+            return
+        try:
+            method()
+        except Exception as exc:
+            self.call_from_thread(self.show_error, f"failed to remove from Continue Watching: {exc}")
+            return
+        self.call_from_thread(self.apply_continue_watching_removal, media)
+
+    def apply_continue_watching_removal(self, media: MediaItem) -> None:
+        if not self.browsing_stack or self.browsing_stack[-1].source != "continue_watching":
+            self.set_status(f"Removed {media.title} from Continue Watching")
+            return
+        state = self.browsing_stack[-1]
+        index = selected_media_index(state.items, media.key)
+        state.items = [item for item in state.items if item.key != media.key]
+        state.total = max(0, state.total - 1) if state.total else len(state.items)
+        if not state.items:
+            self.show_browse_state(state)
+            self.show_detail_text("No items")
+            self.set_status(f"Removed {media.title} from Continue Watching")
+            return
+        next_index = min(index, len(state.items) - 1)
+        self.show_browse_state(state, selected_key=state.items[next_index].key)
+        self.focus_media_browser()
+        self.set_status(f"Removed {media.title} from Continue Watching")
+        self.set_timer(
+            0.05,
+            lambda: self.set_status(f"Removed {media.title} from Continue Watching"),
+            name="continue-watching-removal-status",
+        )
+
+    @work(thread=True, exclusive=True)
+    def toggle_watched_state(self, media: MediaItem) -> None:
+        target_watched = watched_state(media.raw) != "watched"
+        method_name = "markWatched" if target_watched else "markUnwatched"
+        method = getattr(media.raw, method_name, None)
+        if not callable(method):
+            self.call_from_thread(self.set_status, "Selected item does not support watched state changes")
+            return
+        try:
+            result = method()
+            updated_raw = result or media.raw
+        except Exception as exc:
+            self.call_from_thread(self.show_error, f"failed to update watched state: {exc}")
+            return
+        reload_method = getattr(updated_raw, "reload", None)
+        if callable(reload_method):
+            try:
+                updated_raw = reload_method()
+            except Exception:
+                pass
+        updated_media = replace(media, raw=updated_raw)
+        self.call_from_thread(self.apply_watched_state, updated_media, target_watched)
+
+    def apply_watched_state(self, media: MediaItem, watched: bool) -> None:
+        self.detail_cache.pop(media.key, None)
+        selected = self.selected_media()
+        selected_key = selected.key if selected is not None else media.key
+        if self.browsing_stack:
+            state = self.browsing_stack[-1]
+            for index, item in enumerate(state.items):
+                if item.key == media.key:
+                    state.items[index] = media
+                    break
+            if selected_key == media.key:
+                self.show_browse_state(state, selected_key=media.key)
+                self.focus_media_browser()
+            else:
+                self.show_browse_state(state, selected_key=selected_key)
+        else:
+            self.refresh_visible_media_item(media)
+            self.show_media_details(media)
+        label = "watched" if watched else "unwatched"
+        self.set_status(f"Marked {media.title} {label}")
+
+    def refresh_visible_media_item(self, media: MediaItem) -> None:
+        if self.media_grid_visible():
+            grid = self.query_one("#media-grid", MediaGrid)
+            for index, item in enumerate(grid.items):
+                if item.key == media.key:
+                    grid.items[index] = media
+                    grid.refresh_grid()
+                    return
+        row = self.query_one("#media", ListView).highlighted_child
+        if isinstance(row, MediaRow) and row.media.key == media.key:
+            updated_row = MediaRow(media)
+            row.media = updated_row.media
+            row.label_text = updated_row.label_text
+            label = row.query_one(Label)
+            label.update(updated_row.label_text)
+
     def play_selected_media(self, resume: bool) -> None:
         media = self.selected_media()
         if media is None:
@@ -2370,7 +2559,16 @@ def format_offset(milliseconds: int) -> str:
 def render_details(details: object, config: AppConfig | None = None, raw: object | None = None) -> str:
     lines = render_detail_header(details, config)
 
-    metadata = [*detail_key_value_rows(getattr(details, "metadata"))]
+    metadata_rows = list(getattr(details, "metadata"))
+    episode_context = episode_context_rows(details, metadata_rows)
+    if episode_context:
+        metadata_rows = [
+            (label, value)
+            for label, value in metadata_rows
+            if label not in EPISODE_CONTEXT_LABEL_SET
+        ]
+
+    metadata = [*detail_key_value_rows(metadata_rows)]
     append_detail_section(lines, "Metadata", metadata or ["No metadata reported"])
 
     if config is not None:
@@ -2411,10 +2609,12 @@ def render_details(details: object, config: AppConfig | None = None, raw: object
 def render_detail_header(details: object, config: AppConfig | None = None) -> list[str]:
     title = getattr(details, "title")
     title_lines = textwrap.wrap(title, width=DETAIL_SUMMARY_WIDTH) or [title]
+    episode_context = episode_context_summary(details, list(getattr(details, "metadata", [])))
+    context_lines = textwrap.wrap(episode_context, width=DETAIL_SUMMARY_WIDTH) if episode_context else []
     facts = [str(fact) for fact in getattr(details, "facts", []) if fact]
     artwork = artwork_status(details, config)
-    title_width = max(len(line) for line in title_lines)
-    lines = [*title_lines, "-" * min(max(title_width, 8), DETAIL_SUMMARY_WIDTH)]
+    title_width = max(len(line) for line in [*title_lines, *context_lines])
+    lines = [*title_lines, *context_lines, "-" * min(max(title_width, 8), DETAIL_SUMMARY_WIDTH)]
     if facts:
         lines.extend(textwrap.wrap(" / ".join(facts), width=DETAIL_SUMMARY_WIDTH) or [""])
     lines.extend([
@@ -2436,6 +2636,26 @@ def playback_readiness_rows(playable: bool) -> list[str]:
         "Status: Opens more items",
         "Action: Press Enter to open",
     ]
+
+
+EPISODE_CONTEXT_LABELS = ("Show", "Season", "Episode")
+EPISODE_CONTEXT_LABEL_SET = set(EPISODE_CONTEXT_LABELS)
+
+
+def episode_context_rows(details: object, metadata: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    if getattr(details, "kind", "") != "episode":
+        return []
+    values = {label: value for label, value in metadata}
+    return [
+        (label, values[label])
+        for label in EPISODE_CONTEXT_LABELS
+        if values.get(label)
+    ]
+
+
+def episode_context_summary(details: object, metadata: list[tuple[str, str]]) -> str:
+    rows = episode_context_rows(details, metadata)
+    return " - ".join(value for _label, value in rows)
 
 
 def append_detail_section(lines: list[str], heading: str, body: list[str]) -> None:
@@ -2789,6 +3009,7 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsActionRow(f"Details Artwork: {detail_artwork_mode_value(config)}", "cycle_detail_artwork"),
         SettingsActionRow(f"Artwork Renderer: {artwork_renderer_value(config)}", "cycle_artwork_renderer"),
         SettingsHeaderRow("Browsing"),
+        SettingsActionRow(f"Library Enter: {library_enter_action_value(config)}", "cycle_library_enter_action"),
         SettingsActionRow(f"Media View: {media_view_value(config)}", "toggle_media_view"),
         SettingsActionRow(f"Grid Density: {grid_density_value(config)}", "cycle_grid_density"),
         numeric_settings_row(config, "page_size"),
@@ -2846,6 +3067,7 @@ def render_settings(config: AppConfig) -> str:
         f"Artwork Renderer: {artwork_renderer_value(config)}",
         "",
         "Browsing",
+        f"Library Enter: {library_enter_action_value(config)}",
         f"Media View: {media_view_value(config)}",
         f"Grid Density: {grid_density_value(config)}",
         f"Page Size: {config.page_size}",
@@ -2870,6 +3092,7 @@ def render_help() -> str:
     return "\n".join([
         "Navigation",
         "enter: open selected row",
+        "space: alternate library action",
         "escape: go back / close current view",
         "tab / shift+tab: move focus",
         "l: focus libraries",
@@ -2888,6 +3111,8 @@ def render_help() -> str:
         "Playback",
         "p: play selected media from beginning",
         "r: resume selected media",
+        "w: mark selected media watched / unwatched",
+        "backspace/delete: remove selected Continue Watching item",
         "x: stop launched mpv",
         "",
         "Streams",
@@ -2915,6 +3140,7 @@ LIBRARY_MENU_ENTRIES = (
     ("recommended", "Recommended", "Browse Plex hub rows such as recently added or promoted groups."),
     ("collections", "Collections", "Browse collections from this Plex library."),
     ("playlists", "Playlists", "Browse playlists connected to this Plex library."),
+    ("categories", "Categories", "Browse genre/category groupings from this Plex library."),
 )
 
 
@@ -2942,6 +3168,7 @@ def library_menu_description(library: LibraryItem) -> str:
         "Recommended: Plex hub rows.",
         "Collections: library collections.",
         "Playlists: library playlists.",
+        "Categories: genre/category groupings.",
     ])
 
 
@@ -2949,19 +3176,19 @@ def context_hint(row: object) -> str:
     if isinstance(row, ContinueWatchingRow):
         return "Libraries: Enter opens Continue Watching"
     if isinstance(row, LibraryRow):
-        return "Libraries: Enter opens library / Escape shows browse modes"
+        return "Libraries: Enter opens primary view / Space opens alternate view"
     if isinstance(row, LibraryMenuRow):
         return "Library: Enter opens browse mode"
     if isinstance(row, LoadMoreRow):
         return "Media: Enter loads next page"
     if isinstance(row, MediaRow):
         if row.media.playable:
-            return "Media: Enter selects / p plays from start / r resumes / a audio / s subtitles"
+            return "Media: Enter selects / p plays from start / r resumes / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
     if isinstance(row, MediaGrid):
         media = row.selected_media
         if media is not None and media.playable:
-            return "Grid: Arrows/page select card / p plays from start / r resumes / a audio / s subtitles"
+            return "Grid: Arrows/page select card / p plays from start / r resumes / w watched / a audio / s subtitles"
         return "Grid: Arrows/page select card / Enter opens item"
     if isinstance(row, ServerRow):
         return "Servers: Enter selects server"
@@ -3169,6 +3396,8 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         return f"Current artwork renderer: {artwork_renderer_value(config)}"
     if action == "toggle_media_view":
         return f"Current media view: {media_view_value(config)}"
+    if action == "cycle_library_enter_action":
+        return f"Current library Enter action: {library_enter_action_value(config)}"
     if action == "cycle_grid_density":
         return f"Current grid density: {grid_density_value(config)}"
     if action.startswith("toggle_library_visibility:"):
@@ -3217,6 +3446,8 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to select this terminal artwork renderer."
     if action == "toggle_media_view":
         return "Press Enter to switch between list and grid browsing."
+    if action == "cycle_library_enter_action":
+        return "Press Enter to choose whether library rows open all items or browse modes by default."
     if action == "cycle_grid_density":
         return "Press Enter to cycle compact, comfortable, and large grid layouts."
     if action.startswith("toggle_library_visibility:"):
@@ -3262,6 +3493,7 @@ def settings_action_label(action: str) -> str:
         "artwork_renderer_kitty": "Artwork Renderer: Kitty",
         "cycle_artwork_renderer": "Artwork Renderer",
         "toggle_media_view": "Media View",
+        "cycle_library_enter_action": "Library Enter",
         "cycle_grid_density": "Grid Density",
         "decrease_page_size": "Page Size: decrease",
         "increase_page_size": "Page Size: increase",
@@ -3525,6 +3757,16 @@ def media_view_value(config: AppConfig) -> str:
     if config.media_view == "grid":
         return "Grid"
     return "List"
+
+
+def library_enter_action_value(config: AppConfig) -> str:
+    if config.library_enter_action == "browse_modes":
+        return "Browse Modes"
+    return "Library"
+
+
+def next_library_enter_action(value: str) -> str:
+    return "browse_modes" if value == "library" else "library"
 
 
 def grid_density_value(config: AppConfig) -> str:

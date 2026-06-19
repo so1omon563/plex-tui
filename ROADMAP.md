@@ -47,19 +47,30 @@
   [`anthonycaccese/240-MP`](https://github.com/anthonycaccese/240-MP/tree/main)
   live in `docs/plex-integration-research.md`.
 - Continue Watching now has a sidebar browse entrypoint backed by Plex on-deck
-  data; watch for real-library edge cases around ordering and pagination.
+  data; selected items can be removed from Continue Watching. Watch for
+  real-library edge cases around ordering and pagination.
 - Selective library visibility is available in Settings so noisy Plex libraries
   can be hidden from the sidebar.
-- Library submenus are available for Library, Recommended, Collections, and
-  Playlists. Revisit Categories after mapping PlexAPI support against a real
-  server response.
+- Library submenus are available for Library, Recommended, Collections,
+  Playlists, and Categories. Categories use PlexAPI category helpers when
+  present and genre filter choices as the fallback. Library rows open all items
+  by default, Space opens the browse-mode menu, and Settings can swap those
+  primary/alternate actions.
 - Alphabet navigation is available for loaded browse lists and grids with
   previous/next section jumps.
 - Explicit playback controls are available for play-from-start versus resume,
   direct/default playback versus selected transcode quality presets, and
   Plex-side resume offsets for transcoded streams.
-- Later design passes: profile switching with auto sign-in, visible movie
-  edition handling, and in-playback audio/subtitle switching through mpv IPC.
+- Watched/unwatched toggling is available for selected playable movies and
+  episodes.
+- Movie editions are visible as distinct variants when Plex reports multiple
+  editions for a selected movie.
+- In-playback audio/subtitle switching uses mpv IPC when the active stream
+  exposes matching tracks; Plex-transcoded streams may still require relaunching
+  with the saved preference.
+- Design playlist management before implementation: adding/removing media from
+  playlists and creating playlists are intentionally out of PR #80 scope.
+- Later design passes: profile switching with auto sign-in.
 
 ## Technical Follow-Up
 

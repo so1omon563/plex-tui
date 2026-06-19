@@ -4,6 +4,8 @@ from plextui.models import LibraryItem, MediaItem
 from plextui.plex_service import (
     PlexService,
     artwork_path,
+    category_items,
+    episode_context_label,
     kind_label,
     media_details,
     progress_label,
@@ -25,6 +27,12 @@ class RawItem:
 class SecondRawItem(RawItem):
     title = "Second Movie"
     ratingKey = "2"
+
+
+class EditionRawItem(RawItem):
+    title = "Movie"
+    ratingKey = "3"
+    editionTitle = "Director's Cut"
 
 
 class AudioStream:
@@ -75,6 +83,10 @@ class TvEpisodeRawItem(DetailedRawItem):
     TYPE = "episode"
     title = "Episode"
     thumb = "/library/metadata/episode/thumb"
+    grandparentTitle = "Berserk"
+    parentTitle = "Season 1"
+    parentIndex = 1
+    index = 2
 
 
 class TvSeasonRawItem(DetailedRawItem):
@@ -95,7 +107,7 @@ class RawLibrary:
         self.calls.append(kwargs)
         return RawPage([RawItem()])
 
-    def search(self, query, **kwargs):
+    def search(self, query=None, **kwargs):
         self.calls.append((query, kwargs))
         return RawPage([RawItem()])
 
@@ -110,6 +122,10 @@ class RawLibrary:
     def playlists(self, **kwargs):
         self.calls.append(("playlists", kwargs))
         return RawPage([RawItem()])
+
+    def listFilterChoices(self, field):
+        self.calls.append(("choices", field))
+        return [type("Genre", (), {"title": "Sci-Fi", "key": "science_fiction"})()]
 
 
 class RawLibraryHub:
@@ -155,11 +171,13 @@ def test_library_entry_page_fetches_supported_submenus():
     recommended = service.library_entry_page(library, "recommended", start=1, size=1)
     collections = service.library_entry_page(library, "collections", start=50, size=25)
     playlists = service.library_entry_page(library, "playlists", start=75, size=25)
+    categories = service.library_entry_page(library, "categories", start=0, size=25)
 
     assert raw_library.calls == [
         ("hubs", {}),
         ("collections", {"maxresults": 25, "container_start": 50, "container_size": 25}),
         ("playlists", {"maxresults": 25, "container_start": 75, "container_size": 25}),
+        ("choices", "genre"),
     ]
     assert [item.title for item in recommended.items] == ["Second Movie"]
     assert recommended.start == 1
@@ -168,6 +186,41 @@ def test_library_entry_page_fetches_supported_submenus():
     assert collections.has_more
     assert len(playlists.items) == 1
     assert playlists.has_more
+    assert [item.title for item in categories.items] == ["Sci-Fi"]
+    assert categories.items[0].kind == "category"
+
+
+def test_category_children_fetch_library_search_results():
+    raw_library = RawLibrary()
+    service = object.__new__(PlexService)
+    library = LibraryItem("Movies", "1", "movie", raw_library)
+    category = category_items(library)[0]
+    raw_library.calls.clear()
+
+    page = service.category_page(category.raw, start=50, size=25)
+
+    assert raw_library.calls == [
+        (None, {"maxresults": 25, "container_start": 50, "container_size": 25, "genre": "science_fiction"})
+    ]
+    assert len(page.items) == 1
+    assert page.has_more
+
+
+def test_movie_editions_are_visible_as_variants():
+    class MultiEditionRaw(RawItem):
+        def editions(self):
+            return [RawItem(), EditionRawItem()]
+
+    service = object.__new__(PlexService)
+    item = to_media_item(MultiEditionRaw())
+
+    children = service.children(item)
+
+    assert [child.subtitle for child in children] == ["", "Director's Cut"]
+    assert media_details(children[1]).metadata[0:2] == [
+        ("Type", "movie"),
+        ("Edition", "Director's Cut"),
+    ]
 
 
 def test_search_page_fetches_single_library_search_page():
@@ -238,6 +291,23 @@ def test_media_details_include_audio_and_subtitle_locations():
         "Signs (vobsub, embedded, forced)",
     ]
     assert details.artwork_path == "/library/metadata/show/thumb"
+
+
+def test_episode_items_include_show_and_season_context():
+    item = to_media_item(TvEpisodeRawItem())
+
+    assert item.title == "Episode"
+    assert item.subtitle == "Berserk / Season 1 / S01E02  10m"
+    assert episode_context_label(TvEpisodeRawItem()) == "Berserk / Season 1 / S01E02"
+
+    details = media_details(item)
+
+    assert "Berserk" not in details.facts
+    assert "Season 1" not in details.facts
+    assert "S01E02" not in details.facts
+    assert ("Show", "Berserk") in details.metadata
+    assert ("Season", "Season 1") in details.metadata
+    assert ("Episode", "S01E02") in details.metadata
 
 
 def test_tv_episode_artwork_prefers_episode_still():

@@ -174,6 +174,10 @@ comfortable size on modern displays; Settings can override this with values
 such as `90%`, `1280x720`, or `80%x80%`. If an older config has an exact
 `mpv_window_size = "1280x720"` override, cycle the mpv window-size setting once
 to return to the Default preset.
+Use `w` from a playable movie or episode to toggle its Plex watched state.
+When playback is active, choosing an audio or subtitle track from the picker
+also asks mpv to switch the active track when the launched stream exposes a
+matching track.
 
 ## Key Bindings
 
@@ -187,6 +191,7 @@ to return to the Default preset.
 | `tab` / `shift+tab` | Move focus |
 | `l` | Focus libraries |
 | `m` | Focus media |
+| `space` | Run the alternate action for a selected library |
 | `v` | Toggle list/grid view |
 | `pageup` / `pagedown` | Move one page in grid view |
 | `,` | Show settings |
@@ -194,6 +199,8 @@ to return to the Default preset.
 | `enter` | Open selected item |
 | `p` | Play selected item from the beginning |
 | `r` | Resume selected item from the saved Plex position |
+| `w` | Mark selected item watched / unwatched |
+| `backspace` / `delete` | Remove selected item from Continue Watching |
 | `a` / `s` | Choose audio / subtitle preference |
 | `A` / `S` | Clear audio preference / cycle subtitle mode |
 | `x` | Stop launched `mpv` |
@@ -202,14 +209,23 @@ to return to the Default preset.
 
 - Plex PIN login and server selection.
 - Paged library browsing with automatic loading near the end of loaded items.
+- Library submenu entrypoints for all items, Recommended, Collections,
+  Playlists, and Categories. Library rows open all items by default; Space
+  opens the browse-mode menu, and Settings can swap the primary and alternate
+  actions.
 - Current-library search and bounded global search.
 - List view plus configurable-density grid view with terminal poster artwork.
 - External subtitle support and direct playback for embedded PGS/VOBSUB tracks.
 - Audio and subtitle pickers with saved language preferences.
 - Separate play-from-start and resume actions with Plex progress reporting.
+- Watched/unwatched toggling for selected playable Plex items.
+- Continue Watching episode rows show their show, season, and episode context,
+  and items can be removed from the Continue Watching view.
+- Movie editions appear as distinct variants when Plex reports multiple
+  editions for a selected movie.
 - Settings screen for stream preferences, playback mode and transcode quality,
   artwork modes, grid density, page size, auto-load threshold, grid artwork
-  prefetching, media view, and `mpv` window size.
+  prefetching, media view, library Enter behavior, and `mpv` window size.
 - App diagnostics view for version, paths, `mpv`, Plex connection, artwork, and
   browsing settings.
 

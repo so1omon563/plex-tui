@@ -16,6 +16,7 @@ from plextui.app import (
     alphabet_section_groups,
     BrowseState,
     LoadMoreRow,
+    LibraryRow,
     LibraryMenuRow,
     MediaGrid,
     MediaRow,
@@ -134,6 +135,40 @@ def test_render_details_includes_subtitles_and_summary():
     assert "- Japanese (aac, 2ch, selected)" in rendered
     assert "- English (srt, selected)" in rendered
     assert "Summary text" in rendered
+
+
+def test_render_details_promotes_episode_context_under_title():
+    details = MediaDetails(
+        title="Band of the Hawk",
+        kind="episode",
+        facts=["Episode", "1997", "23m", "in progress", "TV-MA", "Rating 7.4", "2 subtitles"],
+        metadata=[
+            ("Type", "episode"),
+            ("Year", "1997"),
+            ("Duration", "23m"),
+            ("Status", "in progress"),
+            ("Episode", "S01E02"),
+            ("Content Rating", "TV-MA"),
+            ("Rating", "7.4"),
+            ("Show", "Berserk"),
+            ("Season", "Season 1"),
+        ],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=True,
+    )
+
+    rendered = render_details(details)
+
+    assert "Band of the Hawk\nBerserk - Season 1 - S01E02\n--------------------------" in rendered
+    assert rendered.index("Berserk - Season 1 - S01E02") < rendered.index("Episode / 1997")
+    assert "in progress / S01E02" not in rendered
+    assert "Episode Context" not in rendered
+    metadata = rendered.split("Metadata\n", 1)[1].split("\n\n", 1)[0]
+    assert "Show: Berserk" not in metadata
+    assert "Season: Season 1" not in metadata
+    assert "Episode: S01E02" not in metadata
 
 
 def test_render_details_uses_clear_empty_states_and_wraps_summary():
@@ -262,6 +297,7 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "› Transcode Quality: Original  (cycle)" in labels
     assert "› mpv Window Size: 1280x720  (cycle)" in labels
     assert "› Set custom mpv window size  (edit)" in labels
+    assert "› Library Enter: Library  (cycle)" in labels
     assert "› Grid Density: Comfortable  (cycle)" in labels
     assert "› Artwork Renderer: Block  (cycle)" in labels
     assert "› Page Size: 80  (edit)" in labels
@@ -299,6 +335,7 @@ def test_settings_row_details_describe_action_types():
     config = AppConfig("http://plex", "token", "client", page_size=80, grid_density="comfortable")
     rows = settings_rows(config)
     grid_row = next(row for row in rows if getattr(row, "action", "") == "cycle_grid_density")
+    library_enter_row = next(row for row in rows if getattr(row, "action", "") == "cycle_library_enter_action")
     clear_row = next(row for row in rows if getattr(row, "action", "") == "clear_audio")
     input_row = next(row for row in rows if getattr(row, "action", "") == "set_page_size")
     value_row = next(row for row in rows if getattr(row, "label_text", "").strip().startswith("Server:"))
@@ -310,6 +347,10 @@ def test_settings_row_details_describe_action_types():
     assert "Current grid density: Comfortable" in grid_details
     assert "Controls" in grid_details
     assert "Left/Right changes this setting without opening an input." in grid_details
+
+    library_enter_details = render_settings_row_details(library_enter_row, config)
+    assert "Library Enter" in library_enter_details
+    assert "Current library Enter action: Library" in library_enter_details
 
     confirm_details = render_settings_row_details(clear_row, config, pending_confirmation_action="clear_audio")
     assert "Confirm Action" in confirm_details
@@ -856,6 +897,8 @@ def test_render_help_groups_key_bindings():
     assert "left/right: move across grid cards" in rendered
     assert "p: play selected media from beginning" in rendered
     assert "r: resume selected media" in rendered
+    assert "w: mark selected media watched / unwatched" in rendered
+    assert "backspace/delete: remove selected Continue Watching item" in rendered
     assert "ctrl+r: reconnect / reload libraries" in rendered
     assert "PLEX_TUI_ARTWORK_LOG=1" in rendered
     assert "?: show help" in rendered
@@ -864,6 +907,10 @@ def test_render_help_groups_key_bindings():
 def test_footer_shows_core_bindings_and_help_keeps_full_reference():
     shown = {binding.action for binding in PlexTuiApp.BINDINGS if binding.show}
     hidden = {binding.action for binding in PlexTuiApp.BINDINGS if not binding.show}
+    hidden_keys_by_action = {}
+    for binding in PlexTuiApp.BINDINGS:
+        if not binding.show:
+            hidden_keys_by_action.setdefault(binding.action, set()).add(binding.key)
     rendered = render_help()
 
     assert shown == {
@@ -877,6 +924,10 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
         "play_selected",
         "resume_selected",
     }
+    assert "alternate_library_action" in hidden
+    assert "toggle_watched" in hidden
+    assert "remove_continue_watching" in hidden
+    assert hidden_keys_by_action["remove_continue_watching"] == {"backspace", "delete"}
     assert "audio_picker" in hidden
     assert "subtitle_picker" in hidden
     assert "a: choose and save audio preference" in rendered
@@ -1081,10 +1132,17 @@ def test_context_hints_for_media_and_load_more():
     setting_action = next(row for row in settings if getattr(row, "action", "") == "cycle_grid_density")
     setting_value = next(row for row in settings if getattr(row, "label_text", "").strip().startswith("Server:"))
 
-    assert context_hint(MediaRow(playable)) == "Media: Enter selects / p plays from start / r resumes / a audio / s subtitles"
+    assert context_hint(MediaRow(playable)) == (
+        "Media: Enter selects / p plays from start / r resumes / w watched / a audio / s subtitles"
+    )
     assert context_hint(MediaRow(container)) == "Media: Enter opens item"
-    assert context_hint(grid) == "Grid: Arrows/page select card / p plays from start / r resumes / a audio / s subtitles"
+    assert context_hint(grid) == (
+        "Grid: Arrows/page select card / p plays from start / r resumes / w watched / a audio / s subtitles"
+    )
     assert context_hint(LoadMoreRow(100, 200)) == "Media: Enter loads next page"
+    assert context_hint(LibraryRow(LibraryItem("Movies", "1", "movie", object()))) == (
+        "Libraries: Enter opens primary view / Space opens alternate view"
+    )
     assert context_hint(LibraryMenuRow(LibraryItem("Movies", "1", "movie", object()), "library", "Library", "All items")) == (
         "Library: Enter opens browse mode"
     )
@@ -1097,8 +1155,8 @@ def test_library_menu_rows_list_supported_entrypoints():
 
     rows = library_menu_rows(library)
 
-    assert [row.entry for row in rows] == ["library", "recommended", "collections", "playlists"]
-    assert [row.label_text for row in rows] == ["Library", "Recommended", "Collections", "Playlists"]
+    assert [row.entry for row in rows] == ["library", "recommended", "collections", "playlists", "categories"]
+    assert [row.label_text for row in rows] == ["Library", "Recommended", "Collections", "Playlists", "Categories"]
 
 
 def render_plain(renderable: object, width: int = 100) -> str:

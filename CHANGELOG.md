@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.4.4 - 2026-06-18
+
+- Added a keyboard action to mark the selected playable Plex item watched or
+  unwatched from the browse view.
+- Added Plex library Categories browsing, visible movie-edition variants, and
+  live mpv audio/subtitle switching when the active playback exposes matching
+  tracks.
+- Made library rows open the full Library view by default, with Space opening
+  the browse-mode menu as the alternate action, and added a Settings option to
+  swap those actions.
+- Added a Backspace/Delete Continue Watching removal action for selected items
+  in the Continue Watching view.
+- Improved episode readability by showing show, season, and episode context in
+  episode rows and directly under the episode title in details.
+
 ## 0.4.3 - 2026-06-18
 
 - Made the default `mpv` window open with `--autofit=80%`, keeping custom

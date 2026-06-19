@@ -215,13 +215,25 @@ class ProgressMonitor:
 
 
 def mpv_get_property(socket_path: Path, property_name: str) -> Any:
+    response = mpv_command(socket_path, ["get_property", property_name])
+    if not response or response.get("error") != "success":
+        return None
+    return response.get("data")
+
+
+def mpv_set_property(socket_path: Path, property_name: str, value: Any) -> bool:
+    response = mpv_command(socket_path, ["set_property", property_name, value])
+    return bool(response and response.get("error") == "success")
+
+
+def mpv_command(socket_path: Path, command: list[Any]) -> dict[str, Any] | None:
     if not socket_path.exists():
         return None
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.settimeout(1)
             sock.connect(str(socket_path))
-            payload = {"command": ["get_property", property_name]}
+            payload = {"command": command}
             sock.sendall((json.dumps(payload) + "\n").encode("utf-8"))
             data = sock.recv(4096)
     except OSError:
@@ -230,9 +242,7 @@ def mpv_get_property(socket_path: Path, property_name: str) -> Any:
         response = json.loads(data.decode("utf-8").splitlines()[0])
     except (IndexError, json.JSONDecodeError, UnicodeDecodeError):
         return None
-    if response.get("error") != "success":
-        return None
-    return response.get("data")
+    return response
 
 
 def cleanup_socket(socket_path: Path) -> None:
@@ -368,6 +378,31 @@ def direct_track_args(
         if track_id is not None:
             args.append(f"--sid={track_id}")
     return args
+
+
+def switch_mpv_stream(
+    handle: PlayerHandle,
+    item: Any,
+    choice: StreamChoice,
+    stream_type: str,
+) -> bool:
+    if not handle.active:
+        return False
+    if stream_type == "subtitle":
+        if choice.stream_id == 0:
+            return mpv_set_property(handle.socket_path, "sid", "no")
+        if choice.stream_id is None:
+            return mpv_set_property(handle.socket_path, "sid", "auto")
+        track_id = mpv_track_id(subtitle_streams(full_metadata(item)), choice.stream)
+        if track_id is None:
+            return False
+        return mpv_set_property(handle.socket_path, "sid", track_id)
+    if stream_type == "audio":
+        track_id = mpv_track_id(audio_streams(full_metadata(item)), choice.stream)
+        if track_id is None:
+            return False
+        return mpv_set_property(handle.socket_path, "aid", track_id)
+    return False
 
 
 def mpv_track_id(streams: list[Any], selected_stream: Any) -> int | None:
