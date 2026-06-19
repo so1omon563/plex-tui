@@ -203,6 +203,10 @@ merge should create the GitHub Release and publish package channels. Exceptions
 are allowed for packaging-only follow-ups, automation repair, docs-only
 maintenance, or other changes that should not create a new version tag; call out
 the reason in the PR body when omitting a bump marker.
+When a change is judged release-worthy, do not only add `#release`: run the
+scripted release prep in the same branch and keep the release marker in the PR
+title. A release decision means both staged release files and a publishing
+marker are required unless the release is explicitly canceled.
 
 When preparing or estimating a release version, fetch remote tags first with
 `git fetch --tags origin` and base the decision on the latest origin tag, not
