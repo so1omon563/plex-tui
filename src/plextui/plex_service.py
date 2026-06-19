@@ -221,7 +221,8 @@ def to_media_item(raw: Any) -> MediaItem:
     year = getattr(raw, "year", None)
     duration = format_duration(getattr(raw, "duration", None))
     edition = edition_label(raw)
-    bits = [str(year) if year else "", edition, duration]
+    context = episode_context_label(raw) if kind == "episode" else ""
+    bits = [context, str(year) if year else "", edition, duration]
     subtitle = "  ".join(bit for bit in bits if bit)
     key = str(getattr(raw, "ratingKey", getattr(raw, "key", "")))
     return MediaItem(
@@ -243,11 +244,9 @@ def media_details(item: MediaItem) -> MediaDetails:
         format_duration(getattr(raw, "duration", None)),
         edition_label(raw),
         watched_state(raw),
-        episode_label(raw),
+        "" if item.kind == "episode" else episode_label(raw),
         getattr(raw, "contentRating", None),
         rating_compact(raw),
-        getattr(raw, "grandparentTitle", None),
-        getattr(raw, "parentTitle", None),
         getattr(raw, "studio", None),
     ):
         if value:
@@ -492,6 +491,17 @@ def episode_label(raw: Any) -> str:
     if episode is not None and getattr(raw, "TYPE", "") == "season":
         return f"Season {episode}"
     return ""
+
+
+def episode_context_label(raw: Any) -> str:
+    if getattr(raw, "TYPE", "") != "episode":
+        return ""
+    parts = [
+        getattr(raw, "grandparentTitle", None),
+        getattr(raw, "parentTitle", None),
+        episode_label(raw),
+    ]
+    return " / ".join(str(part) for part in parts if part)
 
 
 def rating_label(raw: Any) -> str:

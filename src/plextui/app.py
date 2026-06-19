@@ -2559,7 +2559,16 @@ def format_offset(milliseconds: int) -> str:
 def render_details(details: object, config: AppConfig | None = None, raw: object | None = None) -> str:
     lines = render_detail_header(details, config)
 
-    metadata = [*detail_key_value_rows(getattr(details, "metadata"))]
+    metadata_rows = list(getattr(details, "metadata"))
+    episode_context = episode_context_rows(details, metadata_rows)
+    if episode_context:
+        metadata_rows = [
+            (label, value)
+            for label, value in metadata_rows
+            if label not in EPISODE_CONTEXT_LABEL_SET
+        ]
+
+    metadata = [*detail_key_value_rows(metadata_rows)]
     append_detail_section(lines, "Metadata", metadata or ["No metadata reported"])
 
     if config is not None:
@@ -2600,10 +2609,12 @@ def render_details(details: object, config: AppConfig | None = None, raw: object
 def render_detail_header(details: object, config: AppConfig | None = None) -> list[str]:
     title = getattr(details, "title")
     title_lines = textwrap.wrap(title, width=DETAIL_SUMMARY_WIDTH) or [title]
+    episode_context = episode_context_summary(details, list(getattr(details, "metadata", [])))
+    context_lines = textwrap.wrap(episode_context, width=DETAIL_SUMMARY_WIDTH) if episode_context else []
     facts = [str(fact) for fact in getattr(details, "facts", []) if fact]
     artwork = artwork_status(details, config)
-    title_width = max(len(line) for line in title_lines)
-    lines = [*title_lines, "-" * min(max(title_width, 8), DETAIL_SUMMARY_WIDTH)]
+    title_width = max(len(line) for line in [*title_lines, *context_lines])
+    lines = [*title_lines, *context_lines, "-" * min(max(title_width, 8), DETAIL_SUMMARY_WIDTH)]
     if facts:
         lines.extend(textwrap.wrap(" / ".join(facts), width=DETAIL_SUMMARY_WIDTH) or [""])
     lines.extend([
@@ -2625,6 +2636,26 @@ def playback_readiness_rows(playable: bool) -> list[str]:
         "Status: Opens more items",
         "Action: Press Enter to open",
     ]
+
+
+EPISODE_CONTEXT_LABELS = ("Show", "Season", "Episode")
+EPISODE_CONTEXT_LABEL_SET = set(EPISODE_CONTEXT_LABELS)
+
+
+def episode_context_rows(details: object, metadata: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    if getattr(details, "kind", "") != "episode":
+        return []
+    values = {label: value for label, value in metadata}
+    return [
+        (label, values[label])
+        for label in EPISODE_CONTEXT_LABELS
+        if values.get(label)
+    ]
+
+
+def episode_context_summary(details: object, metadata: list[tuple[str, str]]) -> str:
+    rows = episode_context_rows(details, metadata)
+    return " - ".join(value for _label, value in rows)
 
 
 def append_detail_section(lines: list[str], heading: str, body: list[str]) -> None:

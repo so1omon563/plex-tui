@@ -5,6 +5,7 @@ from plextui.plex_service import (
     PlexService,
     artwork_path,
     category_items,
+    episode_context_label,
     kind_label,
     media_details,
     progress_label,
@@ -82,6 +83,10 @@ class TvEpisodeRawItem(DetailedRawItem):
     TYPE = "episode"
     title = "Episode"
     thumb = "/library/metadata/episode/thumb"
+    grandparentTitle = "Berserk"
+    parentTitle = "Season 1"
+    parentIndex = 1
+    index = 2
 
 
 class TvSeasonRawItem(DetailedRawItem):
@@ -286,6 +291,23 @@ def test_media_details_include_audio_and_subtitle_locations():
         "Signs (vobsub, embedded, forced)",
     ]
     assert details.artwork_path == "/library/metadata/show/thumb"
+
+
+def test_episode_items_include_show_and_season_context():
+    item = to_media_item(TvEpisodeRawItem())
+
+    assert item.title == "Episode"
+    assert item.subtitle == "Berserk / Season 1 / S01E02  10m"
+    assert episode_context_label(TvEpisodeRawItem()) == "Berserk / Season 1 / S01E02"
+
+    details = media_details(item)
+
+    assert "Berserk" not in details.facts
+    assert "Season 1" not in details.facts
+    assert "S01E02" not in details.facts
+    assert ("Show", "Berserk") in details.metadata
+    assert ("Season", "Season 1") in details.metadata
+    assert ("Episode", "S01E02") in details.metadata
 
 
 def test_tv_episode_artwork_prefers_episode_still():

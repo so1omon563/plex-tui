@@ -219,7 +219,8 @@ matching track.
 - Audio and subtitle pickers with saved language preferences.
 - Separate play-from-start and resume actions with Plex progress reporting.
 - Watched/unwatched toggling for selected playable Plex items.
-- Continue Watching items can be removed from the Continue Watching view.
+- Continue Watching episode rows show their show, season, and episode context,
+  and items can be removed from the Continue Watching view.
 - Movie editions appear as distinct variants when Plex reports multiple
   editions for a selected movie.
 - Settings screen for stream preferences, playback mode and transcode quality,

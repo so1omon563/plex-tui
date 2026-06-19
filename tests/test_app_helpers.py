@@ -137,6 +137,40 @@ def test_render_details_includes_subtitles_and_summary():
     assert "Summary text" in rendered
 
 
+def test_render_details_promotes_episode_context_under_title():
+    details = MediaDetails(
+        title="Band of the Hawk",
+        kind="episode",
+        facts=["Episode", "1997", "23m", "in progress", "TV-MA", "Rating 7.4", "2 subtitles"],
+        metadata=[
+            ("Type", "episode"),
+            ("Year", "1997"),
+            ("Duration", "23m"),
+            ("Status", "in progress"),
+            ("Episode", "S01E02"),
+            ("Content Rating", "TV-MA"),
+            ("Rating", "7.4"),
+            ("Show", "Berserk"),
+            ("Season", "Season 1"),
+        ],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=True,
+    )
+
+    rendered = render_details(details)
+
+    assert "Band of the Hawk\nBerserk - Season 1 - S01E02\n--------------------------" in rendered
+    assert rendered.index("Berserk - Season 1 - S01E02") < rendered.index("Episode / 1997")
+    assert "in progress / S01E02" not in rendered
+    assert "Episode Context" not in rendered
+    metadata = rendered.split("Metadata\n", 1)[1].split("\n\n", 1)[0]
+    assert "Show: Berserk" not in metadata
+    assert "Season: Season 1" not in metadata
+    assert "Episode: S01E02" not in metadata
+
+
 def test_render_details_uses_clear_empty_states_and_wraps_summary():
     details = MediaDetails(
         title="A Long Movie Title That Should Stay Inside The Details Pane",

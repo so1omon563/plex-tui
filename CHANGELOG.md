@@ -12,6 +12,8 @@
   swap those actions.
 - Added a Backspace/Delete Continue Watching removal action for selected items
   in the Continue Watching view.
+- Improved episode readability by showing show, season, and episode context in
+  episode rows and directly under the episode title in details.
 
 ## 0.4.3 - 2026-06-18
 
