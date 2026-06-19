@@ -14,7 +14,11 @@ client_identifier = "plex-tui-your-stable-client-id"
 # preferred_subtitle_language = "eng"
 # subtitle_mode can be "auto", "none", or "preferred".
 # subtitle_mode = "preferred"
-# Optional mpv window size passed as --autofit. Examples: "1280x720", "80%".
+# Optional mpv window size passed as --autofit. Empty uses the app default
+# "80%" for a more comfortable window on modern displays.
+# Examples: "90%", "1280x720", "80%x80%".
+# Existing exact-size overrides such as "1280x720" stay exact until reset or
+# changed in Settings.
 # mpv_window_size = "1280x720"
 # playback_mode can be "auto" for direct/default playback or "transcode" to
 # force Plex transcoding.

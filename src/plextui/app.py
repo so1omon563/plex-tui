@@ -40,6 +40,7 @@ from .auth import LoginSession, ServerChoice, save_server_choice
 from .config import (
     DEFAULT_AUTO_LOAD_THRESHOLD,
     DEFAULT_GRID_PREFETCH_PAGES,
+    DEFAULT_MPV_WINDOW_SIZE,
     DEFAULT_PAGE_SIZE,
     MAX_AUTO_LOAD_THRESHOLD,
     MAX_GRID_PREFETCH_PAGES,
@@ -1333,8 +1334,11 @@ class PlexTuiApp(App[None]):
         if not self.update_preferences(media_view=next_view):
             return
         if self.settings_visible:
-            self.action_show_settings()
-            self.set_status(f"Media view: {media_view_value(self.config)}")
+            self.refresh_settings_after_change(
+                "toggle_media_view",
+                "Media view",
+                media_view_value(self.config),
+            )
             return
         if self.browsing_stack:
             selected = self.selected_media()
@@ -1769,7 +1773,7 @@ class PlexTuiApp(App[None]):
             return
         if action == "reset_mpv_window_size":
             if self.update_preferences(mpv_window_size=""):
-                self.refresh_settings_after_change(action, "mpv window size", "Default")
+                self.refresh_settings_after_change(action, "mpv window size", mpv_window_size_value(self.config))
             return
         if action == "increase_page_size":
             if self.update_numeric_preference("page_size", 10, MIN_PAGE_SIZE, MAX_PAGE_SIZE):
@@ -1922,7 +1926,12 @@ class PlexTuiApp(App[None]):
         next_size = next_mpv_window_size(self.config.mpv_window_size)
         if self.update_preferences(mpv_window_size=next_size):
             if self.settings_visible:
-                self.action_show_settings()
+                self.refresh_settings_after_change(
+                    "cycle_mpv_window_size",
+                    "mpv window size",
+                    mpv_window_size_value(self.config),
+                )
+                return
             self.set_status(f"mpv window size: {mpv_window_size_value(self.config)}")
 
     @work(thread=True)
@@ -2013,18 +2022,21 @@ class PlexTuiApp(App[None]):
     def prompt_mpv_window_size(self) -> None:
         self.input_mode = "mpv_window_size"
         search = self.query_one("#search", Input)
-        search.placeholder = 'mpv window size: 1280x720, 80%, 80%x80%, or empty for default'
+        search.placeholder = f'mpv window size: 80%, 90%, 1280x720, or empty for default {DEFAULT_MPV_WINDOW_SIZE}'
         search.value = self.config.mpv_window_size
         search.display = True
         search.focus()
-        self.show_detail_text("Enter an mpv --autofit value. Examples: 1280x720, 80%, 80%x80%. Submit empty to reset to Default.")
+        self.show_detail_text(
+            f"Enter an mpv --autofit value. Examples: 80%, 90%, 1280x720, 80%x80%. "
+            f"Submit empty to use Default ({DEFAULT_MPV_WINDOW_SIZE})."
+        )
         self.set_status("Enter custom mpv window size")
 
     def save_mpv_window_size_input(self, value: str) -> None:
         size = value.strip()
         if size and not valid_mpv_window_size(size):
             self.prompt_mpv_window_size()
-            self.set_status("Invalid mpv window size. Use 1280x720, 80%, or 80%x80%.")
+            self.set_status("Invalid mpv window size. Use 80%, 90%, 1280x720, or 80%x80%.")
             return
         if not self.update_preferences(mpv_window_size=size):
             return
@@ -2244,7 +2256,7 @@ class PlexTuiApp(App[None]):
                 media.raw,
                 subtitle_choice=subtitle_choice,
                 audio_choice=audio_choice,
-                window_size=self.config.mpv_window_size,
+                window_size=effective_mpv_window_size(self.config),
                 playback_mode=self.config.playback_mode,
                 transcode_quality=self.config.transcode_quality,
                 resume=resume,
@@ -2770,7 +2782,8 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsHeaderRow("Playback"),
         SettingsActionRow(f"Playback Mode: {playback_mode_value(config)}", "cycle_playback_mode"),
         SettingsActionRow(f"Transcode Quality: {transcode_quality_value(config)}", "cycle_transcode_quality"),
-        SettingsActionRow(f"mpv Window Size: {mpv_window_size_value(config)}", "set_mpv_window_size"),
+        SettingsActionRow(f"mpv Window Size: {mpv_window_size_value(config)}", "cycle_mpv_window_size"),
+        SettingsActionRow("Set custom mpv window size", "set_mpv_window_size"),
         SettingsHeaderRow("Artwork"),
         SettingsActionRow(f"Artwork: {artwork_mode_value(config)}", "toggle_artwork"),
         SettingsActionRow(f"Details Artwork: {detail_artwork_mode_value(config)}", "cycle_detail_artwork"),
@@ -2825,7 +2838,7 @@ def render_settings(config: AppConfig) -> str:
         f"Transcode Quality: {transcode_quality_value(config)}",
         f"mpv Window Size: {mpv_window_size_value(config)}",
         "Use Force transcode with a selected quality when direct/default playback is not desired.",
-        "Set custom mpv window size with values like 1280x720, 80%, or 80%x80%.",
+        "Cycle common mpv window sizes, or set a custom value like 80%, 90%, 1280x720, or 80%x80%.",
         "",
         "Artwork",
         f"Artwork: {artwork_mode_value(config)}",
@@ -3536,7 +3549,13 @@ def next_grid_density(value: str) -> str:
 
 
 def mpv_window_size_value(config: AppConfig) -> str:
-    return config.mpv_window_size or "Default"
+    if config.mpv_window_size:
+        return config.mpv_window_size
+    return f"Default ({DEFAULT_MPV_WINDOW_SIZE})"
+
+
+def effective_mpv_window_size(config: AppConfig) -> str:
+    return config.mpv_window_size or DEFAULT_MPV_WINDOW_SIZE
 
 
 def playback_mode_value(config: AppConfig) -> str:
@@ -3563,7 +3582,9 @@ def next_transcode_quality(value: str) -> str:
 
 
 def next_mpv_window_size(value: str) -> str:
-    sizes = ["", "1280x720", "1600x900", "1920x1080", "80%"]
+    if value == "1280x720":
+        return ""
+    sizes = ["", "80%", "90%", "100%", "1600x900", "1920x1080"]
     try:
         index = sizes.index(value)
     except ValueError:

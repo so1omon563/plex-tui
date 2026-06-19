@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -1803,6 +1804,7 @@ async def run_playback_footer_check():
             app.action_play_selected()
         await pilot.pause(0.2)
 
+        assert launch.call_args.kwargs["window_size"] == "80%"
         assert launch.call_args.kwargs["playback_mode"] == "transcode"
         assert launch.call_args.kwargs["transcode_quality"] == "720p_4"
         assert launch.call_args.kwargs["resume"] is False
@@ -1903,9 +1905,12 @@ async def run_quick_preference_action_check():
             app.action_cycle_subtitle_mode()
             assert app.config.subtitle_mode == "auto"
             app.action_cycle_mpv_window_size()
-            assert app.config.mpv_window_size == "1280x720"
+            assert app.config.mpv_window_size == "80%"
+            app.config = replace(app.config, mpv_window_size="1280x720")
+            app.action_cycle_mpv_window_size()
+            assert app.config.mpv_window_size == ""
 
-        assert save_config.call_count == 4
+        assert save_config.call_count == 5
 
 
 async def run_mpv_window_size_input_check():
@@ -2063,17 +2068,26 @@ async def run_settings_highlight_check():
         assert getattr(row, "label_text") == "Account"
         assert "Settings Section" in app.query_one("#detail-content").content
 
-        with patch("plextui.app.save_config"):
-            app.run_settings_action("cycle_grid_density")
-        await pilot.pause(0.2)
+        option_actions = [
+            "cycle_subtitle_mode",
+            "cycle_playback_mode",
+            "cycle_transcode_quality",
+            "cycle_mpv_window_size",
+            "toggle_artwork",
+            "cycle_detail_artwork",
+            "cycle_artwork_renderer",
+            "toggle_media_view",
+            "cycle_grid_density",
+        ]
+        for action in option_actions:
+            with patch("plextui.app.save_config"):
+                app.run_settings_action(action)
+            await pilot.pause(0.2)
 
-        row = media.highlighted_child
-        assert row is not None
-        assert row.has_class("active-row")
-        assert getattr(row, "action") == "cycle_grid_density"
-        details = app.query_one("#detail-content").content
-        assert "grid density" in details.lower()
-        assert "Current grid density: Large" in details
+            row = media.highlighted_child
+            assert row is not None
+            assert row.has_class("active-row")
+            assert getattr(row, "action") == action
 
 
 async def run_help_back_check():

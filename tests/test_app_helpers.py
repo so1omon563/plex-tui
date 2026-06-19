@@ -226,7 +226,7 @@ def test_render_settings_includes_stream_preferences():
     assert "Details Artwork: List only" in rendered
     assert "Media View: List" in rendered
     assert "Theme: textual-light" in rendered
-    assert "mpv Window Size: Default" in rendered
+    assert "mpv Window Size: Default (80%)" in rendered
     assert "Playback Mode: Auto / direct default" in rendered
     assert "Transcode Quality: Original" in rendered
     assert "Page Size: 250" in rendered
@@ -260,7 +260,8 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "› Subtitle Mode: Auto  (cycle)" in labels
     assert "› Playback Mode: Auto / direct default  (cycle)" in labels
     assert "› Transcode Quality: Original  (cycle)" in labels
-    assert "› mpv Window Size: 1280x720  (edit)" in labels
+    assert "› mpv Window Size: 1280x720  (cycle)" in labels
+    assert "› Set custom mpv window size  (edit)" in labels
     assert "› Grid Density: Comfortable  (cycle)" in labels
     assert "› Artwork Renderer: Block  (cycle)" in labels
     assert "› Page Size: 80  (edit)" in labels
@@ -656,9 +657,11 @@ def test_picker_details_explain_global_save():
 
 
 def test_mpv_window_size_cycles_common_values():
-    assert next_mpv_window_size("") == "1280x720"
-    assert next_mpv_window_size("1280x720") == "1600x900"
-    assert next_mpv_window_size("80%") == ""
+    assert next_mpv_window_size("") == "80%"
+    assert next_mpv_window_size("80%") == "90%"
+    assert next_mpv_window_size("100%") == "1600x900"
+    assert next_mpv_window_size("1920x1080") == ""
+    assert next_mpv_window_size("1280x720") == ""
 
 
 def test_grid_density_cycles_and_changes_card_width():
