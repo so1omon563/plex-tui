@@ -168,7 +168,7 @@ jobs:
       - name: Build Homebrew bottle
         if: steps.release.outputs.publish == 'true' && steps.tap-update.outputs.needed == 'true'
         id: bottle
-        timeout-minutes: 20
+        timeout-minutes: 60
         working-directory: ${{ steps.tap.outputs.path }}
         env:
           BOTTLE_ROOT_URL: ${{ steps.tap-update.outputs.bottle_root_url }}
@@ -179,7 +179,6 @@ jobs:
           brew --version
           brew config
           brew info so1omon563/plex-tui/plex-tui
-          brew deps --tree so1omon563/plex-tui/plex-tui
 
           (
             while true; do
