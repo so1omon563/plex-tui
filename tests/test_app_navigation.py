@@ -1815,8 +1815,6 @@ async def run_settings_recent_debug_log_check(tmp_path):
         log.write_text("first\nsecond\nthird\n", encoding="utf-8")
 
         with patch("plextui.app.debug_log_path", return_value=log):
-            app.action_show_settings()
-            await pilot.pause(0.2)
             app.run_settings_action("show_recent_debug_log")
         await pilot.pause(0.2)
 
@@ -1834,8 +1832,6 @@ async def run_settings_app_diagnostics_check():
         app.config = AppConfig("http://plex", "token", "client-id")
 
         with patch("plextui.app.detect_mpv", return_value=("/usr/bin/mpv", "mpv 0.40.0")):
-            app.action_show_settings()
-            await pilot.pause(0.2)
             app.run_settings_action("show_app_diagnostics")
         await pilot.pause(0.2)
 
