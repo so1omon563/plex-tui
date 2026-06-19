@@ -71,9 +71,11 @@ brew install plex-tui
 plex-tui --smoke
 ```
 
-The Homebrew formula installs `mpv` automatically. The first install can take
-several minutes because native Python dependencies such as `pillow` are built
-from source.
+The Homebrew formula installs `mpv` automatically. Apple Silicon macOS installs
+use prebuilt bottles when available so Homebrew can pour the app virtualenv
+instead of rebuilding native Python dependencies such as `pillow` from source.
+Intel macOS installs still use Homebrew's source-build path while that platform
+continues to be supported.
 Homebrew 6 requires non-official taps to be trusted before Homebrew loads
 formulae from them. `plex-tui` only depends on formulae from Homebrew/core, so no
 additional tap trust is required for its dependencies.
