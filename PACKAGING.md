@@ -52,9 +52,11 @@ brew install plex-tui
 
 The formula depends on `mpv` and `python@3.13`, then installs the Python app in
 a Homebrew-managed virtualenv. Post-release automation publishes Homebrew
-bottles so supported macOS installs can pour the prebuilt app virtualenv instead
-of rebuilding Python resources such as `pillow` from source. If no matching
-bottle is available, Homebrew falls back to the source install path.
+bottles for Apple Silicon macOS so supported installs can pour the prebuilt app
+virtualenv instead of rebuilding Python resources such as `pillow` from source.
+Intel macOS remains supported through Homebrew's source install path while that
+platform continues to be supported. If no matching bottle is available,
+Homebrew falls back to the source install path.
 Homebrew 6 requires non-official taps to be trusted before Homebrew loads
 formulae from them. The `plex-tui` formula only uses Homebrew/core formula
 dependencies, so users do not need to trust any additional taps for `mpv`,

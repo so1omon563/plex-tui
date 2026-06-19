@@ -6,6 +6,8 @@
   installs can pour a prebuilt `plex-tui` virtualenv instead of rebuilding
   Python resources from source, with bounded verbose CI diagnostics for bottle
   builds.
+- Documented that Homebrew bottles are published for Apple Silicon macOS, while
+  Intel macOS remains supported through Homebrew's source-build path.
 
 ## 0.4.2 - 2026-06-18
 

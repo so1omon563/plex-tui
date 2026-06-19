@@ -32,8 +32,10 @@ For each `plex-tui` release:
    ```
 
 The source formula is correct but slow on first install because native Python
-resources such as `pillow` are built from source. Release automation should
-publish bottles so supported macOS installs can pour a prebuilt virtualenv.
+resources such as `pillow` are built from source. Release automation publishes
+Apple Silicon macOS bottles so supported installs can pour a prebuilt
+virtualenv. Intel macOS continues to use Homebrew's source-build path while that
+platform remains supported.
 
 Install-time investigation notes and the baseline measurement helper live in the
 main repo at `docs/homebrew-install-time.md` and
