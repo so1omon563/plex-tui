@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.3 - 2026-06-18
+
 - Made the default `mpv` window open with `--autofit=80%`, keeping custom
   Settings overrides for exact pixel sizes or other percentage presets, and
   made the old `1280x720` preset cycle back to Default.
