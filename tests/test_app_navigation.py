@@ -47,6 +47,16 @@ async def wait_for_selected_title(app: PlexTuiApp, pilot: object, expected: str,
     return selected
 
 
+async def wait_for_status(app: PlexTuiApp, pilot: object, expected: str, attempts: int = 20) -> str:
+    status = str(app.query_one("#status").content)
+    for _ in range(attempts):
+        if status == expected:
+            return status
+        await pilot.pause(0.1)
+        status = str(app.query_one("#status").content)
+    return status
+
+
 def test_picker_return_preserves_highlighted_media():
     asyncio.run(run_picker_return_check())
 
@@ -2121,10 +2131,11 @@ async def run_stream_picker_live_switch_check():
             patch("plextui.app.switch_mpv_stream", return_value=True) as switch,
         ):
             app.choose_stream(choice, "subtitle")
-        await pilot.pause(0.2)
 
+        expected_status = "Subtitle preference: None (disable subtitles) / active playback updated"
+        status = await wait_for_status(app, pilot, expected_status)
         switch.assert_called_once_with(app.player, item.raw, choice, "subtitle")
-        assert app.query_one("#status").content == "Subtitle preference: None (disable subtitles) / active playback updated"
+        assert status == expected_status
 
 
 async def run_quick_preference_action_check():
