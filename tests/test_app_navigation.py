@@ -2019,7 +2019,7 @@ async def run_toggle_watched_marks_unwatched_check():
         await pilot.pause(0.2)
 
         app.action_toggle_watched()
-        await pilot.pause(0.5)
+        status = await wait_for_status(app, pilot, "Marked Movie watched")
 
         row = app.query_one("#media").highlighted_child
         selected = app.selected_media()
@@ -2028,7 +2028,7 @@ async def run_toggle_watched_marks_unwatched_check():
         assert selected is not None
         assert selected.raw.viewCount == 1
         assert "[watched]" in row.label_text
-        assert app.query_one("#status").content == "Marked Movie watched"
+        assert status == "Marked Movie watched"
 
 
 async def run_toggle_watched_marks_watched_check():
@@ -2041,7 +2041,7 @@ async def run_toggle_watched_marks_watched_check():
         await pilot.pause(0.2)
 
         app.action_toggle_watched()
-        await pilot.pause(0.5)
+        status = await wait_for_status(app, pilot, "Marked Movie unwatched")
 
         row = app.query_one("#media").highlighted_child
         selected = app.selected_media()
@@ -2050,7 +2050,7 @@ async def run_toggle_watched_marks_watched_check():
         assert selected is not None
         assert selected.raw.viewCount == 0
         assert "[watched]" not in row.label_text
-        assert app.query_one("#status").content == "Marked Movie unwatched"
+        assert status == "Marked Movie unwatched"
 
 
 async def run_toggle_watched_unsupported_check():
@@ -2062,9 +2062,9 @@ async def run_toggle_watched_unsupported_check():
         await pilot.pause(0.2)
 
         app.action_toggle_watched()
-        await pilot.pause(0.5)
+        status = await wait_for_status(app, pilot, "Selected item does not support watched state changes")
 
-        assert app.query_one("#status").content == "Selected item does not support watched state changes"
+        assert status == "Selected item does not support watched state changes"
 
 
 async def run_remove_continue_watching_check():
