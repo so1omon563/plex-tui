@@ -13,6 +13,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  HOMEBREW_NO_REQUIRE_TAP_TRUST: "1"
 
 jobs:
   publish-tap:
@@ -167,6 +168,7 @@ jobs:
       - name: Build Homebrew bottle
         if: steps.release.outputs.publish == 'true' && steps.tap-update.outputs.needed == 'true'
         id: bottle
+        timeout-minutes: 20
         working-directory: ${{ steps.tap.outputs.path }}
         env:
           BOTTLE_ROOT_URL: ${{ steps.tap-update.outputs.bottle_root_url }}
@@ -174,8 +176,24 @@ jobs:
         run: |
           set -euo pipefail
 
+          brew --version
+          brew config
+          brew info so1omon563/plex-tui/plex-tui
+          brew deps --tree so1omon563/plex-tui/plex-tui
+
+          (
+            while true; do
+              sleep 60
+              echo "Still building Homebrew bottle for plex-tui ${VERSION} at $(date -u +%Y-%m-%dT%H:%M:%SZ)."
+            done
+          ) &
+          heartbeat_pid=$!
+          trap 'kill "$heartbeat_pid" 2>/dev/null || true' EXIT
+
           brew uninstall --ignore-dependencies so1omon563/plex-tui/plex-tui >/dev/null 2>&1 || true
-          brew install --build-bottle so1omon563/plex-tui/plex-tui
+          brew install --verbose --build-bottle so1omon563/plex-tui/plex-tui
+          kill "$heartbeat_pid" 2>/dev/null || true
+          trap - EXIT
 
           rm -f plex-tui--*.bottle.json plex-tui--*.bottle.tar.gz
           brew bottle \
