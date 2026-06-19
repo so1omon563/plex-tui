@@ -39,9 +39,12 @@ Already covered:
 - Plex PIN login and server selection.
 - Library list browsing with paged loading and automatic load-more.
 - Continue Watching as a top-level browse entry.
+- Removing selected items from Continue Watching.
 - Selective library display in Settings.
 - Library submenus for Library, Recommended, Collections, and Playlists.
 - Library Categories through PlexAPI category helpers or genre filter choices.
+- Library rows open all items by default, with Space as the alternate
+  browse-mode menu action and a global Settings toggle to swap the behavior.
 - Alphabet navigation for loaded browse lists and grids.
 - Current-library and global search.
 - Show/season/episode child browsing through PlexAPI child helpers.

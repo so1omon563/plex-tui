@@ -16,6 +16,7 @@ from plextui.app import (
     alphabet_section_groups,
     BrowseState,
     LoadMoreRow,
+    LibraryRow,
     LibraryMenuRow,
     MediaGrid,
     MediaRow,
@@ -262,6 +263,7 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "› Transcode Quality: Original  (cycle)" in labels
     assert "› mpv Window Size: 1280x720  (cycle)" in labels
     assert "› Set custom mpv window size  (edit)" in labels
+    assert "› Library Enter: Library  (cycle)" in labels
     assert "› Grid Density: Comfortable  (cycle)" in labels
     assert "› Artwork Renderer: Block  (cycle)" in labels
     assert "› Page Size: 80  (edit)" in labels
@@ -299,6 +301,7 @@ def test_settings_row_details_describe_action_types():
     config = AppConfig("http://plex", "token", "client", page_size=80, grid_density="comfortable")
     rows = settings_rows(config)
     grid_row = next(row for row in rows if getattr(row, "action", "") == "cycle_grid_density")
+    library_enter_row = next(row for row in rows if getattr(row, "action", "") == "cycle_library_enter_action")
     clear_row = next(row for row in rows if getattr(row, "action", "") == "clear_audio")
     input_row = next(row for row in rows if getattr(row, "action", "") == "set_page_size")
     value_row = next(row for row in rows if getattr(row, "label_text", "").strip().startswith("Server:"))
@@ -310,6 +313,10 @@ def test_settings_row_details_describe_action_types():
     assert "Current grid density: Comfortable" in grid_details
     assert "Controls" in grid_details
     assert "Left/Right changes this setting without opening an input." in grid_details
+
+    library_enter_details = render_settings_row_details(library_enter_row, config)
+    assert "Library Enter" in library_enter_details
+    assert "Current library Enter action: Library" in library_enter_details
 
     confirm_details = render_settings_row_details(clear_row, config, pending_confirmation_action="clear_audio")
     assert "Confirm Action" in confirm_details
@@ -857,6 +864,7 @@ def test_render_help_groups_key_bindings():
     assert "p: play selected media from beginning" in rendered
     assert "r: resume selected media" in rendered
     assert "w: mark selected media watched / unwatched" in rendered
+    assert "delete: remove selected Continue Watching item" in rendered
     assert "ctrl+r: reconnect / reload libraries" in rendered
     assert "PLEX_TUI_ARTWORK_LOG=1" in rendered
     assert "?: show help" in rendered
@@ -878,7 +886,9 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
         "play_selected",
         "resume_selected",
     }
+    assert "alternate_library_action" in hidden
     assert "toggle_watched" in hidden
+    assert "remove_continue_watching" in hidden
     assert "audio_picker" in hidden
     assert "subtitle_picker" in hidden
     assert "a: choose and save audio preference" in rendered
@@ -1091,6 +1101,9 @@ def test_context_hints_for_media_and_load_more():
         "Grid: Arrows/page select card / p plays from start / r resumes / w watched / a audio / s subtitles"
     )
     assert context_hint(LoadMoreRow(100, 200)) == "Media: Enter loads next page"
+    assert context_hint(LibraryRow(LibraryItem("Movies", "1", "movie", object()))) == (
+        "Libraries: Enter opens primary view / Space opens alternate view"
+    )
     assert context_hint(LibraryMenuRow(LibraryItem("Movies", "1", "movie", object()), "library", "Library", "All items")) == (
         "Library: Enter opens browse mode"
     )

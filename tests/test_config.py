@@ -16,7 +16,8 @@ def test_config_and_debug_paths_share_platformdirs_base(monkeypatch):
 
 
 def test_config_example_parses_and_uses_known_fields():
-    raw = tomllib.loads(Path("config.example.toml").read_text(encoding="utf-8"))
+    example = Path("config.example.toml").read_text(encoding="utf-8")
+    raw = tomllib.loads(example)
 
     assert set(raw) <= {
         "base_url",
@@ -43,6 +44,7 @@ def test_config_example_parses_and_uses_known_fields():
     assert raw["base_url"]
     assert raw["token"]
     assert raw["client_identifier"]
+    assert 'library_enter_action = "library"' in example
 
 
 def test_invalid_subtitle_mode_logs_and_normalizes(tmp_path, monkeypatch):
@@ -99,6 +101,7 @@ def test_invalid_artwork_settings_log_and_normalize(tmp_path, monkeypatch):
             'detail_artwork_mode = "always"',
             'grid_density = "huge"',
             'media_view = "tiles"',
+            'library_enter_action = "menu"',
             "",
         ]),
         encoding="utf-8",
@@ -113,6 +116,8 @@ def test_invalid_artwork_settings_log_and_normalize(tmp_path, monkeypatch):
     assert loaded.detail_artwork_mode == "list_only"
     assert loaded.grid_density == "comfortable"
     assert loaded.media_view == "list"
+    assert loaded.library_enter_action == "library"
+    assert "invalid library_enter_action" in debug_file.read_text(encoding="utf-8")
     log = debug_file.read_text(encoding="utf-8")
     assert "invalid artwork_mode" in log
     assert "invalid artwork_renderer" in log

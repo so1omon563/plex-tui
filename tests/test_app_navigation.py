@@ -80,7 +80,15 @@ def test_open_library_shows_browse_modes():
 
 
 def test_sidebar_library_selection_shows_browse_modes():
-    asyncio.run(run_sidebar_library_selection_menu_check())
+    asyncio.run(run_sidebar_library_selection_opens_default_library_check())
+
+
+def test_space_on_sidebar_library_shows_browse_modes():
+    asyncio.run(run_sidebar_library_space_menu_check())
+
+
+def test_sidebar_library_selection_can_default_to_browse_modes():
+    asyncio.run(run_sidebar_library_selection_menu_default_check())
 
 
 def test_back_from_library_entry_returns_to_browse_modes():
@@ -466,6 +474,14 @@ def test_toggle_watched_rejects_unsupported_media():
     asyncio.run(run_toggle_watched_unsupported_check())
 
 
+def test_remove_continue_watching_removes_selected_item():
+    asyncio.run(run_remove_continue_watching_check())
+
+
+def test_remove_continue_watching_requires_continue_watching_view():
+    asyncio.run(run_remove_continue_watching_requires_view_check())
+
+
 def test_stream_picker_updates_active_playback():
     asyncio.run(run_stream_picker_live_switch_check())
 
@@ -803,11 +819,59 @@ async def run_library_menu_check():
         assert app.browsing_stack == []
 
 
-async def run_sidebar_library_selection_menu_check():
+async def run_sidebar_library_selection_opens_default_library_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        page = MediaPage([MediaItem("First", "", "movie", "1", True, Raw())], start=0, total=1)
+        service = FakePagedService(page)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        library = LibraryItem("Movies", "1", "movie", object())
+        app.populate_libraries([library])
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.5)
+
+        assert service.entry_calls == [(library, "library", 0, 40)]
+        assert app.browsing_stack[-1].title == "Movies"
+        assert app.query_one("#media").highlighted_child.media.title == "First"
+
+
+async def run_sidebar_library_space_menu_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
         app.config = AppConfig("http://plex", "token", "client-id")
+        library = LibraryItem("Movies", "1", "movie", object())
+        app.populate_libraries([library])
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+        await pilot.press("down")
+        await pilot.press("space")
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert [row.label_text for row in rows if isinstance(row, LibraryMenuRow)] == [
+            "Library",
+            "Recommended",
+            "Collections",
+            "Playlists",
+            "Categories",
+        ]
+        assert app.selected_library == library
+        assert app.browsing_stack == []
+
+
+async def run_sidebar_library_selection_menu_default_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", library_enter_action="browse_modes")
         library = LibraryItem("Movies", "1", "movie", object())
         app.populate_libraries([library])
         libraries_view = app.query_one("#libraries")
@@ -885,7 +949,7 @@ async def run_library_submenu_keyboard_flow_check():
         assert app.query_one("#media-grid").selected_media.title == "Blade Runner"
 
         libraries_view.focus()
-        await pilot.press("enter")
+        await pilot.press("space")
         await pilot.pause(0.2)
         menu_rows = list(app.query_one("#media").children)
         assert [row.label_text for row in menu_rows if isinstance(row, LibraryMenuRow)] == [
@@ -1931,6 +1995,14 @@ class WatchStateRaw(Raw):
         return bool(self.viewCount)
 
 
+class ContinueWatchingRaw(Raw):
+    def __init__(self):
+        self.remove_calls = 0
+
+    def removeFromContinueWatching(self):
+        self.remove_calls += 1
+
+
 async def run_toggle_watched_marks_unwatched_check():
     raw = WatchStateRaw(view_offset=65_000)
     app = PlexTuiApp()
@@ -1987,6 +2059,47 @@ async def run_toggle_watched_unsupported_check():
         await pilot.pause(0.5)
 
         assert app.query_one("#status").content == "Selected item does not support watched state changes"
+
+
+async def run_remove_continue_watching_check():
+    raw = ContinueWatchingRaw()
+    removed = MediaItem("Movie", "", "movie", "1", True, raw)
+    remaining = MediaItem("Second", "", "movie", "2", True, Raw())
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.browsing_stack = [
+            BrowseState("Continue Watching", [removed, remaining], source="continue_watching", next_start=2, total=2)
+        ]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_remove_continue_watching()
+        await pilot.pause(0.5)
+
+        assert raw.remove_calls == 1
+        assert [item.title for item in app.browsing_stack[-1].items] == ["Second"]
+        assert app.selected_media() is not None
+        assert app.selected_media().title == "Second"
+        assert app.query_one("#status").content == "Removed Movie from Continue Watching"
+
+
+async def run_remove_continue_watching_requires_view_check():
+    raw = ContinueWatchingRaw()
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.browsing_stack = [BrowseState("Movies", [MediaItem("Movie", "", "movie", "1", True, raw)])]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_remove_continue_watching()
+        await pilot.pause(0.2)
+
+        assert raw.remove_calls == 0
+        assert app.query_one("#status").content == "Open Continue Watching before removing an item"
 
 
 async def run_stream_picker_live_switch_check():

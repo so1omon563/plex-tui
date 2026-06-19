@@ -52,6 +52,10 @@ client_identifier = "plex-tui-your-stable-client-id"
 # detail_artwork_mode = "list_only"
 # media_view can be "list" or "grid".
 # media_view = "list"
+# library_enter_action can be "library" or "browse_modes". The default
+# "library" opens all items with Enter and uses Space for browse modes.
+# "browse_modes" swaps those two actions.
+# library_enter_action = "library"
 # grid_density can be "compact", "comfortable", or "large".
 # grid_density = "comfortable"
 # Textual theme selected from the command palette.

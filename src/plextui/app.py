@@ -447,6 +447,7 @@ class PlexTuiApp(App[None]):
         Binding("g", "focus_global_search", "Global"),
         Binding("tab", "focus_next", "Next", show=False),
         Binding("shift+tab", "focus_previous", "Prev", show=False),
+        Binding("space", "alternate_library_action", "Library modes", show=False),
         Binding("question_mark", "show_help", "Help"),
         Binding("l", "focus_libraries", "Focus libraries", show=False),
         Binding("m", "focus_media", "Focus media list", show=False),
@@ -471,6 +472,7 @@ class PlexTuiApp(App[None]):
         Binding("p", "play_selected", "Play"),
         Binding("r", "resume_selected", "Resume"),
         Binding("w", "toggle_watched", "Watched", show=False),
+        Binding("delete", "remove_continue_watching", "Remove continue", show=False),
         Binding("a", "audio_picker", "Audio", show=False),
         Binding("s", "subtitle_picker", "Subtitles", show=False),
         Binding("A", "clear_audio_preference", "Clear audio", show=False),
@@ -721,7 +723,7 @@ class PlexTuiApp(App[None]):
         if isinstance(row, ContinueWatchingRow):
             self.open_continue_watching()
         elif isinstance(row, LibraryRow):
-            self.open_library_menu(row.library)
+            self.open_library_primary(row.library)
         elif isinstance(row, LibraryMenuRow):
             self.open_library_entry(row.library, row.entry, row.label_text)
         elif isinstance(row, MediaRow):
@@ -824,6 +826,28 @@ class PlexTuiApp(App[None]):
         self.show_detail_text(library_menu_description(library))
         self.focus_media_browser()
         self.set_status(f"{library.title}: choose a browse mode")
+
+    def open_library_primary(self, library: LibraryItem) -> None:
+        if self.config.library_enter_action == "browse_modes":
+            self.open_library_menu(library)
+            return
+        self.open_library_entry(library)
+
+    def open_library_alternate(self, library: LibraryItem) -> None:
+        if self.config.library_enter_action == "browse_modes":
+            self.open_library_entry(library)
+            return
+        self.open_library_menu(library)
+
+    def action_alternate_library_action(self) -> None:
+        row = self.query_one("#libraries", ListView).highlighted_child
+        if isinstance(row, LibraryRow):
+            self.open_library_alternate(row.library)
+            return
+        if isinstance(row, ContinueWatchingRow):
+            self.set_status("Continue Watching opens directly with Enter")
+            return
+        self.set_status("Select a library first")
 
     @work(thread=True)
     def open_library_entry(self, library: LibraryItem, entry: str = "library", label: str | None = None) -> None:
@@ -1755,6 +1779,11 @@ class PlexTuiApp(App[None]):
         if action == "toggle_media_view":
             self.action_toggle_media_view()
             return
+        if action == "cycle_library_enter_action":
+            next_action = next_library_enter_action(self.config.library_enter_action)
+            if self.update_preferences(library_enter_action=next_action):
+                self.refresh_settings_after_change(action, "Library Enter", library_enter_action_value(self.config))
+            return
         if action.startswith("toggle_library_visibility:"):
             self.toggle_library_visibility(action.removeprefix("toggle_library_visibility:"))
             return
@@ -2284,6 +2313,53 @@ class PlexTuiApp(App[None]):
         target = "unwatched" if state == "watched" else "watched"
         self.set_status(f"Marking {media.title} {target}...")
         self.toggle_watched_state(media)
+
+    def action_remove_continue_watching(self) -> None:
+        media = self.selected_media()
+        if media is None:
+            self.set_status("No media selected")
+            return
+        if not self.browsing_stack or self.browsing_stack[-1].source != "continue_watching":
+            self.set_status("Open Continue Watching before removing an item")
+            return
+        self.set_status(f"Removing {media.title} from Continue Watching...")
+        self.remove_continue_watching_item(media)
+
+    @work(thread=True, exclusive=True)
+    def remove_continue_watching_item(self, media: MediaItem) -> None:
+        method = getattr(media.raw, "removeFromContinueWatching", None)
+        if not callable(method):
+            self.call_from_thread(self.set_status, "Selected item cannot be removed from Continue Watching")
+            return
+        try:
+            method()
+        except Exception as exc:
+            self.call_from_thread(self.show_error, f"failed to remove from Continue Watching: {exc}")
+            return
+        self.call_from_thread(self.apply_continue_watching_removal, media)
+
+    def apply_continue_watching_removal(self, media: MediaItem) -> None:
+        if not self.browsing_stack or self.browsing_stack[-1].source != "continue_watching":
+            self.set_status(f"Removed {media.title} from Continue Watching")
+            return
+        state = self.browsing_stack[-1]
+        index = selected_media_index(state.items, media.key)
+        state.items = [item for item in state.items if item.key != media.key]
+        state.total = max(0, state.total - 1) if state.total else len(state.items)
+        if not state.items:
+            self.show_browse_state(state)
+            self.show_detail_text("No items")
+            self.set_status(f"Removed {media.title} from Continue Watching")
+            return
+        next_index = min(index, len(state.items) - 1)
+        self.show_browse_state(state, selected_key=state.items[next_index].key)
+        self.focus_media_browser()
+        self.set_status(f"Removed {media.title} from Continue Watching")
+        self.set_timer(
+            0.05,
+            lambda: self.set_status(f"Removed {media.title} from Continue Watching"),
+            name="continue-watching-removal-status",
+        )
 
     @work(thread=True, exclusive=True)
     def toggle_watched_state(self, media: MediaItem) -> None:
@@ -2901,6 +2977,7 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsActionRow(f"Details Artwork: {detail_artwork_mode_value(config)}", "cycle_detail_artwork"),
         SettingsActionRow(f"Artwork Renderer: {artwork_renderer_value(config)}", "cycle_artwork_renderer"),
         SettingsHeaderRow("Browsing"),
+        SettingsActionRow(f"Library Enter: {library_enter_action_value(config)}", "cycle_library_enter_action"),
         SettingsActionRow(f"Media View: {media_view_value(config)}", "toggle_media_view"),
         SettingsActionRow(f"Grid Density: {grid_density_value(config)}", "cycle_grid_density"),
         numeric_settings_row(config, "page_size"),
@@ -2958,6 +3035,7 @@ def render_settings(config: AppConfig) -> str:
         f"Artwork Renderer: {artwork_renderer_value(config)}",
         "",
         "Browsing",
+        f"Library Enter: {library_enter_action_value(config)}",
         f"Media View: {media_view_value(config)}",
         f"Grid Density: {grid_density_value(config)}",
         f"Page Size: {config.page_size}",
@@ -2982,6 +3060,7 @@ def render_help() -> str:
     return "\n".join([
         "Navigation",
         "enter: open selected row",
+        "space: alternate library action",
         "escape: go back / close current view",
         "tab / shift+tab: move focus",
         "l: focus libraries",
@@ -3001,6 +3080,7 @@ def render_help() -> str:
         "p: play selected media from beginning",
         "r: resume selected media",
         "w: mark selected media watched / unwatched",
+        "delete: remove selected Continue Watching item",
         "x: stop launched mpv",
         "",
         "Streams",
@@ -3064,7 +3144,7 @@ def context_hint(row: object) -> str:
     if isinstance(row, ContinueWatchingRow):
         return "Libraries: Enter opens Continue Watching"
     if isinstance(row, LibraryRow):
-        return "Libraries: Enter opens library / Escape shows browse modes"
+        return "Libraries: Enter opens primary view / Space opens alternate view"
     if isinstance(row, LibraryMenuRow):
         return "Library: Enter opens browse mode"
     if isinstance(row, LoadMoreRow):
@@ -3284,6 +3364,8 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         return f"Current artwork renderer: {artwork_renderer_value(config)}"
     if action == "toggle_media_view":
         return f"Current media view: {media_view_value(config)}"
+    if action == "cycle_library_enter_action":
+        return f"Current library Enter action: {library_enter_action_value(config)}"
     if action == "cycle_grid_density":
         return f"Current grid density: {grid_density_value(config)}"
     if action.startswith("toggle_library_visibility:"):
@@ -3332,6 +3414,8 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to select this terminal artwork renderer."
     if action == "toggle_media_view":
         return "Press Enter to switch between list and grid browsing."
+    if action == "cycle_library_enter_action":
+        return "Press Enter to choose whether library rows open all items or browse modes by default."
     if action == "cycle_grid_density":
         return "Press Enter to cycle compact, comfortable, and large grid layouts."
     if action.startswith("toggle_library_visibility:"):
@@ -3377,6 +3461,7 @@ def settings_action_label(action: str) -> str:
         "artwork_renderer_kitty": "Artwork Renderer: Kitty",
         "cycle_artwork_renderer": "Artwork Renderer",
         "toggle_media_view": "Media View",
+        "cycle_library_enter_action": "Library Enter",
         "cycle_grid_density": "Grid Density",
         "decrease_page_size": "Page Size: decrease",
         "increase_page_size": "Page Size: increase",
@@ -3640,6 +3725,16 @@ def media_view_value(config: AppConfig) -> str:
     if config.media_view == "grid":
         return "Grid"
     return "List"
+
+
+def library_enter_action_value(config: AppConfig) -> str:
+    if config.library_enter_action == "browse_modes":
+        return "Browse Modes"
+    return "Library"
+
+
+def next_library_enter_action(value: str) -> str:
+    return "browse_modes" if value == "library" else "library"
 
 
 def grid_density_value(config: AppConfig) -> str:

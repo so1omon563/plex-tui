@@ -23,6 +23,7 @@ MAX_GRID_PREFETCH_PAGES = 5
 PLAYBACK_MODES = {"auto", "transcode"}
 TRANSCODE_QUALITIES = {"original", "1080p_8", "720p_4", "480p_2"}
 DEFAULT_MPV_WINDOW_SIZE = "80%"
+LIBRARY_ENTER_ACTIONS = {"library", "browse_modes"}
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,7 @@ class AppConfig:
     detail_artwork_mode: str = "list_only"
     grid_density: str = "comfortable"
     media_view: str = "list"
+    library_enter_action: str = "library"
     theme: str = "textual-dark"
     mpv_window_size: str = ""
     playback_mode: str = "auto"
@@ -102,6 +104,10 @@ def load_config() -> AppConfig:
     if media_view not in {"list", "grid"}:
         write_debug_log(f"invalid media_view {media_view!r}; using 'list'")
         media_view = "list"
+    library_enter_action = data.get("library_enter_action", "library")
+    if library_enter_action not in LIBRARY_ENTER_ACTIONS:
+        write_debug_log(f"invalid library_enter_action {library_enter_action!r}; using 'library'")
+        library_enter_action = "library"
     theme = data.get("theme", "textual-dark")
     mpv_window_size = data.get("mpv_window_size", "")
     if mpv_window_size and not valid_mpv_window_size(mpv_window_size):
@@ -150,6 +156,7 @@ def load_config() -> AppConfig:
         detail_artwork_mode=detail_artwork_mode.strip(),
         grid_density=grid_density.strip(),
         media_view=media_view.strip(),
+        library_enter_action=library_enter_action.strip(),
         theme=theme.strip() or "textual-dark",
         mpv_window_size=mpv_window_size.strip(),
         playback_mode=playback_mode.strip(),
@@ -187,6 +194,8 @@ def save_config(config: AppConfig) -> None:
         lines.append(f'grid_density = "{_toml_escape(config.grid_density)}"')
     if config.media_view != "list":
         lines.append(f'media_view = "{_toml_escape(config.media_view)}"')
+    if config.library_enter_action != "library":
+        lines.append(f'library_enter_action = "{_toml_escape(config.library_enter_action)}"')
     if config.theme != "textual-dark":
         lines.append(f'theme = "{_toml_escape(config.theme)}"')
     if config.mpv_window_size:
