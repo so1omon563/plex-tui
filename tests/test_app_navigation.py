@@ -78,6 +78,38 @@ async def wait_for_calls(calls: list[object], pilot: object, attempts: int = 20)
     return calls
 
 
+async def wait_for_watched_update(
+    app: PlexTuiApp,
+    pilot: object,
+    raw: object,
+    *,
+    watched: bool,
+    expected_status: str,
+    attempts: int = 80,
+) -> tuple[object | None, MediaItem | None, str]:
+    row = app.query_one("#media").highlighted_child
+    selected = app.selected_media()
+    status = str(app.query_one("#status").content)
+    for _ in range(attempts):
+        watched_calls = getattr(raw, "mark_watched_calls", 0)
+        unwatched_calls = getattr(raw, "mark_unwatched_calls", 0)
+        selected_watched = bool(getattr(getattr(selected, "raw", None), "viewCount", 0))
+        label = getattr(row, "label_text", "")
+        if (
+            status == expected_status
+            and selected is not None
+            and selected_watched is watched
+            and ("[watched]" in label) is watched
+            and ((watched and watched_calls == 1) or (not watched and unwatched_calls == 1))
+        ):
+            return row, selected, status
+        await pilot.pause(0.1)
+        row = app.query_one("#media").highlighted_child
+        selected = app.selected_media()
+        status = str(app.query_one("#status").content)
+    return row, selected, status
+
+
 def test_picker_return_preserves_highlighted_media():
     asyncio.run(run_picker_return_check())
 
@@ -2076,14 +2108,19 @@ async def run_toggle_watched_marks_unwatched_check():
         await pilot.pause(0.2)
 
         app.action_toggle_watched()
-        status = await wait_for_status(app, pilot, "Marked Movie watched")
+        row, selected, status = await wait_for_watched_update(
+            app,
+            pilot,
+            raw,
+            watched=True,
+            expected_status="Marked Movie watched",
+        )
 
-        row = app.query_one("#media").highlighted_child
-        selected = app.selected_media()
         assert raw.mark_watched_calls == 1
         assert raw.mark_unwatched_calls == 0
         assert selected is not None
         assert selected.raw.viewCount == 1
+        assert row is not None
         assert "[watched]" in row.label_text
         assert status == "Marked Movie watched"
 
@@ -2098,14 +2135,19 @@ async def run_toggle_watched_marks_watched_check():
         await pilot.pause(0.2)
 
         app.action_toggle_watched()
-        status = await wait_for_status(app, pilot, "Marked Movie unwatched")
+        row, selected, status = await wait_for_watched_update(
+            app,
+            pilot,
+            raw,
+            watched=False,
+            expected_status="Marked Movie unwatched",
+        )
 
-        row = app.query_one("#media").highlighted_child
-        selected = app.selected_media()
         assert raw.mark_watched_calls == 0
         assert raw.mark_unwatched_calls == 1
         assert selected is not None
         assert selected.raw.viewCount == 0
+        assert row is not None
         assert "[watched]" not in row.label_text
         assert status == "Marked Movie unwatched"
 

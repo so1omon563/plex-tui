@@ -45,6 +45,10 @@ working today. Expect rough edges, but expect progress too.
 
 ![plex-tui grid view](docs/assets/grid-view.png)
 
+### Continue Watching
+
+![plex-tui Continue Watching grid](docs/assets/continue-watching.png)
+
 ### List view
 
 ![plex-tui list view](docs/assets/list-view.png)
@@ -61,7 +65,7 @@ working today. Expect rough edges, but expect progress too.
 
 ### Block renderer fallback
 
-![plex-tui block renderer TV grid](docs/assets/block-renderer-tv-grid.png)
+![plex-tui block renderer grid](docs/assets/block-renderer-tv-grid.png)
 
 ## Features
 
