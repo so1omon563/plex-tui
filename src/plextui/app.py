@@ -2163,13 +2163,13 @@ class PlexTuiApp(App[None]):
 
         self.call_from_thread(update)
 
-    def choose_playlist_target(self, playlist: MediaItem) -> None:
+    def choose_playlist_target(self, playlist: MediaItem) -> object | None:
         item = self.playlist_picker_item
         if item is None:
             self.set_status("No media selected for playlist")
-            return
+            return None
         self.set_status(f"Adding {item.title} to {playlist.title}...")
-        self.add_item_to_playlist(playlist, item)
+        return self.add_item_to_playlist(playlist, item)
 
     @work(thread=True, exclusive=True)
     def add_item_to_playlist(self, playlist: MediaItem, item: MediaItem) -> None:
@@ -2196,20 +2196,20 @@ class PlexTuiApp(App[None]):
         self.show_detail_text(f"Enter a name for a new playlist containing {item.title}.")
         self.set_status("Enter new playlist name")
 
-    def save_playlist_name_input(self, value: str) -> None:
+    def save_playlist_name_input(self, value: str) -> object | None:
         title = value.strip()
         if not title:
             self.prompt_playlist_name()
             self.set_status("Playlist name is required")
-            return
+            return None
         item = self.playlist_picker_item
         if item is None:
             self.input_mode = ""
             self.set_status("No media selected for playlist")
-            return
+            return None
         self.input_mode = ""
         self.set_status(f"Creating playlist {title}...")
-        self.create_playlist_from_item(title, item)
+        return self.create_playlist_from_item(title, item)
 
     @work(thread=True, exclusive=True)
     def create_playlist_from_item(self, title: str, item: MediaItem) -> None:

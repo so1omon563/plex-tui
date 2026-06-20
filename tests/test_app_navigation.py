@@ -2252,7 +2252,9 @@ async def run_add_to_playlist_existing_check():
         app.action_add_to_playlist()
         rows = await wait_for_playlist_rows(app, pilot)
         target = next(row for row in rows if isinstance(row, PlaylistTargetRow))
-        app.choose_playlist_target(target.playlist)
+        worker = app.choose_playlist_target(target.playlist)
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
         add_calls, status = await wait_for_playlist_result(
             app,
             pilot,
@@ -2280,7 +2282,9 @@ async def run_add_to_playlist_create_check():
         app.action_add_to_playlist()
         rows = await wait_for_playlist_rows(app, pilot)
         assert any(isinstance(row, PlaylistCreateRow) for row in rows)
-        app.save_playlist_name_input("Weekend")
+        worker = app.save_playlist_name_input("Weekend")
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
         create_calls, status = await wait_for_playlist_result(
             app,
             pilot,
