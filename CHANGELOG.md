@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.9 - 2026-06-19
+
 - Improved playlist-management discoverability in the details pane, Help view,
   and README usage docs.
 - Fixed a crash when selecting playlist container cards whose PlexAPI objects
