@@ -133,6 +133,8 @@ def check_homebrew_workflow(root: Path) -> CheckResult:
         "grep -Fq",
         "timeout-minutes: 60",
         "brew config",
+        "gh api graphql",
+        "gh pr list --repo so1omon563/homebrew-plex-tui --limit 1",
         "brew info so1omon563/plex-tui/plex-tui",
         "Still building Homebrew bottle for plex-tui ${VERSION}",
         "brew install --verbose --build-bottle so1omon563/plex-tui/plex-tui",
@@ -144,6 +146,8 @@ def check_homebrew_workflow(root: Path) -> CheckResult:
         "gh release create \"$BOTTLE_RELEASE\"",
         "gh release upload \"$BOTTLE_RELEASE\"",
         "brew audit --strict --online so1omon563/plex-tui/plex-tui",
+        "git ls-remote --exit-code --heads origin \"$branch\"",
+        "gh pr list \\",
         "gh pr create \\",
         "gh pr merge \"$pr_url\"",
     ]

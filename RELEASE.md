@@ -134,6 +134,13 @@ tap PR, and merges it. This uses `PACKAGING_PR_TOKEN`, which must have access to
 create releases, upload assets, push branches, and merge pull requests in the
 tap repository.
 
+Before the bottle build starts, the workflow preflights the token against the
+tap repository's REST, GraphQL, and pull-request APIs. This should catch missing
+or invalid PR permissions before spending time on the hosted bottle build. The
+tap branch and PR steps are also idempotent: a rerun reuses the
+`automation/plex-tui-vX.Y.Z` branch or an existing tap PR when a previous run
+failed after pushing the branch.
+
 If the automated workflow cannot run, update and validate manually:
 
 ```bash

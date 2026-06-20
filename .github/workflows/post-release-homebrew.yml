@@ -34,11 +34,33 @@ jobs:
       - name: Check packaging PR token
         env:
           PACKAGING_PR_TOKEN: ${{ secrets.PACKAGING_PR_TOKEN }}
+          GH_TOKEN: ${{ secrets.PACKAGING_PR_TOKEN }}
         run: |
+          set -euo pipefail
+
           if [ -z "$PACKAGING_PR_TOKEN" ]; then
             echo "PACKAGING_PR_TOKEN secret is required to publish the Homebrew tap" >&2
             exit 1
           fi
+
+          pr_query="$(cat <<'GRAPHQL'
+          query($owner: String!, $name: String!) {
+            repository(owner: $owner, name: $name) {
+              nameWithOwner
+              pullRequests(first: 1) {
+                totalCount
+              }
+            }
+          }
+          GRAPHQL
+          )"
+
+          gh api repos/so1omon563/homebrew-plex-tui --jq '.full_name' >/dev/null
+          gh api graphql \
+            -f owner=so1omon563 \
+            -f name=homebrew-plex-tui \
+            -f query="$pr_query" >/dev/null
+          gh pr list --repo so1omon563/homebrew-plex-tui --limit 1 >/dev/null
 
       - name: Determine release tag
         id: release
@@ -269,11 +291,23 @@ jobs:
           fi
 
           branch="automation/plex-tui-v${VERSION}"
-          git switch -c "$branch"
+          formula_update="$(mktemp)"
+          cp Formula/plex-tui.rb "$formula_update"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Formula/plex-tui.rb
-          git commit -m "Update plex-tui to ${VERSION}"
+
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            git fetch origin "$branch"
+            git switch -C "$branch" "origin/$branch"
+            cp "$formula_update" Formula/plex-tui.rb
+          else
+            git switch -c "$branch"
+          fi
+
+          if ! git diff --quiet -- Formula/plex-tui.rb; then
+            git add Formula/plex-tui.rb
+            git commit -m "Update plex-tui to ${VERSION}"
+          fi
           git push origin "$branch"
 
           echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -292,12 +326,20 @@ jobs:
 
           pr_body="$(printf 'Automated Homebrew tap update for plex-tui %s.\n\nIncludes the generated bottle metadata for %s.\n' "$VERSION" "$BOTTLE_RELEASE")"
 
-          pr_url="$(gh pr create \
+          pr_url="$(gh pr list \
             --repo so1omon563/homebrew-plex-tui \
-            --base main \
             --head "$BRANCH" \
-            --title "Update plex-tui to ${VERSION}" \
-            --body "$pr_body")"
+            --json url \
+            --jq '.[0].url // ""')"
+
+          if [ -z "$pr_url" ]; then
+            pr_url="$(gh pr create \
+              --repo so1omon563/homebrew-plex-tui \
+              --base main \
+              --head "$BRANCH" \
+              --title "Update plex-tui to ${VERSION}" \
+              --body "$pr_body")"
+          fi
 
           gh pr merge "$pr_url" \
             --repo so1omon563/homebrew-plex-tui \
