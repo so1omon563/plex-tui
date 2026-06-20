@@ -3012,14 +3012,43 @@ def render_media_grid_card(
 def grid_artwork_placeholder(status: str, config: AppConfig) -> Group:
     spec = grid_density_spec(config)
     width = grid_card_width(config)
+    content_width = grid_card_content_width(config)
     height = int(spec["art_height"])
-    label = truncate_text(f"[{status}]", grid_card_content_width(config))
-    blank = " " * width
+    background, accent = grid_artwork_placeholder_palette(status)
     lines = []
-    midpoint = height // 2
     for index in range(height):
-        lines.append(grid_card_line(label, width, "dim") if index == midpoint else Text(blank, style="dim"))
+        line_style = accent if index in grid_artwork_placeholder_accent_rows(height) else background
+        lines.append(grid_artwork_placeholder_line(width, content_width, line_style))
     return Group(*lines)
+
+
+def grid_artwork_placeholder_palette(status: str) -> tuple[str, str]:
+    palettes = {
+        "hub": ("on #222535", "on #3f4563"),
+        "collection": ("on #202e30", "on #3d5b5e"),
+        "playlist": ("on #232c2a", "on #416059"),
+        "show": ("on #2b2732", "on #574866"),
+        "season": ("on #2d2826", "on #5f4c3f"),
+        "artist": ("on #272b35", "on #485670"),
+        "album": ("on #282a30", "on #4c5364"),
+        "browse": ("on #262936", "on #444b61"),
+    }
+    return palettes.get(status, ("on #252834", "on #464d60"))
+
+
+def grid_artwork_placeholder_accent_rows(height: int) -> set[int]:
+    if height <= 3:
+        return {height // 2}
+    return {height // 3, (height * 2) // 3}
+
+
+def grid_artwork_placeholder_line(width: int, content_width: int, style: str) -> Text:
+    left = (width - content_width) // 2
+    right = width - content_width - left
+    line = Text(" " * left, style="dim")
+    line.append(" " * content_width, style=style)
+    line.append(" " * right, style="dim")
+    return line
 
 
 def grid_artwork_placeholder_label(media: MediaItem) -> str:

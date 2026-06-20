@@ -810,21 +810,23 @@ def test_grid_card_marks_container_items_as_openable():
 
     assert "open" in rendered_text
     assert "Season  10 episodes" in rendered_text
-    assert any("[season]" in str(line) for line in placeholder.renderables)
+    assert not any("[season]" in str(line) for line in placeholder.renderables)
+    assert any("on #" in str(line.spans) for line in placeholder.renderables)
 
 
-def test_grid_card_uses_semantic_placeholder_for_hub_rows():
+def test_grid_card_uses_visual_placeholder_for_hub_rows():
     media = MediaItem("Recently Added", "", "hub", "1", False, object(), artwork_path="")
 
     rendered = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"))
     rendered_text = "\n".join(str(renderable) for renderable in rendered.renderables)
     placeholder = rendered.renderables[0]
 
-    assert any("[hub]" in str(line) for line in placeholder.renderables)
+    assert not any("[hub]" in str(line) for line in placeholder.renderables)
+    assert any("on #" in str(line.spans) for line in placeholder.renderables)
     assert "open" in rendered_text
 
 
-def test_render_media_grid_text_snapshot_for_media_and_hub_placeholders():
+def test_render_media_grid_text_snapshot_hides_placeholder_labels():
     config = AppConfig("http://plex", "token", "client", grid_density="compact")
     items = [
         MediaItem("Blade Runner", "1982", "movie", "movie-1", True, object(), artwork_path=""),
@@ -834,8 +836,8 @@ def test_render_media_grid_text_snapshot_for_media_and_hub_placeholders():
     rendered = render_media_grid(items, "hub-1", config, columns=2)
     text = render_plain(rendered, width=80)
 
-    assert "[no poster]" in text
-    assert "[hub]" in text
+    assert "[no poster]" not in text
+    assert "[hub]" not in text
     assert "Blade Runner" in text
     assert "Recently Added" in text
     assert "playable" in text
@@ -858,7 +860,8 @@ def test_grid_card_placeholder_matches_artwork_height():
     placeholder = rendered.renderables[0]
     assert isinstance(placeholder, Group)
     assert len(placeholder.renderables) == grid_card_height(config) - 3
-    assert any("[no poster]" in str(line) for line in placeholder.renderables)
+    assert not any("[no poster]" in str(line) for line in placeholder.renderables)
+    assert any("on #" in str(line.spans) for line in placeholder.renderables)
 
 
 def test_grid_card_text_and_placeholder_are_card_width():

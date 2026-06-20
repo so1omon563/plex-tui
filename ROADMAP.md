@@ -3,7 +3,8 @@
 ## App UX
 
 - Continue refining grid view presentation after the initial card/detail
-  balance pass, especially against real terminal themes and wide/narrow panes.
+  balance pass and the label-free placeholder artwork pass, especially against
+  real terminal themes and wide/narrow panes.
 - Continue tuning focus, row markers, and selection affordances based on real
   terminal themes. Status hints should keep a compact context prefix such as
   `Media:`, `Grid:`, or `Settings:` so the active pane is clear at a glance.
