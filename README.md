@@ -45,9 +45,13 @@ working today. Expect rough edges, but expect progress too.
 
 ![plex-tui grid view](docs/assets/grid-view.png)
 
-### TV show grid
+### List view
 
-![plex-tui TV show grid view](docs/assets/grid-tv-shows.png)
+![plex-tui list view](docs/assets/list-view.png)
+
+### Browse modes
+
+![plex-tui library browse modes](docs/assets/browse-modes.png)
 
 ### Collection cards
 
@@ -55,9 +59,9 @@ working today. Expect rough edges, but expect progress too.
 
 ![plex-tui Categories collection cards](docs/assets/collection-categories.png)
 
-### List view
+### Block renderer fallback
 
-![plex-tui list view](docs/assets/list-view.png)
+![plex-tui block renderer TV grid](docs/assets/block-renderer-tv-grid.png)
 
 ## Features
 
@@ -71,6 +75,8 @@ working today. Expect rough edges, but expect progress too.
 - List view plus configurable-density grid view with terminal poster artwork,
   missing-artwork placeholders, and intentional glyph cards for collections and
   hubs.
+- Intentional loading, empty, and Plex error states so slow or empty browse
+  paths still show what happened and what to try next.
 - External subtitle support and direct playback for embedded PGS/VOBSUB tracks.
 - Audio and subtitle pickers with saved language preferences.
 - Separate play-from-start and resume actions with Plex progress reporting.
@@ -316,6 +322,7 @@ Collection-style cards:
 
 - Collections, playlists, categories, hubs, and query shelves use geometric
   glyph artwork instead of pretending to be missing posters.
+- Library browse-mode rows reuse that glyph vocabulary for compact wayfinding.
 - Rows made entirely of those cards use roomier navigation-grid spacing.
 - See `docs/collection-artwork-design.md` for the design notes behind that
   visual language.

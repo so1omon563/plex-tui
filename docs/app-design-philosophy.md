@@ -146,6 +146,8 @@ Empty and loading states should be informative without looking broken.
 
 - Empty library or playlist views should say what is empty and what action, if
   any, can change it.
+- Loading rows should name what is being fetched so the main pane never looks
+  blank while Plex is responding.
 - Missing artwork should be visually quiet.
 - Playback and Plex errors should include the next useful diagnostic path
   without exposing tokens or noisy internals.
@@ -180,6 +182,11 @@ orientation: sidebar badges, browse-mode rows, search result indicators, or
 filter headings. Reuse should be modest; glyphs become product language when
 they help identify object families, not when every label receives decoration.
 
+The first reusable surface is the library browse-mode menu: Library,
+Recommended, Collections, Playlists, and Categories use the same small glyph
+families as their card counterparts while keeping the row label itself plain
+for selection logic.
+
 ## Current Alignment
 
 Already aligned:
@@ -191,6 +198,10 @@ Already aligned:
   modes available.
 - Details now elevate episode context and split playback, preferences, tracks,
   and summaries.
+- Empty, loading, and Plex error states use intentional rows and inspector
+  details instead of blank lists or generic error blobs.
+- Library browse-mode rows reuse the collection glyph vocabulary as compact
+  wayfinding markers.
 - Footer hints keep a compact visible action set with Help as the full
   reference.
 
@@ -200,9 +211,9 @@ Still uneven:
   intentional as the collection cards.
 - List view and grid view do not yet share a strong metadata rhythm.
 - Settings rows work, but the scanning hierarchy can be tightened.
-- Empty states, loading states, and error states have not had the same visual
-  attention as browse cards.
-- Glyphs are mostly isolated to collection-card artwork.
+- The new non-happy-path states are intentionally simple; future screenshot
+  passes should capture real examples once they are easy to reproduce.
+- Glyph reuse should stay selective and earn its place surface by surface.
 
 ## Recommended Implementation Order
 
@@ -214,11 +225,12 @@ Still uneven:
    action language across both browse modes.
 4. Settings scan pass: preserve compact rows while making current values easier
    to compare.
-5. Empty/loading/error states: make non-happy paths feel intentional.
-6. Glyph reuse experiments: introduce small family markers only where they
-   improve orientation.
-7. Screenshot refresh: update README screenshots after visible UI refinements
-   land.
+5. Pane and palette convergence: align focus chrome, state surfaces, and
+   navigation glyphs with the calm blueprint direction.
+6. Broader glyph reuse experiments: introduce small family markers only where
+   they improve orientation.
+7. Screenshot refresh: update README screenshots after the next visible UI
+   refinement pass that changes the default browse surfaces.
 
 ## Review Checklist
 

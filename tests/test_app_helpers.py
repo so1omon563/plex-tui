@@ -15,6 +15,7 @@ from plextui.app import (
     alphabet_jump_index,
     alphabet_section_groups,
     BrowseState,
+    EmptyStateRow,
     LoadMoreRow,
     LibraryRow,
     LibraryMenuRow,
@@ -55,7 +56,10 @@ from plextui.app import (
     render_app_diagnostics,
     render_debug_log_details,
     render_details,
+    render_empty_state_details,
+    render_error_state_details,
     render_help,
+    render_loading_state_details,
     render_media_grid,
     render_media_grid_card,
     render_picker_details,
@@ -243,6 +247,22 @@ def test_render_details_uses_clear_empty_states_and_wraps_summary():
     summary_lines = rendered.split("Summary\n", 1)[1].splitlines()
     assert len(summary_lines) > 1
     assert all(len(line) <= 38 for line in summary_lines if line)
+
+
+def test_empty_loading_and_error_state_details_are_actionable():
+    empty = render_empty_state_details("Continue Watching", "Nothing in progress", "Start playback from a library item.")
+    loading = render_loading_state_details("Movies", "Loading library items from Plex.")
+    error = render_error_state_details("Plex Error", "connection failed", "Config: /tmp/config.toml", "Relogin with Plex.")
+    row = EmptyStateRow("Nothing in progress", "Start playback from a library item.")
+
+    assert "Empty View" in empty
+    assert "Nothing in progress" in empty
+    assert "Next Step\nStart playback from a library item." in empty
+    assert "✦ Loading\nMovies" in loading
+    assert "Loading library items from Plex." in loading
+    assert "Cause\nconnection failed" in error
+    assert "Diagnostics\nConfig: /tmp/config.toml" in error
+    assert context_hint(row) == "Start playback from a library item."
 
 
 def test_render_details_limits_dense_stream_lists_and_wraps_rows():
@@ -1307,6 +1327,13 @@ def test_library_menu_rows_list_supported_entrypoints():
 
     assert [row.entry for row in rows] == ["library", "recommended", "collections", "playlists", "categories"]
     assert [row.label_text for row in rows] == ["Library", "Recommended", "Collections", "Playlists", "Categories"]
+    assert [row.display_text for row in rows] == [
+        "▦ Library",
+        "✦ Recommended",
+        "◇ Collections",
+        "▤ Playlists",
+        "◈ Categories",
+    ]
 
 
 def render_plain(renderable: object, width: int = 100) -> str:
