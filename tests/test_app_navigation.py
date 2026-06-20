@@ -69,6 +69,14 @@ async def wait_for_playlist_rows(app: PlexTuiApp, pilot: object, attempts: int =
     return rows
 
 
+async def wait_for_calls(calls: list[object], pilot: object, attempts: int = 20) -> list[object]:
+    for _ in range(attempts):
+        if calls:
+            return calls
+        await pilot.pause(0.1)
+    return calls
+
+
 def test_picker_return_preserves_highlighted_media():
     asyncio.run(run_picker_return_check())
 
@@ -2152,8 +2160,9 @@ async def run_add_to_playlist_create_check():
         assert any(isinstance(row, PlaylistCreateRow) for row in rows)
         app.save_playlist_name_input("Weekend")
         status = await wait_for_status(app, pilot, "Created playlist Weekend with Movie")
+        create_calls = await wait_for_calls(service.create_calls, pilot)
 
-        assert service.create_calls == [("Weekend", "Movie")]
+        assert create_calls == [("Weekend", "Movie")]
         assert status == "Created playlist Weekend with Movie"
         assert not app.picker_visible
 
