@@ -10,6 +10,8 @@
   leaking into the TUI during artwork refreshes.
 - Improved details, Settings, list, and grid metadata rhythm with aligned
   detail rows, scannable Settings sections, and shared media metadata labels.
+- Added intentional loading, empty, and Plex error states, and reused browse
+  mode glyphs in the library menu for clearer wayfinding.
 
 ## 0.4.9 - 2026-06-19
 

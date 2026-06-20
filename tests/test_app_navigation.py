@@ -11,6 +11,7 @@ import plextui.app as app_module
 from plextui.app import (
     BrowseState,
     ContinueWatchingRow,
+    EmptyStateRow,
     LibraryMenuRow,
     LoadMoreRow,
     PlexTuiApp,
@@ -131,6 +132,10 @@ def test_library_submenu_keyboard_flow_with_fake_service():
 
 def test_show_browse_state_adds_load_more_row():
     asyncio.run(run_load_more_row_check())
+
+
+def test_show_browse_state_uses_empty_state_row():
+    asyncio.run(run_empty_browse_state_check())
 
 
 def test_render_loaded_status():
@@ -776,6 +781,26 @@ async def run_load_more_row_check():
         rows = list(app.query_one("#media").children)
         assert len(rows) == 3
         assert isinstance(rows[-1], LoadMoreRow)
+
+
+async def run_empty_browse_state_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        state = BrowseState("Continue Watching", [], source="continue_watching", total=0)
+
+        app.show_browse_state(state)
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert len(rows) == 1
+        assert isinstance(rows[0], EmptyStateRow)
+        assert rows[0].label_text.strip() == "Nothing in progress"
+        details = app.query_one("#detail-content").content
+        assert "Empty View" in details
+        assert "Start playback from a library item" in details
+        assert app.query_one("#status").content == "Continue Watching: 0 items"
 
 
 class FakePagedService:

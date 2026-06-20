@@ -134,7 +134,8 @@ class LibraryMenuRow(ListItem):
         self.entry = entry
         self.label_text = label
         self.description = description
-        super().__init__(Label(f"› {label}"))
+        self.display_text = f"{library_entry_glyph(entry)} {label}"
+        super().__init__(Label(self.display_text))
 
 
 class MediaRow(ListItem):
@@ -303,6 +304,13 @@ class LoadMoreRow(ListItem):
     def __init__(self, loaded: int, total: int | None) -> None:
         total_text = str(total) if total is not None else "?"
         super().__init__(Label(f"  Load more... ({loaded} of {total_text})"))
+
+
+class EmptyStateRow(ListItem):
+    def __init__(self, title: str, action: str = "") -> None:
+        self.label_text = f"  {title}"
+        self.action_text = action
+        super().__init__(Label(self.label_text))
 
 
 class ServerRow(ListItem):
@@ -901,6 +909,7 @@ class PlexTuiApp(App[None]):
             return
         title = library.title if entry == "library" else f"{library.title}: {label or library_entry_label(entry)}"
         self.post_message(StatusChanged(f"Loading {title}..."))
+        self.call_from_thread(self.show_loading_state, title, "Loading library items from Plex.")
         started = time.perf_counter()
         try:
             page = self.service.library_entry_page(library, entry, 0, self.config.page_size)
@@ -936,6 +945,7 @@ class PlexTuiApp(App[None]):
             return
         title = "Continue Watching"
         self.post_message(StatusChanged(f"Loading {title}..."))
+        self.call_from_thread(self.show_loading_state, title, "Loading in-progress items from Plex.")
         started = time.perf_counter()
         try:
             page = self.service.continue_watching_page(0, self.config.page_size)
@@ -1081,13 +1091,14 @@ class PlexTuiApp(App[None]):
                 return
         else:
             self.post_message(StatusChanged(f"Opening {media.title}..."))
+            self.call_from_thread(self.show_loading_state, media.title, "Loading child items from Plex.")
             try:
                 children = self.service.children(media)
             except Exception as exc:
                 self.call_from_thread(self.show_error, str(exc))
                 return
         if not children:
-            self.call_from_thread(self.set_status, f"No child items for {media.title}")
+            self.call_from_thread(self.show_empty_state, media.title, "No child items", "Go back and choose another item.")
             return
 
         def update() -> None:
@@ -1131,9 +1142,26 @@ class PlexTuiApp(App[None]):
                 f"title={state.title!r} view={self.config.media_view} items={len(state.items)} selected={selected_index}",
             )
         else:
-            self.show_media_list()
-            self.replace_media_rows([])
-            self.show_detail_text("No items")
+            self.show_empty_state(
+                state.title,
+                empty_state_message(state),
+                empty_state_action(state),
+                status=render_loaded_status(state.title, 0, state.total, state.has_more),
+            )
+
+    def show_loading_state(self, title: str, message: str = "Loading from Plex.") -> None:
+        self.set_media_title(title)
+        self.show_media_list()
+        self.replace_media_rows([EmptyStateRow("Loading...", message)], selected_index=0)
+        self.show_detail_text(render_loading_state_details(title, message))
+
+    def show_empty_state(self, title: str, message: str, action: str = "", status: str | None = None) -> None:
+        self.set_media_title(title)
+        self.show_media_list()
+        self.replace_media_rows([EmptyStateRow(message, action)], selected_index=0)
+        self.show_detail_text(render_empty_state_details(title, message, action))
+        if status is not None:
+            self.set_status(status)
 
     def replace_media_rows(self, rows: list[ListItem], selected_index: int | None = None) -> None:
         self.replace_list_rows_async("#media", rows, selected_index, "media-list")
@@ -2387,6 +2415,8 @@ class PlexTuiApp(App[None]):
             return
         scope = "all libraries" if global_search else "current library"
         self.post_message(StatusChanged(f"Searching {scope} for {query}..."))
+        title = f"Global search: {query}" if global_search else f"Search: {query}"
+        self.call_from_thread(self.show_loading_state, title, f"Searching {scope}.")
         started = time.perf_counter()
         try:
             library = None if global_search else self.selected_library
@@ -2401,7 +2431,6 @@ class PlexTuiApp(App[None]):
         )
 
         def update() -> None:
-            title = f"Global search: {query}" if global_search else f"Search: {query}"
             if self.browsing_stack and self.browsing_stack[-1].search:
                 self.browsing_stack.pop()
             state = BrowseState(
@@ -2756,8 +2785,8 @@ class PlexTuiApp(App[None]):
         self.set_media_title("Error")
         view = self.show_media_list()
         view.clear()
-        view.append(ListItem(Label(f"{text}\n{config_hint}\n{recovery_hint}")))
-        self.show_detail_text(f"{config_hint}\n{recovery_hint}")
+        view.append(EmptyStateRow("Plex error", "Open Settings or relogin, then retry."))
+        self.show_detail_text(render_error_state_details("Plex Error", text, config_hint, recovery_hint))
 
     def show_playback_error(self, text: str) -> None:
         self.detail_refresh_token += 1
@@ -2767,7 +2796,7 @@ class PlexTuiApp(App[None]):
         self.set_media_title("Playback Error")
         view = self.show_media_list()
         view.clear()
-        view.append(ListItem(Label(f"{text}\nDebug log: {path}")))
+        view.append(EmptyStateRow("Playback error", f"Debug log: {path}"))
         self.show_detail_text(render_playback_error_details(text, path))
 
 
@@ -3718,6 +3747,15 @@ LIBRARY_MENU_ENTRIES = (
 )
 
 
+LIBRARY_ENTRY_GLYPHS = {
+    "library": "▦",
+    "recommended": "✦",
+    "collections": "◇",
+    "playlists": "▤",
+    "categories": "◈",
+}
+
+
 def library_menu_rows(library: LibraryItem) -> list[LibraryMenuRow]:
     return [
         LibraryMenuRow(library, entry, label, description)
@@ -3732,17 +3770,21 @@ def library_entry_label(entry: str) -> str:
     return entry.replace("_", " ").title()
 
 
+def library_entry_glyph(entry: str) -> str:
+    return LIBRARY_ENTRY_GLYPHS.get(entry, "›")
+
+
 def library_menu_description(library: LibraryItem) -> str:
     return "\n".join([
         library.title,
         "",
         "Choose how to browse this Plex library.",
         "",
-        "Library: all items.",
-        "Recommended: Plex hub rows.",
-        "Collections: library collections.",
-        "Playlists: library playlists.",
-        "Categories: genre/category groupings.",
+        "▦ Library: all items.",
+        "✦ Recommended: Plex hub rows.",
+        "◇ Collections: library collections.",
+        "▤ Playlists: library playlists.",
+        "◈ Categories: genre/category groupings.",
     ])
 
 
@@ -3755,6 +3797,8 @@ def context_hint(row: object) -> str:
         return "Library: Enter opens browse mode"
     if isinstance(row, LoadMoreRow):
         return "Media: Enter loads next page"
+    if isinstance(row, EmptyStateRow):
+        return row.action_text or "Media: No items available"
     if isinstance(row, MediaRow):
         if row.media.playable:
             return "Media: Enter selects / p play / r resume / P playlist / w watched / a audio / s subtitles"
@@ -4144,6 +4188,63 @@ def render_loaded_status(title: str, loaded: int, total: int | None, has_more: b
     if has_more:
         return f"{title}: {loaded} of {total} items loaded"
     return f"{title}: {loaded} items"
+
+
+def empty_state_message(state: BrowseState) -> str:
+    if state.search:
+        return "No matching media"
+    if state.source == "continue_watching":
+        return "Nothing in progress"
+    if state.context_media is not None and state.context_media.kind == "playlist":
+        return "Playlist is empty"
+    return "No items found"
+
+
+def empty_state_action(state: BrowseState) -> str:
+    if state.search:
+        return "Try a broader search or switch scope."
+    if state.source == "continue_watching":
+        return "Start playback from a library item to populate this view."
+    if state.context_media is not None and state.context_media.kind == "playlist":
+        return "Use P on playable media to add items."
+    return "Go back or choose another library view."
+
+
+def render_empty_state_details(title: str, message: str, action: str = "") -> str:
+    lines = [
+        "◇ Empty View",
+        title,
+        "-" * min(max(len(title), 8), DETAIL_SUMMARY_WIDTH),
+        message,
+    ]
+    if action:
+        lines.extend(["", "Next Step", action])
+    return "\n".join(lines)
+
+
+def render_loading_state_details(title: str, message: str) -> str:
+    return "\n".join([
+        "✦ Loading",
+        title,
+        "-" * min(max(len(title), 8), DETAIL_SUMMARY_WIDTH),
+        message,
+    ])
+
+
+def render_error_state_details(title: str, error: str, diagnostic: str, recovery: str) -> str:
+    lines = [
+        f"△ {title}",
+        "-" * min(max(len(title), 8), DETAIL_SUMMARY_WIDTH),
+        "Cause",
+        *wrapped_detail_text(error),
+        "",
+        "Diagnostics",
+        *wrapped_detail_text(diagnostic),
+        "",
+        "Next Step",
+        *wrapped_detail_text(recovery),
+    ]
+    return "\n".join(lines)
 
 
 def alphabet_jump_index(items: list[MediaItem], current_index: int, direction: int) -> int | None:

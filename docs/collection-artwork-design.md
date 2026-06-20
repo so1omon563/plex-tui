@@ -71,3 +71,9 @@ Current examples live in the README screenshot set:
 Future iterations can reuse these glyphs in sidebar navigation, filters,
 badges, and search result indicators. New glyphs should stay geometric,
 low-detail, and readable at compact density before they are added.
+
+The first expansion beyond artwork cards is the library browse-mode menu:
+Library, Recommended, Collections, Playlists, and Categories use matching
+one-character wayfinding glyphs next to their labels. Keep future reuse this
+modest: a glyph should clarify the object family without making every row feel
+decorated.
