@@ -78,6 +78,30 @@ async def wait_for_calls(calls: list[object], pilot: object, attempts: int = 20)
     return calls
 
 
+async def wait_for_playlist_result(
+    app: PlexTuiApp,
+    pilot: object,
+    calls: list[object],
+    *,
+    expected_calls: list[object],
+    expected_status: str,
+    attempts: int = 180,
+) -> tuple[list[object], str]:
+    status = str(app.query_one("#status").content)
+    for _ in range(attempts):
+        current_calls = list(calls)
+        status = str(app.query_one("#status").content)
+        if current_calls == expected_calls and status == expected_status and not app.picker_visible:
+            return current_calls, status
+        await pilot.pause(0.1)
+    raise AssertionError(
+        "Timed out waiting for playlist worker result: "
+        f"expected_calls={expected_calls!r}, calls={list(calls)!r}, "
+        f"expected_status={expected_status!r}, status={status!r}, "
+        f"picker_visible={app.picker_visible!r}, input_mode={app.input_mode!r}"
+    )
+
+
 async def wait_for_watched_update(
     app: PlexTuiApp,
     pilot: object,
@@ -2227,8 +2251,13 @@ async def run_add_to_playlist_existing_check():
         rows = await wait_for_playlist_rows(app, pilot)
         target = next(row for row in rows if isinstance(row, PlaylistTargetRow))
         app.choose_playlist_target(target.playlist)
-        add_calls = await wait_for_calls(service.add_calls, pilot, attempts=80)
-        status = await wait_for_status(app, pilot, "Added Movie to Favorites", attempts=80)
+        add_calls, status = await wait_for_playlist_result(
+            app,
+            pilot,
+            service.add_calls,
+            expected_calls=[("Favorites", "Movie")],
+            expected_status="Added Movie to Favorites",
+        )
 
         assert add_calls == [("Favorites", "Movie")]
         assert status == "Added Movie to Favorites"
@@ -2250,8 +2279,13 @@ async def run_add_to_playlist_create_check():
         rows = await wait_for_playlist_rows(app, pilot)
         assert any(isinstance(row, PlaylistCreateRow) for row in rows)
         app.save_playlist_name_input("Weekend")
-        create_calls = await wait_for_calls(service.create_calls, pilot, attempts=80)
-        status = await wait_for_status(app, pilot, "Created playlist Weekend with Movie", attempts=80)
+        create_calls, status = await wait_for_playlist_result(
+            app,
+            pilot,
+            service.create_calls,
+            expected_calls=[("Weekend", "Movie")],
+            expected_status="Created playlist Weekend with Movie",
+        )
 
         assert create_calls == [("Weekend", "Movie")]
         assert status == "Created playlist Weekend with Movie"
