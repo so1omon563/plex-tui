@@ -811,7 +811,7 @@ def test_grid_card_marks_container_items_as_openable():
     assert "open" in rendered_text
     assert "Season  10 episodes" in rendered_text
     assert not any("[season]" in str(line) for line in placeholder.renderables)
-    assert any("┌─┐" in line.plain for line in placeholder.renderables)
+    assert any("┌────┐" in line.plain for line in placeholder.renderables)
 
 
 def test_grid_card_uses_collection_glyph_for_hub_rows():
@@ -822,7 +822,7 @@ def test_grid_card_uses_collection_glyph_for_hub_rows():
     placeholder = rendered.renderables[0]
 
     assert not any("[hub]" in str(line) for line in placeholder.renderables)
-    assert any("─┼─" in line.plain for line in placeholder.renderables)
+    assert any("──┼──" in line.plain for line in placeholder.renderables)
     assert "open" in rendered_text
 
 
@@ -840,7 +840,7 @@ def test_render_media_grid_text_snapshot_distinguishes_missing_and_collection_ar
     assert "[hub]" not in text
     assert "Blade Runner" in text
     assert "Recently Added" in text
-    assert "─┼─" in text
+    assert "──┼──" in text
     assert "playable" in text
     assert "▶ selected" in text
 
@@ -865,6 +865,21 @@ def test_collection_grid_rows_are_left_aligned_with_breathing_room():
     assert not isinstance(rendered.renderables[0], Align)
     assert isinstance(rendered.renderables[1], Text)
     assert not isinstance(rendered.renderables[2], Align)
+
+
+def test_category_collection_glyphs_vary_by_title_family():
+    config = AppConfig("http://plex", "token", "client", grid_density="compact")
+    action = render_media_grid_card(MediaItem("Action", "Category", "category", "1", False, object()), False, config)
+    comedy = render_media_grid_card(MediaItem("Comedy", "Category", "category", "2", False, object()), False, config)
+
+    action_art = "\n".join(line.plain for line in action.renderables[0].renderables)
+    comedy_art = "\n".join(line.plain for line in comedy.renderables[0].renderables)
+    action_text = "\n".join(str(renderable) for renderable in action.renderables)
+
+    assert "╱╱" in action_art
+    assert "○" in comedy_art
+    assert action_art != comedy_art
+    assert "Category  Category" not in action_text
 
 
 def test_grid_card_placeholder_matches_artwork_height():

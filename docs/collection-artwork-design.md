@@ -15,9 +15,11 @@ blueprint-style panels:
 - missing poster: quiet missing-artwork block;
 - collection card: intentional glyph for a hub, playlist, category, or query.
 
-The glyph is the dominant artwork element. Title, type, and action remain in
-the normal grid-card text below the artwork so the visual stays calm at compact
-terminal sizes.
+The glyph is the dominant artwork element. A faint construction layer of corner
+marks, guide dots, and center lines sits behind the glyph so the card feels like
+part of a deliberate wayfinding system instead of an empty color field. Title,
+type, and action remain in the normal grid-card text below the artwork so the
+visual stays calm at compact terminal sizes.
 
 ## Glyph System
 
@@ -31,14 +33,18 @@ only reports a generic hub object.
 - Trending and Top shelves: upward path.
 - Unwatched shelves: hollow circles.
 - Actor shelves: simplified person.
-- Genre and category cards: stacked blocks.
+- Genre and category cards: one shared family with title-derived motif
+  variations, such as angled marks for action, circles for comedy, diamonds for
+  horror, and grid marks for documentary.
 - Playlist cards: layered panel.
 - Collection cards: repeated diamond mark.
 - Generic hubs: abstract geometric mark.
 
 The system is intentionally small and text-based so it remains legible in
 compact grids, plain terminals, Kitty/Ghostty image modes, and low-resolution
-remote sessions.
+remote sessions. New glyphs should use the same line weight, centered geometry,
+and blueprint layer so they read as symbols from one fictional design system,
+not unrelated icons.
 
 ## Grid Behavior
 

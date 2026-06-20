@@ -2998,7 +2998,7 @@ def render_media_grid_card(
     title_style = "bold #e5a00d" if selected else "bold"
     card_width = grid_card_width(config)
     title = grid_card_text(media.title, config)
-    subtitle = grid_card_text("  ".join(bit for bit in (kind_label(media.kind), media.subtitle) if bit), config)
+    subtitle = grid_card_text(grid_card_subtitle(media), config)
     artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
     artwork = copy_renderable(artwork)
     if artwork is None:
@@ -3048,50 +3048,88 @@ def render_collection_art(media: MediaItem, config: AppConfig) -> Group:
     top_pad = max(0, (height - len(glyph_lines)) // 2)
     bottom_pad = max(0, height - top_pad - len(glyph_lines))
     lines = []
+    row_index = 0
     for _ in range(top_pad):
-        lines.append(collection_art_line("", width, content_width, glyph.background))
+        lines.append(collection_art_line("", width, content_width, glyph.background, row_index=row_index, blueprint_style=glyph.blueprint))
+        row_index += 1
     for index, line in enumerate(glyph_lines):
         style = glyph.accent if index == glyph.primary_line else glyph.foreground
-        lines.append(collection_art_line(line, width, content_width, glyph.background, style))
+        lines.append(
+            collection_art_line(
+                line,
+                width,
+                content_width,
+                glyph.background,
+                style,
+                row_index=row_index,
+                blueprint_style=glyph.blueprint,
+            )
+        )
+        row_index += 1
     for _ in range(bottom_pad):
-        lines.append(collection_art_line("", width, content_width, glyph.background))
+        lines.append(collection_art_line("", width, content_width, glyph.background, row_index=row_index, blueprint_style=glyph.blueprint))
+        row_index += 1
     return Group(*lines[:height])
 
 
 @dataclass(frozen=True)
 class CollectionGlyph:
     lines: tuple[str, ...]
-    primary_line: int = 1
+    primary_line: int = 2
     background: str = "on #202332"
     foreground: str = "#8f96b8 on #202332"
     accent: str = "#e5a00d on #202332"
+    blueprint: str = "#3b4055 on #202332"
 
 
 def collection_glyph(media: MediaItem) -> CollectionGlyph:
     title = media.title.lower()
     if "continue" in title and "watch" in title:
-        return CollectionGlyph(("  ◜◝  ", "  ▶●  ", "  ◟◞  "), background="on #202735", foreground="#9098bd on #202735")
+        return CollectionGlyph(("  ◜──◝  ", "  │▶ │  ", "  │ ●│  ", "  ◟──◞  "), background="on #202735", foreground="#9098bd on #202735", blueprint="#394357 on #202735")
     if "recently added" in title:
-        return CollectionGlyph(("  │  ", " ─┼─ ", "  │  "), background="on #202e30", foreground="#93b7b2 on #202e30")
+        return CollectionGlyph(("   │   ", " ──┼── ", "   │   ", "  ╴╵╶  "), background="on #202e30", foreground="#93b7b2 on #202e30", blueprint="#39494a on #202e30")
     if "recently released" in title or "new" in title:
-        return CollectionGlyph((" ╲│╱ ", " ─✦─ ", " ╱│╲ "), background="on #242638", foreground="#a7a2c6 on #242638")
+        return CollectionGlyph((" ╲  │  ╱ ", "   ✦   ", " ──┼── ", "   ✦   ", " ╱  │  ╲ "), background="on #242638", foreground="#a7a2c6 on #242638", blueprint="#3e4057 on #242638")
     if "recommended" in title:
-        return CollectionGlyph((" ●  ╱", "  ╲● ", " ●─╯ "), background="on #222535", foreground="#9ba3c6 on #222535")
+        return CollectionGlyph((" ●    ╱ ", "  ╲  ●  ", "   ╲╱   ", "  ●─╯   "), background="on #222535", foreground="#9ba3c6 on #222535", blueprint="#3c4159 on #222535")
     if "trending" in title or title.startswith("top "):
-        return CollectionGlyph(("   ╱ ", " ●╱● ", " ╱   "), background="on #2a2630", foreground="#b9a0bd on #2a2630")
+        return CollectionGlyph(("     ╱ ", "  ● ╱  ", "   ╱●  ", "  ╱    ", " ●     "), background="on #2a2630", foreground="#b9a0bd on #2a2630", blueprint="#463c49 on #2a2630")
     if "unwatched" in title:
-        return CollectionGlyph((" ○ ○ ", "  ○  ", " ○ ○ "), background="on #242a33", foreground="#9ca8bd on #242a33")
+        return CollectionGlyph((" ○   ○ ", "   ○   ", " ○   ○ ", "   ○   "), background="on #242a33", foreground="#9ca8bd on #242a33", blueprint="#3e4654 on #242a33")
     if "actor" in title or "by " in title:
-        return CollectionGlyph(("  ○  ", " ╱│╲ ", " ╱ ╲ "), background="on #272b35", foreground="#a7adc7 on #272b35")
+        return CollectionGlyph(("   ○   ", "  ╱│╲  ", "   │   ", "  ╱ ╲  "), background="on #272b35", foreground="#a7adc7 on #272b35", blueprint="#414757 on #272b35")
     if "genre" in title or media.kind == "category":
-        return CollectionGlyph((" ▬▬  ", "  ▬▬ ", " ▬▬  "), background="on #202e30", foreground="#94b0ad on #202e30")
+        return category_collection_glyph(media.title)
     if media.kind == "playlist":
-        return CollectionGlyph((" ╭─╮ ", " ├─┤ ", " ╰─╯ "), background="on #232c2a", foreground="#99b8ad on #232c2a")
+        return CollectionGlyph((" ╭────╮ ", " ├────┤ ", " ├────┤ ", " ╰────╯ "), background="on #232c2a", foreground="#99b8ad on #232c2a", blueprint="#3d4944 on #232c2a")
     if media.kind == "collection":
-        return CollectionGlyph((" ◇◇  ", "  ◇◇ ", " ◇◇  "), background="on #202e30", foreground="#9eb7ba on #202e30")
+        return CollectionGlyph((" ◇  ◇ ", "  ◇◇  ", " ◇  ◇ ", "  ◇◇  "), background="on #202e30", foreground="#9eb7ba on #202e30", blueprint="#39494a on #202e30")
     if media.kind in {"show", "season"}:
-        return CollectionGlyph((" ┌─┐ ", " ├─┤ ", " └─┘ "), background="on #2b2732", foreground="#b2a2c6 on #2b2732")
-    return CollectionGlyph((" ╱╲  ", " ╲╱  ", "  ╲╱ "), background="on #262936", foreground="#9aa2bf on #262936")
+        return CollectionGlyph((" ┌────┐ ", " ├────┤ ", " ├────┤ ", " └────┘ "), background="on #2b2732", foreground="#b2a2c6 on #2b2732", blueprint="#463f50 on #2b2732")
+    return CollectionGlyph(("  ╱╲   ", " ╱  ╲  ", " ╲  ╱  ", "  ╲╱   "), background="on #262936", foreground="#9aa2bf on #262936", blueprint="#404557 on #262936")
+
+
+def category_collection_glyph(title: str) -> CollectionGlyph:
+    normalized = title.lower()
+    motifs = {
+        "action": ("   ╱╱  ", "  ╱╱   ", " ╱╱    ", "   ╱╱  "),
+        "adventure": (" ╱╲    ", "╱  ╲   ", "╲  ╱   ", " ╲╱    "),
+        "animation": (" ▢ ▢  ", "  ▢ ▢ ", " ▢ ▢  ", "  ▢ ▢ "),
+        "comedy": (" ○  ○ ", "   ○  ", " ○  ○ ", "   ○  "),
+        "documentary": (" ┬─┬  ", " ├─┤  ", " ┼─┼  ", " ┴─┴  "),
+        "drama": ("  ││  ", "  ││  ", " ─┼┼─ ", "  ││  "),
+        "horror": ("  ◇   ", " ◇ ◇  ", "  ◇   ", " ◇ ◇  "),
+        "sci": (" ●─╮  ", "   ●  ", " ╰─●  ", "  ●   "),
+        "science": (" ●─╮  ", "   ●  ", " ╰─●  ", "  ●   "),
+        "romance": (" ◜ ◝  ", "  ◇   ", " ◟ ◞  ", "  ◇   "),
+        "thriller": (" ╲╲   ", "  ╲╲  ", "   ╲╲ ", "  ╲╲  "),
+    }
+    lines = (" ▬▬   ", "  ▬▬  ", " ▬▬   ", "  ▬▬  ")
+    for key, motif in motifs.items():
+        if key in normalized:
+            lines = motif
+            break
+    return CollectionGlyph(lines, background="on #202e30", foreground="#94b0ad on #202e30", blueprint="#39494a on #202e30")
 
 
 def collection_art_line(
@@ -3100,20 +3138,40 @@ def collection_art_line(
     content_width: int,
     background_style: str,
     glyph_style: str | None = None,
+    row_index: int = 0,
+    blueprint_style: str = "#3b4055 on #202332",
 ) -> Text:
     left = (width - content_width) // 2
     right = width - content_width - left
     text = Text(" " * left, style="dim")
-    inner = Text(" " * content_width, style=background_style)
+    inner = collection_blueprint_layer(content_width, row_index, background_style, blueprint_style)
     if value and glyph_style is not None:
         glyph_text = truncate_text(value, content_width)
         glyph_left = max(0, (content_width - len(glyph_text)) // 2)
         glyph_right = max(0, content_width - glyph_left - len(glyph_text))
-        inner = Text(" " * glyph_left, style=background_style)
+        inner = collection_blueprint_layer(glyph_left, row_index, background_style, blueprint_style)
         inner.append(glyph_text, style=glyph_style)
-        inner.append(" " * glyph_right, style=background_style)
+        inner.append_text(collection_blueprint_layer(glyph_right, row_index, background_style, blueprint_style))
     text.append_text(inner)
     text.append(" " * right, style="dim")
+    return text
+
+
+def collection_blueprint_layer(width: int, row_index: int, background_style: str, blueprint_style: str) -> Text:
+    if width <= 0:
+        return Text("")
+    chars = [" "] * width
+    if row_index == 0 and width >= 2:
+        chars[0] = "┌"
+        chars[-1] = "┐"
+    elif width >= 7 and row_index % 3 == 1:
+        chars[width // 3] = "·"
+        chars[(width * 2) // 3] = "·"
+    elif row_index % 3 == 2:
+        chars[width // 2] = "│"
+    text = Text()
+    for char in chars:
+        text.append(char, style=blueprint_style if char != " " else background_style)
     return text
 
 
@@ -3179,6 +3237,14 @@ def grid_artwork_placeholder_label(media: MediaItem) -> str:
 
 def grid_card_text(value: str, config: AppConfig) -> str:
     return truncate_text(value.strip(), grid_card_content_width(config))
+
+
+def grid_card_subtitle(media: MediaItem) -> str:
+    kind = kind_label(media.kind)
+    subtitle = media.subtitle.strip()
+    if subtitle.lower() == kind.lower():
+        subtitle = ""
+    return "  ".join(bit for bit in (kind, subtitle) if bit)
 
 
 def grid_card_footer(media: MediaItem, selected: bool) -> str:
