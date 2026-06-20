@@ -4,6 +4,10 @@
 
 - Polished pane focus styling so sidebar, media, and details panes share a
   consistent focused border, title treatment, and compact focus marker.
+- Made container-only grid views such as Recommended use wider navigation cards
+  with two-line titles so hub and collection names are easier to read.
+- Hardened Kitty artwork transmission to reduce visible graphics payload text
+  leaking into the TUI during artwork refreshes.
 
 ## 0.4.9 - 2026-06-19
 

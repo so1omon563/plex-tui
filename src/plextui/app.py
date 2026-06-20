@@ -77,6 +77,7 @@ from .player import (
 )
 from .plex_service import PlexService, kind_label, media_details, row_progress_marker, watched_state
 GRID_CARD_GAP = 2
+GRID_COLLECTION_CARD_EXTRA_WIDTH = 8
 GRID_DENSITY_SPECS = {
     "compact": {"width": 18, "content_width": 15, "art_width": 14, "art_height": 7, "height": 10, "max_columns": 6},
     "comfortable": {"width": 22, "content_width": 19, "art_width": 18, "art_height": 9, "height": 12, "max_columns": 5},
@@ -261,9 +262,10 @@ class MediaGrid(Static):
         if not self.is_mounted:
             return
         row = (self.selected_index - self.page_start) // max(1, self.columns)
-        row_height = grid_card_height(self.config)
-        if grid_items_are_collection_cards(self.visible_page_items()):
-            row_height += 1
+        row_height = grid_card_height(
+            self.config,
+            collection_card=grid_items_are_collection_cards(self.visible_page_items()),
+        )
         if self.parent is not None:
             self.parent.scroll_to(y=max(0, row * row_height), animate=False)
 
@@ -1109,7 +1111,9 @@ class PlexTuiApp(App[None]):
             selected_index = selected_media_index(state.items, selected_key)
             if self.config.media_view == "grid":
                 grid = self.show_media_grid()
-                columns, rows = self.media_grid_geometry()
+                columns, rows = self.media_grid_geometry(
+                    collection_cards=grid_items_are_collection_cards(state.items),
+                )
                 grid.set_items(state.items, selected_index, self.config, columns, rows)
                 self.schedule_grid_prefetch(grid)
             else:
@@ -1349,9 +1353,9 @@ class PlexTuiApp(App[None]):
         width = min(36, max(14, pane_width - 6))
         return width, 22
 
-    def media_grid_geometry(self) -> tuple[int, int]:
+    def media_grid_geometry(self, collection_cards: bool = False) -> tuple[int, int]:
         media_size = self.query_one("#main").size
-        return grid_geometry_for_size(media_size.width, media_size.height, self.config)
+        return grid_geometry_for_size(media_size.width, media_size.height, self.config, collection_cards=collection_cards)
 
     def action_focus_search(self) -> None:
         self.search_global = False
@@ -2984,18 +2988,26 @@ def render_media_grid(
     artwork_overrides: dict[str, object] | None = None,
 ) -> object:
     rows = []
+    collection_cards = grid_items_are_collection_cards(items)
+    card_width = grid_card_width(config, collection_card=collection_cards)
     for start in range(0, len(items), columns):
         chunk = items[start:start + columns]
         cards = [
-            render_media_grid_card(item, item.key == selected_key, config, artwork_overrides)
+            render_media_grid_card(
+                item,
+                item.key == selected_key,
+                config,
+                artwork_overrides,
+                collection_card=collection_cards,
+            )
             for item in chunk
         ]
         row = Table.grid(padding=(0, 1))
         for _ in cards:
-            row.add_column(width=grid_card_width(config), no_wrap=True)
+            row.add_column(width=card_width, no_wrap=True)
         row.add_row(*cards)
-        rows.append(row if grid_items_are_collection_cards(items) else Align.center(row))
-        if grid_items_are_collection_cards(items) and start + columns < len(items):
+        rows.append(row if collection_cards else Align.center(row))
+        if collection_cards and start + columns < len(items):
             rows.append(Text(""))
     return Group(*rows)
 
@@ -3005,21 +3017,27 @@ def render_media_grid_card(
     selected: bool,
     config: AppConfig,
     artwork_overrides: dict[str, object] | None = None,
+    collection_card: bool | None = None,
 ) -> object:
+    collection_card = is_collection_card(media) if collection_card is None else collection_card
     title_style = "bold #e5a00d" if selected else "bold"
-    card_width = grid_card_width(config)
-    title = grid_card_text(media.title, config)
-    subtitle = grid_card_text(grid_card_subtitle(media), config)
+    card_width = grid_card_width(config, collection_card=collection_card)
+    title_lines = grid_card_title_lines(media.title, config, collection_card=collection_card)
+    subtitle = grid_card_text(grid_card_subtitle(media), config, collection_card=collection_card)
     artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
     artwork = copy_renderable(artwork)
     if artwork is None:
-        artwork = grid_missing_artwork_placeholder(media, config) if media.playable else render_collection_art(media, config)
+        artwork = (
+            grid_missing_artwork_placeholder(media, config)
+            if media.playable
+            else render_collection_art(media, config, collection_card=collection_card)
+        )
     else:
         artwork = center_renderable_lines(artwork, card_width)
     footer = grid_card_footer(media, selected)
     return Group(
         artwork,
-        grid_card_line(title, card_width, title_style),
+        *(grid_card_line(title, card_width, title_style) for title in title_lines),
         grid_card_line(subtitle, card_width, "dim"),
         grid_card_line(footer, card_width, "#e5a00d" if selected else "dim"),
     )
@@ -3030,7 +3048,7 @@ def grid_items_are_collection_cards(items: list[MediaItem]) -> bool:
 
 
 def is_collection_card(media: MediaItem) -> bool:
-    if media.playable or media.artwork_path:
+    if media.playable:
         return False
     return media.kind in {
         "hub",
@@ -3049,10 +3067,10 @@ def grid_missing_artwork_placeholder(media: MediaItem, config: AppConfig) -> Gro
     return grid_artwork_placeholder(grid_artwork_placeholder_label(media), config)
 
 
-def render_collection_art(media: MediaItem, config: AppConfig) -> Group:
+def render_collection_art(media: MediaItem, config: AppConfig, collection_card: bool = True) -> Group:
     spec = grid_density_spec(config)
-    width = grid_card_width(config)
-    content_width = grid_card_content_width(config)
+    width = grid_card_width(config, collection_card=collection_card)
+    content_width = grid_card_content_width(config, collection_card=collection_card)
     height = int(spec["art_height"])
     glyph = collection_glyph(media)
     glyph_lines = glyph.lines[: max(1, height - 2)]
@@ -3246,8 +3264,26 @@ def grid_artwork_placeholder_label(media: MediaItem) -> str:
     return labels.get(media.kind, "browse")
 
 
-def grid_card_text(value: str, config: AppConfig) -> str:
-    return truncate_text(value.strip(), grid_card_content_width(config))
+def grid_card_text(value: str, config: AppConfig, collection_card: bool = False) -> str:
+    return truncate_text(value.strip(), grid_card_content_width(config, collection_card=collection_card))
+
+
+def grid_card_title_lines(value: str, config: AppConfig, collection_card: bool = False) -> list[str]:
+    text = value.strip()
+    width = grid_card_content_width(config, collection_card=collection_card)
+    if not collection_card:
+        return [truncate_text(text, width)]
+    lines = textwrap.wrap(
+        text,
+        width=width,
+        max_lines=2,
+        placeholder="...",
+        break_long_words=False,
+    ) or [""]
+    lines = [truncate_text(line, width) for line in lines[:2]]
+    while len(lines) < 2:
+        lines.append("")
+    return lines
 
 
 def grid_card_subtitle(media: MediaItem) -> str:
@@ -3342,26 +3378,49 @@ def grid_density_spec(config: AppConfig | None) -> dict[str, int]:
     return GRID_DENSITY_SPECS.get(density, GRID_DENSITY_SPECS["comfortable"])
 
 
-def grid_card_width(config: AppConfig | None) -> int:
-    return int(grid_density_spec(config)["width"])
+def grid_card_width(config: AppConfig | None, collection_card: bool = False) -> int:
+    width = int(grid_density_spec(config)["width"])
+    if collection_card:
+        width += GRID_COLLECTION_CARD_EXTRA_WIDTH
+    return width
 
 
-def grid_card_content_width(config: AppConfig | None) -> int:
-    return int(grid_density_spec(config)["content_width"])
+def grid_card_content_width(config: AppConfig | None, collection_card: bool = False) -> int:
+    content_width = int(grid_density_spec(config)["content_width"])
+    if collection_card:
+        content_width += GRID_COLLECTION_CARD_EXTRA_WIDTH
+    return content_width
 
 
-def grid_card_render_width(config: AppConfig | None) -> int:
-    return grid_card_width(config) + GRID_CARD_GAP
+def grid_card_render_width(config: AppConfig | None, collection_card: bool = False) -> int:
+    return grid_card_width(config, collection_card=collection_card) + GRID_CARD_GAP
 
 
-def grid_card_height(config: AppConfig | None) -> int:
-    return int(grid_density_spec(config)["height"])
+def grid_card_height(config: AppConfig | None, collection_card: bool = False) -> int:
+    height = int(grid_density_spec(config)["height"])
+    if collection_card:
+        height += 1
+    return height
 
 
-def grid_geometry_for_size(width: int, height: int, config: AppConfig | None) -> tuple[int, int]:
+def grid_geometry_for_size(
+    width: int,
+    height: int,
+    config: AppConfig | None,
+    collection_cards: bool = False,
+) -> tuple[int, int]:
     spec = grid_density_spec(config)
-    columns = max(1, min(int(spec["max_columns"]), max(1, width - 4) // grid_card_render_width(config)))
-    rows = max(1, min(4, max(1, height - 2) // grid_card_height(config)))
+    max_columns = int(spec["max_columns"])
+    if collection_cards:
+        max_columns = max(1, max_columns - 1)
+    columns = max(
+        1,
+        min(max_columns, max(1, width - 4) // grid_card_render_width(config, collection_card=collection_cards)),
+    )
+    rows = max(
+        1,
+        min(4, max(1, height - 2) // grid_card_height(config, collection_card=collection_cards)),
+    )
     return columns, rows
 
 

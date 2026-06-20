@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
 import os
 from io import BytesIO
+from pathlib import Path
 
 from PIL import Image
 
@@ -80,10 +82,11 @@ def test_render_artwork_returns_halfcell_text():
     assert rendered.spans
 
 
-def test_render_protocol_artwork_tries_kitty_when_explicitly_enabled(monkeypatch):
+def test_render_protocol_artwork_tries_kitty_when_explicitly_enabled(tmp_path, monkeypatch):
     monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
     monkeypatch.delenv("KITTY_PID", raising=False)
     monkeypatch.delenv("TERM_PROGRAM", raising=False)
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
     transmitted = []
     monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: transmitted.extend(commands))
     image = Image.new("RGB", (2, 4), "#00ff00")
@@ -96,8 +99,9 @@ def test_render_protocol_artwork_tries_kitty_when_explicitly_enabled(monkeypatch
     assert transmitted == list(rendered.commands)
 
 
-def test_render_protocol_artwork_uses_unicode_placeholders_when_kitty_is_detected(monkeypatch):
+def test_render_protocol_artwork_uses_unicode_placeholders_when_kitty_is_detected(tmp_path, monkeypatch):
     monkeypatch.setenv("KITTY_WINDOW_ID", "1")
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
     transmitted = []
     monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: transmitted.extend(commands))
     image = Image.new("RGB", (2, 4), "#00ff00")
@@ -107,7 +111,7 @@ def test_render_protocol_artwork_uses_unicode_placeholders_when_kitty_is_detecte
     rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=2, max_height=2)
 
     assert isinstance(rendered, KittyImage)
-    assert rendered.commands[0].startswith("\033_Ga=T,f=100,q=2,i=")
+    assert rendered.commands[0].startswith("\033_Ga=T,t=f,f=100,q=2,i=")
     assert ",U=1,c=2,r=2;" in rendered.commands[0]
     assert rendered.plain.count(KITTY_PLACEHOLDER) == 4
     assert transmitted == list(rendered.commands)
@@ -137,6 +141,16 @@ def test_kitty_graphics_commands_chunks_large_payload(monkeypatch):
     assert commands[-1].startswith("\033_Gm=0;")
 
 
+def test_kitty_graphics_emits_each_command_boundary(monkeypatch):
+    payloads = []
+
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_payload", payloads.append)
+
+    artwork.emit_kitty_graphics_commands(["first", "second"])
+
+    assert payloads == [b"first", b"second"]
+
+
 def test_auto_protocol_renderer_requires_kitty_terminal(monkeypatch):
     monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
     monkeypatch.delenv("KITTY_PID", raising=False)
@@ -152,10 +166,11 @@ def test_auto_protocol_renderer_requires_kitty_terminal(monkeypatch):
     assert protocol_renderer_status("auto") == "Block art; Kitty-compatible terminal not detected"
 
 
-def test_auto_protocol_renderer_uses_kitty_placeholders_in_ghostty(monkeypatch):
+def test_auto_protocol_renderer_uses_kitty_placeholders_in_ghostty(tmp_path, monkeypatch):
     monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
     monkeypatch.delenv("KITTY_PID", raising=False)
     monkeypatch.setenv("TERM_PROGRAM", "ghostty")
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
     transmitted = []
     monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: transmitted.extend(commands))
     image = Image.new("RGB", (2, 4), "#00ff00")
@@ -167,6 +182,30 @@ def test_auto_protocol_renderer_uses_kitty_placeholders_in_ghostty(monkeypatch):
     assert isinstance(rendered, KittyImage)
     assert transmitted == list(rendered.commands)
     assert protocol_renderer_status("auto") == "Kitty native images via Unicode placeholders"
+
+
+def test_protocol_renderer_transmits_kitty_file_reference(tmp_path, monkeypatch):
+    monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
+    monkeypatch.delenv("KITTY_PID", raising=False)
+    monkeypatch.setenv("TERM_PROGRAM", "ghostty")
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    transmitted = []
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: transmitted.extend(commands))
+    image = Image.new("RGB", (6, 8), "#00ff00")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+
+    rendered = render_protocol_artwork(buffer.getvalue(), "auto", width=2, max_height=2)
+
+    assert isinstance(rendered, KittyImage)
+    assert transmitted == list(rendered.commands)
+    command = transmitted[0]
+    assert ",t=f," in command
+    payload = command.split(";", 1)[1].removesuffix("\033\\")
+    image_path = Path(base64.b64decode(payload).decode("utf-8"))
+    assert image_path.exists()
+    assert image_path.read_bytes().startswith(b"\x89PNG")
+    assert base64.b64encode(image_path.read_bytes()).decode("ascii") not in command
 
 
 def test_protocol_renderer_status_explains_explicit_kitty_force(monkeypatch):

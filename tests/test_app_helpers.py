@@ -31,8 +31,10 @@ from plextui.app import (
     effective_stream_preference_rows,
     format_offset,
     grid_card_height,
+    grid_card_title_lines,
     grid_card_width,
     grid_geometry_for_size,
+    grid_items_are_collection_cards,
     grid_page_key,
     grid_status,
     library_menu_rows,
@@ -774,6 +776,24 @@ def test_grid_geometry_uses_density_at_common_terminal_sizes():
     assert grid_geometry_for_size(138, 34, large) == (4, 2)
 
 
+def test_collection_grid_geometry_uses_wider_navigation_cards():
+    comfortable = AppConfig("http://plex", "token", "client", grid_density="comfortable")
+
+    assert grid_geometry_for_size(138, 34, comfortable, collection_cards=True) == (4, 2)
+    assert grid_card_width(comfortable, collection_card=True) > grid_card_width(comfortable)
+    assert grid_card_height(comfortable, collection_card=True) == grid_card_height(comfortable) + 1
+
+
+def test_collection_grid_titles_wrap_to_two_lines():
+    config = AppConfig("http://plex", "token", "client", grid_density="compact")
+
+    assert grid_card_title_lines("Recently Released Movies", config, collection_card=True) == [
+        "Recently Released",
+        "Movies",
+    ]
+    assert grid_card_title_lines("Recently Released Movies", config) == ["Recently Rel..."]
+
+
 def test_card_artwork_pixel_size_tracks_terminal_render_size():
     assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="comfortable")) == (18, 18)
     assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="large")) == (24, 24)
@@ -800,8 +820,9 @@ def test_render_card_artwork_uses_per_line_renderables():
     assert all(isinstance(line, Text) for line in rendered.renderables)
 
 
-def test_render_card_artwork_uses_kitty_placeholders_when_enabled(monkeypatch):
+def test_render_card_artwork_uses_kitty_placeholders_when_enabled(monkeypatch, tmp_path):
     monkeypatch.setenv("KITTY_WINDOW_ID", "1")
+    monkeypatch.setattr("plextui.artwork.cache_path", lambda: tmp_path)
     monkeypatch.setattr("plextui.artwork.emit_kitty_graphics_commands", lambda commands: None)
     image = Image.new("RGB", (2, 4), "#ff0000")
     buffer = BytesIO()
@@ -866,6 +887,18 @@ def test_grid_card_uses_collection_glyph_for_hub_rows():
     assert not any("[hub]" in str(line) for line in placeholder.renderables)
     assert any("──┼──" in line.plain for line in placeholder.renderables)
     assert "open" in rendered_text
+
+
+def test_collection_grid_card_allows_longer_two_line_title():
+    media = MediaItem("Recently Released Movies", "", "hub", "1", False, object(), artwork_path="/hub/thumb")
+
+    rendered = render_media_grid_card(media, True, AppConfig("http://plex", "token", "client", grid_density="compact"))
+    title_text = "\n".join(line.plain for line in rendered.renderables[1:3])
+
+    assert grid_items_are_collection_cards([media])
+    assert "Recently Released" in title_text
+    assert "Movies" in title_text
+    assert "..." not in title_text
 
 
 def test_render_media_grid_text_snapshot_distinguishes_missing_and_collection_art():
