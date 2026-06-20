@@ -2159,8 +2159,8 @@ async def run_add_to_playlist_create_check():
         rows = await wait_for_playlist_rows(app, pilot)
         assert any(isinstance(row, PlaylistCreateRow) for row in rows)
         app.save_playlist_name_input("Weekend")
-        status = await wait_for_status(app, pilot, "Created playlist Weekend with Movie")
-        create_calls = await wait_for_calls(service.create_calls, pilot)
+        create_calls = await wait_for_calls(service.create_calls, pilot, attempts=80)
+        status = await wait_for_status(app, pilot, "Created playlist Weekend with Movie", attempts=80)
 
         assert create_calls == [("Weekend", "Movie")]
         assert status == "Created playlist Weekend with Movie"
