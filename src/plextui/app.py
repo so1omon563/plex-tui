@@ -75,7 +75,7 @@ from .player import (
     subtitle_choices,
     transcode_quality_label,
 )
-from .plex_service import PlexService, kind_label, media_details, row_progress_marker, watched_state
+from .plex_service import PlexService, kind_label, media_details, progress_bar, row_progress_marker, watched_state
 GRID_CARD_GAP = 2
 GRID_COLLECTION_CARD_EXTRA_WIDTH = 8
 GRID_DENSITY_SPECS = {
@@ -3362,6 +3362,9 @@ def media_metadata_label(media: MediaItem, include_kind: bool = True) -> str:
 
 
 def grid_card_footer(media: MediaItem, selected: bool) -> str:
+    progress = progress_bar(media.raw)
+    if progress:
+        return f"▶ {progress}" if selected else progress
     if selected:
         return "▶ selected"
     if media.playable:

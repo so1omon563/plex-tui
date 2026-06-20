@@ -895,6 +895,21 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
     assert "playable" in unselected_text
 
 
+def test_grid_card_footer_shows_watch_progress():
+    class PartialRaw:
+        viewOffset = 300000
+        duration = 600000
+
+    media = MediaItem("Movie", "2024", "movie", "1", True, PartialRaw(), artwork_path="")
+
+    selected = render_media_grid_card(media, True, AppConfig("http://plex", "token", "client"))
+    unselected = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"))
+
+    assert "[####----] 50%" in str(selected.renderables[3])
+    assert "▶ [####----] 50%" in str(selected.renderables[3])
+    assert "[####----] 50%" in str(unselected.renderables[3])
+
+
 def test_grid_card_styles_follow_visual_state_tokens():
     media = MediaItem("Movie", "2024", "movie", "1", True, object(), artwork_path="")
 
@@ -1270,7 +1285,7 @@ def test_media_row_includes_progress_marker():
 
     assert row.label_text.startswith("▶ Movie")
     assert "Movie · Movie · 2024" in row.label_text
-    assert "[resume 1m]" in row.label_text
+    assert "[#-------] 11%" in row.label_text
 
 
 def test_media_row_marks_container_items():

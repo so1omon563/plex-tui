@@ -8,6 +8,7 @@ from plextui.plex_service import (
     episode_context_label,
     kind_label,
     media_details,
+    progress_bar,
     progress_label,
     row_progress_marker,
     to_media_item,
@@ -427,9 +428,11 @@ def test_progress_helpers_report_watched_resume_and_unwatched():
             return False
 
     assert watched_state(Watched()) == "watched"
-    assert row_progress_marker(Watched()) == "[watched]"
+    assert progress_bar(Watched()) == "[########] 100%"
+    assert row_progress_marker(Watched()) == "[########] 100%"
     assert watched_state(Partial()) == "in progress"
     assert progress_label(Partial()) == "1m / 10m (11%)"
-    assert row_progress_marker(Partial()) == "[resume 1m]"
+    assert progress_bar(Partial()) == "[#-------] 11%"
+    assert row_progress_marker(Partial()) == "[#-------] 11%"
     assert watched_state(Unwatched()) == "unwatched"
     assert row_progress_marker(Unwatched()) == ""

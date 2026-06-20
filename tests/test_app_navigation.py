@@ -103,7 +103,7 @@ async def wait_for_watched_update(
             status == expected_status
             and selected is not None
             and selected_watched is watched
-            and ("[watched]" in label) is watched
+            and ("[########] 100%" in label) is watched
             and ((watched and watched_calls == 1) or (not watched and unwatched_calls == 1))
         ):
             return row, selected, status
@@ -2131,7 +2131,7 @@ async def run_toggle_watched_marks_unwatched_check():
         assert selected is not None
         assert selected.raw.viewCount == 1
         assert row is not None
-        assert "[watched]" in row.label_text
+        assert "[########] 100%" in row.label_text
         assert status == "Marked Movie watched"
 
 
@@ -2158,7 +2158,7 @@ async def run_toggle_watched_marks_watched_check():
         assert selected is not None
         assert selected.raw.viewCount == 0
         assert row is not None
-        assert "[watched]" not in row.label_text
+        assert "[########] 100%" not in row.label_text
         assert status == "Marked Movie unwatched"
 
 
