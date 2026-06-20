@@ -135,8 +135,8 @@ def test_render_details_includes_subtitles_and_summary():
     assert "Playlist: Press P" in rendered
     assert "Metadata" in rendered
     assert "Preferences" in rendered
-    assert "Audio: jpn" in rendered
-    assert "Subtitles: Preferred / eng" in rendered
+    assert "Audio:             jpn" in rendered
+    assert "Subtitles:         Preferred / eng" in rendered
     assert "Artwork: available" in rendered
     assert "Audio Tracks (1)" in rendered
     assert "Subtitle Tracks (1)" in rendered
@@ -279,7 +279,7 @@ def test_render_settings_hides_tokens():
     rendered = render_settings(config)
 
     assert "secret" not in rendered
-    assert "Server Token: saved" in rendered
+    assert "Server Token:  saved" in rendered
     assert "Account Token: saved" in rendered
     assert "Cache Path:" in rendered
     assert "Debug Log:" in rendered
@@ -302,18 +302,19 @@ def test_render_settings_includes_stream_preferences():
 
     rendered = render_settings(config)
 
-    assert "Audio Preference: jpn" in rendered
-    assert "Subtitle Mode: Preferred" in rendered
+    assert "Audio Preference:  jpn" in rendered
+    assert "Subtitle Mode:     Preferred" in rendered
     assert "Subtitle Language: eng" in rendered
-    assert "Artwork: On" in rendered
+    assert "Artwork:          On" in rendered
     assert "Artwork Renderer: Block" in rendered
-    assert "Details Artwork: List only" in rendered
-    assert "Media View: List" in rendered
-    assert "Theme: textual-light" in rendered
-    assert "mpv Window Size: Default (80%)" in rendered
-    assert "Playback Mode: Auto / direct default" in rendered
+    assert "Details Artwork:  List only" in rendered
+    assert "Media View:          List" in rendered
+    assert "Theme:       textual-light" in rendered
+    assert "mpv Window Size:   Default (80%)" in rendered
+    assert "Playback Mode:     Auto / direct" in rendered
+    assert "default" in rendered
     assert "Transcode Quality: Original" in rendered
-    assert "Page Size: 250" in rendered
+    assert "Page Size:           250" in rendered
     assert "Auto-load Threshold: 25" in rendered
     assert "Grid Prefetch Pages: 4" in rendered
     assert "Show recent debug log" in rendered
@@ -736,7 +737,7 @@ def test_render_details_includes_effective_playback_rows():
     rendered = render_details(details, AppConfig("http://plex", "token", "client", subtitle_mode="none"), object())
 
     assert "Effective Playback" in rendered
-    assert "Subtitles: none" in rendered
+    assert "Subtitles:         none" in rendered
 
 
 def test_picker_details_explain_global_save():
@@ -857,7 +858,7 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
     selected_text = "\n".join(str(renderable) for renderable in selected.renderables)
     unselected_text = "\n".join(str(renderable) for renderable in unselected.renderables)
     assert "Movie" in selected_text
-    assert "Movie  2024" in selected_text
+    assert "Movie · 2024" in selected_text
     assert "▶ selected" in selected_text
     assert "┏" not in selected_text
     assert "▶ selected" not in unselected_text
@@ -872,7 +873,7 @@ def test_grid_card_marks_container_items_as_openable():
     placeholder = rendered.renderables[0]
 
     assert "open" in rendered_text
-    assert "Season  10 episodes" in rendered_text
+    assert "10 episodes" in rendered_text
     assert not any("[season]" in str(line) for line in placeholder.renderables)
     assert any("┌────┐" in line.plain for line in placeholder.renderables)
 
@@ -1219,7 +1220,7 @@ def test_media_row_includes_progress_marker():
     row = MediaRow(MediaItem("Movie", "2024", "movie", "1", True, PartialRaw()))
 
     assert row.label_text.startswith("▶ Movie")
-    assert "[Movie] 2024" in row.label_text
+    assert "Movie · Movie · 2024" in row.label_text
     assert "[resume 1m]" in row.label_text
 
 
@@ -1227,7 +1228,7 @@ def test_media_row_marks_container_items():
     row = MediaRow(MediaItem("Show", "2 seasons", "show", "1", False, object()))
 
     assert row.label_text.startswith("› Show")
-    assert "[TV Show] 2 seasons" in row.label_text
+    assert "Show · TV Show · 2 seasons" in row.label_text
 
 
 def test_media_grid_tracks_selection_and_visible_page():
