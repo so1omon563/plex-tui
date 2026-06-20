@@ -88,6 +88,7 @@ LIST_DETAIL_REFRESH_DELAY = 0.35
 DETAIL_ARTWORK_REFRESH_DELAY = 0.55
 GRID_PREFETCH_WORKERS = 3
 DETAIL_SUMMARY_WIDTH = 38
+DETAIL_LABEL_WIDTH = 20
 DETAIL_STREAM_LIMIT = 5
 
 
@@ -139,7 +140,8 @@ class LibraryMenuRow(ListItem):
 class MediaRow(ListItem):
     def __init__(self, media: MediaItem) -> None:
         marker = "▶" if media.playable else "›"
-        subtitle = f" [{kind_label(media.kind)}] {media.subtitle}".rstrip()
+        metadata = media_metadata_label(media, include_kind=True)
+        subtitle = f" · {metadata}" if metadata else ""
         progress = row_progress_marker(media.raw)
         progress_text = f" {progress}" if progress else ""
         self.label_text = f"{marker} {media.title}{subtitle}{progress_text}"
@@ -2890,8 +2892,25 @@ def append_detail_section(lines: list[str], heading: str, body: list[str]) -> No
 
 def detail_key_value_rows(values: list[tuple[str, str]]) -> list[str]:
     rows: list[str] = []
+    label_width = detail_label_width(values)
     for label, value in values:
-        rows.extend(wrapped_detail_text(f"{label}: {value}"))
+        rows.extend(detail_key_value_row(label, value, label_width))
+    return rows
+
+
+def detail_label_width(values: list[tuple[str, str]]) -> int:
+    if not values:
+        return 0
+    return min(DETAIL_LABEL_WIDTH, max(len(label) for label, _value in values))
+
+
+def detail_key_value_row(label: str, value: str, label_width: int = DETAIL_LABEL_WIDTH) -> list[str]:
+    label_text = f"{label}:"
+    prefix = f"{label_text:<{label_width + 2}}"
+    value_width = max(8, DETAIL_SUMMARY_WIDTH - len(prefix))
+    wrapped = wrapped_detail_text(value, width=value_width) or [""]
+    rows = [f"{prefix}{wrapped[0]}"]
+    rows.extend(f"{' ' * len(prefix)}{line}" for line in wrapped[1:])
     return rows
 
 
@@ -3287,11 +3306,17 @@ def grid_card_title_lines(value: str, config: AppConfig, collection_card: bool =
 
 
 def grid_card_subtitle(media: MediaItem) -> str:
-    kind = "" if media.kind == "hub" else kind_label(media.kind)
+    return media_metadata_label(media, include_kind=not is_collection_card(media))
+
+
+def media_metadata_label(media: MediaItem, include_kind: bool = True) -> str:
+    bits = []
+    if include_kind:
+        bits.append(kind_label(media.kind))
     subtitle = media.subtitle.strip()
-    if subtitle.lower() == kind.lower():
-        subtitle = ""
-    return "  ".join(bit for bit in (kind, subtitle) if bit)
+    if subtitle and subtitle.lower() not in {bit.lower() for bit in bits}:
+        bits.extend(bit.strip() for bit in subtitle.split("  ") if bit.strip())
+    return " · ".join(bits)
 
 
 def grid_card_footer(media: MediaItem, selected: bool) -> str:
@@ -3542,58 +3567,95 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
 
 
 def render_settings(config: AppConfig) -> str:
-    lines = [
-        "Settings",
-        "",
+    lines = ["Settings"]
+    append_settings_section(
+        lines,
         "Account",
-        f"Server: {config.base_url or 'not set'}",
-        f"Server Token: {'saved' if config.token else 'not set'}",
-        f"Account Token: {'saved' if config.account_token else 'not set'}",
-        "Reconnect / reload libraries",
-        "Relogin with Plex",
-        "",
+        [
+            ("Server", config.base_url or "not set"),
+            ("Server Token", "saved" if config.token else "not set"),
+            ("Account Token", "saved" if config.account_token else "not set"),
+        ],
+        ["Reconnect / reload libraries", "Relogin with Plex"],
+    )
+    append_settings_section(
+        lines,
         "Streams",
-        f"Audio Preference: {preference_value(config.preferred_audio_language)}",
-        f"Subtitle Mode: {subtitle_mode_value(config)}",
-        f"Subtitle Language: {subtitle_language_value(config)}",
-        "Clear audio preference",
-        "Set subtitles to Auto",
-        "Set subtitles to None",
-        "Clear subtitle preference",
-        "Clear audio/subtitle preferences",
-        "",
+        [
+            ("Audio Preference", preference_value(config.preferred_audio_language)),
+            ("Subtitle Mode", subtitle_mode_value(config)),
+            ("Subtitle Language", subtitle_language_value(config)),
+        ],
+        [
+            "Clear audio preference",
+            "Set subtitles to Auto",
+            "Set subtitles to None",
+            "Clear subtitle preference",
+            "Clear audio/subtitle preferences",
+        ],
+    )
+    append_settings_section(
+        lines,
         "Playback",
-        f"Playback Mode: {playback_mode_value(config)}",
-        f"Transcode Quality: {transcode_quality_value(config)}",
-        f"mpv Window Size: {mpv_window_size_value(config)}",
-        "Use Force transcode with a selected quality when direct/default playback is not desired.",
-        "Cycle common mpv window sizes, or set a custom value like 80%, 90%, 1280x720, or 80%x80%.",
-        "",
+        [
+            ("Playback Mode", playback_mode_value(config)),
+            ("Transcode Quality", transcode_quality_value(config)),
+            ("mpv Window Size", mpv_window_size_value(config)),
+        ],
+        [
+            "Force transcode only when direct/default playback is not desired.",
+            "Cycle common mpv sizes or set a custom value such as 80%, 90%, 1280x720, or 80%x80%.",
+        ],
+    )
+    append_settings_section(
+        lines,
         "Artwork",
-        f"Artwork: {artwork_mode_value(config)}",
-        f"Details Artwork: {detail_artwork_mode_value(config)}",
-        f"Artwork Renderer: {artwork_renderer_value(config)}",
-        "",
+        [
+            ("Artwork", artwork_mode_value(config)),
+            ("Details Artwork", detail_artwork_mode_value(config)),
+            ("Artwork Renderer", artwork_renderer_value(config)),
+        ],
+    )
+    append_settings_section(
+        lines,
         "Browsing",
-        f"Library Enter: {library_enter_action_value(config)}",
-        f"Media View: {media_view_value(config)}",
-        f"Grid Density: {grid_density_value(config)}",
-        f"Page Size: {config.page_size}",
-        f"Auto-load Threshold: {config.auto_load_threshold}",
-        f"Grid Prefetch Pages: {config.grid_prefetch_pages}",
-        f"Hidden Libraries: {hidden_library_count_value(config)}",
-        "Set custom browsing values with whole numbers inside the allowed range.",
-        "",
+        [
+            ("Library Enter", library_enter_action_value(config)),
+            ("Media View", media_view_value(config)),
+            ("Grid Density", grid_density_value(config)),
+            ("Page Size", str(config.page_size)),
+            ("Auto-load Threshold", str(config.auto_load_threshold)),
+            ("Grid Prefetch Pages", str(config.grid_prefetch_pages)),
+            ("Hidden Libraries", hidden_library_count_value(config)),
+        ],
+        ["Custom browsing values use whole numbers inside the allowed range."],
+    )
+    append_settings_section(
+        lines,
         "Diagnostics",
-        f"Config Path: {config_path()}",
-        f"Cache Path: {cache_path()}",
-        f"Debug Log: {debug_log_path()}",
-        f"Client ID: {config.client_identifier or 'not set'}",
-        f"Theme: {config.theme}",
-        "Show recent debug log",
-        "Show app diagnostics",
-    ]
+        [
+            ("Config Path", str(config_path())),
+            ("Cache Path", str(cache_path())),
+            ("Debug Log", str(debug_log_path())),
+            ("Client ID", config.client_identifier or "not set"),
+            ("Theme", config.theme),
+        ],
+        ["Show recent debug log", "Show app diagnostics"],
+    )
     return "\n".join(lines)
+
+
+def append_settings_section(
+    lines: list[str],
+    heading: str,
+    values: list[tuple[str, str]],
+    notes: list[str] | None = None,
+) -> None:
+    lines.extend(["", heading])
+    lines.extend(detail_key_value_rows(values))
+    for note in notes or []:
+        for index, line in enumerate(wrapped_detail_text(note, width=DETAIL_SUMMARY_WIDTH - 2)):
+            lines.append(f"- {line}" if index == 0 else f"  {line}")
 
 
 def render_help() -> str:

@@ -8,6 +8,8 @@
   with two-line titles so hub and collection names are easier to read.
 - Hardened Kitty artwork transmission to reduce visible graphics payload text
   leaking into the TUI during artwork refreshes.
+- Improved details, Settings, list, and grid metadata rhythm with aligned
+  detail rows, scannable Settings sections, and shared media metadata labels.
 
 ## 0.4.9 - 2026-06-19
 
