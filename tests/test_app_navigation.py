@@ -87,6 +87,8 @@ async def wait_for_playlist_result(
     expected_status: str,
     attempts: int = 180,
 ) -> tuple[list[object], str]:
+    # Worker-backed playlist actions can complete their service call and UI
+    # cleanup on different event-loop ticks, especially on hosted Python 3.13.
     status = str(app.query_one("#status").content)
     for _ in range(attempts):
         current_calls = list(calls)
