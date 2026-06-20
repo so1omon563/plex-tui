@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.13 - 2026-06-20
+
 - Polished pane focus styling so sidebar, media, and details panes share a
   consistent focused border, title treatment, and compact focus marker.
 - Made container-only grid views such as Recommended use wider navigation cards
