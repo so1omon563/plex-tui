@@ -380,6 +380,8 @@ make check          # smoke, tests, compile, package validation
 
 Packaging and release docs:
 
+- `docs/app-design-philosophy.md`: whole-app UI direction and review checklist.
+- `docs/collection-artwork-design.md`: geometric glyph card visual language.
 - `PACKAGING.md`: PyPI/pipx, Homebrew, AUR, and standalone packaging options.
 - `RELEASE.md`: release validation and tagging checklist.
 - `ROADMAP.md`: planned follow-up work.
