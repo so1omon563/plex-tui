@@ -129,7 +129,8 @@ def test_render_details_includes_subtitles_and_summary():
     assert "Title\n--------" in rendered
     assert "Movie" in rendered
     assert "Playback\nStatus: Ready to play" in rendered
-    assert "Action: Press p to play" in rendered
+    assert "Actions: p play / r resume" in rendered
+    assert "Playlist: Press P" in rendered
     assert "Metadata" in rendered
     assert "Preferences" in rendered
     assert "Audio: jpn" in rendered
@@ -140,6 +141,47 @@ def test_render_details_includes_subtitles_and_summary():
     assert "- Japanese (aac, 2ch, selected)" in rendered
     assert "- English (srt, selected)" in rendered
     assert "Summary text" in rendered
+
+
+def test_render_details_skips_effective_playback_for_playlist_container():
+    class RawPlaylist:
+        TYPE = "playlist"
+        title = "Test list"
+        duration = 6_360_000
+
+        def iterParts(self):
+            raise AttributeError("'Playlist' object has no attribute 'media'")
+
+    details = MediaDetails(
+        title="Test list",
+        kind="playlist",
+        facts=["Playlist", "1h 46m"],
+        metadata=[("Type", "playlist")],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=False,
+        artwork_path="/playlists/1/composite/1",
+    )
+
+    rendered = render_details(
+        details,
+        AppConfig(
+            base_url="http://plex",
+            token="token",
+            client_identifier="client-id",
+            preferred_audio_language="jpn",
+            preferred_subtitle_language="eng",
+            subtitle_mode="preferred",
+        ),
+        raw=RawPlaylist(),
+    )
+
+    assert "Playback\nStatus: Opens more items" in rendered
+    assert "Action: Press Enter to open" in rendered
+    assert "Effective Playback" not in rendered
+    assert "Audio Tracks\nNo audio tracks reported" in rendered
+    assert "Subtitle Tracks\nNo subtitle tracks reported" in rendered
 
 
 def test_render_details_promotes_episode_context_under_title():
@@ -937,8 +979,10 @@ def test_render_help_groups_key_bindings():
     assert "p: play selected media from beginning" in rendered
     assert "r: resume selected media" in rendered
     assert "w: mark selected media watched / unwatched" in rendered
-    assert "P: add selected media to a playlist" in rendered
-    assert "backspace/delete: remove selected Continue Watching or playlist item" in rendered
+    assert "Playlist Management" in rendered
+    assert "P: add selected media to an existing or new playlist" in rendered
+    assert "backspace/delete: remove selected item while browsing a playlist" in rendered
+    assert "backspace/delete: remove selected item from Continue Watching" in rendered
     assert "ctrl+r: reconnect / reload libraries" in rendered
     assert "PLEX_TUI_ARTWORK_LOG=1" in rendered
     assert "?: show help" in rendered
@@ -1190,11 +1234,11 @@ def test_context_hints_for_media_and_load_more():
     setting_value = next(row for row in settings if getattr(row, "label_text", "").strip().startswith("Server:"))
 
     assert context_hint(MediaRow(playable)) == (
-        "Media: Enter selects / p plays from start / r resumes / w watched / a audio / s subtitles"
+        "Media: Enter selects / p play / r resume / P playlist / w watched / a audio / s subtitles"
     )
     assert context_hint(MediaRow(container)) == "Media: Enter opens item"
     assert context_hint(grid) == (
-        "Grid: Arrows/page select card / p plays from start / r resumes / w watched / a audio / s subtitles"
+        "Grid: Arrows/page select card / p play / r resume / P playlist / w watched / a audio / s subtitles"
     )
     assert context_hint(LoadMoreRow(100, 200)) == "Media: Enter loads next page"
     assert context_hint(LibraryRow(LibraryItem("Movies", "1", "movie", object()))) == (
