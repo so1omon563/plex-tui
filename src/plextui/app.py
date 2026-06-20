@@ -376,6 +376,16 @@ class StatusChanged(Message):
 
 
 FOCUS_TITLE_PREFIX = "▶ "
+UI_PANE_BORDER = "#7f8fa6"
+UI_FOCUS_BORDER = "#88c0d0"
+UI_FOCUS_BACKGROUND = "#303b4a"
+UI_PANE_TITLE_BACKGROUND = "#3b4252"
+UI_ACTIVE_ROW_BACKGROUND = "#b48ead"
+UI_ACTIVE_ROW_TEXT = "#151923"
+UI_SELECTED_ACCENT = "#e5a00d"
+UI_GRID_TITLE = "#d8dee9"
+UI_GRID_MUTED = "#9aa3b8"
+UI_GRID_DIM = "#778196"
 
 
 class PlexTuiApp(App[None]):
@@ -390,32 +400,32 @@ class PlexTuiApp(App[None]):
 
     #sidebar {
         width: 30;
-        border: solid $accent;
+        border: solid __UI_PANE_BORDER__;
     }
 
     #sidebar.focused-pane {
-        border: heavy $accent;
-        background: $boost;
+        border: heavy __UI_FOCUS_BORDER__;
+        background: __UI_FOCUS_BACKGROUND__;
     }
 
     #main {
         width: 1fr;
-        border: solid $primary;
+        border: solid __UI_PANE_BORDER__;
     }
 
     #main.focused-pane {
-        border: heavy $primary;
-        background: $boost;
+        border: heavy __UI_FOCUS_BORDER__;
+        background: __UI_FOCUS_BACKGROUND__;
     }
 
     #details {
         width: 42;
-        border: solid $secondary;
+        border: solid __UI_PANE_BORDER__;
     }
 
     #details.focused-pane {
-        border: heavy $secondary;
-        background: $boost;
+        border: heavy __UI_FOCUS_BORDER__;
+        background: __UI_FOCUS_BACKGROUND__;
     }
 
     #search {
@@ -425,32 +435,25 @@ class PlexTuiApp(App[None]):
     #status {
         height: 1;
         padding: 0 1;
-        background: $surface;
+        background: __UI_PANE_TITLE_BACKGROUND__;
     }
 
     #playback-footer {
         height: 1;
         padding: 0 1;
-        background: $panel;
+        background: __UI_PANE_TITLE_BACKGROUND__;
         color: $text;
     }
 
     .pane-title {
         text-style: bold;
         padding: 0 1;
+        background: __UI_PANE_TITLE_BACKGROUND__;
     }
 
     .focused-pane > .pane-title {
-        background: $accent;
-        color: $text;
-    }
-
-    #main.focused-pane > .pane-title {
-        background: $primary;
-    }
-
-    #details.focused-pane > .pane-title {
-        background: $secondary;
+        background: __UI_FOCUS_BORDER__;
+        color: __UI_ACTIVE_ROW_TEXT__;
     }
 
     #detail-content {
@@ -464,8 +467,9 @@ class PlexTuiApp(App[None]):
     }
 
     .active-row {
-        background: $accent;
-        color: $text;
+        background: __UI_ACTIVE_ROW_BACKGROUND__;
+        color: __UI_ACTIVE_ROW_TEXT__;
+        text-style: bold;
     }
 
     #media-grid-scroll {
@@ -477,6 +481,15 @@ class PlexTuiApp(App[None]):
         padding: 0 1;
     }
     """
+    CSS = (
+        CSS
+        .replace("__UI_PANE_BORDER__", UI_PANE_BORDER)
+        .replace("__UI_FOCUS_BORDER__", UI_FOCUS_BORDER)
+        .replace("__UI_FOCUS_BACKGROUND__", UI_FOCUS_BACKGROUND)
+        .replace("__UI_PANE_TITLE_BACKGROUND__", UI_PANE_TITLE_BACKGROUND)
+        .replace("__UI_ACTIVE_ROW_BACKGROUND__", UI_ACTIVE_ROW_BACKGROUND)
+        .replace("__UI_ACTIVE_ROW_TEXT__", UI_ACTIVE_ROW_TEXT)
+    )
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
@@ -3068,7 +3081,7 @@ def render_media_grid_card(
     collection_card: bool | None = None,
 ) -> object:
     collection_card = is_collection_card(media) if collection_card is None else collection_card
-    title_style = "bold #e5a00d" if selected else "bold"
+    title_style = f"bold {UI_SELECTED_ACCENT}" if selected else f"bold {UI_GRID_TITLE}"
     card_width = grid_card_width(config, collection_card=collection_card)
     title_lines = grid_card_title_lines(media.title, config, collection_card=collection_card)
     subtitle = grid_card_text(grid_card_subtitle(media), config, collection_card=collection_card)
@@ -3086,8 +3099,8 @@ def render_media_grid_card(
     return Group(
         artwork,
         *(grid_card_line(title, card_width, title_style) for title in title_lines),
-        grid_card_line(subtitle, card_width, "dim"),
-        grid_card_line(footer, card_width, "#e5a00d" if selected else "dim"),
+        grid_card_line(subtitle, card_width, UI_GRID_MUTED),
+        grid_card_line(footer, card_width, f"bold {UI_SELECTED_ACCENT}" if selected else UI_GRID_DIM),
     )
 
 

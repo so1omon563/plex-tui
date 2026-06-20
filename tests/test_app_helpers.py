@@ -24,6 +24,16 @@ from plextui.app import (
     PlaylistCreateRow,
     PlaylistTargetRow,
     PlexTuiApp,
+    UI_ACTIVE_ROW_BACKGROUND,
+    UI_ACTIVE_ROW_TEXT,
+    UI_FOCUS_BACKGROUND,
+    UI_FOCUS_BORDER,
+    UI_GRID_DIM,
+    UI_GRID_MUTED,
+    UI_GRID_TITLE,
+    UI_PANE_BORDER,
+    UI_PANE_TITLE_BACKGROUND,
+    UI_SELECTED_ACCENT,
     card_artwork_fetch_size,
     card_artwork_pixel_size,
     context_hint,
@@ -885,6 +895,20 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
     assert "playable" in unselected_text
 
 
+def test_grid_card_styles_follow_visual_state_tokens():
+    media = MediaItem("Movie", "2024", "movie", "1", True, object(), artwork_path="")
+
+    selected = render_media_grid_card(media, True, AppConfig("http://plex", "token", "client"))
+    unselected = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"))
+
+    assert selected.renderables[1].style == f"bold {UI_SELECTED_ACCENT}"
+    assert selected.renderables[2].style == UI_GRID_MUTED
+    assert selected.renderables[3].style == f"bold {UI_SELECTED_ACCENT}"
+    assert unselected.renderables[1].style == f"bold {UI_GRID_TITLE}"
+    assert unselected.renderables[2].style == UI_GRID_MUTED
+    assert unselected.renderables[3].style == UI_GRID_DIM
+
+
 def test_grid_card_marks_container_items_as_openable():
     media = MediaItem("Season 1", "10 episodes", "season", "1", False, object(), artwork_path="")
 
@@ -1102,7 +1126,12 @@ def test_focus_css_styles_all_panes():
     assert "#sidebar.focused-pane" in css
     assert "#main.focused-pane" in css
     assert "#details.focused-pane" in css
-    assert "#details.focused-pane > .pane-title" in css
+    assert css.count(f"border: solid {UI_PANE_BORDER};") == 3
+    assert css.count(f"border: heavy {UI_FOCUS_BORDER};") == 3
+    assert css.count(f"background: {UI_FOCUS_BACKGROUND};") == 3
+    assert f"background: {UI_PANE_TITLE_BACKGROUND};" in css
+    assert f"background: {UI_ACTIVE_ROW_BACKGROUND};" in css
+    assert f"color: {UI_ACTIVE_ROW_TEXT};" in css
 
 
 def test_performance_log_requires_perf_env(monkeypatch):

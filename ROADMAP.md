@@ -9,9 +9,10 @@
 - Continue refining grid view presentation after the collection-card artwork
   pass, especially against real terminal themes, wide/narrow panes, and
   screenshot refreshes.
-- Continue tuning focus, row markers, and selection affordances based on real
-  terminal themes. Status hints should keep a compact context prefix such as
-  `Media:`, `Grid:`, or `Settings:` so the active pane is clear at a glance.
+- Review focus, row markers, and selection affordances after the shared
+  visual-state palette is exercised in real terminal themes. Status hints
+  should keep a compact context prefix such as `Media:`, `Grid:`, or
+  `Settings:` so the active pane is clear at a glance.
 - Continue polishing the details pane hierarchy after the dense metadata,
   stream-list, and playback-readiness passes, especially real-library edge
   cases.
