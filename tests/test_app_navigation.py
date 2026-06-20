@@ -599,7 +599,7 @@ async def run_picker_return_check():
             app.choose_stream(StreamChoice(0, "None (disable subtitles)"), "subtitle")
         await pilot.pause(0.2)
 
-        assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Movies"
+        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Movies"
         assert app.query_one("#detail-content").content.splitlines()[0] == "Second"
 
 
@@ -637,28 +637,28 @@ async def run_focus_pane_check():
         await pilot.pause(0.1)
         assert app.query_one("#sidebar").has_class("focused-pane")
         assert not app.query_one("#main").has_class("focused-pane")
-        assert app.query_one("#libraries-title").content == "[FOCUS] Libraries"
-        assert not app.query_one("#media-title").content.startswith("[FOCUS]")
+        assert app.query_one("#libraries-title").content == "▶ Libraries"
+        assert not app.query_one("#media-title").content.startswith("▶ ")
 
         app.action_focus_media()
         await pilot.pause(0.1)
         assert app.query_one("#main").has_class("focused-pane")
         assert not app.query_one("#sidebar").has_class("focused-pane")
         assert not app.query_one("#details").has_class("focused-pane")
-        assert app.query_one("#media-title").content.startswith("[FOCUS]")
+        assert app.query_one("#media-title").content.startswith("▶ ")
         assert app.query_one("#libraries-title").content == "Libraries"
 
         app.action_focus_details()
         await pilot.pause(0.1)
         assert app.query_one("#details").has_class("focused-pane")
-        assert app.query_one("#details-title").content == "[FOCUS] Details"
+        assert app.query_one("#details-title").content == "▶ Details"
         assert not app.query_one("#main").has_class("focused-pane")
 
         app.action_focus_media()
         await pilot.press("d")
         await pilot.pause(0.1)
         assert app.query_one("#details").has_class("focused-pane")
-        assert app.query_one("#details-title").content == "[FOCUS] Details"
+        assert app.query_one("#details-title").content == "▶ Details"
         assert not app.query_one("#main").has_class("focused-pane")
 
 
@@ -677,22 +677,22 @@ async def run_tab_focus_pane_check():
         await pilot.pause(0.2)
 
         assert app.query_one("#main").has_class("focused-pane")
-        assert app.query_one("#media-title").content.startswith("[FOCUS]")
-        assert not app.query_one("#libraries-title").content.startswith("[FOCUS]")
+        assert app.query_one("#media-title").content.startswith("▶ ")
+        assert not app.query_one("#libraries-title").content.startswith("▶ ")
 
         await pilot.press("tab")
         await pilot.pause(0.2)
 
         assert app.query_one("#details").has_class("focused-pane")
-        assert app.query_one("#details-title").content == "[FOCUS] Details"
+        assert app.query_one("#details-title").content == "▶ Details"
         assert not app.query_one("#main").has_class("focused-pane")
-        assert not app.query_one("#media-title").content.startswith("[FOCUS]")
+        assert not app.query_one("#media-title").content.startswith("▶ ")
 
         await pilot.press("shift+tab")
         await pilot.pause(0.2)
 
         assert app.query_one("#main").has_class("focused-pane")
-        assert app.query_one("#media-title").content.startswith("[FOCUS]")
+        assert app.query_one("#media-title").content.startswith("▶ ")
         assert not app.query_one("#details").has_class("focused-pane")
 
 
@@ -1892,7 +1892,7 @@ async def run_playback_error_check(tmp_path):
             app.action_play_selected()
         await pilot.pause(0.2)
 
-        assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Playback Error"
+        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Playback Error"
         details = app.query_one("#detail-content").content
         assert "mpv missing" in details
         assert f"Debug log: {log}" in details
@@ -2353,7 +2353,7 @@ async def run_numeric_settings_left_right_check():
         await pilot.pause(0.2)
         assert save_config.call_count == 2
         assert app.settings_visible
-        assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Settings"
+        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Settings"
 
 
 async def run_option_settings_left_right_check():
@@ -2373,7 +2373,7 @@ async def run_option_settings_left_right_check():
         await pilot.pause(0.2)
         assert save_config.call_count == 2
         assert app.settings_visible
-        assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Settings"
+        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Settings"
 
 
 async def run_grid_density_settings_view_check():
@@ -2484,12 +2484,12 @@ async def run_help_back_check():
 
         app.action_show_help()
         await pilot.pause(0.2)
-        assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Help"
+        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Help"
         assert "Keyboard reference" in app.query_one("#detail-content").content
 
         app.action_back_or_clear()
         await pilot.pause(0.2)
-        assert app.query_one("#media-title").content.removeprefix("[FOCUS] ") == "Movies"
+        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Movies"
         assert app.query_one("#detail-content").content.splitlines()[0] == "First"
 
 

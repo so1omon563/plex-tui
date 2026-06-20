@@ -1036,6 +1036,15 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
     assert "ctrl+r: reconnect / reload libraries" in rendered
 
 
+def test_focus_css_styles_all_panes():
+    css = PlexTuiApp.CSS
+
+    assert "#sidebar.focused-pane" in css
+    assert "#main.focused-pane" in css
+    assert "#details.focused-pane" in css
+    assert "#details.focused-pane > .pane-title" in css
+
+
 def test_performance_log_requires_perf_env(monkeypatch):
     messages = []
     monkeypatch.delenv("PLEX_TUI_PERF_LOG", raising=False)

@@ -363,7 +363,7 @@ class StatusChanged(Message):
         super().__init__()
 
 
-FOCUS_TITLE_PREFIX = "[FOCUS] "
+FOCUS_TITLE_PREFIX = "▶ "
 
 
 class PlexTuiApp(App[None]):
@@ -401,6 +401,11 @@ class PlexTuiApp(App[None]):
         border: solid $secondary;
     }
 
+    #details.focused-pane {
+        border: heavy $secondary;
+        background: $boost;
+    }
+
     #search {
         margin: 0 1;
     }
@@ -430,6 +435,10 @@ class PlexTuiApp(App[None]):
 
     #main.focused-pane > .pane-title {
         background: $primary;
+    }
+
+    #details.focused-pane > .pane-title {
+        background: $secondary;
     }
 
     #detail-content {

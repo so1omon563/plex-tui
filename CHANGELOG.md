@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Polished pane focus styling so sidebar, media, and details panes share a
+  consistent focused border, title treatment, and compact focus marker.
+
 ## 0.4.9 - 2026-06-19
 
 - Improved playlist-management discoverability in the details pane, Help view,
