@@ -85,11 +85,15 @@ async def wait_for_watched_update(
     *,
     watched: bool,
     expected_status: str,
-    attempts: int = 80,
-) -> tuple[object | None, MediaItem | None, str]:
+    attempts: int = 180,
+) -> tuple[object, MediaItem, str]:
     row = app.query_one("#media").highlighted_child
     selected = app.selected_media()
     status = str(app.query_one("#status").content)
+    watched_calls = 0
+    unwatched_calls = 0
+    selected_watched = False
+    label = ""
     for _ in range(attempts):
         watched_calls = getattr(raw, "mark_watched_calls", 0)
         unwatched_calls = getattr(raw, "mark_unwatched_calls", 0)
@@ -107,7 +111,13 @@ async def wait_for_watched_update(
         row = app.query_one("#media").highlighted_child
         selected = app.selected_media()
         status = str(app.query_one("#status").content)
-    return row, selected, status
+    raise AssertionError(
+        "Timed out waiting for watched-state update: "
+        f"expected_status={expected_status!r}, status={status!r}, "
+        f"expected_watched={watched!r}, selected_watched={selected_watched!r}, "
+        f"label={label!r}, mark_watched_calls={watched_calls}, "
+        f"mark_unwatched_calls={unwatched_calls}, selected={selected!r}"
+    )
 
 
 def test_picker_return_preserves_highlighted_media():
