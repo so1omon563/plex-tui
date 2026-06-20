@@ -4,8 +4,9 @@
 
 - Added playlist management for creating playlists from selected media, adding
   selected media to existing playlists, and removing items from playlist views.
-- Replaced text-heavy grid placeholders such as `[browse]` with quiet visual
-  placeholder blocks for cards that do not have artwork.
+- Added intentional collection-card artwork for hub, playlist, category, and
+  other container grid cards, with geometric glyphs and roomier spacing for
+  all-container grids such as Recommended.
 
 ## 0.4.4 - 2026-06-18
 

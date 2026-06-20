@@ -215,8 +215,9 @@ matching track.
   opens the browse-mode menu, and Settings can swap the primary and alternate
   actions.
 - Current-library search and bounded global search.
-- List view plus configurable-density grid view with terminal poster artwork
-  and quiet placeholder blocks when Plex has no image to show.
+- List view plus configurable-density grid view with terminal poster artwork,
+  missing-artwork placeholders, and intentional glyph cards for collections and
+  hubs.
 - External subtitle support and direct playback for embedded PGS/VOBSUB tracks.
 - Audio and subtitle pickers with saved language preferences.
 - Separate play-from-start and resume actions with Plex progress reporting.
@@ -244,8 +245,11 @@ charge of layout and redraws while the terminal paints the poster inside those
 cells. Outside detected Kitty-compatible terminals, `auto` falls back to block
 art; `plex-tui --diagnostics` reports the active renderer status.
 
-Cards without Plex artwork use label-free placeholder blocks, keeping the grid
-visual while leaving media type and action labels in the normal card text.
+Cards that represent collections, playlists, categories, hubs, or query shelves
+use geometric glyph artwork instead of pretending to be missing posters. Rows
+made entirely of those cards use roomier navigation-grid spacing. See
+`docs/collection-artwork-design.md` for the design notes behind that visual
+language.
 
 Grid view prefetches artwork for the visible page immediately and, by default,
 prepares three pages ahead in the background. `grid_prefetch_pages` can be set

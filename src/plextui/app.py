@@ -261,8 +261,11 @@ class MediaGrid(Static):
         if not self.is_mounted:
             return
         row = (self.selected_index - self.page_start) // max(1, self.columns)
+        row_height = grid_card_height(self.config)
+        if grid_items_are_collection_cards(self.visible_page_items()):
+            row_height += 1
         if self.parent is not None:
-            self.parent.scroll_to(y=max(0, row * grid_card_height(self.config)), animate=False)
+            self.parent.scroll_to(y=max(0, row * row_height), animate=False)
 
     def on_key(self, event) -> None:
         if not self.items:
@@ -2980,7 +2983,9 @@ def render_media_grid(
         for _ in cards:
             row.add_column(width=grid_card_width(config), no_wrap=True)
         row.add_row(*cards)
-        rows.append(Align.center(row))
+        rows.append(row if grid_items_are_collection_cards(items) else Align.center(row))
+        if grid_items_are_collection_cards(items) and start + columns < len(items):
+            rows.append(Text(""))
     return Group(*rows)
 
 
@@ -2997,7 +3002,7 @@ def render_media_grid_card(
     artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
     artwork = copy_renderable(artwork)
     if artwork is None:
-        artwork = grid_artwork_placeholder(grid_artwork_placeholder_label(media), config)
+        artwork = grid_missing_artwork_placeholder(media, config) if media.playable else render_collection_art(media, config)
     else:
         artwork = center_renderable_lines(artwork, card_width)
     footer = grid_card_footer(media, selected)
@@ -3007,6 +3012,109 @@ def render_media_grid_card(
         grid_card_line(subtitle, card_width, "dim"),
         grid_card_line(footer, card_width, "#e5a00d" if selected else "dim"),
     )
+
+
+def grid_items_are_collection_cards(items: list[MediaItem]) -> bool:
+    return bool(items) and all(is_collection_card(item) for item in items)
+
+
+def is_collection_card(media: MediaItem) -> bool:
+    if media.playable or media.artwork_path:
+        return False
+    return media.kind in {
+        "hub",
+        "collection",
+        "playlist",
+        "category",
+        "show",
+        "season",
+        "artist",
+        "album",
+        "photoalbum",
+    }
+
+
+def grid_missing_artwork_placeholder(media: MediaItem, config: AppConfig) -> Group:
+    return grid_artwork_placeholder(grid_artwork_placeholder_label(media), config)
+
+
+def render_collection_art(media: MediaItem, config: AppConfig) -> Group:
+    spec = grid_density_spec(config)
+    width = grid_card_width(config)
+    content_width = grid_card_content_width(config)
+    height = int(spec["art_height"])
+    glyph = collection_glyph(media)
+    glyph_lines = glyph.lines[: max(1, height - 2)]
+    top_pad = max(0, (height - len(glyph_lines)) // 2)
+    bottom_pad = max(0, height - top_pad - len(glyph_lines))
+    lines = []
+    for _ in range(top_pad):
+        lines.append(collection_art_line("", width, content_width, glyph.background))
+    for index, line in enumerate(glyph_lines):
+        style = glyph.accent if index == glyph.primary_line else glyph.foreground
+        lines.append(collection_art_line(line, width, content_width, glyph.background, style))
+    for _ in range(bottom_pad):
+        lines.append(collection_art_line("", width, content_width, glyph.background))
+    return Group(*lines[:height])
+
+
+@dataclass(frozen=True)
+class CollectionGlyph:
+    lines: tuple[str, ...]
+    primary_line: int = 1
+    background: str = "on #202332"
+    foreground: str = "#8f96b8 on #202332"
+    accent: str = "#e5a00d on #202332"
+
+
+def collection_glyph(media: MediaItem) -> CollectionGlyph:
+    title = media.title.lower()
+    if "continue" in title and "watch" in title:
+        return CollectionGlyph(("  ◜◝  ", "  ▶●  ", "  ◟◞  "), background="on #202735", foreground="#9098bd on #202735")
+    if "recently added" in title:
+        return CollectionGlyph(("  │  ", " ─┼─ ", "  │  "), background="on #202e30", foreground="#93b7b2 on #202e30")
+    if "recently released" in title or "new" in title:
+        return CollectionGlyph((" ╲│╱ ", " ─✦─ ", " ╱│╲ "), background="on #242638", foreground="#a7a2c6 on #242638")
+    if "recommended" in title:
+        return CollectionGlyph((" ●  ╱", "  ╲● ", " ●─╯ "), background="on #222535", foreground="#9ba3c6 on #222535")
+    if "trending" in title or title.startswith("top "):
+        return CollectionGlyph(("   ╱ ", " ●╱● ", " ╱   "), background="on #2a2630", foreground="#b9a0bd on #2a2630")
+    if "unwatched" in title:
+        return CollectionGlyph((" ○ ○ ", "  ○  ", " ○ ○ "), background="on #242a33", foreground="#9ca8bd on #242a33")
+    if "actor" in title or "by " in title:
+        return CollectionGlyph(("  ○  ", " ╱│╲ ", " ╱ ╲ "), background="on #272b35", foreground="#a7adc7 on #272b35")
+    if "genre" in title or media.kind == "category":
+        return CollectionGlyph((" ▬▬  ", "  ▬▬ ", " ▬▬  "), background="on #202e30", foreground="#94b0ad on #202e30")
+    if media.kind == "playlist":
+        return CollectionGlyph((" ╭─╮ ", " ├─┤ ", " ╰─╯ "), background="on #232c2a", foreground="#99b8ad on #232c2a")
+    if media.kind == "collection":
+        return CollectionGlyph((" ◇◇  ", "  ◇◇ ", " ◇◇  "), background="on #202e30", foreground="#9eb7ba on #202e30")
+    if media.kind in {"show", "season"}:
+        return CollectionGlyph((" ┌─┐ ", " ├─┤ ", " └─┘ "), background="on #2b2732", foreground="#b2a2c6 on #2b2732")
+    return CollectionGlyph((" ╱╲  ", " ╲╱  ", "  ╲╱ "), background="on #262936", foreground="#9aa2bf on #262936")
+
+
+def collection_art_line(
+    value: str,
+    width: int,
+    content_width: int,
+    background_style: str,
+    glyph_style: str | None = None,
+) -> Text:
+    left = (width - content_width) // 2
+    right = width - content_width - left
+    text = Text(" " * left, style="dim")
+    inner = Text(" " * content_width, style=background_style)
+    if value and glyph_style is not None:
+        glyph_text = truncate_text(value, content_width)
+        glyph_left = max(0, (content_width - len(glyph_text)) // 2)
+        glyph_right = max(0, content_width - glyph_left - len(glyph_text))
+        inner = Text(" " * glyph_left, style=background_style)
+        inner.append(glyph_text, style=glyph_style)
+        inner.append(" " * glyph_right, style=background_style)
+    text.append_text(inner)
+    text.append(" " * right, style="dim")
+    return text
 
 
 def grid_artwork_placeholder(status: str, config: AppConfig) -> Group:

@@ -811,10 +811,10 @@ def test_grid_card_marks_container_items_as_openable():
     assert "open" in rendered_text
     assert "Season  10 episodes" in rendered_text
     assert not any("[season]" in str(line) for line in placeholder.renderables)
-    assert any("on #" in str(line.spans) for line in placeholder.renderables)
+    assert any("┌─┐" in line.plain for line in placeholder.renderables)
 
 
-def test_grid_card_uses_visual_placeholder_for_hub_rows():
+def test_grid_card_uses_collection_glyph_for_hub_rows():
     media = MediaItem("Recently Added", "", "hub", "1", False, object(), artwork_path="")
 
     rendered = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"))
@@ -822,11 +822,11 @@ def test_grid_card_uses_visual_placeholder_for_hub_rows():
     placeholder = rendered.renderables[0]
 
     assert not any("[hub]" in str(line) for line in placeholder.renderables)
-    assert any("on #" in str(line.spans) for line in placeholder.renderables)
+    assert any("─┼─" in line.plain for line in placeholder.renderables)
     assert "open" in rendered_text
 
 
-def test_render_media_grid_text_snapshot_hides_placeholder_labels():
+def test_render_media_grid_text_snapshot_distinguishes_missing_and_collection_art():
     config = AppConfig("http://plex", "token", "client", grid_density="compact")
     items = [
         MediaItem("Blade Runner", "1982", "movie", "movie-1", True, object(), artwork_path=""),
@@ -840,6 +840,7 @@ def test_render_media_grid_text_snapshot_hides_placeholder_labels():
     assert "[hub]" not in text
     assert "Blade Runner" in text
     assert "Recently Added" in text
+    assert "─┼─" in text
     assert "playable" in text
     assert "▶ selected" in text
 
@@ -849,6 +850,21 @@ def test_grid_rows_are_centered_in_media_pane():
     rendered = render_media_grid([media], media.key, AppConfig("http://plex", "token", "client"), columns=2)
 
     assert isinstance(rendered.renderables[0], Align)
+
+
+def test_collection_grid_rows_are_left_aligned_with_breathing_room():
+    config = AppConfig("http://plex", "token", "client", grid_density="compact")
+    items = [
+        MediaItem("Continue Watching", "", "hub", "hub-1", False, object(), artwork_path=""),
+        MediaItem("Recently Added", "", "hub", "hub-2", False, object(), artwork_path=""),
+        MediaItem("Recommended", "", "hub", "hub-3", False, object(), artwork_path=""),
+    ]
+
+    rendered = render_media_grid(items, "hub-1", config, columns=2)
+
+    assert not isinstance(rendered.renderables[0], Align)
+    assert isinstance(rendered.renderables[1], Text)
+    assert not isinstance(rendered.renderables[2], Align)
 
 
 def test_grid_card_placeholder_matches_artwork_height():
