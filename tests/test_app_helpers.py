@@ -143,6 +143,47 @@ def test_render_details_includes_subtitles_and_summary():
     assert "Summary text" in rendered
 
 
+def test_render_details_skips_effective_playback_for_playlist_container():
+    class RawPlaylist:
+        TYPE = "playlist"
+        title = "Test list"
+        duration = 6_360_000
+
+        def iterParts(self):
+            raise AttributeError("'Playlist' object has no attribute 'media'")
+
+    details = MediaDetails(
+        title="Test list",
+        kind="playlist",
+        facts=["Playlist", "1h 46m"],
+        metadata=[("Type", "playlist")],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=False,
+        artwork_path="/playlists/1/composite/1",
+    )
+
+    rendered = render_details(
+        details,
+        AppConfig(
+            base_url="http://plex",
+            token="token",
+            client_identifier="client-id",
+            preferred_audio_language="jpn",
+            preferred_subtitle_language="eng",
+            subtitle_mode="preferred",
+        ),
+        raw=RawPlaylist(),
+    )
+
+    assert "Playback\nStatus: Opens more items" in rendered
+    assert "Action: Press Enter to open" in rendered
+    assert "Effective Playback" not in rendered
+    assert "Audio Tracks\nNo audio tracks reported" in rendered
+    assert "Subtitle Tracks\nNo subtitle tracks reported" in rendered
+
+
 def test_render_details_promotes_episode_context_under_title():
     details = MediaDetails(
         title="Band of the Hawk",

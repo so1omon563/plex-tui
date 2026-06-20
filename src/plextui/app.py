@@ -2791,7 +2791,7 @@ def render_details(details: object, config: AppConfig | None = None, raw: object
                 ("Transcode Quality", transcode_quality_value(config)),
             ]),
         )
-        if raw is not None:
+        if raw is not None and bool(getattr(details, "playable")):
             effective = effective_stream_preference_rows(raw, config)
             if effective:
                 append_detail_section(lines, "Effective Playback", detail_key_value_rows(effective))
