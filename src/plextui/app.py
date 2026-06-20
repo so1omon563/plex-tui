@@ -2839,7 +2839,8 @@ def playback_readiness_rows(playable: bool) -> list[str]:
     if playable:
         return [
             "Status: Ready to play",
-            "Action: Press p to play",
+            "Actions: p play / r resume",
+            "Playlist: Press P",
         ]
     return [
         "Status: Opens more items",
@@ -3551,9 +3552,12 @@ def render_help() -> str:
         "p: play selected media from beginning",
         "r: resume selected media",
         "w: mark selected media watched / unwatched",
-        "P: add selected media to a playlist",
-        "backspace/delete: remove selected Continue Watching or playlist item",
         "x: stop launched mpv",
+        "",
+        "Playlist Management",
+        "P: add selected media to an existing or new playlist",
+        "backspace/delete: remove selected item while browsing a playlist",
+        "backspace/delete: remove selected item from Continue Watching",
         "",
         "Streams",
         "a: choose and save audio preference",
@@ -3623,12 +3627,12 @@ def context_hint(row: object) -> str:
         return "Media: Enter loads next page"
     if isinstance(row, MediaRow):
         if row.media.playable:
-            return "Media: Enter selects / p plays from start / r resumes / w watched / a audio / s subtitles"
+            return "Media: Enter selects / p play / r resume / P playlist / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
     if isinstance(row, MediaGrid):
         media = row.selected_media
         if media is not None and media.playable:
-            return "Grid: Arrows/page select card / p plays from start / r resumes / w watched / a audio / s subtitles"
+            return "Grid: Arrows/page select card / p play / r resume / P playlist / w watched / a audio / s subtitles"
         return "Grid: Arrows/page select card / Enter opens item"
     if isinstance(row, ServerRow):
         return "Servers: Enter selects server"

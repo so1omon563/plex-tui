@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Improved playlist-management discoverability in the details pane, Help view,
+  and README usage docs.
+
 ## 0.4.7 - 2026-06-19
 
 - Added playlist management for creating playlists from selected media, adding

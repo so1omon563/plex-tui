@@ -222,22 +222,52 @@ See `config.example.toml` for optional settings.
 ## Playback
 
 Playback is launched through `mpv`; plex-tui does not embed a video player.
-Use `p` to start the selected item from the beginning, or `r` to resume from
-the saved Plex position when one is available. While playback is active, Plex
-progress is updated in the background. Saved audio/subtitle language
-preferences are applied when matching streams are available, and the details
-pane shows the effective playback choices. Playback mode defaults to
-direct/default behavior and can be changed in Settings to force Plex
-transcoding with Original, 1080p 8 Mbps, 720p 4 Mbps, or 480p 2 Mbps quality
-presets. The default `mpv` launch uses `--autofit=80%` so videos open at a
-comfortable size on modern displays; Settings can override this with values
-such as `90%`, `1280x720`, or `80%x80%`. If an older config has an exact
-`mpv_window_size = "1280x720"` override, cycle the mpv window-size setting once
-to return to the Default preset.
-Use `w` from a playable movie or episode to toggle its Plex watched state.
-When playback is active, choosing an audio or subtitle track from the picker
-also asks mpv to switch the active track when the launched stream exposes a
-matching track.
+
+Common playback actions:
+
+| Key | Action |
+| --- | --- |
+| `p` | Play the selected item from the beginning |
+| `r` | Resume from the saved Plex position when available |
+| `x` | Stop the launched `mpv` process |
+| `w` | Toggle watched / unwatched for the selected playable Plex item |
+
+Playback behavior:
+
+- Plex progress is updated in the background while playback is active.
+- Saved audio/subtitle language preferences are applied when matching streams
+  are available.
+- The details pane shows the effective playback choices for the selected item.
+- Choosing an audio or subtitle track while playback is active also asks `mpv`
+  to switch the active track when the launched stream exposes a matching track.
+
+Playback mode and window sizing:
+
+- Playback mode defaults to Plex direct/default behavior.
+- Settings can force Plex transcoding with Original, 1080p 8 Mbps, 720p
+  4 Mbps, or 480p 2 Mbps quality presets.
+- The default `mpv` launch uses `--autofit=80%` so videos open at a comfortable
+  size on modern displays.
+- Settings can override the window size with values such as `90%`,
+  `1280x720`, or `80%x80%`.
+- If an older config has an exact `mpv_window_size = "1280x720"` override,
+  cycle the mpv window-size setting once to return to the Default preset.
+
+## Playlist Management
+
+Playlist actions are available from selected playable media and from inside
+playlist views.
+
+| Key | Where | Action |
+| --- | --- | --- |
+| `P` | Playable media item | Open the Add to Playlist picker |
+| `enter` | Add to Playlist picker | Add the selected media to an existing playlist |
+| `enter` | `New playlist...` row | Prompt for a name and create a playlist containing the selected media |
+| `backspace` / `delete` | Playlist contents | Remove the selected item from that playlist |
+
+The Add to Playlist picker lists `New playlist...` first, followed by existing
+Plex playlists. Playlist browsing itself is available from a library's browse
+modes: select a library, press `space`, then open `Playlists`.
 
 ## Key Bindings
 
@@ -268,27 +298,37 @@ matching track.
 
 ## Artwork
 
-Poster artwork renders as portable colored block art by default, so it works in
-ordinary terminals without native image support. In Kitty and Ghostty, set
-`artwork_renderer` to `auto` to render native terminal images through Kitty
-Unicode placeholders. Set `artwork_renderer` to `kitty` to explicitly try the
-Kitty graphics protocol in other compatible terminals. This keeps Textual in
-charge of layout and redraws while the terminal paints the poster inside those
-cells. Outside detected Kitty-compatible terminals, `auto` falls back to block
-art; `plex-tui --diagnostics` reports the active renderer status.
+plex-tui has two artwork paths: poster rendering for real media and glyph cards
+for Plex objects that are not posters.
 
-Cards that represent collections, playlists, categories, hubs, or query shelves
-use geometric glyph artwork instead of pretending to be missing posters. Rows
-made entirely of those cards use roomier navigation-grid spacing. See
-`docs/collection-artwork-design.md` for the design notes behind that visual
-language.
+Poster rendering:
 
-Grid view prefetches artwork for the visible page immediately and, by default,
-prepares three pages ahead in the background. `grid_prefetch_pages` can be set
-from `0` to `5`; use `0` to fetch only the visible page on slower systems.
-Compact, comfortable, and large density modes adjust card and poster sizing. The
-artwork cache is bounded and stored in the app cache directory shown in
-Settings.
+- Default mode renders portable colored block art, so it works in ordinary
+  terminals without native image support.
+- In Kitty and Ghostty, set `artwork_renderer` to `auto` to render native
+  terminal images through Kitty Unicode placeholders.
+- Set `artwork_renderer` to `kitty` to explicitly try the Kitty graphics
+  protocol in other compatible terminals.
+- Outside detected Kitty-compatible terminals, `auto` falls back to block art.
+- `plex-tui --diagnostics` reports the active renderer status.
+
+Collection-style cards:
+
+- Collections, playlists, categories, hubs, and query shelves use geometric
+  glyph artwork instead of pretending to be missing posters.
+- Rows made entirely of those cards use roomier navigation-grid spacing.
+- See `docs/collection-artwork-design.md` for the design notes behind that
+  visual language.
+
+Grid behavior and cache:
+
+- Grid view fetches artwork for the visible page immediately.
+- By default, it prepares three pages ahead in the background.
+- `grid_prefetch_pages` can be set from `0` to `5`; use `0` to fetch only the
+  visible page on slower systems.
+- Compact, comfortable, and large density modes adjust card and poster sizing.
+- The artwork cache is bounded and stored in the app cache directory shown in
+  Settings.
 
 ## Diagnostics
 
