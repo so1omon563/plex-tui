@@ -78,6 +78,32 @@ async def wait_for_calls(calls: list[object], pilot: object, attempts: int = 20)
     return calls
 
 
+async def wait_for_playlist_result(
+    app: PlexTuiApp,
+    pilot: object,
+    calls: list[object],
+    *,
+    expected_calls: list[object],
+    expected_status: str,
+    attempts: int = 180,
+) -> tuple[list[object], str]:
+    # Worker-backed playlist actions can complete their service call and UI
+    # cleanup on different event-loop ticks, especially on hosted Python 3.13.
+    status = str(app.query_one("#status").content)
+    for _ in range(attempts):
+        current_calls = list(calls)
+        status = str(app.query_one("#status").content)
+        if current_calls == expected_calls and status == expected_status and not app.picker_visible:
+            return current_calls, status
+        await pilot.pause(0.1)
+    raise AssertionError(
+        "Timed out waiting for playlist worker result: "
+        f"expected_calls={expected_calls!r}, calls={list(calls)!r}, "
+        f"expected_status={expected_status!r}, status={status!r}, "
+        f"picker_visible={app.picker_visible!r}, input_mode={app.input_mode!r}"
+    )
+
+
 async def wait_for_watched_update(
     app: PlexTuiApp,
     pilot: object,
@@ -103,7 +129,7 @@ async def wait_for_watched_update(
             status == expected_status
             and selected is not None
             and selected_watched is watched
-            and ("[watched]" in label) is watched
+            and ("[########] 100%" in label) is watched
             and ((watched and watched_calls == 1) or (not watched and unwatched_calls == 1))
         ):
             return row, selected, status
@@ -181,8 +207,16 @@ def test_show_browse_state_uses_empty_state_row():
 
 
 def test_render_loaded_status():
+    class PartialRaw:
+        viewOffset = 300000
+        duration = 600000
+
     assert render_loaded_status("Movies", 100, 250, True) == "Movies: 100 of 250 items loaded"
     assert render_loaded_status("Movies", 250, 250, False) == "Movies: 250 items"
+    items = [MediaItem("Partial", "", "movie", "1", True, PartialRaw())]
+    assert render_loaded_status("Movies", 1, 250, True, items) == (
+        "Movies: 1 of 250 items loaded / 1 in-progress item"
+    )
 
 
 def test_load_more_media_appends_next_page():
@@ -2131,7 +2165,7 @@ async def run_toggle_watched_marks_unwatched_check():
         assert selected is not None
         assert selected.raw.viewCount == 1
         assert row is not None
-        assert "[watched]" in row.label_text
+        assert "[########] 100%" in row.label_text
         assert status == "Marked Movie watched"
 
 
@@ -2158,7 +2192,7 @@ async def run_toggle_watched_marks_watched_check():
         assert selected is not None
         assert selected.raw.viewCount == 0
         assert row is not None
-        assert "[watched]" not in row.label_text
+        assert "[########] 100%" not in row.label_text
         assert status == "Marked Movie unwatched"
 
 
@@ -2218,9 +2252,16 @@ async def run_add_to_playlist_existing_check():
         app.action_add_to_playlist()
         rows = await wait_for_playlist_rows(app, pilot)
         target = next(row for row in rows if isinstance(row, PlaylistTargetRow))
-        app.choose_playlist_target(target.playlist)
-        add_calls = await wait_for_calls(service.add_calls, pilot, attempts=80)
-        status = await wait_for_status(app, pilot, "Added Movie to Favorites", attempts=80)
+        worker = app.choose_playlist_target(target.playlist)
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
+        add_calls, status = await wait_for_playlist_result(
+            app,
+            pilot,
+            service.add_calls,
+            expected_calls=[("Favorites", "Movie")],
+            expected_status="Added Movie to Favorites",
+        )
 
         assert add_calls == [("Favorites", "Movie")]
         assert status == "Added Movie to Favorites"
@@ -2241,9 +2282,16 @@ async def run_add_to_playlist_create_check():
         app.action_add_to_playlist()
         rows = await wait_for_playlist_rows(app, pilot)
         assert any(isinstance(row, PlaylistCreateRow) for row in rows)
-        app.save_playlist_name_input("Weekend")
-        create_calls = await wait_for_calls(service.create_calls, pilot, attempts=80)
-        status = await wait_for_status(app, pilot, "Created playlist Weekend with Movie", attempts=80)
+        worker = app.save_playlist_name_input("Weekend")
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
+        create_calls, status = await wait_for_playlist_result(
+            app,
+            pilot,
+            service.create_calls,
+            expected_calls=[("Weekend", "Movie")],
+            expected_status="Created playlist Weekend with Movie",
+        )
 
         assert create_calls == [("Weekend", "Movie")]
         assert status == "Created playlist Weekend with Movie"

@@ -75,7 +75,7 @@ from .player import (
     subtitle_choices,
     transcode_quality_label,
 )
-from .plex_service import PlexService, kind_label, media_details, row_progress_marker, watched_state
+from .plex_service import PlexService, kind_label, media_details, progress_bar, row_progress_marker, watched_state
 GRID_CARD_GAP = 2
 GRID_COLLECTION_CARD_EXTRA_WIDTH = 8
 GRID_DENSITY_SPECS = {
@@ -520,7 +520,7 @@ class PlexTuiApp(App[None]):
         Binding("right", "grid_right", "Right", show=False),
         Binding("comma", "show_settings", "Settings"),
         Binding("escape", "back_or_clear", "Back"),
-        Binding("p", "play_selected", "Play"),
+        Binding("p", "play_selected", "Play from start"),
         Binding("P", "add_to_playlist", "Playlist", show=False),
         Binding("r", "resume_selected", "Resume"),
         Binding("w", "toggle_watched", "Watched", show=False),
@@ -948,7 +948,7 @@ class PlexTuiApp(App[None]):
             self.browsing_stack = [state]
             self.show_browse_state(state)
             self.focus_media_browser()
-            self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more))
+            self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more, page.items))
 
         self.call_from_thread(update)
 
@@ -982,7 +982,7 @@ class PlexTuiApp(App[None]):
             self.browsing_stack = [state]
             self.show_browse_state(state)
             self.focus_media_browser()
-            self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more))
+            self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more, page.items))
 
         self.call_from_thread(update)
 
@@ -1075,7 +1075,7 @@ class PlexTuiApp(App[None]):
             self.loading_more = False
             self.suppress_auto_load = True
             target_key = selected_key or first_new_key
-            status = render_loaded_status(state.title, len(state.items), state.total, state.has_more)
+            status = render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items)
             if alphabet_direction and selected_key:
                 current_index = selected_media_index(state.items, selected_key)
                 next_index = alphabet_jump_index(state.items, current_index, alphabet_direction)
@@ -2163,13 +2163,13 @@ class PlexTuiApp(App[None]):
 
         self.call_from_thread(update)
 
-    def choose_playlist_target(self, playlist: MediaItem) -> None:
+    def choose_playlist_target(self, playlist: MediaItem) -> object | None:
         item = self.playlist_picker_item
         if item is None:
             self.set_status("No media selected for playlist")
-            return
+            return None
         self.set_status(f"Adding {item.title} to {playlist.title}...")
-        self.add_item_to_playlist(playlist, item)
+        return self.add_item_to_playlist(playlist, item)
 
     @work(thread=True, exclusive=True)
     def add_item_to_playlist(self, playlist: MediaItem, item: MediaItem) -> None:
@@ -2196,20 +2196,20 @@ class PlexTuiApp(App[None]):
         self.show_detail_text(f"Enter a name for a new playlist containing {item.title}.")
         self.set_status("Enter new playlist name")
 
-    def save_playlist_name_input(self, value: str) -> None:
+    def save_playlist_name_input(self, value: str) -> object | None:
         title = value.strip()
         if not title:
             self.prompt_playlist_name()
             self.set_status("Playlist name is required")
-            return
+            return None
         item = self.playlist_picker_item
         if item is None:
             self.input_mode = ""
             self.set_status("No media selected for playlist")
-            return
+            return None
         self.input_mode = ""
         self.set_status(f"Creating playlist {title}...")
-        self.create_playlist_from_item(title, item)
+        return self.create_playlist_from_item(title, item)
 
     @work(thread=True, exclusive=True)
     def create_playlist_from_item(self, title: str, item: MediaItem) -> None:
@@ -2459,7 +2459,7 @@ class PlexTuiApp(App[None]):
             self.browsing_stack.append(state)
             self.show_browse_state(state)
             self.focus_media_browser()
-            self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more))
+            self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more, page.items))
 
         self.call_from_thread(update)
 
@@ -2874,11 +2874,13 @@ def render_details(details: object, config: AppConfig | None = None, raw: object
 
 def render_detail_header(details: object, config: AppConfig | None = None) -> list[str]:
     title = getattr(details, "title")
+    metadata = list(getattr(details, "metadata", []))
     title_lines = textwrap.wrap(title, width=DETAIL_SUMMARY_WIDTH) or [title]
-    episode_context = episode_context_summary(details, list(getattr(details, "metadata", [])))
+    episode_context = episode_context_summary(details, metadata)
     context_lines = textwrap.wrap(episode_context, width=DETAIL_SUMMARY_WIDTH) if episode_context else []
     facts = [str(fact) for fact in getattr(details, "facts", []) if fact]
     artwork = artwork_status(details, config)
+    progress = detail_metadata_value(metadata, "Progress")
     title_width = max(len(line) for line in [*title_lines, *context_lines])
     lines = [*title_lines, *context_lines, "-" * min(max(title_width, 8), DETAIL_SUMMARY_WIDTH)]
     if facts:
@@ -2886,23 +2888,36 @@ def render_detail_header(details: object, config: AppConfig | None = None) -> li
     lines.extend([
         "",
         "Playback",
-        *playback_readiness_rows(bool(getattr(details, "playable"))),
+        *playback_readiness_rows(bool(getattr(details, "playable")), progress),
         f"Artwork: {artwork}",
     ])
     return lines
 
 
-def playback_readiness_rows(playable: bool) -> list[str]:
+def playback_readiness_rows(playable: bool, progress: str = "") -> list[str]:
     if playable:
-        return [
+        rows = [
             "Status: Ready to play",
-            "Actions: p play / r resume",
-            "Playlist: Press P",
         ]
+        if progress:
+            rows.append(f"Progress: {progress}")
+        rows.extend([
+            "p: play from beginning",
+            "r: resume saved progress",
+            "Playlist: Press P",
+        ])
+        return rows
     return [
         "Status: Opens more items",
         "Action: Press Enter to open",
     ]
+
+
+def detail_metadata_value(metadata: list[tuple[str, str]], label: str) -> str:
+    for row_label, value in metadata:
+        if row_label == label:
+            return value
+    return ""
 
 
 EPISODE_CONTEXT_LABELS = ("Show", "Season", "Episode")
@@ -3362,6 +3377,9 @@ def media_metadata_label(media: MediaItem, include_kind: bool = True) -> str:
 
 
 def grid_card_footer(media: MediaItem, selected: bool) -> str:
+    progress = progress_bar(media.raw)
+    if progress:
+        return f"▶ {progress}" if selected else progress
     if selected:
         return "▶ selected"
     if media.playable:
@@ -3722,7 +3740,7 @@ def render_help() -> str:
         "",
         "Playback",
         "p: play selected media from beginning",
-        "r: resume selected media",
+        "r: resume selected media from saved progress",
         "w: mark selected media watched / unwatched",
         "x: stop launched mpv",
         "",
@@ -3814,12 +3832,12 @@ def context_hint(row: object) -> str:
         return row.action_text or "Media: No items available"
     if isinstance(row, MediaRow):
         if row.media.playable:
-            return "Media: Enter selects / p play / r resume / P playlist / w watched / a audio / s subtitles"
+            return "Media: Enter selects / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
     if isinstance(row, MediaGrid):
         media = row.selected_media
         if media is not None and media.playable:
-            return "Grid: Arrows/page select card / p play / r resume / P playlist / w watched / a audio / s subtitles"
+            return "Grid: Arrows/page select card / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
         return "Grid: Arrows/page select card / Enter opens item"
     if isinstance(row, ServerRow):
         return "Servers: Enter selects server"
@@ -4195,12 +4213,31 @@ def numeric_setting_label(name: str) -> str:
     return name
 
 
-def render_loaded_status(title: str, loaded: int, total: int | None, has_more: bool) -> str:
+def render_loaded_status(
+    title: str,
+    loaded: int,
+    total: int | None,
+    has_more: bool,
+    items: list[MediaItem] | None = None,
+) -> str:
+    suffix = progress_count_suffix(items)
     if total is None:
-        return f"{title}: {loaded} items"
+        return f"{title}: {loaded} items{suffix}"
     if has_more:
-        return f"{title}: {loaded} of {total} items loaded"
-    return f"{title}: {loaded} items"
+        return f"{title}: {loaded} of {total} items loaded{suffix}"
+    return f"{title}: {loaded} items{suffix}"
+
+
+def progress_count_suffix(items: list[MediaItem] | None) -> str:
+    count = in_progress_count(items or [])
+    if not count:
+        return ""
+    label = "item" if count == 1 else "items"
+    return f" / {count} in-progress {label}"
+
+
+def in_progress_count(items: list[MediaItem]) -> int:
+    return sum(1 for item in items if watched_state(item.raw) == "in progress")
 
 
 def empty_state_message(state: BrowseState) -> str:
@@ -4344,7 +4381,7 @@ def grid_status(grid: MediaGrid, state: BrowseState | None) -> str:
     current_page = min(page_count, (grid.selected_index // grid.page_size) + 1)
     selected = min(grid.selected_index + 1, total_loaded)
     total_text = f"{total_loaded} loaded" if total_available is None else f"{total_loaded} of {total_available} loaded"
-    return f"{context_hint(grid)} / item {selected} / page {current_page} of {page_count} / {total_text}"
+    return f"{context_hint(grid)} / item {selected} / page {current_page} of {page_count} / {total_text}{progress_count_suffix(grid.items)}"
 
 
 def grid_page_key(items: list[MediaItem]) -> tuple[str, ...]:

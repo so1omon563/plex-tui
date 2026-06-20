@@ -122,7 +122,7 @@ def test_render_details_includes_subtitles_and_summary():
         title="Title",
         kind="movie",
         facts=["Movie"],
-        metadata=[("Type", "movie")],
+        metadata=[("Type", "movie"), ("Progress", "1m / 10m (11%)")],
         audio=["Japanese (aac, 2ch, selected)"],
         subtitles=["English (srt, selected)"],
         summary="Summary text",
@@ -145,7 +145,9 @@ def test_render_details_includes_subtitles_and_summary():
     assert "Title\n--------" in rendered
     assert "Movie" in rendered
     assert "Playback\nStatus: Ready to play" in rendered
-    assert "Actions: p play / r resume" in rendered
+    assert "Progress: 1m / 10m (11%)" in rendered
+    assert "p: play from beginning" in rendered
+    assert "r: resume saved progress" in rendered
     assert "Playlist: Press P" in rendered
     assert "Metadata" in rendered
     assert "Preferences" in rendered
@@ -895,6 +897,21 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
     assert "playable" in unselected_text
 
 
+def test_grid_card_footer_shows_watch_progress():
+    class PartialRaw:
+        viewOffset = 300000
+        duration = 600000
+
+    media = MediaItem("Movie", "2024", "movie", "1", True, PartialRaw(), artwork_path="")
+
+    selected = render_media_grid_card(media, True, AppConfig("http://plex", "token", "client"))
+    unselected = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"))
+
+    assert "[####----] 50%" in str(selected.renderables[3])
+    assert "▶ [####----] 50%" in str(selected.renderables[3])
+    assert "[####----] 50%" in str(unselected.renderables[3])
+
+
 def test_grid_card_styles_follow_visual_state_tokens():
     media = MediaItem("Movie", "2024", "movie", "1", True, object(), artwork_path="")
 
@@ -1061,7 +1078,7 @@ def test_render_help_groups_key_bindings():
     assert "v: toggle list/grid view" in rendered
     assert "left/right: move across grid cards" in rendered
     assert "p: play selected media from beginning" in rendered
-    assert "r: resume selected media" in rendered
+    assert "r: resume selected media from saved progress" in rendered
     assert "w: mark selected media watched / unwatched" in rendered
     assert "Playlist Management" in rendered
     assert "P: add selected media to an existing or new playlist" in rendered
@@ -1090,6 +1107,7 @@ def test_playlist_picker_rows_and_details():
 def test_footer_shows_core_bindings_and_help_keeps_full_reference():
     shown = {binding.action for binding in PlexTuiApp.BINDINGS if binding.show}
     hidden = {binding.action for binding in PlexTuiApp.BINDINGS if not binding.show}
+    shown_labels = {binding.action: binding.description for binding in PlexTuiApp.BINDINGS if binding.show}
     hidden_keys_by_action = {}
     for binding in PlexTuiApp.BINDINGS:
         if not binding.show:
@@ -1107,6 +1125,8 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
         "play_selected",
         "resume_selected",
     }
+    assert shown_labels["play_selected"] == "Play from start"
+    assert shown_labels["resume_selected"] == "Resume"
     assert "alternate_library_action" in hidden
     assert "add_to_playlist" in hidden
     assert "toggle_watched" in hidden
@@ -1270,7 +1290,7 @@ def test_media_row_includes_progress_marker():
 
     assert row.label_text.startswith("▶ Movie")
     assert "Movie · Movie · 2024" in row.label_text
-    assert "[resume 1m]" in row.label_text
+    assert "[#-------] 11%" in row.label_text
 
 
 def test_media_row_marks_container_items():
@@ -1308,10 +1328,15 @@ def test_media_grid_visible_handles_unmounted_app():
 
 
 def test_media_grid_page_status_counts_loaded_items():
+    class PartialRaw:
+        viewOffset = 300000
+        duration = 600000
+
     items = [
         MediaItem(f"Movie {index}", "2024", "movie", str(index), True, object(), artwork_path="/thumb")
         for index in range(12)
     ]
+    items[2] = MediaItem("Partial", "2024", "movie", "2", True, PartialRaw(), artwork_path="/thumb")
     config = AppConfig("http://plex", "token", "client", media_view="grid")
     grid = MediaGrid()
     grid.set_items(items, selected_index=7, config=config, columns=2, rows=2)
@@ -1320,6 +1345,7 @@ def test_media_grid_page_status_counts_loaded_items():
     assert "item 8" in grid_status(grid, state)
     assert "page 2 of 3" in grid_status(grid, state)
     assert "12 of 30 loaded" in grid_status(grid, state)
+    assert "1 in-progress item" in grid_status(grid, state)
 
 
 def test_context_hints_for_media_and_load_more():
@@ -1332,11 +1358,11 @@ def test_context_hints_for_media_and_load_more():
     setting_value = next(row for row in settings if getattr(row, "label_text", "").strip().startswith("Server:"))
 
     assert context_hint(MediaRow(playable)) == (
-        "Media: Enter selects / p play / r resume / P playlist / w watched / a audio / s subtitles"
+        "Media: Enter selects / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
     )
     assert context_hint(MediaRow(container)) == "Media: Enter opens item"
     assert context_hint(grid) == (
-        "Grid: Arrows/page select card / p play / r resume / P playlist / w watched / a audio / s subtitles"
+        "Grid: Arrows/page select card / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
     )
     assert context_hint(LoadMoreRow(100, 200)) == "Media: Enter loads next page"
     assert context_hint(LibraryRow(LibraryItem("Movies", "1", "movie", object()))) == (

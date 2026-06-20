@@ -472,13 +472,34 @@ def progress_label(raw: Any) -> str:
     return f"Resume at {format_position(offset)}"
 
 
+def progress_percent(raw: Any) -> int:
+    if watched_state(raw) == "watched":
+        return 100
+    offset = resume_offset(raw)
+    duration = duration_ms(raw)
+    if not offset or not duration:
+        return 0
+    return min(99, max(1, round(offset / duration * 100)))
+
+
+def progress_bar(raw: Any, width: int = 8) -> str:
+    width = max(1, width)
+    percent = progress_percent(raw)
+    if not percent:
+        return ""
+    filled = width if percent == 100 else max(1, round(width * percent / 100))
+    filled = min(width, filled)
+    empty = width - filled
+    return f"[{'#' * filled}{'-' * empty}] {percent}%"
+
+
 def row_progress_marker(raw: Any) -> str:
     state = watched_state(raw)
     if state == "watched":
-        return "[watched]"
+        return progress_bar(raw)
     if state == "in progress":
-        label = progress_label(raw)
-        return f"[resume {format_position(resume_offset(raw))}]" if label else "[resume]"
+        bar = progress_bar(raw)
+        return bar or f"[resume {format_position(resume_offset(raw))}]"
     return ""
 
 

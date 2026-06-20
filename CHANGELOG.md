@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added compact watched-progress indicators to media rows, grid cards, browse
+  status, and details so partially watched movies and episodes show how far
+  along they are.
+
 ## 0.4.13 - 2026-06-20
 
 - Polished pane focus styling so sidebar, media, and details panes share a
