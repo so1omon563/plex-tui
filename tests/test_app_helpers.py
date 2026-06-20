@@ -122,7 +122,7 @@ def test_render_details_includes_subtitles_and_summary():
         title="Title",
         kind="movie",
         facts=["Movie"],
-        metadata=[("Type", "movie")],
+        metadata=[("Type", "movie"), ("Progress", "1m / 10m (11%)")],
         audio=["Japanese (aac, 2ch, selected)"],
         subtitles=["English (srt, selected)"],
         summary="Summary text",
@@ -145,6 +145,7 @@ def test_render_details_includes_subtitles_and_summary():
     assert "Title\n--------" in rendered
     assert "Movie" in rendered
     assert "Playback\nStatus: Ready to play" in rendered
+    assert "Progress: 1m / 10m (11%)" in rendered
     assert "Actions: p play / r resume" in rendered
     assert "Playlist: Press P" in rendered
     assert "Metadata" in rendered
@@ -1323,10 +1324,15 @@ def test_media_grid_visible_handles_unmounted_app():
 
 
 def test_media_grid_page_status_counts_loaded_items():
+    class PartialRaw:
+        viewOffset = 300000
+        duration = 600000
+
     items = [
         MediaItem(f"Movie {index}", "2024", "movie", str(index), True, object(), artwork_path="/thumb")
         for index in range(12)
     ]
+    items[2] = MediaItem("Partial", "2024", "movie", "2", True, PartialRaw(), artwork_path="/thumb")
     config = AppConfig("http://plex", "token", "client", media_view="grid")
     grid = MediaGrid()
     grid.set_items(items, selected_index=7, config=config, columns=2, rows=2)
@@ -1335,6 +1341,7 @@ def test_media_grid_page_status_counts_loaded_items():
     assert "item 8" in grid_status(grid, state)
     assert "page 2 of 3" in grid_status(grid, state)
     assert "12 of 30 loaded" in grid_status(grid, state)
+    assert "1 in-progress item" in grid_status(grid, state)
 
 
 def test_context_hints_for_media_and_load_more():

@@ -181,8 +181,16 @@ def test_show_browse_state_uses_empty_state_row():
 
 
 def test_render_loaded_status():
+    class PartialRaw:
+        viewOffset = 300000
+        duration = 600000
+
     assert render_loaded_status("Movies", 100, 250, True) == "Movies: 100 of 250 items loaded"
     assert render_loaded_status("Movies", 250, 250, False) == "Movies: 250 items"
+    items = [MediaItem("Partial", "", "movie", "1", True, PartialRaw())]
+    assert render_loaded_status("Movies", 1, 250, True, items) == (
+        "Movies: 1 of 250 items loaded / 1 in-progress item"
+    )
 
 
 def test_load_more_media_appends_next_page():
