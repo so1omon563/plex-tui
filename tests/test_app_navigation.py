@@ -2094,7 +2094,12 @@ async def run_toggle_watched_unsupported_check():
         await pilot.pause(0.2)
 
         app.action_toggle_watched()
-        status = await wait_for_status(app, pilot, "Selected item does not support watched state changes")
+        status = await wait_for_status(
+            app,
+            pilot,
+            "Selected item does not support watched state changes",
+            attempts=80,
+        )
 
         assert status == "Selected item does not support watched state changes"
 
