@@ -146,7 +146,8 @@ def test_render_details_includes_subtitles_and_summary():
     assert "Movie" in rendered
     assert "Playback\nStatus: Ready to play" in rendered
     assert "Progress: 1m / 10m (11%)" in rendered
-    assert "Actions: p play / r resume" in rendered
+    assert "p: start over" in rendered
+    assert "r: resume saved progress" in rendered
     assert "Playlist: Press P" in rendered
     assert "Metadata" in rendered
     assert "Preferences" in rendered
@@ -1076,8 +1077,8 @@ def test_render_help_groups_key_bindings():
     assert "d: focus details" in rendered
     assert "v: toggle list/grid view" in rendered
     assert "left/right: move across grid cards" in rendered
-    assert "p: play selected media from beginning" in rendered
-    assert "r: resume selected media" in rendered
+    assert "p: start selected media from beginning" in rendered
+    assert "r: resume selected media from saved progress" in rendered
     assert "w: mark selected media watched / unwatched" in rendered
     assert "Playlist Management" in rendered
     assert "P: add selected media to an existing or new playlist" in rendered
@@ -1354,11 +1355,11 @@ def test_context_hints_for_media_and_load_more():
     setting_value = next(row for row in settings if getattr(row, "label_text", "").strip().startswith("Server:"))
 
     assert context_hint(MediaRow(playable)) == (
-        "Media: Enter selects / p play / r resume / P playlist / w watched / a audio / s subtitles"
+        "Media: Enter selects / p start over / r resume / P playlist / w watched / a audio / s subtitles"
     )
     assert context_hint(MediaRow(container)) == "Media: Enter opens item"
     assert context_hint(grid) == (
-        "Grid: Arrows/page select card / p play / r resume / P playlist / w watched / a audio / s subtitles"
+        "Grid: Arrows/page select card / p start over / r resume / P playlist / w watched / a audio / s subtitles"
     )
     assert context_hint(LoadMoreRow(100, 200)) == "Media: Enter loads next page"
     assert context_hint(LibraryRow(LibraryItem("Movies", "1", "movie", object()))) == (
