@@ -2137,9 +2137,10 @@ async def run_add_to_playlist_existing_check():
         rows = await wait_for_playlist_rows(app, pilot)
         target = next(row for row in rows if isinstance(row, PlaylistTargetRow))
         app.choose_playlist_target(target.playlist)
-        status = await wait_for_status(app, pilot, "Added Movie to Favorites")
+        add_calls = await wait_for_calls(service.add_calls, pilot, attempts=80)
+        status = await wait_for_status(app, pilot, "Added Movie to Favorites", attempts=80)
 
-        assert service.add_calls == [("Favorites", "Movie")]
+        assert add_calls == [("Favorites", "Movie")]
         assert status == "Added Movie to Favorites"
         assert not app.picker_visible
 

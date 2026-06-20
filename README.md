@@ -7,12 +7,37 @@
 [![Homebrew](https://shieldcn.dev/badge/Homebrew-tap-blue.png?logo=homebrew)](https://github.com/so1omon563/homebrew-plex-tui)
 [![License](https://shieldcn.dev/github/so1omon563/plex-tui/license.png)](LICENSE)
 
-A standalone Python/Textual terminal UI for browsing Plex and launching playback
-through `mpv`.
+A terminal Plex client built for watching media, not managing servers.
 
-plex-tui is an early release. It supports Plex login, server selection, paged
-library browsing, search, list/grid views, stream preferences, terminal poster
-artwork, and playback progress reporting.
+There are plenty of tools for administering Plex from the command line.
+Surprisingly few are built for sitting down, browsing your library, and watching
+something without leaving the terminal.
+
+plex-tui is a standalone Textual application that brings Plex browsing, poster
+artwork, collection cards, playlists, search, stream preferences, and `mpv`
+playback into a keyboard-first terminal interface.
+
+Built for people who spend their day in a terminal and would rather stay there.
+
+## Why?
+
+Most terminal Plex tools are built for administration, automation, or quick
+status checks. Those are useful jobs, but they are not the same as browsing a
+library, comparing options, and choosing something to watch.
+
+Meanwhile, terminal applications got better. Tools like lazygit, gitui, btop,
+and modern Textual apps raised the bar for what a TUI can be: rich layouts,
+keyboard-first workflows, responsive interfaces, and even artwork are no longer
+unusual.
+
+plex-tui exists because browsing Plex and choosing something to watch deserves
+that same kind of terminal-native experience.
+
+## Project Status
+
+plex-tui is still early, but already usable. Login, server selection, library
+browsing, search, playlists, artwork, stream preferences, and playback are
+working today. Expect rough edges, but expect progress too.
 
 ## Screenshots
 
@@ -33,6 +58,34 @@ artwork, and playback progress reporting.
 ### List view
 
 ![plex-tui list view](docs/assets/list-view.png)
+
+## Features
+
+- Plex PIN login and server selection.
+- Paged library browsing with automatic loading near the end of loaded items.
+- Library submenu entrypoints for all items, Recommended, Collections,
+  Playlists, and Categories. Library rows open all items by default; Space
+  opens the browse-mode menu, and Settings can swap the primary and alternate
+  actions.
+- Current-library search and bounded global search.
+- List view plus configurable-density grid view with terminal poster artwork,
+  missing-artwork placeholders, and intentional glyph cards for collections and
+  hubs.
+- External subtitle support and direct playback for embedded PGS/VOBSUB tracks.
+- Audio and subtitle pickers with saved language preferences.
+- Separate play-from-start and resume actions with Plex progress reporting.
+- Watched/unwatched toggling for selected playable Plex items.
+- Continue Watching episode rows show their show, season, and episode context,
+  and items can be removed from the Continue Watching view.
+- Playlist management for creating playlists from selected media, adding media
+  to existing playlists, and removing items while browsing a playlist.
+- Movie editions appear as distinct variants when Plex reports multiple
+  editions for a selected movie.
+- Settings screen for stream preferences, playback mode and transcode quality,
+  artwork modes, grid density, page size, auto-load threshold, grid artwork
+  prefetching, media view, library Enter behavior, and `mpv` window size.
+- App diagnostics view for version, paths, `mpv`, Plex connection, artwork, and
+  browsing settings.
 
 ## Requirements
 
@@ -68,9 +121,9 @@ plex-tui
 ```
 
 This is the recommended cross-platform install path. It keeps Python
-dependencies isolated, but you still need to install `mpv` separately.
-If `pipx` is not installed, install it with your platform package manager first
-or follow the pipx installation guide.
+dependencies isolated, but you still need to install `mpv` separately. If
+`pipx` is not installed, install it with your platform package manager first or
+follow the pipx installation guide.
 
 ### Homebrew
 
@@ -81,14 +134,11 @@ brew install plex-tui
 plex-tui --smoke
 ```
 
-The Homebrew formula installs `mpv` automatically. Apple Silicon macOS installs
-use prebuilt bottles when available so Homebrew can pour the app virtualenv
-instead of rebuilding native Python dependencies such as `pillow` from source.
-Intel macOS installs still use Homebrew's source-build path while that platform
-continues to be supported.
-Homebrew 6 requires non-official taps to be trusted before Homebrew loads
-formulae from them. `plex-tui` only depends on formulae from Homebrew/core, so no
-additional tap trust is required for its dependencies.
+The Homebrew formula installs `mpv` automatically. Apple Silicon macOS uses
+prebuilt bottles when available, while Intel macOS still uses Homebrew's
+source-build path. Homebrew 6 requires non-official taps to be trusted before
+loading formulae from them; `plex-tui` only depends on formulae from
+Homebrew/core, so no additional tap trust is required for dependencies.
 
 ### Arch Linux
 
@@ -104,7 +154,7 @@ example.
 
 ```bash
 pipx install "git+https://github.com/so1omon563/plex-tui.git"
-pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.2.1"
+pipx install "git+https://github.com/so1omon563/plex-tui.git@v0.4.4"
 ```
 
 Use this path for testing `main` before a tagged/PyPI release.
@@ -215,34 +265,6 @@ matching track.
 | `a` / `s` | Choose audio / subtitle preference |
 | `A` / `S` | Clear audio preference / cycle subtitle mode |
 | `x` | Stop launched `mpv` |
-
-## Features
-
-- Plex PIN login and server selection.
-- Paged library browsing with automatic loading near the end of loaded items.
-- Library submenu entrypoints for all items, Recommended, Collections,
-  Playlists, and Categories. Library rows open all items by default; Space
-  opens the browse-mode menu, and Settings can swap the primary and alternate
-  actions.
-- Current-library search and bounded global search.
-- List view plus configurable-density grid view with terminal poster artwork,
-  missing-artwork placeholders, and intentional glyph cards for collections and
-  hubs.
-- External subtitle support and direct playback for embedded PGS/VOBSUB tracks.
-- Audio and subtitle pickers with saved language preferences.
-- Separate play-from-start and resume actions with Plex progress reporting.
-- Watched/unwatched toggling for selected playable Plex items.
-- Continue Watching episode rows show their show, season, and episode context,
-  and items can be removed from the Continue Watching view.
-- Playlist management for creating playlists from selected media, adding media
-  to existing playlists, and removing items while browsing a playlist.
-- Movie editions appear as distinct variants when Plex reports multiple
-  editions for a selected movie.
-- Settings screen for stream preferences, playback mode and transcode quality,
-  artwork modes, grid density, page size, auto-load threshold, grid artwork
-  prefetching, media view, library Enter behavior, and `mpv` window size.
-- App diagnostics view for version, paths, `mpv`, Plex connection, artwork, and
-  browsing settings.
 
 ## Artwork
 
