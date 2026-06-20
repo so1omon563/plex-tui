@@ -16,9 +16,19 @@ artwork, and playback progress reporting.
 
 ## Screenshots
 
-### Grid view
+### Movie grid
 
 ![plex-tui grid view](docs/assets/grid-view.png)
+
+### TV show grid
+
+![plex-tui TV show grid view](docs/assets/grid-tv-shows.png)
+
+### Collection cards
+
+![plex-tui Recommended collection cards](docs/assets/collection-recommended.png)
+
+![plex-tui Categories collection cards](docs/assets/collection-categories.png)
 
 ### List view
 

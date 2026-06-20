@@ -56,6 +56,16 @@ cluster of failed posters.
 Mixed rows or playable-media rows continue to use the centered poster-grid
 presentation.
 
+## Screenshots
+
+Current examples live in the README screenshot set:
+
+- `docs/assets/collection-recommended.png`
+- `docs/assets/collection-categories.png`
+- `docs/assets/grid-view.png`
+- `docs/assets/grid-tv-shows.png`
+- `docs/assets/list-view.png`
+
 ## Expansion Notes
 
 Future iterations can reuse these glyphs in sidebar navigation, filters,
