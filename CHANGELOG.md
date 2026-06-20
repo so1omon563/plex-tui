@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.7 - 2026-06-19
+
 - Added playlist management for creating playlists from selected media, adding
   selected media to existing playlists, and removing items from playlist views.
 - Added intentional collection-card artwork for hub, playlist, category, and
