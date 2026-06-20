@@ -146,7 +146,7 @@ def test_render_details_includes_subtitles_and_summary():
     assert "Movie" in rendered
     assert "Playback\nStatus: Ready to play" in rendered
     assert "Progress: 1m / 10m (11%)" in rendered
-    assert "p: start over" in rendered
+    assert "p: play from beginning" in rendered
     assert "r: resume saved progress" in rendered
     assert "Playlist: Press P" in rendered
     assert "Metadata" in rendered
@@ -1077,7 +1077,7 @@ def test_render_help_groups_key_bindings():
     assert "d: focus details" in rendered
     assert "v: toggle list/grid view" in rendered
     assert "left/right: move across grid cards" in rendered
-    assert "p: start selected media from beginning" in rendered
+    assert "p: play selected media from beginning" in rendered
     assert "r: resume selected media from saved progress" in rendered
     assert "w: mark selected media watched / unwatched" in rendered
     assert "Playlist Management" in rendered
@@ -1107,6 +1107,7 @@ def test_playlist_picker_rows_and_details():
 def test_footer_shows_core_bindings_and_help_keeps_full_reference():
     shown = {binding.action for binding in PlexTuiApp.BINDINGS if binding.show}
     hidden = {binding.action for binding in PlexTuiApp.BINDINGS if not binding.show}
+    shown_labels = {binding.action: binding.description for binding in PlexTuiApp.BINDINGS if binding.show}
     hidden_keys_by_action = {}
     for binding in PlexTuiApp.BINDINGS:
         if not binding.show:
@@ -1124,6 +1125,8 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
         "play_selected",
         "resume_selected",
     }
+    assert shown_labels["play_selected"] == "Play from start"
+    assert shown_labels["resume_selected"] == "Resume"
     assert "alternate_library_action" in hidden
     assert "add_to_playlist" in hidden
     assert "toggle_watched" in hidden
@@ -1355,11 +1358,11 @@ def test_context_hints_for_media_and_load_more():
     setting_value = next(row for row in settings if getattr(row, "label_text", "").strip().startswith("Server:"))
 
     assert context_hint(MediaRow(playable)) == (
-        "Media: Enter selects / p start over / r resume / P playlist / w watched / a audio / s subtitles"
+        "Media: Enter selects / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
     )
     assert context_hint(MediaRow(container)) == "Media: Enter opens item"
     assert context_hint(grid) == (
-        "Grid: Arrows/page select card / p start over / r resume / P playlist / w watched / a audio / s subtitles"
+        "Grid: Arrows/page select card / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
     )
     assert context_hint(LoadMoreRow(100, 200)) == "Media: Enter loads next page"
     assert context_hint(LibraryRow(LibraryItem("Movies", "1", "movie", object()))) == (

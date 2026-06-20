@@ -520,7 +520,7 @@ class PlexTuiApp(App[None]):
         Binding("right", "grid_right", "Right", show=False),
         Binding("comma", "show_settings", "Settings"),
         Binding("escape", "back_or_clear", "Back"),
-        Binding("p", "play_selected", "Play"),
+        Binding("p", "play_selected", "Play from start"),
         Binding("P", "add_to_playlist", "Playlist", show=False),
         Binding("r", "resume_selected", "Resume"),
         Binding("w", "toggle_watched", "Watched", show=False),
@@ -2902,7 +2902,7 @@ def playback_readiness_rows(playable: bool, progress: str = "") -> list[str]:
         if progress:
             rows.append(f"Progress: {progress}")
         rows.extend([
-            "p: start over",
+            "p: play from beginning",
             "r: resume saved progress",
             "Playlist: Press P",
         ])
@@ -3739,7 +3739,7 @@ def render_help() -> str:
         "g: search all libraries",
         "",
         "Playback",
-        "p: start selected media from beginning",
+        "p: play selected media from beginning",
         "r: resume selected media from saved progress",
         "w: mark selected media watched / unwatched",
         "x: stop launched mpv",
@@ -3832,12 +3832,12 @@ def context_hint(row: object) -> str:
         return row.action_text or "Media: No items available"
     if isinstance(row, MediaRow):
         if row.media.playable:
-            return "Media: Enter selects / p start over / r resume / P playlist / w watched / a audio / s subtitles"
+            return "Media: Enter selects / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
     if isinstance(row, MediaGrid):
         media = row.selected_media
         if media is not None and media.playable:
-            return "Grid: Arrows/page select card / p start over / r resume / P playlist / w watched / a audio / s subtitles"
+            return "Grid: Arrows/page select card / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
         return "Grid: Arrows/page select card / Enter opens item"
     if isinstance(row, ServerRow):
         return "Servers: Enter selects server"
