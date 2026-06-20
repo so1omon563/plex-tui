@@ -14,6 +14,8 @@ from plextui.app import (
     LibraryMenuRow,
     LoadMoreRow,
     PlexTuiApp,
+    PlaylistCreateRow,
+    PlaylistTargetRow,
     artwork_fetch_pixel_size,
     card_artwork_pixel_size,
     grid_artwork_cache_key,
@@ -55,6 +57,16 @@ async def wait_for_status(app: PlexTuiApp, pilot: object, expected: str, attempt
         await pilot.pause(0.1)
         status = str(app.query_one("#status").content)
     return status
+
+
+async def wait_for_playlist_rows(app: PlexTuiApp, pilot: object, attempts: int = 20) -> list[object]:
+    rows = list(app.query_one("#media").children)
+    for _ in range(attempts):
+        if any(isinstance(row, PlaylistCreateRow) for row in rows):
+            return rows
+        await pilot.pause(0.1)
+        rows = list(app.query_one("#media").children)
+    return rows
 
 
 def test_picker_return_preserves_highlighted_media():
@@ -482,6 +494,18 @@ def test_toggle_watched_marks_watched_media_unwatched():
 
 def test_toggle_watched_rejects_unsupported_media():
     asyncio.run(run_toggle_watched_unsupported_check())
+
+
+def test_add_to_playlist_picker_adds_existing_playlist():
+    asyncio.run(run_add_to_playlist_existing_check())
+
+
+def test_add_to_playlist_picker_creates_new_playlist():
+    asyncio.run(run_add_to_playlist_create_check())
+
+
+def test_remove_playlist_item_updates_playlist_view():
+    asyncio.run(run_remove_playlist_item_check())
 
 
 def test_remove_continue_watching_removes_selected_item():
@@ -2067,6 +2091,97 @@ async def run_toggle_watched_unsupported_check():
         assert status == "Selected item does not support watched state changes"
 
 
+class PlaylistService:
+    def __init__(self) -> None:
+        self.playlist = MediaItem("Favorites", "", "playlist", "playlist-1", False, Raw())
+        self.add_calls = []
+        self.create_calls = []
+        self.remove_calls = []
+
+    def playlists(self):
+        return [self.playlist]
+
+    def add_to_playlist(self, playlist, item):
+        self.add_calls.append((playlist.title, item.title))
+        return playlist
+
+    def create_playlist(self, title, item):
+        self.create_calls.append((title, item.title))
+        return MediaItem(title, "", "playlist", "playlist-new", False, Raw())
+
+    def remove_from_playlist(self, playlist, item):
+        self.remove_calls.append((playlist.title, item.title))
+        return playlist
+
+
+async def run_add_to_playlist_existing_check():
+    service = PlaylistService()
+    item = MediaItem("Movie", "", "movie", "1", True, Raw())
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.show_media("Movies", [item])
+        await pilot.pause(0.2)
+
+        app.action_add_to_playlist()
+        rows = await wait_for_playlist_rows(app, pilot)
+        target = next(row for row in rows if isinstance(row, PlaylistTargetRow))
+        app.choose_playlist_target(target.playlist)
+        status = await wait_for_status(app, pilot, "Added Movie to Favorites")
+
+        assert service.add_calls == [("Favorites", "Movie")]
+        assert status == "Added Movie to Favorites"
+        assert not app.picker_visible
+
+
+async def run_add_to_playlist_create_check():
+    service = PlaylistService()
+    item = MediaItem("Movie", "", "movie", "1", True, Raw())
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.show_media("Movies", [item])
+        await pilot.pause(0.2)
+
+        app.action_add_to_playlist()
+        rows = await wait_for_playlist_rows(app, pilot)
+        assert any(isinstance(row, PlaylistCreateRow) for row in rows)
+        app.save_playlist_name_input("Weekend")
+        status = await wait_for_status(app, pilot, "Created playlist Weekend with Movie")
+
+        assert service.create_calls == [("Weekend", "Movie")]
+        assert status == "Created playlist Weekend with Movie"
+        assert not app.picker_visible
+
+
+async def run_remove_playlist_item_check():
+    service = PlaylistService()
+    playlist = service.playlist
+    first = MediaItem("Movie", "", "movie", "1", True, Raw())
+    second = MediaItem("Second", "", "movie", "2", True, Raw())
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.browsing_stack = [BrowseState("Favorites", [first, second], source="playlist", context_media=playlist, total=2)]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_remove_continue_watching()
+        status = await wait_for_status(app, pilot, "Removed Movie from Favorites")
+
+        assert service.remove_calls == [("Favorites", "Movie")]
+        assert [item.title for item in app.browsing_stack[-1].items] == ["Second"]
+        assert app.selected_media() is not None
+        assert app.selected_media().title == "Second"
+        assert status == "Removed Movie from Favorites"
+
+
 async def run_remove_continue_watching_check():
     raw = ContinueWatchingRaw()
     removed = MediaItem("Movie", "", "movie", "1", True, raw)
@@ -2105,7 +2220,7 @@ async def run_remove_continue_watching_requires_view_check():
         await pilot.pause(0.2)
 
         assert raw.remove_calls == 0
-        assert app.query_one("#status").content == "Open Continue Watching before removing an item"
+        assert app.query_one("#status").content == "Open Continue Watching or a playlist before removing an item"
 
 
 async def run_stream_picker_live_switch_check():

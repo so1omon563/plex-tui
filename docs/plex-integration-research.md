@@ -56,10 +56,11 @@ Already covered:
 - Direct playback paths where possible, with transcode fallback through PlexAPI.
 - Explicit video quality/direct/transcode preference in Settings and playback.
 - Details pane metadata, audio/subtitle stream display, and playback readiness.
+- Playlist management for creating playlists from selected media, adding media
+  to existing playlists, and removing items from playlist views.
 
 Not yet covered:
 
-- User/profile switching and auto sign-in.
 - Fuller profile switching and auto sign-in.
 
 ## Recommended Sequence

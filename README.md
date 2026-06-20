@@ -200,7 +200,8 @@ matching track.
 | `p` | Play selected item from the beginning |
 | `r` | Resume selected item from the saved Plex position |
 | `w` | Mark selected item watched / unwatched |
-| `backspace` / `delete` | Remove selected item from Continue Watching |
+| `P` | Add selected playable item to a playlist |
+| `backspace` / `delete` | Remove selected item from Continue Watching or a playlist |
 | `a` / `s` | Choose audio / subtitle preference |
 | `A` / `S` | Clear audio preference / cycle subtitle mode |
 | `x` | Stop launched `mpv` |
@@ -221,6 +222,8 @@ matching track.
 - Watched/unwatched toggling for selected playable Plex items.
 - Continue Watching episode rows show their show, season, and episode context,
   and items can be removed from the Continue Watching view.
+- Playlist management for creating playlists from selected media, adding media
+  to existing playlists, and removing items while browsing a playlist.
 - Movie editions appear as distinct variants when Plex reports multiple
   editions for a selected movie.
 - Settings screen for stream preferences, playback mode and transcode quality,
