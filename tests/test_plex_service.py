@@ -29,6 +29,13 @@ class SecondRawItem(RawItem):
     ratingKey = "2"
 
 
+class RawHubItem:
+    TYPE = None
+    title = "Recently Released Movies"
+    ratingKey = "hub-1"
+    thumb = "/library/hubs/recently-released/thumb"
+
+
 class EditionRawItem(RawItem):
     title = "Movie"
     ratingKey = "3"
@@ -113,7 +120,7 @@ class RawLibrary:
 
     def hubs(self):
         self.calls.append(("hubs", {}))
-        return [RawItem(), SecondRawItem()]
+        return [RawHubItem(), SecondRawItem()]
 
     def collections(self, **kwargs):
         self.calls.append(("collections", kwargs))
@@ -201,7 +208,7 @@ def test_library_entry_page_fetches_supported_submenus():
     service = object.__new__(PlexService)
     library = LibraryItem("Movies", "1", "movie", raw_library)
 
-    recommended = service.library_entry_page(library, "recommended", start=1, size=1)
+    recommended = service.library_entry_page(library, "recommended", start=0, size=2)
     collections = service.library_entry_page(library, "collections", start=50, size=25)
     playlists = service.library_entry_page(library, "playlists", start=75, size=25)
     categories = service.library_entry_page(library, "categories", start=0, size=25)
@@ -212,8 +219,10 @@ def test_library_entry_page_fetches_supported_submenus():
         ("playlists", {"maxresults": 25, "container_start": 75, "container_size": 25}),
         ("choices", "genre"),
     ]
-    assert [item.title for item in recommended.items] == ["Second Movie"]
-    assert recommended.start == 1
+    assert [item.title for item in recommended.items] == ["Recently Released Movies", "Second Movie"]
+    assert [item.kind for item in recommended.items] == ["hub", "hub"]
+    assert [item.playable for item in recommended.items] == [False, False]
+    assert recommended.start == 0
     assert recommended.total == 2
     assert len(collections.items) == 1
     assert collections.has_more

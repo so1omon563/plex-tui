@@ -3050,11 +3050,11 @@ def grid_items_are_collection_cards(items: list[MediaItem]) -> bool:
 def is_collection_card(media: MediaItem) -> bool:
     if media.playable:
         return False
+    if media.kind in {"hub", "collection", "playlist", "category"}:
+        return True
+    if media.artwork_path:
+        return False
     return media.kind in {
-        "hub",
-        "collection",
-        "playlist",
-        "category",
         "show",
         "season",
         "artist",
@@ -3287,7 +3287,7 @@ def grid_card_title_lines(value: str, config: AppConfig, collection_card: bool =
 
 
 def grid_card_subtitle(media: MediaItem) -> str:
-    kind = kind_label(media.kind)
+    kind = "" if media.kind == "hub" else kind_label(media.kind)
     subtitle = media.subtitle.strip()
     if subtitle.lower() == kind.lower():
         subtitle = ""

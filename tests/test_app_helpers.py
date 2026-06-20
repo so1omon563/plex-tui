@@ -901,6 +901,12 @@ def test_collection_grid_card_allows_longer_two_line_title():
     assert "..." not in title_text
 
 
+def test_show_grid_with_artwork_keeps_poster_card_layout():
+    media = MediaItem("Berserk", "1997", "show", "1", False, object(), artwork_path="/show/thumb")
+
+    assert not grid_items_are_collection_cards([media])
+
+
 def test_render_media_grid_text_snapshot_distinguishes_missing_and_collection_art():
     config = AppConfig("http://plex", "token", "client", grid_density="compact")
     items = [
