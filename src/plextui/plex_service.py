@@ -129,6 +129,21 @@ class PlexService:
     def library_items(self, library: LibraryItem) -> list[MediaItem]:
         return self.library_page(library, 0, DEFAULT_PAGE_SIZE).items
 
+    def playlists(self) -> list[MediaItem]:
+        return [to_media_item(item) for item in self.server.playlists()]
+
+    def create_playlist(self, title: str, item: MediaItem) -> MediaItem:
+        playlist = self.server.createPlaylist(title, items=[item.raw])
+        return to_media_item(playlist)
+
+    def add_to_playlist(self, playlist: MediaItem, item: MediaItem) -> MediaItem:
+        result = playlist.raw.addItems([item.raw])
+        return to_media_item(result or playlist.raw)
+
+    def remove_from_playlist(self, playlist: MediaItem, item: MediaItem) -> MediaItem:
+        result = playlist.raw.removeItems([item.raw])
+        return to_media_item(result or playlist.raw)
+
     def search_page(
         self,
         query: str,

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added playlist management for creating playlists from selected media, adding
+  selected media to existing playlists, and removing items from playlist views.
+
 ## 0.4.4 - 2026-06-18
 
 - Added a keyboard action to mark the selected playable Plex item watched or

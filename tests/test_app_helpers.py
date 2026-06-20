@@ -20,6 +20,8 @@ from plextui.app import (
     LibraryMenuRow,
     MediaGrid,
     MediaRow,
+    PlaylistCreateRow,
+    PlaylistTargetRow,
     PlexTuiApp,
     card_artwork_fetch_size,
     card_artwork_pixel_size,
@@ -55,6 +57,9 @@ from plextui.app import (
     render_media_grid,
     render_media_grid_card,
     render_picker_details,
+    render_playlist_create_details,
+    render_playlist_picker_details,
+    render_playlist_target_details,
     render_playback_details,
     render_playback_error_details,
     render_settings_change_details,
@@ -898,10 +903,26 @@ def test_render_help_groups_key_bindings():
     assert "p: play selected media from beginning" in rendered
     assert "r: resume selected media" in rendered
     assert "w: mark selected media watched / unwatched" in rendered
-    assert "backspace/delete: remove selected Continue Watching item" in rendered
+    assert "P: add selected media to a playlist" in rendered
+    assert "backspace/delete: remove selected Continue Watching or playlist item" in rendered
     assert "ctrl+r: reconnect / reload libraries" in rendered
     assert "PLEX_TUI_ARTWORK_LOG=1" in rendered
     assert "?: show help" in rendered
+
+
+def test_playlist_picker_rows_and_details():
+    media = MediaItem("Movie", "", "movie", "1", True, object())
+    playlist = MediaItem("Favorites", "", "playlist", "p1", False, object())
+    create_row = PlaylistCreateRow()
+    target_row = PlaylistTargetRow(playlist)
+
+    assert create_row.label_text == "New playlist..."
+    assert target_row.label_text == "Favorites"
+    assert context_hint(create_row) == "Playlists: Enter creates a new playlist"
+    assert context_hint(target_row) == "Playlists: Enter adds selected media"
+    assert "1 existing playlist" in render_playlist_picker_details(media, 1)
+    assert "Create a playlist containing Movie" in render_playlist_create_details(media)
+    assert "Add Movie to this playlist" in render_playlist_target_details(playlist, media)
 
 
 def test_footer_shows_core_bindings_and_help_keeps_full_reference():
@@ -925,9 +946,11 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
         "resume_selected",
     }
     assert "alternate_library_action" in hidden
+    assert "add_to_playlist" in hidden
     assert "toggle_watched" in hidden
     assert "remove_continue_watching" in hidden
     assert hidden_keys_by_action["remove_continue_watching"] == {"backspace", "delete"}
+    assert hidden_keys_by_action["add_to_playlist"] == {"P"}
     assert "audio_picker" in hidden
     assert "subtitle_picker" in hidden
     assert "a: choose and save audio preference" in rendered

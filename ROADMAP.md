@@ -68,8 +68,10 @@
 - In-playback audio/subtitle switching uses mpv IPC when the active stream
   exposes matching tracks; Plex-transcoded streams may still require relaunching
   with the saved preference.
-- Design playlist management before implementation: adding/removing media from
-  playlists and creating playlists are intentionally out of PR #80 scope.
+- Playlist management can create playlists from selected media, add selected
+  media to existing playlists, and remove items while browsing a playlist.
+  Continue design passes for bulk playlist actions and richer playlist editing
+  if real-library use shows those workflows are needed.
 - Later design passes: profile switching with auto sign-in.
 
 ## Technical Follow-Up

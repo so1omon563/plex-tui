@@ -137,13 +137,46 @@ class RawLibraryHub:
         return [RawItem(), SecondRawItem()]
 
 
+class RawPlaylist:
+    TYPE = "playlist"
+    title = "Favorites"
+    ratingKey = "playlist-1"
+    key = "/playlists/1"
+
+    def __init__(self) -> None:
+        self.calls = []
+
+    def items(self):
+        self.calls.append(("items",))
+        return [RawItem()]
+
+    def addItems(self, items):
+        self.calls.append(("addItems", items))
+        return self
+
+    def removeItems(self, items):
+        self.calls.append(("removeItems", items))
+        return self
+
+
 class RawServer:
     def __init__(self) -> None:
         self.calls = []
+        self.raw_playlist = RawPlaylist()
 
     def search(self, query, **kwargs):
         self.calls.append((query, kwargs))
         return [RawItem()]
+
+    def playlists(self):
+        self.calls.append(("playlists",))
+        return [self.raw_playlist]
+
+    def createPlaylist(self, title, items=None):
+        self.calls.append(("createPlaylist", title, items))
+        playlist = RawPlaylist()
+        playlist.title = title
+        return playlist
 
 
 def test_library_page_fetches_single_plex_page():
@@ -204,6 +237,30 @@ def test_category_children_fetch_library_search_results():
     ]
     assert len(page.items) == 1
     assert page.has_more
+
+
+def test_playlist_helpers_create_add_and_remove_items():
+    service = object.__new__(PlexService)
+    service.server = RawServer()
+    item = MediaItem("Movie", "", "movie", "1", True, RawItem())
+
+    playlists = service.playlists()
+    created = service.create_playlist("Weekend", item)
+    added = service.add_to_playlist(playlists[0], item)
+    removed = service.remove_from_playlist(playlists[0], item)
+
+    assert service.server.calls == [
+        ("playlists",),
+        ("createPlaylist", "Weekend", [item.raw]),
+    ]
+    assert playlists[0].title == "Favorites"
+    assert created.title == "Weekend"
+    assert added.title == "Favorites"
+    assert removed.title == "Favorites"
+    assert service.server.raw_playlist.calls == [
+        ("addItems", [item.raw]),
+        ("removeItems", [item.raw]),
+    ]
 
 
 def test_movie_editions_are_visible_as_variants():
