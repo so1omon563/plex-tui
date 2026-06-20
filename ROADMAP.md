@@ -2,6 +2,10 @@
 
 ## App UX
 
+- Use `docs/app-design-philosophy.md` as the source of truth for whole-app UI
+  direction. Future polish should align pane focus, details hierarchy,
+  list/grid metadata rhythm, Settings scanning, empty states, and glyph reuse
+  with that document.
 - Continue refining grid view presentation after the collection-card artwork
   pass, especially against real terminal themes, wide/narrow panes, and
   screenshot refreshes.
