@@ -2212,13 +2212,13 @@ async def run_remove_continue_watching_check():
         await pilot.pause(0.2)
 
         app.action_remove_continue_watching()
-        await pilot.pause(0.5)
+        status = await wait_for_status(app, pilot, "Removed Movie from Continue Watching", attempts=80)
 
         assert raw.remove_calls == 1
         assert [item.title for item in app.browsing_stack[-1].items] == ["Second"]
         assert app.selected_media() is not None
         assert app.selected_media().title == "Second"
-        assert app.query_one("#status").content == "Removed Movie from Continue Watching"
+        assert status == "Removed Movie from Continue Watching"
 
 
 async def run_remove_continue_watching_requires_view_check():
