@@ -256,9 +256,19 @@ def render_kitty_artwork(data: bytes, width: int = 28, max_height: int = 20, tra
     image = resize_for_kitty_cells(image, columns, rows)
     buffer = BytesIO()
     image.save(buffer, format="PNG")
-    payload = base64.b64encode(buffer.getvalue()).decode("ascii")
-    image_id = kitty_image_id(buffer.getvalue(), columns, rows)
-    commands = kitty_graphics_commands(payload, image_id=image_id, columns=columns, rows=rows)
+    image_data = buffer.getvalue()
+    payload = base64.b64encode(image_data).decode("ascii")
+    image_id = kitty_image_id(image_data, columns, rows)
+    commands = (
+        kitty_graphics_file_commands(
+            kitty_protocol_image_path(image_data, image_id),
+            image_id=image_id,
+            columns=columns,
+            rows=rows,
+        )
+        if transmit
+        else kitty_graphics_commands(payload, image_id=image_id, columns=columns, rows=rows)
+    )
     if transmit:
         emit_kitty_graphics_commands(commands)
     return KittyImage(
@@ -313,10 +323,25 @@ def kitty_graphics_commands(
     return commands
 
 
+def kitty_graphics_file_commands(path: Path, image_id: int, columns: int, rows: int) -> list[str]:
+    payload = base64.b64encode(str(path).encode("utf-8")).decode("ascii")
+    placement = f",i={image_id},U=1,c={max(1, columns)},r={max(1, rows)}"
+    return [f"\033_Ga=T,t=f,f=100,q=2{placement};{payload}\033\\"]
+
+
+def kitty_protocol_image_path(data: bytes, image_id: int) -> Path:
+    directory = cache_path() / "kitty"
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{image_id:06x}.png"
+    if not path.exists():
+        path.write_bytes(data)
+    return path
+
+
 def emit_kitty_graphics_commands(commands: list[str]) -> None:
-    payload = "".join(commands).encode("ascii")
     with KITTY_TRANSMIT_LOCK:
-        emit_kitty_graphics_payload(payload)
+        for command in commands:
+            emit_kitty_graphics_payload(command.encode("ascii"))
 
 
 def emit_kitty_graphics_payload(payload: bytes) -> None:

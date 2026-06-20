@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from plexapi.server import PlexServer
@@ -107,7 +107,7 @@ class PlexService:
             return self.library_page(library, start, size)
         if entry == "recommended":
             raw_items = list(library.raw.hubs())
-            return sliced_media_page(raw_items, start, size)
+            return sliced_media_page([to_hub_media_item(item) for item in raw_items], start, size)
         if entry == "collections":
             raw_items = library.raw.collections(
                 maxresults=size,
@@ -249,6 +249,13 @@ def to_media_item(raw: Any) -> MediaItem:
         raw=raw,
         artwork_path=artwork_path(raw),
     )
+
+
+def to_hub_media_item(raw: Any) -> MediaItem:
+    item = to_media_item(raw)
+    if item.kind == "hub":
+        return item
+    return replace(item, kind="hub", playable=False)
 
 
 def media_details(item: MediaItem) -> MediaDetails:
