@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.13 - 2026-06-20
+
 - Polished pane focus styling so sidebar, media, and details panes share a
   consistent focused border, title treatment, and compact focus marker.
 - Made container-only grid views such as Recommended use wider navigation cards
@@ -14,6 +16,8 @@
   mode glyphs in the library menu for clearer wayfinding.
 - Refreshed README screenshots for the current grid, list, browse-mode,
   collection-card, and block-renderer views.
+- Aligned pane borders, focused pane titles, active list rows, and selected
+  grid-card text around a shared visual-state palette.
 
 ## 0.4.9 - 2026-06-19
 

@@ -202,18 +202,21 @@ Already aligned:
   details instead of blank lists or generic error blobs.
 - Library browse-mode rows reuse the collection glyph vocabulary as compact
   wayfinding markers.
+- Pane borders, focused pane titles, active list rows, and selected grid-card
+  text now share a small visual-state palette instead of unrelated theme
+  variables.
 - Footer hints keep a compact visible action set with Help as the full
   reference.
 
 Still uneven:
 
-- Pane focus, row highlight, and border language are functional but not yet as
-  intentional as the collection cards.
 - List view and grid view do not yet share a strong metadata rhythm.
 - Settings rows work, but the scanning hierarchy can be tightened.
 - The new non-happy-path states are intentionally simple; future screenshot
   passes should capture real examples once they are easy to reproduce.
 - Glyph reuse should stay selective and earn its place surface by surface.
+- README screenshots should be refreshed after palette changes are reviewed in
+  a real terminal session.
 
 ## Recommended Implementation Order
 
@@ -225,11 +228,9 @@ Still uneven:
    action language across both browse modes.
 4. Settings scan pass: preserve compact rows while making current values easier
    to compare.
-5. Pane and palette convergence: align focus chrome, state surfaces, and
-   navigation glyphs with the calm blueprint direction.
-6. Broader glyph reuse experiments: introduce small family markers only where
+5. Broader glyph reuse experiments: introduce small family markers only where
    they improve orientation.
-7. Screenshot refresh: update README screenshots after the next visible UI
+6. Screenshot refresh: update README screenshots after the next visible UI
    refinement pass that changes the default browse surfaces.
 
 ## Review Checklist
