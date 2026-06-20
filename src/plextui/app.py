@@ -261,8 +261,11 @@ class MediaGrid(Static):
         if not self.is_mounted:
             return
         row = (self.selected_index - self.page_start) // max(1, self.columns)
+        row_height = grid_card_height(self.config)
+        if grid_items_are_collection_cards(self.visible_page_items()):
+            row_height += 1
         if self.parent is not None:
-            self.parent.scroll_to(y=max(0, row * grid_card_height(self.config)), animate=False)
+            self.parent.scroll_to(y=max(0, row * row_height), animate=False)
 
     def on_key(self, event) -> None:
         if not self.items:
@@ -2980,7 +2983,9 @@ def render_media_grid(
         for _ in cards:
             row.add_column(width=grid_card_width(config), no_wrap=True)
         row.add_row(*cards)
-        rows.append(Align.center(row))
+        rows.append(row if grid_items_are_collection_cards(items) else Align.center(row))
+        if grid_items_are_collection_cards(items) and start + columns < len(items):
+            rows.append(Text(""))
     return Group(*rows)
 
 
@@ -2993,11 +2998,11 @@ def render_media_grid_card(
     title_style = "bold #e5a00d" if selected else "bold"
     card_width = grid_card_width(config)
     title = grid_card_text(media.title, config)
-    subtitle = grid_card_text("  ".join(bit for bit in (kind_label(media.kind), media.subtitle) if bit), config)
+    subtitle = grid_card_text(grid_card_subtitle(media), config)
     artwork = artwork_overrides.get(media.key) if artwork_overrides is not None else None
     artwork = copy_renderable(artwork)
     if artwork is None:
-        artwork = grid_artwork_placeholder(grid_artwork_placeholder_label(media), config)
+        artwork = grid_missing_artwork_placeholder(media, config) if media.playable else render_collection_art(media, config)
     else:
         artwork = center_renderable_lines(artwork, card_width)
     footer = grid_card_footer(media, selected)
@@ -3009,17 +3014,207 @@ def render_media_grid_card(
     )
 
 
+def grid_items_are_collection_cards(items: list[MediaItem]) -> bool:
+    return bool(items) and all(is_collection_card(item) for item in items)
+
+
+def is_collection_card(media: MediaItem) -> bool:
+    if media.playable or media.artwork_path:
+        return False
+    return media.kind in {
+        "hub",
+        "collection",
+        "playlist",
+        "category",
+        "show",
+        "season",
+        "artist",
+        "album",
+        "photoalbum",
+    }
+
+
+def grid_missing_artwork_placeholder(media: MediaItem, config: AppConfig) -> Group:
+    return grid_artwork_placeholder(grid_artwork_placeholder_label(media), config)
+
+
+def render_collection_art(media: MediaItem, config: AppConfig) -> Group:
+    spec = grid_density_spec(config)
+    width = grid_card_width(config)
+    content_width = grid_card_content_width(config)
+    height = int(spec["art_height"])
+    glyph = collection_glyph(media)
+    glyph_lines = glyph.lines[: max(1, height - 2)]
+    top_pad = max(0, (height - len(glyph_lines)) // 2)
+    bottom_pad = max(0, height - top_pad - len(glyph_lines))
+    lines = []
+    row_index = 0
+    for _ in range(top_pad):
+        lines.append(collection_art_line("", width, content_width, glyph.background, row_index=row_index, blueprint_style=glyph.blueprint))
+        row_index += 1
+    for index, line in enumerate(glyph_lines):
+        style = glyph.accent if index == glyph.primary_line else glyph.foreground
+        lines.append(
+            collection_art_line(
+                line,
+                width,
+                content_width,
+                glyph.background,
+                style,
+                row_index=row_index,
+                blueprint_style=glyph.blueprint,
+            )
+        )
+        row_index += 1
+    for _ in range(bottom_pad):
+        lines.append(collection_art_line("", width, content_width, glyph.background, row_index=row_index, blueprint_style=glyph.blueprint))
+        row_index += 1
+    return Group(*lines[:height])
+
+
+@dataclass(frozen=True)
+class CollectionGlyph:
+    lines: tuple[str, ...]
+    primary_line: int = 2
+    background: str = "on #202332"
+    foreground: str = "#8f96b8 on #202332"
+    accent: str = "#e5a00d on #202332"
+    blueprint: str = "#3b4055 on #202332"
+
+
+def collection_glyph(media: MediaItem) -> CollectionGlyph:
+    title = media.title.lower()
+    if "continue" in title and "watch" in title:
+        return CollectionGlyph(("  ◜──◝  ", "  │▶ │  ", "  │ ●│  ", "  ◟──◞  "), background="on #202735", foreground="#9098bd on #202735", blueprint="#394357 on #202735")
+    if "recently added" in title:
+        return CollectionGlyph(("   │   ", " ──┼── ", "   │   ", "  ╴╵╶  "), background="on #202e30", foreground="#93b7b2 on #202e30", blueprint="#39494a on #202e30")
+    if "recently released" in title or "new" in title:
+        return CollectionGlyph((" ╲  │  ╱ ", "   ✦   ", " ──┼── ", "   ✦   ", " ╱  │  ╲ "), background="on #242638", foreground="#a7a2c6 on #242638", blueprint="#3e4057 on #242638")
+    if "recommended" in title:
+        return CollectionGlyph((" ●    ╱ ", "  ╲  ●  ", "   ╲╱   ", "  ●─╯   "), background="on #222535", foreground="#9ba3c6 on #222535", blueprint="#3c4159 on #222535")
+    if "trending" in title or title.startswith("top "):
+        return CollectionGlyph(("     ╱ ", "  ● ╱  ", "   ╱●  ", "  ╱    ", " ●     "), background="on #2a2630", foreground="#b9a0bd on #2a2630", blueprint="#463c49 on #2a2630")
+    if "unwatched" in title:
+        return CollectionGlyph((" ○   ○ ", "   ○   ", " ○   ○ ", "   ○   "), background="on #242a33", foreground="#9ca8bd on #242a33", blueprint="#3e4654 on #242a33")
+    if "actor" in title or "by " in title:
+        return CollectionGlyph(("   ○   ", "  ╱│╲  ", "   │   ", "  ╱ ╲  "), background="on #272b35", foreground="#a7adc7 on #272b35", blueprint="#414757 on #272b35")
+    if "genre" in title or media.kind == "category":
+        return category_collection_glyph(media.title)
+    if media.kind == "playlist":
+        return CollectionGlyph((" ╭────╮ ", " ├────┤ ", " ├────┤ ", " ╰────╯ "), background="on #232c2a", foreground="#99b8ad on #232c2a", blueprint="#3d4944 on #232c2a")
+    if media.kind == "collection":
+        return CollectionGlyph((" ◇  ◇ ", "  ◇◇  ", " ◇  ◇ ", "  ◇◇  "), background="on #202e30", foreground="#9eb7ba on #202e30", blueprint="#39494a on #202e30")
+    if media.kind in {"show", "season"}:
+        return CollectionGlyph((" ┌────┐ ", " ├────┤ ", " ├────┤ ", " └────┘ "), background="on #2b2732", foreground="#b2a2c6 on #2b2732", blueprint="#463f50 on #2b2732")
+    return CollectionGlyph(("  ╱╲   ", " ╱  ╲  ", " ╲  ╱  ", "  ╲╱   "), background="on #262936", foreground="#9aa2bf on #262936", blueprint="#404557 on #262936")
+
+
+def category_collection_glyph(title: str) -> CollectionGlyph:
+    normalized = title.lower()
+    motifs = {
+        "action": ("   ╱╱  ", "  ╱╱   ", " ╱╱    ", "   ╱╱  "),
+        "adventure": (" ╱╲    ", "╱  ╲   ", "╲  ╱   ", " ╲╱    "),
+        "animation": (" ▢ ▢  ", "  ▢ ▢ ", " ▢ ▢  ", "  ▢ ▢ "),
+        "comedy": (" ○  ○ ", "   ○  ", " ○  ○ ", "   ○  "),
+        "documentary": (" ┬─┬  ", " ├─┤  ", " ┼─┼  ", " ┴─┴  "),
+        "drama": ("  ││  ", "  ││  ", " ─┼┼─ ", "  ││  "),
+        "horror": ("  ◇   ", " ◇ ◇  ", "  ◇   ", " ◇ ◇  "),
+        "sci": (" ●─╮  ", "   ●  ", " ╰─●  ", "  ●   "),
+        "science": (" ●─╮  ", "   ●  ", " ╰─●  ", "  ●   "),
+        "romance": (" ◜ ◝  ", "  ◇   ", " ◟ ◞  ", "  ◇   "),
+        "thriller": (" ╲╲   ", "  ╲╲  ", "   ╲╲ ", "  ╲╲  "),
+    }
+    lines = (" ▬▬   ", "  ▬▬  ", " ▬▬   ", "  ▬▬  ")
+    for key, motif in motifs.items():
+        if key in normalized:
+            lines = motif
+            break
+    return CollectionGlyph(lines, background="on #202e30", foreground="#94b0ad on #202e30", blueprint="#39494a on #202e30")
+
+
+def collection_art_line(
+    value: str,
+    width: int,
+    content_width: int,
+    background_style: str,
+    glyph_style: str | None = None,
+    row_index: int = 0,
+    blueprint_style: str = "#3b4055 on #202332",
+) -> Text:
+    left = (width - content_width) // 2
+    right = width - content_width - left
+    text = Text(" " * left, style="dim")
+    inner = collection_blueprint_layer(content_width, row_index, background_style, blueprint_style)
+    if value and glyph_style is not None:
+        glyph_text = truncate_text(value, content_width)
+        glyph_left = max(0, (content_width - len(glyph_text)) // 2)
+        glyph_right = max(0, content_width - glyph_left - len(glyph_text))
+        inner = collection_blueprint_layer(glyph_left, row_index, background_style, blueprint_style)
+        inner.append(glyph_text, style=glyph_style)
+        inner.append_text(collection_blueprint_layer(glyph_right, row_index, background_style, blueprint_style))
+    text.append_text(inner)
+    text.append(" " * right, style="dim")
+    return text
+
+
+def collection_blueprint_layer(width: int, row_index: int, background_style: str, blueprint_style: str) -> Text:
+    if width <= 0:
+        return Text("")
+    chars = [" "] * width
+    if row_index == 0 and width >= 2:
+        chars[0] = "┌"
+        chars[-1] = "┐"
+    elif width >= 7 and row_index % 3 == 1:
+        chars[width // 3] = "·"
+        chars[(width * 2) // 3] = "·"
+    elif row_index % 3 == 2:
+        chars[width // 2] = "│"
+    text = Text()
+    for char in chars:
+        text.append(char, style=blueprint_style if char != " " else background_style)
+    return text
+
+
 def grid_artwork_placeholder(status: str, config: AppConfig) -> Group:
     spec = grid_density_spec(config)
     width = grid_card_width(config)
+    content_width = grid_card_content_width(config)
     height = int(spec["art_height"])
-    label = truncate_text(f"[{status}]", grid_card_content_width(config))
-    blank = " " * width
+    background, accent = grid_artwork_placeholder_palette(status)
     lines = []
-    midpoint = height // 2
     for index in range(height):
-        lines.append(grid_card_line(label, width, "dim") if index == midpoint else Text(blank, style="dim"))
+        line_style = accent if index in grid_artwork_placeholder_accent_rows(height) else background
+        lines.append(grid_artwork_placeholder_line(width, content_width, line_style))
     return Group(*lines)
+
+
+def grid_artwork_placeholder_palette(status: str) -> tuple[str, str]:
+    palettes = {
+        "hub": ("on #222535", "on #3f4563"),
+        "collection": ("on #202e30", "on #3d5b5e"),
+        "playlist": ("on #232c2a", "on #416059"),
+        "show": ("on #2b2732", "on #574866"),
+        "season": ("on #2d2826", "on #5f4c3f"),
+        "artist": ("on #272b35", "on #485670"),
+        "album": ("on #282a30", "on #4c5364"),
+        "browse": ("on #262936", "on #444b61"),
+    }
+    return palettes.get(status, ("on #252834", "on #464d60"))
+
+
+def grid_artwork_placeholder_accent_rows(height: int) -> set[int]:
+    if height <= 3:
+        return {height // 2}
+    return {height // 3, (height * 2) // 3}
+
+
+def grid_artwork_placeholder_line(width: int, content_width: int, style: str) -> Text:
+    left = (width - content_width) // 2
+    right = width - content_width - left
+    line = Text(" " * left, style="dim")
+    line.append(" " * content_width, style=style)
+    line.append(" " * right, style="dim")
+    return line
 
 
 def grid_artwork_placeholder_label(media: MediaItem) -> str:
@@ -3042,6 +3237,14 @@ def grid_artwork_placeholder_label(media: MediaItem) -> str:
 
 def grid_card_text(value: str, config: AppConfig) -> str:
     return truncate_text(value.strip(), grid_card_content_width(config))
+
+
+def grid_card_subtitle(media: MediaItem) -> str:
+    kind = kind_label(media.kind)
+    subtitle = media.subtitle.strip()
+    if subtitle.lower() == kind.lower():
+        subtitle = ""
+    return "  ".join(bit for bit in (kind, subtitle) if bit)
 
 
 def grid_card_footer(media: MediaItem, selected: bool) -> str:
