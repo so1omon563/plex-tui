@@ -21,9 +21,9 @@ Built for people who spend their day in a terminal and would rather stay there.
 
 ## Why?
 
-Years ago, projects like `plexctl` proved that Plex could work surprisingly
-well from a terminal. Most terminal Plex projects eventually drifted toward
-maintenance tools, dashboards, or abandoned codebases.
+Most terminal Plex tools are built for administration, automation, or quick
+status checks. Those are useful jobs, but they are not the same as browsing a
+library, comparing options, and choosing something to watch.
 
 Meanwhile, terminal applications got better. Tools like lazygit, gitui, btop,
 and modern Textual apps raised the bar for what a TUI can be: rich layouts,
