@@ -2473,8 +2473,11 @@ class PlexTuiApp(App[None]):
         if not media.playable:
             self.set_status("Selected item cannot be marked watched")
             return
-        state = watched_state(media.raw)
-        target = "unwatched" if state == "watched" else "watched"
+        target_watched, method = watched_state_action(media.raw)
+        if method is None:
+            self.set_status("Selected item does not support watched state changes")
+            return
+        target = "watched" if target_watched else "unwatched"
         self.set_status(f"Marking {media.title} {target}...")
         self.toggle_watched_state(media)
 
@@ -2572,9 +2575,7 @@ class PlexTuiApp(App[None]):
 
     @work(thread=True, exclusive=True)
     def toggle_watched_state(self, media: MediaItem) -> None:
-        target_watched = watched_state(media.raw) != "watched"
-        method_name = "markWatched" if target_watched else "markUnwatched"
-        method = getattr(media.raw, method_name, None)
+        target_watched, method = watched_state_action(media.raw)
         if not callable(method):
             self.call_from_thread(self.set_status, "Selected item does not support watched state changes")
             return
@@ -4559,6 +4560,13 @@ def append_debug_log_hint(message: str, debug_path: object | None) -> str:
     if debug_path is None:
         return message
     return f"{message}. Debug log: {debug_path}"
+
+
+def watched_state_action(raw: object) -> tuple[bool, Any | None]:
+    target_watched = watched_state(raw) != "watched"
+    method_name = "markWatched" if target_watched else "markUnwatched"
+    method = getattr(raw, method_name, None)
+    return target_watched, method if callable(method) else None
 
 
 def render_audio_playback_preference(config: AppConfig, audio_choice: StreamChoice | None) -> str:
