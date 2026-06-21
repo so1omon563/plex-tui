@@ -226,6 +226,20 @@ def mpv_set_property(socket_path: Path, property_name: str, value: Any) -> bool:
     return bool(response and response.get("error") == "success")
 
 
+def toggle_mpv_pause(handle: PlayerHandle) -> bool:
+    if not handle.active:
+        return False
+    response = mpv_command(handle.socket_path, ["cycle", "pause"])
+    return bool(response and response.get("error") == "success")
+
+
+def seek_mpv(handle: PlayerHandle, seconds: int) -> bool:
+    if not handle.active:
+        return False
+    response = mpv_command(handle.socket_path, ["seek", seconds, "relative+exact"])
+    return bool(response and response.get("error") == "success")
+
+
 def mpv_command(socket_path: Path, command: list[Any]) -> dict[str, Any] | None:
     if not socket_path.exists():
         return None

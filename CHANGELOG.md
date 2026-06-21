@@ -13,6 +13,10 @@
   for scripts.
 - Added Settings controls for reordering Plex libraries in the sidebar while
   preserving existing library visibility toggles.
+- Added active `mpv` playback controls for pause/resume and short seek
+  backward/forward actions from inside the TUI.
+- Fixed app theme changes so pane chrome, status, playback footer, and active
+  rows use Textual theme colors instead of a fixed custom palette.
 
 ## 0.4.13 - 2026-06-20
 
