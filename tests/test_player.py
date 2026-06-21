@@ -200,6 +200,7 @@ def test_terminal_playback_uses_tct_and_terminal_output():
     assert "--vo-tct-buffering=frame" in args
     assert "--vo-tct-width=100" in args
     assert "--vo-tct-height=28" in args
+    assert "--vf=fps=15,scale=640:-2" in args
     assert "--profile=sw-fast" in args
     assert "--really-quiet" in args
     assert "--autofit=1280x720" not in args
@@ -222,13 +223,32 @@ def test_terminal_playback_prefers_kitty_video_when_supported():
         patch("plextui.player.ProgressMonitor.start"),
         patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
     ):
-        play_with_mpv(item, playback_display="terminal")
+        play_with_mpv(item, playback_display="terminal", terminal_video_profile="sharp")
 
     args = popen.call_args.args[0]
     assert "--vo=kitty" in args
     assert "--terminal=yes" in args
+    assert "--vf=fps=24,scale=960:-2" in args
     assert "--vo=tct" not in args
     assert not any(arg.startswith("--vo-tct-") for arg in args)
+
+
+def test_terminal_playback_balanced_profile_scales_terminal_video():
+    item = Item()
+    tty = MagicMock()
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch.dict("plextui.player.os.environ", {"KITTY_WINDOW_ID": "1"}, clear=True),
+        patch("plextui.player.Path.open", return_value=tty),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        play_with_mpv(item, playback_display="terminal", terminal_video_profile="balanced")
+
+    args = popen.call_args.args[0]
+    assert "--vo=kitty" in args
+    assert "--vf=fps=24,scale=854:-2" in args
 
 
 def test_subtitle_none_disables_subtitle_selection():

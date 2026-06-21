@@ -1900,6 +1900,11 @@ class PlexTuiApp(App[None]):
             if self.update_preferences(playback_display=next_display):
                 self.refresh_settings_after_change(action, "Playback display", playback_display_value(self.config))
             return
+        if action == "cycle_terminal_video_profile":
+            next_profile = next_terminal_video_profile(self.config.terminal_video_profile)
+            if self.update_preferences(terminal_video_profile=next_profile):
+                self.refresh_settings_after_change(action, "Terminal video", terminal_video_profile_value(self.config))
+            return
         if action == "cycle_transcode_quality":
             next_quality = next_transcode_quality(self.config.transcode_quality)
             if self.update_preferences(transcode_quality=next_quality):
@@ -2838,6 +2843,7 @@ class PlexTuiApp(App[None]):
                     window_size=effective_mpv_window_size(self.config),
                     playback_mode=self.config.playback_mode,
                     playback_display=self.config.playback_display,
+                    terminal_video_profile=self.config.terminal_video_profile,
                     transcode_quality=self.config.transcode_quality,
                     resume=resume,
                 )
@@ -2877,6 +2883,7 @@ class PlexTuiApp(App[None]):
                     window_size=effective_mpv_window_size(self.config),
                     playback_mode=self.config.playback_mode,
                     playback_display=self.config.playback_display,
+                    terminal_video_profile=self.config.terminal_video_profile,
                     transcode_quality=self.config.transcode_quality,
                     resume=resume,
                 )
@@ -3851,6 +3858,7 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsHeaderRow("Playback"),
         SettingsActionRow(f"Playback Mode: {playback_mode_value(config)}", "cycle_playback_mode"),
         SettingsActionRow(f"Playback Display: {playback_display_value(config)}", "cycle_playback_display"),
+        SettingsActionRow(f"Terminal Video: {terminal_video_profile_value(config)}", "cycle_terminal_video_profile"),
         SettingsActionRow(f"Transcode Quality: {transcode_quality_value(config)}", "cycle_transcode_quality"),
         SettingsActionRow(f"mpv Window Size: {mpv_window_size_value(config)}", "cycle_mpv_window_size"),
         SettingsActionRow("Set custom mpv window size", "set_mpv_window_size"),
@@ -3921,12 +3929,13 @@ def render_settings(config: AppConfig) -> str:
         [
             ("Playback Mode", playback_mode_value(config)),
             ("Playback Display", playback_display_value(config)),
+            ("Terminal Video", terminal_video_profile_value(config)),
             ("Transcode Quality", transcode_quality_value(config)),
             ("mpv Window Size", mpv_window_size_value(config)),
         ],
         [
             "Force transcode only when direct/default playback is not desired.",
-            "Terminal playback is experimental and takes over the terminal until mpv exits.",
+            "Terminal playback is experimental, sub-par for normal watching, and takes over the terminal until mpv exits.",
             "Cycle common mpv sizes or set a custom value such as 80%, 90%, 1280x720, or 80%x80%.",
         ],
     )
@@ -4307,6 +4316,8 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         return f"Current playback mode: {playback_mode_value(config)}"
     if action == "cycle_playback_display":
         return f"Current playback display: {playback_display_value(config)}"
+    if action == "cycle_terminal_video_profile":
+        return f"Current terminal video: {terminal_video_profile_value(config)}"
     if action == "cycle_transcode_quality":
         return f"Current transcode quality: {transcode_quality_value(config)}"
     if action == "toggle_artwork":
@@ -4358,7 +4369,9 @@ def settings_action_help(action: str) -> str:
     if action == "cycle_playback_mode":
         return "Press Enter to choose auto/direct-default playback or force Plex transcoding."
     if action == "cycle_playback_display":
-        return "Press Enter to choose external mpv windows or experimental terminal playback."
+        return "Press Enter to choose external mpv windows or novelty terminal playback."
+    if action == "cycle_terminal_video_profile":
+        return "Press Enter to choose smooth, balanced, or sharp terminal playback."
     if action == "cycle_transcode_quality":
         return "Press Enter to choose the quality used when playback mode forces transcoding."
     if action == "set_mpv_window_size":
@@ -4410,6 +4423,7 @@ def settings_action_label(action: str) -> str:
         "cycle_subtitle_mode": "Subtitle Mode",
         "cycle_playback_mode": "Playback Mode",
         "cycle_playback_display": "Playback Display",
+        "cycle_terminal_video_profile": "Terminal Video",
         "cycle_transcode_quality": "Transcode Quality",
         "cycle_mpv_window_size": "mpv Window Size",
         "set_mpv_window_size": "mpv Window Size",
@@ -4828,6 +4842,24 @@ def next_playback_display(value: str) -> str:
     return "terminal" if value == "external" else "external"
 
 
+def terminal_video_profile_value(config: AppConfig) -> str:
+    labels = {
+        "smooth": "Smooth (15 fps / 640px)",
+        "balanced": "Balanced (24 fps / 854px)",
+        "sharp": "Sharp (24 fps / 960px)",
+    }
+    return labels.get(config.terminal_video_profile, labels["smooth"])
+
+
+def next_terminal_video_profile(value: str) -> str:
+    values = ["smooth", "balanced", "sharp"]
+    try:
+        index = values.index(value)
+    except ValueError:
+        return "smooth"
+    return values[(index + 1) % len(values)]
+
+
 def transcode_quality_value(config: AppConfig) -> str:
     return transcode_quality_label(config.transcode_quality)
 
@@ -4900,6 +4932,7 @@ def render_playback_details(
         f"Mode: {player.stream_mode}",
         f"Playback preference: {playback_mode_value(config)}",
         f"Playback display: {playback_display_value(config)}",
+        f"Terminal video: {terminal_video_profile_value(config)}",
         f"Transcode quality: {transcode_quality_value(config)}",
         f"Resume: {format_offset(player.start_offset_ms) if player.start_offset_ms else 'start'}",
         f"Subtitles available: {player.subtitle_count}",
@@ -5069,6 +5102,7 @@ def render_app_diagnostics(config: AppConfig, mpv_info: tuple[str, str]) -> str:
         f"mpv window size: {mpv_window_size_value(config)}",
         f"Playback mode: {playback_mode_value(config)}",
         f"Playback display: {playback_display_value(config)}",
+        f"Terminal video: {terminal_video_profile_value(config)}",
         f"Transcode quality: {transcode_quality_value(config)}",
     ]
     if mpv_path == "missing" or mpv_version.startswith("version check failed"):
@@ -5136,6 +5170,7 @@ def effective_stream_preference_rows(raw: object, config: AppConfig) -> list[tup
     return [
         ("Playback Mode", playback_mode_value(config)),
         ("Playback Display", playback_display_value(config)),
+        ("Terminal Video", terminal_video_profile_value(config)),
         ("Transcode Quality", transcode_quality_value(config)),
         ("Audio", render_audio_playback_preference(config, audio_choice).removeprefix("audio ")),
         ("Subtitles", render_subtitle_playback_preference(config, subtitle_choice).removeprefix("subtitles ")),

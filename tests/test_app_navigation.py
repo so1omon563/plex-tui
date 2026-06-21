@@ -2143,6 +2143,7 @@ async def run_playback_footer_check():
         assert launch.call_args.kwargs["window_size"] == "80%"
         assert launch.call_args.kwargs["playback_mode"] == "transcode"
         assert launch.call_args.kwargs["playback_display"] == "external"
+        assert launch.call_args.kwargs["terminal_video_profile"] == "smooth"
         assert launch.call_args.kwargs["transcode_quality"] == "720p_4"
         assert launch.call_args.kwargs["resume"] is False
         footer = app.query_one("#playback-footer")
@@ -2718,6 +2719,7 @@ async def run_settings_highlight_check():
         option_actions = [
             "cycle_subtitle_mode",
             "cycle_playback_mode",
+            "cycle_terminal_video_profile",
             "cycle_transcode_quality",
             "cycle_mpv_window_size",
             "toggle_artwork",

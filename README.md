@@ -264,7 +264,10 @@ Playback behavior:
   socket after playback is launched.
 - Experimental terminal playback can be enabled from Settings. It prefers
   mpv's Kitty/Ghostty graphics output when available, falls back to TCT text
-  video elsewhere, suspends the TUI, and returns after mpv exits.
+  video elsewhere, uses Smooth/Balanced/Sharp terminal video profiles to trade
+  frame size and frame rate for smoother rendering, suspends the TUI, and
+  returns after mpv exits. This mode is a novelty/experiment and will be
+  visibly worse than the normal external mpv window.
 - Saved audio/subtitle language preferences are applied when matching streams
   are available.
 - The details pane shows the effective playback choices for the selected item.

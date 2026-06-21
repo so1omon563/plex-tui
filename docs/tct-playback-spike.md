@@ -19,7 +19,11 @@ as an experimental display setting. It suspends the Textual UI, starts mpv with
 terminal video output, waits for mpv to exit, and then resumes the TUI. Real
 testing showed TCT works but is inherently blocky, so the launch path should
 prefer mpv's Kitty graphics output in Kitty/Ghostty-compatible terminals and
-use TCT as a fallback.
+use TCT as a fallback. Live Ghostty playback also showed large Kitty frame
+payloads are choppy, so terminal playback needs Smooth/Balanced/Sharp profiles
+that downscale and, for Smooth, reduce frame rate before mpv emits terminal
+graphics. Even with those profiles, terminal playback should be treated as a
+novelty/experiment; external mpv remains the recommended playback experience.
 
 ## Evidence
 
@@ -113,13 +117,13 @@ This is the only implementation path worth considering later.
 If this is revisited, the first manual experiment should be outside Textual:
 
 ```bash
-mpv --vo=tct --terminal=yes --vo-tct-buffering=frame --profile=sw-fast --really-quiet "$URL"
+mpv --vo=tct --terminal=yes --vo-tct-buffering=frame --vf=fps=15,scale=640:-2 --profile=sw-fast --really-quiet "$URL"
 ```
 
 Sizing experiments should add explicit cell dimensions:
 
 ```bash
-mpv --vo=tct --terminal=yes --vo-tct-buffering=frame --vo-tct-width=120 --vo-tct-height=40 --profile=sw-fast --really-quiet "$URL"
+mpv --vo=tct --terminal=yes --vo-tct-buffering=frame --vo-tct-width=120 --vo-tct-height=40 --vf=fps=15,scale=640:-2 --profile=sw-fast --really-quiet "$URL"
 ```
 
 An app-driven prototype would need a new playback mode that does not redirect
@@ -131,7 +135,8 @@ screen before launching mpv.
 Keep external mpv playback as the default path. Terminal playback should remain
 an explicit opt-in path that isolates mpv terminal output from Textual
 rendering, prefers Kitty/Ghostty graphics when available, and treats TCT as a
-portable but block-cell fallback.
+portable but block-cell fallback. Do not position terminal playback as a
+replacement for the external mpv window.
 
 ## Future Acceptance Criteria
 

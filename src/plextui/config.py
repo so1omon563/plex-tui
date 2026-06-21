@@ -22,6 +22,7 @@ MIN_GRID_PREFETCH_PAGES = 0
 MAX_GRID_PREFETCH_PAGES = 5
 PLAYBACK_MODES = {"auto", "transcode"}
 PLAYBACK_DISPLAYS = {"external", "terminal"}
+TERMINAL_VIDEO_PROFILES = {"smooth", "balanced", "sharp"}
 TRANSCODE_QUALITIES = {"original", "1080p_8", "720p_4", "480p_2"}
 DEFAULT_MPV_WINDOW_SIZE = "80%"
 LIBRARY_ENTER_ACTIONS = {"library", "browse_modes"}
@@ -46,6 +47,7 @@ class AppConfig:
     mpv_window_size: str = ""
     playback_mode: str = "auto"
     playback_display: str = "external"
+    terminal_video_profile: str = "smooth"
     transcode_quality: str = "original"
     page_size: int = DEFAULT_PAGE_SIZE
     auto_load_threshold: int = DEFAULT_AUTO_LOAD_THRESHOLD
@@ -124,6 +126,10 @@ def load_config() -> AppConfig:
     if playback_display not in PLAYBACK_DISPLAYS:
         write_debug_log(f"invalid playback_display {playback_display!r}; using 'external'")
         playback_display = "external"
+    terminal_video_profile = data.get("terminal_video_profile", "smooth")
+    if terminal_video_profile not in TERMINAL_VIDEO_PROFILES:
+        write_debug_log(f"invalid terminal_video_profile {terminal_video_profile!r}; using 'smooth'")
+        terminal_video_profile = "smooth"
     transcode_quality = data.get("transcode_quality", "original")
     if transcode_quality not in TRANSCODE_QUALITIES:
         write_debug_log(f"invalid transcode_quality {transcode_quality!r}; using 'original'")
@@ -169,6 +175,7 @@ def load_config() -> AppConfig:
         mpv_window_size=mpv_window_size.strip(),
         playback_mode=playback_mode.strip(),
         playback_display=playback_display.strip(),
+        terminal_video_profile=terminal_video_profile.strip(),
         transcode_quality=transcode_quality.strip(),
         page_size=page_size,
         auto_load_threshold=auto_load_threshold,
@@ -214,6 +221,8 @@ def save_config(config: AppConfig) -> None:
         lines.append(f'playback_mode = "{_toml_escape(config.playback_mode)}"')
     if config.playback_display != "external":
         lines.append(f'playback_display = "{_toml_escape(config.playback_display)}"')
+    if config.terminal_video_profile != "smooth":
+        lines.append(f'terminal_video_profile = "{_toml_escape(config.terminal_video_profile)}"')
     if config.transcode_quality != "original":
         lines.append(f'transcode_quality = "{_toml_escape(config.transcode_quality)}"')
     if config.page_size != DEFAULT_PAGE_SIZE:

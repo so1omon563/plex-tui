@@ -51,6 +51,11 @@ TRANSCODE_QUALITY_OPTIONS: dict[str, tuple[str, int | None, str]] = {
     "720p_4": ("720p 4 Mbps", 4000, "1280x720"),
     "480p_2": ("480p 2 Mbps", 2000, "720x480"),
 }
+TERMINAL_VIDEO_FILTERS = {
+    "smooth": "fps=15,scale=640:-2",
+    "balanced": "fps=24,scale=854:-2",
+    "sharp": "fps=24,scale=960:-2",
+}
 
 
 def play_with_mpv(
@@ -60,6 +65,7 @@ def play_with_mpv(
     window_size: str = "",
     playback_mode: str = "auto",
     playback_display: str = "external",
+    terminal_video_profile: str = "smooth",
     transcode_quality: str = "original",
     resume: bool = True,
 ) -> PlayerHandle:
@@ -106,7 +112,7 @@ def play_with_mpv(
         "--input-ipc-server=" + str(socket_path),
     ]
     if playback_display == "terminal":
-        args.extend(terminal_video_args())
+        args.extend(terminal_video_args(terminal_video_profile))
     if start_offset and not monitor_base_offset:
         args.append(f"--start={start_offset / 1000:.3f}")
     if window_size and playback_display != "terminal":
@@ -592,11 +598,13 @@ def sanitize_command(args: list[str]) -> list[str]:
     return [sanitize_arg(arg) for arg in args]
 
 
-def terminal_video_args() -> list[str]:
+def terminal_video_args(profile: str = "smooth") -> list[str]:
+    video_filter = TERMINAL_VIDEO_FILTERS.get(profile, TERMINAL_VIDEO_FILTERS["smooth"])
     if terminal_kitty_graphics_supported():
         return [
             "--vo=kitty",
             "--terminal=yes",
+            f"--vf={video_filter}",
             "--profile=sw-fast",
             "--really-quiet",
         ]
@@ -609,6 +617,7 @@ def terminal_video_args() -> list[str]:
         "--vo-tct-buffering=frame",
         f"--vo-tct-width={width}",
         f"--vo-tct-height={height}",
+        f"--vf={video_filter}",
         "--profile=sw-fast",
         "--really-quiet",
     ]

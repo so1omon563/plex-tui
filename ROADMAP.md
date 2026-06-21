@@ -76,8 +76,11 @@
   with the saved preference.
 - Experimental terminal-video playback is available as an opt-in playback
   display. It prefers mpv's Kitty/Ghostty graphics output when available, falls
-  back to TCT text video elsewhere, and suspends the TUI while mpv owns the
-  terminal; embedded video panes remain intentionally out of scope.
+  back to TCT text video elsewhere, uses Smooth/Balanced/Sharp profiles to
+  manage terminal throughput, and suspends the TUI while mpv owns the terminal;
+  it is intentionally positioned as a novelty/experiment rather than a
+  replacement for external mpv playback. Embedded video panes remain
+  intentionally out of scope.
 - Playlist management can create playlists from selected media, add selected
   media to existing playlists, and remove items while browsing a playlist.
   Continue design passes for bulk playlist actions and richer playlist editing
