@@ -15,7 +15,9 @@ from plextui.player import (
     preferred_subtitle_choice,
     log_debug,
     sanitize_command,
+    seek_mpv,
     switch_mpv_stream,
+    toggle_mpv_pause,
 )
 
 
@@ -285,6 +287,24 @@ def test_switch_mpv_stream_can_disable_subtitles():
         assert switch_mpv_stream(handle, item, StreamChoice(0, "None"), "subtitle")
 
     set_property.assert_called_once_with(Path("/tmp/socket"), "sid", "no")
+
+
+def test_toggle_mpv_pause_sends_cycle_pause():
+    handle = type("Handle", (), {"active": True, "socket_path": Path("/tmp/socket")})()
+
+    with patch("plextui.player.mpv_command", return_value={"error": "success"}) as command:
+        assert toggle_mpv_pause(handle)
+
+    command.assert_called_once_with(Path("/tmp/socket"), ["cycle", "pause"])
+
+
+def test_seek_mpv_sends_relative_seek():
+    handle = type("Handle", (), {"active": True, "socket_path": Path("/tmp/socket")})()
+
+    with patch("plextui.player.mpv_command", return_value={"error": "success"}) as command:
+        assert seek_mpv(handle, -10)
+
+    command.assert_called_once_with(Path("/tmp/socket"), ["seek", -10, "relative+exact"])
 
 
 def test_force_transcode_bypasses_direct_play_and_applies_quality():

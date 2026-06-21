@@ -70,11 +70,13 @@ from .player import (
     preferred_subtitle_choice,
     resume_offset_ms,
     same_stream,
+    seek_mpv,
     stop_mpv,
     stream_language_key,
     stream_language_label,
     switch_mpv_stream,
     subtitle_choices,
+    toggle_mpv_pause,
     transcode_quality_label,
 )
 from .plex_service import PlexService, kind_label, media_details, progress_bar, row_progress_marker, watched_state
@@ -88,6 +90,7 @@ GRID_DENSITY_SPECS = {
 GRID_DETAIL_REFRESH_DELAY = 0.65
 LIST_DETAIL_REFRESH_DELAY = 0.35
 DETAIL_ARTWORK_REFRESH_DELAY = 0.55
+PLAYBACK_CONTROL_HINT = "controls c pause, z -10s, f +30s, x stop"
 GRID_PREFETCH_WORKERS = 3
 DETAIL_SUMMARY_WIDTH = 38
 DETAIL_LABEL_WIDTH = 20
@@ -402,32 +405,32 @@ class PlexTuiApp(App[None]):
 
     #sidebar {
         width: 30;
-        border: solid __UI_PANE_BORDER__;
+        border: solid $panel;
     }
 
     #sidebar.focused-pane {
-        border: heavy __UI_FOCUS_BORDER__;
-        background: __UI_FOCUS_BACKGROUND__;
+        border: heavy $primary;
+        background: $boost;
     }
 
     #main {
         width: 1fr;
-        border: solid __UI_PANE_BORDER__;
+        border: solid $panel;
     }
 
     #main.focused-pane {
-        border: heavy __UI_FOCUS_BORDER__;
-        background: __UI_FOCUS_BACKGROUND__;
+        border: heavy $primary;
+        background: $boost;
     }
 
     #details {
         width: 42;
-        border: solid __UI_PANE_BORDER__;
+        border: solid $panel;
     }
 
     #details.focused-pane {
-        border: heavy __UI_FOCUS_BORDER__;
-        background: __UI_FOCUS_BACKGROUND__;
+        border: heavy $primary;
+        background: $boost;
     }
 
     #search {
@@ -437,25 +440,25 @@ class PlexTuiApp(App[None]):
     #status {
         height: 1;
         padding: 0 1;
-        background: __UI_PANE_TITLE_BACKGROUND__;
+        background: $panel;
     }
 
     #playback-footer {
         height: 1;
         padding: 0 1;
-        background: __UI_PANE_TITLE_BACKGROUND__;
+        background: $panel;
         color: $text;
     }
 
     .pane-title {
         text-style: bold;
         padding: 0 1;
-        background: __UI_PANE_TITLE_BACKGROUND__;
+        background: $panel;
     }
 
     .focused-pane > .pane-title {
-        background: __UI_FOCUS_BORDER__;
-        color: __UI_ACTIVE_ROW_TEXT__;
+        background: $primary;
+        color: $text;
     }
 
     #detail-content {
@@ -469,8 +472,8 @@ class PlexTuiApp(App[None]):
     }
 
     .active-row {
-        background: __UI_ACTIVE_ROW_BACKGROUND__;
-        color: __UI_ACTIVE_ROW_TEXT__;
+        background: $accent;
+        color: $text;
         text-style: bold;
     }
 
@@ -483,16 +486,6 @@ class PlexTuiApp(App[None]):
         padding: 0 1;
     }
     """
-    CSS = (
-        CSS
-        .replace("__UI_PANE_BORDER__", UI_PANE_BORDER)
-        .replace("__UI_FOCUS_BORDER__", UI_FOCUS_BORDER)
-        .replace("__UI_FOCUS_BACKGROUND__", UI_FOCUS_BACKGROUND)
-        .replace("__UI_PANE_TITLE_BACKGROUND__", UI_PANE_TITLE_BACKGROUND)
-        .replace("__UI_ACTIVE_ROW_BACKGROUND__", UI_ACTIVE_ROW_BACKGROUND)
-        .replace("__UI_ACTIVE_ROW_TEXT__", UI_ACTIVE_ROW_TEXT)
-    )
-
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("ctrl+r", "reload", "Reload", show=False),
@@ -532,6 +525,9 @@ class PlexTuiApp(App[None]):
         Binding("s", "subtitle_picker", "Subtitles", show=False),
         Binding("A", "clear_audio_preference", "Clear audio", show=False),
         Binding("S", "cycle_subtitle_mode", "Sub mode", show=False),
+        Binding("c", "toggle_playback_pause", "Pause", show=False),
+        Binding("z", "seek_playback_backward", "-10s", show=False),
+        Binding("f", "seek_playback_forward", "+30s", show=False),
         Binding("x", "stop_playback", "Stop", show=False),
     ]
 
@@ -2285,7 +2281,7 @@ class PlexTuiApp(App[None]):
         except Exception:
             return False
         if updated:
-            self.set_playback_footer(f"{self.player.title}: {stream_type} {choice.label}")
+            self.set_playback_footer(f"{self.player.title}: {stream_type} {choice.label} / {PLAYBACK_CONTROL_HINT}")
         return updated
 
     def media_by_key(self, media_key: str) -> MediaItem | None:
@@ -2878,6 +2874,43 @@ class PlexTuiApp(App[None]):
         self.player = None
         self.clear_playback_footer()
         self.set_status(f"Stopped {title}")
+
+    def active_player_for_control(self) -> PlayerHandle | None:
+        if self.player is None:
+            self.set_status("Nothing is playing")
+            self.clear_playback_footer()
+            return None
+        if not self.player.active:
+            self.set_status(playback_exit_status(self.player, debug_log_path()) or "Nothing is playing")
+            self.player = None
+            self.clear_playback_footer()
+            return None
+        return self.player
+
+    def action_toggle_playback_pause(self) -> None:
+        player = self.active_player_for_control()
+        if player is None:
+            return
+        if not toggle_mpv_pause(player):
+            self.set_status("Playback control unavailable; mpv may still be starting")
+            return
+        self.set_status(f"Toggled pause for {player.title}")
+
+    def action_seek_playback_backward(self) -> None:
+        self.seek_active_playback(-10)
+
+    def action_seek_playback_forward(self) -> None:
+        self.seek_active_playback(30)
+
+    def seek_active_playback(self, seconds: int) -> None:
+        player = self.active_player_for_control()
+        if player is None:
+            return
+        if not seek_mpv(player, seconds):
+            self.set_status("Playback control unavailable; mpv may still be starting")
+            return
+        label = f"+{seconds}s" if seconds > 0 else f"{seconds}s"
+        self.set_status(f"Seeked {player.title} {label}")
 
     def action_reload(self) -> None:
         self.load_server()
@@ -3927,6 +3960,9 @@ def render_help() -> str:
         "Playback",
         "p: play selected media from beginning",
         "r: resume selected media from saved progress",
+        "c: pause / resume active mpv playback",
+        "z: seek active playback back 10 seconds",
+        "f: seek active playback forward 30 seconds",
         "w: mark selected media watched / unwatched",
         "x: stop launched mpv",
         "",
@@ -4784,6 +4820,7 @@ def render_playback_status(
     if player.subtitle_count:
         details.append(f"{player.subtitle_count} subtitles")
     details.append(render_playback_preferences(config, audio_choice, subtitle_choice))
+    details.append(PLAYBACK_CONTROL_HINT)
     return " / ".join(details)
 
 
@@ -4805,6 +4842,12 @@ def render_playback_details(
         f"Resume: {format_offset(player.start_offset_ms) if player.start_offset_ms else 'start'}",
         f"Subtitles available: {player.subtitle_count}",
         f"mpv window: {mpv_window_size_value(config)}",
+        "",
+        "Controls",
+        "c: pause / resume active playback",
+        "z: seek back 10 seconds",
+        "f: seek forward 30 seconds",
+        "x: stop playback",
         "",
         "Selected Streams",
         f"Audio: {render_audio_playback_preference(config, audio_choice).removeprefix('audio ')}",

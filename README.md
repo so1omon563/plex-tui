@@ -250,12 +250,17 @@ Common playback actions:
 | --- | --- |
 | `p` | Play the selected item from the beginning |
 | `r` | Resume from the saved Plex position when available |
+| `c` | Pause or resume the active `mpv` playback |
+| `z` | Seek active playback back 10 seconds |
+| `f` | Seek active playback forward 30 seconds |
 | `x` | Stop the launched `mpv` process |
 | `w` | Toggle watched / unwatched for the selected playable Plex item |
 
 Playback behavior:
 
 - Plex progress is updated in the background while playback is active.
+- Pause and seek controls are sent to the active `mpv` process through its IPC
+  socket after playback is launched.
 - Saved audio/subtitle language preferences are applied when matching streams
   are available.
 - The details pane shows the effective playback choices for the selected item.

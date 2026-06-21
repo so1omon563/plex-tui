@@ -557,7 +557,8 @@ def test_render_playback_status_includes_active_launch_context():
     )
 
     assert rendered == (
-        "Playing Movie / resume 1:05 / mode direct / 2 subtitles / audio Japanese; subtitles English"
+        "Playing Movie / resume 1:05 / mode direct / 2 subtitles / audio Japanese; subtitles English / "
+        "controls c pause, z -10s, f +30s, x stop"
     )
 
 
@@ -1165,8 +1166,14 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
     assert hidden_keys_by_action["add_to_playlist"] == {"P"}
     assert "audio_picker" in hidden
     assert "subtitle_picker" in hidden
+    assert hidden_keys_by_action["toggle_playback_pause"] == {"c"}
+    assert hidden_keys_by_action["seek_playback_backward"] == {"z"}
+    assert hidden_keys_by_action["seek_playback_forward"] == {"f"}
     assert "a: choose and save audio preference" in rendered
     assert "s: choose and save subtitle preference" in rendered
+    assert "c: pause / resume active mpv playback" in rendered
+    assert "z: seek active playback back 10 seconds" in rendered
+    assert "f: seek active playback forward 30 seconds" in rendered
     assert "ctrl+r: reconnect / reload libraries" in rendered
 
 
@@ -1176,12 +1183,12 @@ def test_focus_css_styles_all_panes():
     assert "#sidebar.focused-pane" in css
     assert "#main.focused-pane" in css
     assert "#details.focused-pane" in css
-    assert css.count(f"border: solid {UI_PANE_BORDER};") == 3
-    assert css.count(f"border: heavy {UI_FOCUS_BORDER};") == 3
-    assert css.count(f"background: {UI_FOCUS_BACKGROUND};") == 3
-    assert f"background: {UI_PANE_TITLE_BACKGROUND};" in css
-    assert f"background: {UI_ACTIVE_ROW_BACKGROUND};" in css
-    assert f"color: {UI_ACTIVE_ROW_TEXT};" in css
+    assert css.count("border: solid $panel;") == 3
+    assert css.count("border: heavy $primary;") == 3
+    assert css.count("background: $boost;") == 3
+    assert "background: $panel;" in css
+    assert "background: $accent;" in css
+    assert "color: $text;" in css
 
 
 def test_performance_log_requires_perf_env(monkeypatch):

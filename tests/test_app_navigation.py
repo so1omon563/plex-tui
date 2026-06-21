@@ -641,6 +641,10 @@ def test_playback_footer_shows_active_playback():
     asyncio.run(run_playback_footer_check())
 
 
+def test_playback_controls_update_active_mpv():
+    asyncio.run(run_playback_controls_check())
+
+
 def test_playback_action_starts_from_beginning():
     asyncio.run(run_playback_starts_from_beginning_check())
 
@@ -2145,8 +2149,33 @@ async def run_playback_footer_check():
         assert footer.content == (
             "Playing Movie / resume 1:05 / mode transcode / quality 720p 4 Mbps / 2 subtitles / "
             "audio jpn not found, Plex/default; "
-            "subtitles eng not found, Plex/default"
+            "subtitles eng not found, Plex/default / controls c pause, z -10s, f +30s, x stop"
         )
+
+
+async def run_playback_controls_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        player = SimpleNamespace(
+            title="Movie",
+            process=SimpleNamespace(poll=lambda: None),
+            active=True,
+        )
+        app.player = player
+
+        with (
+            patch("plextui.app.toggle_mpv_pause", return_value=True) as pause,
+            patch("plextui.app.seek_mpv", return_value=True) as seek,
+        ):
+            app.action_toggle_playback_pause()
+            app.action_seek_playback_backward()
+            app.action_seek_playback_forward()
+
+        pause.assert_called_once_with(player)
+        assert seek.call_args_list[0].args == (player, -10)
+        assert seek.call_args_list[1].args == (player, 30)
+        assert app.query_one("#status").content == "Seeked Movie +30s"
 
 
 async def run_playback_starts_from_beginning_check():
@@ -2497,6 +2526,9 @@ async def run_stream_picker_live_switch_check():
         status = await wait_for_status(app, pilot, expected_status)
         switch.assert_called_once_with(app.player, item.raw, choice, "subtitle")
         assert status == expected_status
+        assert app.query_one("#playback-footer").content == (
+            "Movie: subtitle None (disable subtitles) / controls c pause, z -10s, f +30s, x stop"
+        )
 
 
 async def run_quick_preference_action_check():
