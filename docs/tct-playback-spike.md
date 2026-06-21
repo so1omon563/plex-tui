@@ -1,0 +1,144 @@
+# TCT Playback Spike
+
+## Summary
+
+mpv's `tct` video output can render video as true-color Unicode art in a text
+console, and local mpv 0.41.0 reports `tct` as an available video output. That
+makes terminal-video playback technically feasible, but it should not be added
+to the normal playback path for the next release.
+
+The recommended product direction is:
+
+- Keep external `mpv` window playback as the default.
+- Keep the current mpv IPC controls for normal playback.
+- Treat TCT as a future opt-in experimental mode only if we can isolate it from
+  the Textual app screen.
+
+## Evidence
+
+The current mpv manual documents `tct` as a color Unicode art video output for
+text consoles. It also notes that `--profile=sw-fast` may be needed for decent
+performance, and that TCT image output is not synchronized with other terminal
+output, which can cause broken images. The same manual recommends
+`--terminal=no` or `--really-quiet` to reduce terminal-output interference and
+documents `--vo-tct-buffering=<pixel|line|frame>` plus explicit
+`--vo-tct-width` and `--vo-tct-height` sizing options.
+
+Local capability check:
+
+```text
+mpv v0.41.0
+Available video outputs include:
+  tct              true-color terminals
+  kitty            Kitty terminal graphics protocol
+```
+
+The current `plex-tui` player path launches mpv with an IPC socket and redirects
+stdout/stderr to `DEVNULL`. That is correct for external-window playback, but a
+TCT mode would need a terminal-owned output path instead of the current quiet
+background launch.
+
+## Integration Options
+
+### Option 1: Replace The TUI During Playback
+
+Launch mpv with `--vo=tct`, suspend or leave the Textual screen, and let mpv own
+the terminal until playback exits.
+
+Pros:
+
+- Most likely to work with mpv's TCT output model.
+- Avoids interleaving Textual rendering and mpv frame output.
+- Preserves the current app architecture better than embedding frames.
+
+Cons:
+
+- Playback stops feeling integrated with the TUI.
+- Returning from alternate-screen state needs careful cleanup.
+- Active playback footer, details, and in-app controls are unavailable while
+  mpv owns the terminal unless a separate controller process remains active.
+
+### Option 2: Embedded TCT Pane
+
+Try to render TCT output inside the current Textual layout.
+
+Pros:
+
+- Highest novelty value.
+- Could make playback feel fully terminal-native if it worked perfectly.
+
+Cons:
+
+- High risk. mpv warns that TCT output is not synchronized with other terminal
+  output.
+- Textual also controls terminal drawing, cursor state, focus, alternate-screen
+  behavior, and repaint timing.
+- The current app redirects mpv stdout/stderr away from the terminal; a TCT
+  launch path would need to let mpv write terminal frame output, which would
+  compete with Rich/Textual rendering if done inside the active app screen.
+- Any partial failure would look like corrupted UI rather than a graceful
+  playback fallback.
+
+This option is not recommended.
+
+### Option 3: Separate Terminal Or Subprocess Mode
+
+Start TCT playback in a separate terminal process or a clearly separate
+command-line mode.
+
+Pros:
+
+- Avoids corrupting the active Textual screen.
+- Keeps the feature explicit and experimental.
+- Could reuse the existing stream URL, resume, progress, and IPC setup.
+
+Cons:
+
+- Platform-specific terminal launching is messy.
+- It still does not provide a clean embedded player.
+- More configuration and documentation burden than the feature likely deserves
+  right now.
+
+This is the only implementation path worth considering later.
+
+## Prototype Command Shape
+
+If this is revisited, the first manual experiment should be outside Textual:
+
+```bash
+mpv --vo=tct --vo-tct-buffering=frame --profile=sw-fast --really-quiet "$URL"
+```
+
+Sizing experiments should add explicit cell dimensions:
+
+```bash
+mpv --vo=tct --vo-tct-buffering=frame --vo-tct-width=120 --vo-tct-height=40 --profile=sw-fast --really-quiet "$URL"
+```
+
+An app-driven prototype would need a new playback mode that does not redirect
+mpv's terminal output to `DEVNULL`, and it should probably leave the Textual
+screen before launching mpv.
+
+## Recommendation
+
+Do not implement TCT playback for the next release.
+
+The current external mpv path is reliable, supports active IPC controls, keeps
+Plex progress reporting intact, and does not risk corrupting the TUI. TCT is
+interesting enough to keep as a future experimental mode, but only behind an
+explicit opt-in path that isolates mpv terminal output from Textual rendering.
+
+## Future Acceptance Criteria
+
+Promote TCT beyond research only if all of these are true:
+
+- It is opt-in and never the default playback mode.
+- The TUI returns cleanly after playback exits or fails.
+- mpv terminal output cannot corrupt the Textual layout.
+- Existing play-from-start, resume, progress reporting, and token-redacted
+  diagnostics still work.
+- Failure falls back to normal external mpv playback or shows a clear error.
+
+## Sources
+
+- [mpv manual: terminal video outputs and TCT options](https://mpv.io/manual/stable/#video-output-drivers-tct)
