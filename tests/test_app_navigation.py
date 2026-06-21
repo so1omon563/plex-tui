@@ -2647,7 +2647,8 @@ async def run_rename_playlist_check():
 
         assert service.rename_calls == [("Favorites", "Road Trip")]
         assert [item.title for item in app.browsing_stack[-1].items] == ["Road Trip"]
-        assert app.query_one("#status").content == "Renamed playlist to Road Trip"
+        status = await wait_for_status(app, pilot, "Renamed playlist to Road Trip")
+        assert status == "Renamed playlist to Road Trip"
 
 
 async def run_delete_playlist_check():
@@ -2669,7 +2670,8 @@ async def run_delete_playlist_check():
 
         assert service.delete_calls == ["Favorites"]
         assert app.browsing_stack[-1].items == []
-        assert app.query_one("#status").content == "Deleted playlist Favorites"
+        status = await wait_for_status(app, pilot, "Deleted playlist Favorites")
+        assert status == "Deleted playlist Favorites"
 
 
 async def run_remove_continue_watching_check():
