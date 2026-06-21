@@ -20,6 +20,10 @@ class FakeCliService:
         self.search_calls = []
         self.continue_watching_calls = []
 
+    @property
+    def friendly_name(self) -> str:
+        return "Plex"
+
     def libraries(self) -> list[LibraryItem]:
         self.libraries_calls += 1
         return [self.movie_library, self.show_library]
@@ -127,6 +131,64 @@ def test_cli_lists_libraries_as_json(monkeypatch, capsys):
         {"key": "1", "title": "Movies", "kind": "movie"},
         {"key": "2", "title": "TV Shows", "kind": "show"},
     ]
+
+
+def test_cli_status_reports_ready_state(monkeypatch, capsys, tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("base_url = 'http://plex'\ntoken = 'token'\n", encoding="utf-8")
+    monkeypatch.setattr(cli, "PlexService", FakeCliService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id"))
+    monkeypatch.setattr(cli, "config_path", lambda: config_file)
+    monkeypatch.setattr(cli, "debug_log_path", lambda: tmp_path / "debug.log")
+    monkeypatch.setattr(cli, "detect_mpv", lambda: ("/usr/bin/mpv", "mpv 0.40.0"))
+
+    assert cli.main(["status"]) == 0
+
+    output = capsys.readouterr().out
+    assert "Ready          yes" in output
+    assert "Configured     yes" in output
+    assert "Connected      yes" in output
+    assert "Server" in output
+    assert "Libraries      2" in output
+    assert "mpv            mpv 0.40.0" in output
+    assert str(config_file) in output
+
+
+def test_cli_status_reports_json(monkeypatch, capsys, tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("base_url = 'http://plex'\ntoken = 'token'\n", encoding="utf-8")
+    monkeypatch.setattr(cli, "PlexService", FakeCliService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id"))
+    monkeypatch.setattr(cli, "config_path", lambda: config_file)
+    monkeypatch.setattr(cli, "debug_log_path", lambda: tmp_path / "debug.log")
+    monkeypatch.setattr(cli, "detect_mpv", lambda: ("/usr/bin/mpv", "mpv 0.40.0"))
+
+    assert cli.main(["status", "--json"]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ready"] is True
+    assert payload["configured"] is True
+    assert payload["connected"] is True
+    assert payload["server"] == "Plex"
+    assert payload["library_count"] == 2
+    assert payload["mpv_available"] is True
+    assert payload["paths"]["config_exists"] is True
+
+
+def test_cli_status_reports_missing_config(monkeypatch, capsys, tmp_path):
+    config_file = tmp_path / "missing.toml"
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("", "", "client-id"))
+    monkeypatch.setattr(cli, "config_path", lambda: config_file)
+    monkeypatch.setattr(cli, "debug_log_path", lambda: tmp_path / "debug.log")
+    monkeypatch.setattr(cli, "detect_mpv", lambda: ("/usr/bin/mpv", "mpv 0.40.0"))
+
+    assert cli.main(["status"]) == 2
+
+    output = capsys.readouterr().out
+    assert "Ready          no" in output
+    assert "Configured     no" in output
+    assert "Config exists  no" in output
+    assert "Error          missing Plex config" in output
 
 
 def test_cli_lists_continue_watching(monkeypatch, capsys):

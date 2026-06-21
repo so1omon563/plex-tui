@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 from . import __version__
@@ -24,6 +25,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     libraries = subparsers.add_parser("libraries", help="list configured Plex libraries")
     libraries.add_argument("--json", action="store_true", help="print JSON output")
+
+    status = subparsers.add_parser("status", help="check Plex and playback readiness")
+    status.add_argument("--json", action="store_true", help="print JSON output")
 
     continue_watching = subparsers.add_parser("continue-watching", help="list Continue Watching items")
     continue_watching.add_argument("--limit", type=positive_int, default=10, help="maximum items to print")
@@ -55,6 +59,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "libraries":
         return command_libraries(args.json)
+    if args.command == "status":
+        return command_status(args.json)
     if args.command == "continue-watching":
         return command_continue_watching(args.limit, args.json)
     if args.command == "search":
@@ -86,6 +92,15 @@ def command_libraries(json_output: bool = False) -> int:
     else:
         print_libraries(libraries)
     return 0
+
+
+def command_status(json_output: bool = False) -> int:
+    status = status_payload()
+    if json_output:
+        print(json.dumps(status, indent=2))
+    else:
+        print_status(status)
+    return 0 if status["ready"] else 2
 
 
 def command_continue_watching(limit: int, json_output: bool = False) -> int:
@@ -124,6 +139,69 @@ def connect_service() -> PlexService | None:
     except Exception as exc:
         print(f"plex-tui: {exc}", file=sys.stderr)
         return None
+
+
+def status_payload() -> dict[str, Any]:
+    path = config_path()
+    config = load_config()
+    mpv_path, mpv_version = detect_mpv()
+    payload: dict[str, Any] = {
+        "ready": False,
+        "configured": bool(config.base_url and config.token),
+        "connected": False,
+        "server": "",
+        "library_count": 0,
+        "mpv_available": mpv_path != "missing",
+        "mpv": {
+            "path": mpv_path,
+            "version": mpv_version,
+        },
+        "paths": {
+            "config": str(path),
+            "config_exists": Path(path).exists(),
+            "debug_log": str(debug_log_path()),
+        },
+        "error": "",
+    }
+    if not payload["configured"]:
+        payload["error"] = "missing Plex config"
+        return payload
+    try:
+        service = PlexService(config)
+        libraries = service.libraries()
+    except Exception as exc:
+        payload["error"] = str(exc)
+        return payload
+    payload["connected"] = True
+    payload["server"] = service.friendly_name
+    payload["library_count"] = len(libraries)
+    payload["ready"] = bool(payload["mpv_available"])
+    if not payload["ready"]:
+        payload["error"] = "mpv was not found on PATH"
+    return payload
+
+
+def print_status(status: dict[str, Any]) -> None:
+    rows = [
+        ("Ready", yes_no(bool(status["ready"]))),
+        ("Configured", yes_no(bool(status["configured"]))),
+        ("Connected", yes_no(bool(status["connected"]))),
+        ("Server", str(status["server"]) or "-"),
+        ("Libraries", str(status["library_count"])),
+        ("mpv", status["mpv"]["version"] if status["mpv_available"] else "missing"),
+        ("Config", str(status["paths"]["config"])),
+        ("Config exists", yes_no(bool(status["paths"]["config_exists"]))),
+        ("Debug log", str(status["paths"]["debug_log"])),
+    ]
+    if status["error"]:
+        rows.append(("Error", str(status["error"])))
+    width = max(len(label) for label, _ in rows)
+    for label, value in rows:
+        print(f"{label.ljust(width)}  {value}")
+
+
+def yes_no(value: bool) -> str:
+    return "yes" if value else "no"
 
 
 def find_library(libraries: list[LibraryItem], value: str) -> LibraryItem | None:

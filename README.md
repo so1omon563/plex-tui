@@ -177,15 +177,17 @@ plex-tui --config-path
 plex-tui --debug-log-path
 plex-tui --diagnostics
 plex-tui --smoke
+plex-tui status
+plex-tui status --json
 plex-tui libraries
 plex-tui continue-watching --limit 5
 plex-tui search "blade runner"
 plex-tui search "alien" --library Movies --json
 ```
 
-`libraries`, `continue-watching`, and `search` are read-only helpers for quick
-checks and scripts. Launch `plex-tui` with no command for the full interactive
-browser and playback workflow.
+`status`, `libraries`, `continue-watching`, and `search` are read-only helpers
+for quick checks and scripts. Launch `plex-tui` with no command for the full
+interactive browser and playback workflow.
 
 For local development:
 
