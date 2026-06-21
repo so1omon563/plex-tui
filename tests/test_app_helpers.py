@@ -1170,6 +1170,7 @@ def test_render_help_groups_key_bindings():
 
 def test_playlist_picker_rows_and_details():
     media = MediaItem("Movie", "", "movie", "1", True, object())
+    second = MediaItem("Second", "", "movie", "2", True, object())
     playlist = MediaItem("Favorites", "", "playlist", "p1", False, object())
     create_row = PlaylistCreateRow()
     target_row = PlaylistTargetRow(playlist)
@@ -1181,6 +1182,8 @@ def test_playlist_picker_rows_and_details():
     assert "1 existing playlist" in render_playlist_picker_details(media, 1)
     assert "Create a playlist containing Movie" in render_playlist_create_details(media)
     assert "Add Movie to this playlist" in render_playlist_target_details(playlist, media)
+    assert "Create a playlist containing 2 selected items" in render_playlist_create_details([media, second])
+    assert "Add 2 selected items to this playlist" in render_playlist_target_details(playlist, [media, second])
 
 
 def test_footer_shows_core_bindings_and_help_keeps_full_reference():

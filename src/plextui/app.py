@@ -866,11 +866,11 @@ class PlexTuiApp(App[None]):
             self.set_status(context_hint(row))
         elif isinstance(row, PlaylistCreateRow):
             mark_active_row(event.list_view, row)
-            self.show_detail_text(render_playlist_create_details(self.playlist_picker_item))
+            self.show_detail_text(render_playlist_create_details(self.playlist_picker_items or self.playlist_picker_item))
             self.set_status(context_hint(row))
         elif isinstance(row, PlaylistTargetRow):
             mark_active_row(event.list_view, row)
-            self.show_detail_text(render_playlist_target_details(row.playlist, self.playlist_picker_item))
+            self.show_detail_text(render_playlist_target_details(row.playlist, self.playlist_picker_items or self.playlist_picker_item))
             self.set_status(context_hint(row))
         elif isinstance(row, (SettingsActionRow, SettingsHeaderRow, SettingsValueRow)):
             mark_active_row(event.list_view, row)
@@ -3494,8 +3494,9 @@ def render_playlist_picker_details(media: MediaItem | list[MediaItem], playlist_
     ])
 
 
-def render_playlist_create_details(media: MediaItem | None) -> str:
-    title = media.title if media is not None else "selected media"
+def render_playlist_create_details(media: MediaItem | list[MediaItem] | None) -> str:
+    items = [] if media is None else media if isinstance(media, list) else [media]
+    title = playlist_items_label(items) if items else "selected media"
     return "\n".join([
         "New Playlist",
         "",
@@ -3504,8 +3505,9 @@ def render_playlist_create_details(media: MediaItem | None) -> str:
     ])
 
 
-def render_playlist_target_details(playlist: MediaItem, media: MediaItem | None) -> str:
-    title = media.title if media is not None else "selected media"
+def render_playlist_target_details(playlist: MediaItem, media: MediaItem | list[MediaItem] | None) -> str:
+    items = [] if media is None else media if isinstance(media, list) else [media]
+    title = playlist_items_label(items) if items else "selected media"
     return "\n".join([
         playlist.title,
         "",
