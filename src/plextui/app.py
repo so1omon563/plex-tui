@@ -2171,7 +2171,7 @@ class PlexTuiApp(App[None]):
         self.set_status(f"Adding {item.title} to {playlist.title}...")
         return self.add_item_to_playlist(playlist, item)
 
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="playlist")
     def add_item_to_playlist(self, playlist: MediaItem, item: MediaItem) -> None:
         if self.service is None:
             return
@@ -2211,7 +2211,7 @@ class PlexTuiApp(App[None]):
         self.set_status(f"Creating playlist {title}...")
         return self.create_playlist_from_item(title, item)
 
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="playlist")
     def create_playlist_from_item(self, title: str, item: MediaItem) -> None:
         if self.service is None:
             return
