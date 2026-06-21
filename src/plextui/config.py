@@ -21,6 +21,7 @@ DEFAULT_GRID_PREFETCH_PAGES = 3
 MIN_GRID_PREFETCH_PAGES = 0
 MAX_GRID_PREFETCH_PAGES = 5
 PLAYBACK_MODES = {"auto", "transcode"}
+PLAYBACK_DISPLAYS = {"external", "terminal"}
 TRANSCODE_QUALITIES = {"original", "1080p_8", "720p_4", "480p_2"}
 DEFAULT_MPV_WINDOW_SIZE = "80%"
 LIBRARY_ENTER_ACTIONS = {"library", "browse_modes"}
@@ -44,6 +45,7 @@ class AppConfig:
     theme: str = "textual-dark"
     mpv_window_size: str = ""
     playback_mode: str = "auto"
+    playback_display: str = "external"
     transcode_quality: str = "original"
     page_size: int = DEFAULT_PAGE_SIZE
     auto_load_threshold: int = DEFAULT_AUTO_LOAD_THRESHOLD
@@ -118,6 +120,10 @@ def load_config() -> AppConfig:
     if playback_mode not in PLAYBACK_MODES:
         write_debug_log(f"invalid playback_mode {playback_mode!r}; using 'auto'")
         playback_mode = "auto"
+    playback_display = data.get("playback_display", "external")
+    if playback_display not in PLAYBACK_DISPLAYS:
+        write_debug_log(f"invalid playback_display {playback_display!r}; using 'external'")
+        playback_display = "external"
     transcode_quality = data.get("transcode_quality", "original")
     if transcode_quality not in TRANSCODE_QUALITIES:
         write_debug_log(f"invalid transcode_quality {transcode_quality!r}; using 'original'")
@@ -162,6 +168,7 @@ def load_config() -> AppConfig:
         theme=theme.strip() or "textual-dark",
         mpv_window_size=mpv_window_size.strip(),
         playback_mode=playback_mode.strip(),
+        playback_display=playback_display.strip(),
         transcode_quality=transcode_quality.strip(),
         page_size=page_size,
         auto_load_threshold=auto_load_threshold,
@@ -205,6 +212,8 @@ def save_config(config: AppConfig) -> None:
         lines.append(f'mpv_window_size = "{_toml_escape(config.mpv_window_size)}"')
     if config.playback_mode != "auto":
         lines.append(f'playback_mode = "{_toml_escape(config.playback_mode)}"')
+    if config.playback_display != "external":
+        lines.append(f'playback_display = "{_toml_escape(config.playback_display)}"')
     if config.transcode_quality != "original":
         lines.append(f'transcode_quality = "{_toml_escape(config.transcode_quality)}"')
     if config.page_size != DEFAULT_PAGE_SIZE:

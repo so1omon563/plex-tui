@@ -155,6 +155,7 @@ def save_server_choice(config: AppConfig, account_token: str, choice: ServerChoi
         theme=config.theme,
         mpv_window_size=config.mpv_window_size,
         playback_mode=config.playback_mode,
+        playback_display=config.playback_display,
         transcode_quality=config.transcode_quality,
         page_size=config.page_size,
         auto_load_threshold=config.auto_load_threshold,

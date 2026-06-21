@@ -242,7 +242,8 @@ See `config.example.toml` for optional settings.
 
 ## Playback
 
-Playback is launched through `mpv`; plex-tui does not embed a video player.
+Playback is launched through `mpv`. By default, plex-tui opens an external mpv
+window so the TUI can keep showing playback status and controls.
 
 Common playback actions:
 
@@ -261,6 +262,9 @@ Playback behavior:
 - Plex progress is updated in the background while playback is active.
 - Pause and seek controls are sent to the active `mpv` process through its IPC
   socket after playback is launched.
+- Experimental terminal playback can be enabled from Settings. It prefers
+  mpv's Kitty/Ghostty graphics output when available, falls back to TCT text
+  video elsewhere, suspends the TUI, and returns after mpv exits.
 - Saved audio/subtitle language preferences are applied when matching streams
   are available.
 - The details pane shows the effective playback choices for the selected item.

@@ -57,6 +57,7 @@ from plextui.app import (
     next_grid_density,
     next_media_view,
     next_mpv_window_size,
+    next_playback_display,
     next_playback_mode,
     next_transcode_quality,
     playback_failure_hints,
@@ -347,6 +348,7 @@ def test_render_settings_includes_stream_preferences():
     assert "mpv Window Size:   Default (80%)" in rendered
     assert "Playback Mode:     Auto / direct" in rendered
     assert "default" in rendered
+    assert "Playback Display:  External mpv window" in rendered
     assert "Transcode Quality: Original" in rendered
     assert "Page Size:           250" in rendered
     assert "Auto-load Threshold: 25" in rendered
@@ -378,6 +380,7 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "  Server: http://plex" in labels
     assert "› Subtitle Mode: Auto  (cycle)" in labels
     assert "› Playback Mode: Auto / direct default  (cycle)" in labels
+    assert "› Playback Display: External mpv window  (cycle)" in labels
     assert "› Transcode Quality: Original  (cycle)" in labels
     assert "› mpv Window Size: 1280x720  (cycle)" in labels
     assert "› Set custom mpv window size  (edit)" in labels
@@ -530,6 +533,8 @@ def test_next_artwork_renderer_cycles_values():
 def test_playback_quality_helpers_cycle_values():
     assert next_playback_mode("auto") == "transcode"
     assert next_playback_mode("transcode") == "auto"
+    assert next_playback_display("external") == "terminal"
+    assert next_playback_display("terminal") == "external"
     assert next_transcode_quality("original") == "1080p_8"
     assert next_transcode_quality("1080p_8") == "720p_4"
     assert next_transcode_quality("720p_4") == "480p_2"
@@ -767,18 +772,21 @@ def test_effective_stream_preferences_report_found_missing_and_none():
 
     assert effective_stream_preference_rows(Raw(), found) == [
         ("Playback Mode", "Auto / direct default"),
+        ("Playback Display", "External mpv window"),
         ("Transcode Quality", "Original"),
         ("Audio", "Japanese"),
         ("Subtitles", "English"),
     ]
     assert effective_stream_preference_rows(Raw(), missing) == [
         ("Playback Mode", "Auto / direct default"),
+        ("Playback Display", "External mpv window"),
         ("Transcode Quality", "Original"),
         ("Audio", "spa not found, Plex/default"),
         ("Subtitles", "fre not found, Plex/default"),
     ]
     assert effective_stream_preference_rows(Raw(), none) == [
         ("Playback Mode", "Auto / direct default"),
+        ("Playback Display", "External mpv window"),
         ("Transcode Quality", "Original"),
         ("Audio", "Plex/default"),
         ("Subtitles", "none"),

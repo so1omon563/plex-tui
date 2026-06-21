@@ -59,6 +59,7 @@ def play_with_mpv(
     audio_choice: StreamChoice | None = None,
     window_size: str = "",
     playback_mode: str = "auto",
+    playback_display: str = "external",
     transcode_quality: str = "original",
     resume: bool = True,
 ) -> PlayerHandle:
@@ -104,9 +105,11 @@ def play_with_mpv(
         "--force-media-title=" + title,
         "--input-ipc-server=" + str(socket_path),
     ]
+    if playback_display == "terminal":
+        args.extend(terminal_video_args())
     if start_offset and not monitor_base_offset:
         args.append(f"--start={start_offset / 1000:.3f}")
-    if window_size:
+    if window_size and playback_display != "terminal":
         args.append(f"--autofit={window_size}")
     args.extend(direct_track_args(direct_url, item, selected_audio, selected_subtitle))
     for subtitle in subtitles:
@@ -117,21 +120,34 @@ def play_with_mpv(
     log_debug(
         "launching mpv: "
         f"title={title!r} mode={stream_mode} "
+        f"display={playback_display!r} "
         f"quality={quality_label!r} "
         f"audio={stream_debug_label(selected_audio)} "
         f"subtitle={stream_debug_label(selected_subtitle)} "
         f"args={command!r}"
     )
+    stdin = stdout = stderr = None
+    tty = None
+    if playback_display == "terminal" and os.name != "nt":
+        try:
+            tty = Path("/dev/tty").open("r+b", buffering=0)
+            stdin = stdout = stderr = tty
+        except OSError as exc:
+            log_debug(f"terminal playback warning: could not open /dev/tty: {exc}")
     try:
         process = subprocess.Popen(
             args,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
+            stdin=stdin,
+            stdout=stdout if playback_display == "terminal" else subprocess.DEVNULL,
+            stderr=stderr if playback_display == "terminal" else subprocess.DEVNULL,
+            start_new_session=playback_display != "terminal",
         )
     except OSError as exc:
         log_debug(f"playback error: failed to launch mpv: {exc}; args={command!r}")
         raise PlayerError(f"failed to launch mpv: {exc}") from exc
+    finally:
+        if tty is not None:
+            tty.close()
     subtitle_count = active_subtitle_count(item, selected_subtitle)
     monitor = ProgressMonitor(item, process, socket_path, start_offset, base_offset=monitor_base_offset)
     monitor.start()
@@ -574,6 +590,36 @@ def stop_mpv(handle: PlayerHandle | None) -> None:
 
 def sanitize_command(args: list[str]) -> list[str]:
     return [sanitize_arg(arg) for arg in args]
+
+
+def terminal_video_args() -> list[str]:
+    if terminal_kitty_graphics_supported():
+        return [
+            "--vo=kitty",
+            "--terminal=yes",
+            "--profile=sw-fast",
+            "--really-quiet",
+        ]
+    size = shutil.get_terminal_size(fallback=(120, 40))
+    width = max(40, size.columns)
+    height = max(12, size.lines - 2)
+    return [
+        "--vo=tct",
+        "--terminal=yes",
+        "--vo-tct-buffering=frame",
+        f"--vo-tct-width={width}",
+        f"--vo-tct-height={height}",
+        "--profile=sw-fast",
+        "--really-quiet",
+    ]
+
+
+def terminal_kitty_graphics_supported() -> bool:
+    if os.environ.get("KITTY_WINDOW_ID") or os.environ.get("KITTY_PID"):
+        return True
+    term_program = os.environ.get("TERM_PROGRAM", "").lower()
+    term = os.environ.get("TERM", "").lower()
+    return term_program == "ghostty" or term.startswith("xterm-ghostty")
 
 
 def sanitize_arg(arg: str) -> str:

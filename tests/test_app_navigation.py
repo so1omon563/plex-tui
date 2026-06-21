@@ -2142,6 +2142,7 @@ async def run_playback_footer_check():
 
         assert launch.call_args.kwargs["window_size"] == "80%"
         assert launch.call_args.kwargs["playback_mode"] == "transcode"
+        assert launch.call_args.kwargs["playback_display"] == "external"
         assert launch.call_args.kwargs["transcode_quality"] == "720p_4"
         assert launch.call_args.kwargs["resume"] is False
         footer = app.query_one("#playback-footer")
