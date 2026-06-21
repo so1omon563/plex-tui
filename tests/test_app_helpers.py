@@ -41,6 +41,7 @@ from plextui.app import (
     detail_artwork_enabled,
     effective_stream_preference_rows,
     format_offset,
+    fuzzy_match_media,
     grid_card_height,
     grid_card_title_lines,
     grid_card_width,
@@ -1198,6 +1199,23 @@ def test_media_rows_returns_list_rows():
     assert isinstance(rows[0], MediaRow)
     assert next_media_view("list") == "grid"
     assert next_media_view("grid") == "list"
+
+
+def test_fuzzy_match_media_ranks_typos_and_acronyms():
+    items = [
+        MediaItem("Blade Runner", "1982", "movie", "1", True, object()),
+        MediaItem("Interstellar", "2014", "movie", "2", True, object()),
+        MediaItem("The Lord of the Rings", "The Fellowship of the Ring", "movie", "3", True, object()),
+        MediaItem("The Matrix", "1999", "movie", "4", True, object()),
+    ]
+
+    typo_matches = fuzzy_match_media("interstelar", items)
+    acronym_matches = fuzzy_match_media("lotr", items)
+    subtitle_matches = fuzzy_match_media("fellowship", items)
+
+    assert [item.title for item in typo_matches[:2]] == ["Interstellar"]
+    assert [item.title for item in acronym_matches[:2]] == ["The Lord of the Rings"]
+    assert [item.title for item in subtitle_matches[:2]] == ["The Lord of the Rings"]
 
 
 def test_alphabet_jump_index_moves_between_loaded_title_groups():
