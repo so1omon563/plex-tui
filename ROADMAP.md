@@ -74,10 +74,13 @@
 - In-playback audio/subtitle switching uses mpv IPC when the active stream
   exposes matching tracks; Plex-transcoded streams may still require relaunching
   with the saved preference.
-- TCT terminal-video playback was spiked in
-  `docs/tct-playback-spike.md`. It is technically feasible through mpv's TCT
-  video output, but should stay out of the next release unless it can be kept
-  opt-in and isolated from Textual's terminal rendering.
+- Experimental terminal-video playback is available as an opt-in playback
+  display. It prefers mpv's Kitty/Ghostty graphics output when available, falls
+  back to TCT text video elsewhere, uses Smooth/Balanced/Sharp profiles to
+  manage terminal throughput, and suspends the TUI while mpv owns the terminal;
+  it is intentionally positioned as a novelty/experiment rather than a
+  replacement for external mpv playback. Embedded video panes remain
+  intentionally out of scope.
 - Playlist management can create playlists from selected media, add selected
   media to existing playlists, and remove items while browsing a playlist.
   Continue design passes for bulk playlist actions and richer playlist editing

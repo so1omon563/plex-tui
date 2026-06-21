@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added opt-in experimental terminal playback through mpv's terminal video
+  outputs. External mpv windows remain the default, while terminal playback
+  prefers Kitty/Ghostty graphics, falls back to TCT text video, suspends the
+  TUI, offers Smooth/Balanced/Sharp terminal video profiles, and is positioned
+  as a novelty experiment rather than a replacement for external mpv playback.
+
 ## 0.5.0 - 2026-06-20
 
 - Added compact watched-progress indicators to media rows, grid cards, browse

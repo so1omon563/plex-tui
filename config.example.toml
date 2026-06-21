@@ -23,6 +23,16 @@ client_identifier = "plex-tui-your-stable-client-id"
 # playback_mode can be "auto" for direct/default playback or "transcode" to
 # force Plex transcoding.
 # playback_mode = "transcode"
+# playback_display can be "external" for the normal mpv window or "terminal"
+# for experimental terminal playback that prefers Kitty/Ghostty graphics and
+# falls back to TCT text video. Terminal playback takes over the terminal until
+# mpv exits.
+# playback_display = "terminal"
+# terminal_video_profile can be "smooth", "balanced", or "sharp". Smooth is
+# the default because terminal graphics can become choppy with large frames.
+# Terminal playback is experimental and will be worse than an external mpv
+# window; keep playback_display external for normal watching.
+# terminal_video_profile = "balanced"
 # transcode_quality applies when playback_mode is "transcode". Values are
 # "original", "1080p_8", "720p_4", or "480p_2".
 # transcode_quality = "720p_4"
