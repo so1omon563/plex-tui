@@ -11,6 +11,8 @@
 - Added read-only CLI commands for checking app status, listing libraries,
   Continue Watching items, and Plex search results, with optional JSON output
   for scripts.
+- Added Settings controls for reordering Plex libraries in the sidebar while
+  preserving existing library visibility toggles.
 
 ## 0.4.13 - 2026-06-20
 

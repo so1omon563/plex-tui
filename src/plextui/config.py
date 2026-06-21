@@ -49,6 +49,7 @@ class AppConfig:
     auto_load_threshold: int = DEFAULT_AUTO_LOAD_THRESHOLD
     grid_prefetch_pages: int = DEFAULT_GRID_PREFETCH_PAGES
     hidden_library_keys: tuple[str, ...] = ()
+    library_order_keys: tuple[str, ...] = ()
 
 
 def config_path() -> Path:
@@ -143,6 +144,7 @@ def load_config() -> AppConfig:
         "grid_prefetch_pages",
     )
     hidden_library_keys = csv_values(data.get("hidden_library_keys", ""))
+    library_order_keys = csv_values(data.get("library_order_keys", ""))
     return AppConfig(
         base_url=base_url.strip(),
         token=token.strip(),
@@ -165,6 +167,7 @@ def load_config() -> AppConfig:
         auto_load_threshold=auto_load_threshold,
         grid_prefetch_pages=grid_prefetch_pages,
         hidden_library_keys=hidden_library_keys,
+        library_order_keys=library_order_keys,
     )
 
 
@@ -212,6 +215,8 @@ def save_config(config: AppConfig) -> None:
         lines.append(f"grid_prefetch_pages = {config.grid_prefetch_pages}")
     if config.hidden_library_keys:
         lines.append(f'hidden_library_keys = "{_toml_escape(",".join(config.hidden_library_keys))}"')
+    if config.library_order_keys:
+        lines.append(f'library_order_keys = "{_toml_escape(",".join(config.library_order_keys))}"')
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

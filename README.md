@@ -93,7 +93,8 @@ working today. Expect rough edges, but expect progress too.
   editions for a selected movie.
 - Settings screen for stream preferences, playback mode and transcode quality,
   artwork modes, grid density, page size, auto-load threshold, grid artwork
-  prefetching, media view, library Enter behavior, and `mpv` window size.
+  prefetching, media view, library visibility/order, library Enter behavior,
+  and `mpv` window size.
 - App diagnostics view for version, paths, `mpv`, Plex connection, artwork, and
   browsing settings.
 

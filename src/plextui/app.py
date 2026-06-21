@@ -1880,6 +1880,12 @@ class PlexTuiApp(App[None]):
         if action.startswith("toggle_library_visibility:"):
             self.toggle_library_visibility(action.removeprefix("toggle_library_visibility:"))
             return
+        if action.startswith("move_library_up:"):
+            self.move_library(action.removeprefix("move_library_up:"), -1)
+            return
+        if action.startswith("move_library_down:"):
+            self.move_library(action.removeprefix("move_library_down:"), 1)
+            return
         if action == "cycle_grid_density":
             next_density = next_grid_density(self.config.grid_density)
             if self.update_preferences(grid_density=next_density):
@@ -2025,6 +2031,37 @@ class PlexTuiApp(App[None]):
         label = library.title if library is not None else library_key
         value = "Hidden" if library_key in self.config.hidden_library_keys else "Visible"
         self.refresh_settings_after_change(f"toggle_library_visibility:{library_key}", f"Library: {label}", value)
+
+    def move_library(self, library_key: str, direction: int) -> None:
+        current = ordered_libraries(self.libraries, self.config)
+        keys = [library.key for library in current]
+        try:
+            index = keys.index(library_key)
+        except ValueError:
+            self.set_status("Library is no longer available")
+            return
+        target = index + direction
+        if target < 0 or target >= len(keys):
+            library = current[index]
+            self.refresh_settings_after_change(
+                f"move_library_{'up' if direction < 0 else 'down'}:{library_key}",
+                f"Library order: {library.title}",
+                "No change",
+            )
+            return
+        keys[index], keys[target] = keys[target], keys[index]
+        if not self.update_preferences(library_order_keys=tuple(keys)):
+            return
+        visible = visible_libraries(self.libraries, self.config)
+        self.populate_libraries(visible, selected_library_key=library_key)
+        library = library_by_key(self.libraries, library_key)
+        label = library.title if library is not None else library_key
+        position = target + 1
+        self.refresh_settings_after_change(
+            f"move_library_{'up' if direction < 0 else 'down'}:{library_key}",
+            f"Library order: {label}",
+            f"Position {position}",
+        )
 
     def action_subtitle_picker(self) -> None:
         media = self.selected_media()
@@ -3675,7 +3712,17 @@ def artwork_status(details: object, config: AppConfig | None) -> str:
 
 def visible_libraries(libraries: list[LibraryItem], config: AppConfig) -> list[LibraryItem]:
     hidden = set(config.hidden_library_keys)
-    return [library for library in libraries if library.key not in hidden]
+    return ordered_libraries([library for library in libraries if library.key not in hidden], config)
+
+
+def ordered_libraries(libraries: list[LibraryItem], config: AppConfig) -> list[LibraryItem]:
+    if not config.library_order_keys:
+        return libraries
+    by_key = {library.key: library for library in libraries}
+    ordered = [by_key[key] for key in config.library_order_keys if key in by_key]
+    ordered_keys = {library.key for library in ordered}
+    ordered.extend(library for library in libraries if library.key not in ordered_keys)
+    return ordered
 
 
 def library_by_key(libraries: list[LibraryItem], key: str) -> LibraryItem | None:
@@ -3690,6 +3737,14 @@ def library_visibility_row(library: LibraryItem, config: AppConfig) -> SettingsA
     return SettingsActionRow(
         f"{library.title}: {state}",
         f"toggle_library_visibility:{library.key}",
+    )
+
+
+def library_order_row(library: LibraryItem, direction: str) -> SettingsActionRow:
+    label = "Move up" if direction == "up" else "Move down"
+    return SettingsActionRow(
+        f"{library.title}: {label}",
+        f"move_library_{direction}:{library.key}",
     )
 
 
@@ -3737,8 +3792,12 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         numeric_settings_row(config, "grid_prefetch_pages"),
     ]
     if libraries:
-        rows.append(SettingsHeaderRow("Library Visibility"))
-        rows.extend(library_visibility_row(library, config) for library in libraries)
+        rows.append(SettingsHeaderRow("Libraries"))
+        ordered = ordered_libraries(libraries, config)
+        for library in ordered:
+            rows.append(library_visibility_row(library, config))
+            rows.append(library_order_row(library, "up"))
+            rows.append(library_order_row(library, "down"))
     rows.extend([
         SettingsHeaderRow("Diagnostics"),
         SettingsValueRow(f"Config Path: {config_path()}"),
@@ -4006,7 +4065,7 @@ def settings_action_kind(action: str) -> str:
         return "confirm"
     if action.startswith("set_"):
         return "input"
-    if action.startswith(("increase_", "decrease_")):
+    if action.startswith(("increase_", "decrease_", "move_")):
         return "step"
     if action.startswith("reset_"):
         return "reset"
@@ -4184,6 +4243,8 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         key = action.removeprefix("toggle_library_visibility:")
         state = "Hidden" if key in config.hidden_library_keys else "Visible"
         return f"Current library visibility: {state}"
+    if action.startswith(("move_library_up:", "move_library_down:")):
+        return "Current library order can be changed from the Libraries section."
     if "page_size" in action:
         return f"Current page size: {config.page_size}"
     if "auto_load_threshold" in action:
@@ -4232,6 +4293,8 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to cycle compact, comfortable, and large grid layouts."
     if action.startswith("toggle_library_visibility:"):
         return "Press Enter to show or hide this library in the sidebar."
+    if action.startswith(("move_library_up:", "move_library_down:")):
+        return "Press Enter to move this library in the sidebar order."
     if action.startswith(("increase_", "decrease_")):
         return "Press Enter to adjust this value by one step."
     if action.startswith("reset_"):
@@ -4293,6 +4356,10 @@ def settings_action_label(action: str) -> str:
     }
     if action.startswith("toggle_library_visibility:"):
         return "Library visibility"
+    if action.startswith("move_library_up:"):
+        return "Library order: move up"
+    if action.startswith("move_library_down:"):
+        return "Library order: move down"
     return labels.get(action, action)
 
 
