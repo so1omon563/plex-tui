@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import textwrap
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, replace
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -571,7 +573,7 @@ class PlexTuiApp(App[None]):
                 yield ListView(id="libraries")
             with Vertical(id="main"):
                 yield Static("Media", id="media-title", classes="pane-title")
-                yield Input(placeholder="Search current library", id="search")
+                yield Input(placeholder="Fuzzy search loaded items", id="search")
                 yield ListView(id="media")
                 with VerticalScroll(id="media-grid-scroll"):
                     yield MediaGrid()
@@ -1404,7 +1406,7 @@ class PlexTuiApp(App[None]):
         self.search_global = False
         self.input_mode = "search"
         search = self.query_one("#search", Input)
-        search.placeholder = "Search current library"
+        search.placeholder = "Fuzzy search loaded items"
         search.value = ""
         search.display = True
         search.focus()
@@ -1414,7 +1416,7 @@ class PlexTuiApp(App[None]):
         self.search_global = True
         self.input_mode = "search"
         search = self.query_one("#search", Input)
-        search.placeholder = "Search all libraries"
+        search.placeholder = "Search all libraries through Plex"
         search.value = ""
         search.display = True
         search.focus()
@@ -2419,12 +2421,41 @@ class PlexTuiApp(App[None]):
             if self.input_mode == "playlist_name":
                 self.save_playlist_name_input(query)
                 return
+            search_global = self.search_global
             self.input_mode = ""
-            self.run_search(query, self.search_global)
+            if not search_global and self.apply_fuzzy_search(query, focus=True):
+                return
+            self.run_search(query, search_global)
 
-    @work(thread=True)
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id != "search":
+            return
+        if self.input_mode != "search" or self.search_global:
+            return
+        query = event.value.strip()
+        if query:
+            self.apply_fuzzy_search(query)
+        else:
+            self.restore_fuzzy_search_source()
+
+    @work(thread=True, exclusive=True, group="search")
     def run_search(self, query: str, global_search: bool = False) -> None:
-        if self.service is None or not query:
+        if not query:
+            return
+        local_source = None if global_search else self.fuzzy_search_source()
+        if local_source is not None:
+            matches = fuzzy_match_media(query, local_source.items)
+            title = f"Fuzzy search: {query}"
+            self.post_message(StatusChanged(f"Fuzzy searching {local_source.title} for {query}..."))
+            self.call_from_thread(self.show_loading_state, title, f"Matching loaded items from {local_source.title}.")
+
+            def update_fuzzy() -> None:
+                self.show_fuzzy_search_results(query, local_source, matches, focus=True)
+
+            self.call_from_thread(update_fuzzy)
+            return
+
+        if self.service is None:
             return
         scope = "all libraries" if global_search else "current library"
         self.post_message(StatusChanged(f"Searching {scope} for {query}..."))
@@ -2462,6 +2493,58 @@ class PlexTuiApp(App[None]):
             self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more, page.items))
 
         self.call_from_thread(update)
+
+    def fuzzy_search_source(self) -> BrowseState | None:
+        for state in reversed(self.browsing_stack):
+            if not state.search and state.items:
+                return state
+        return None
+
+    def apply_fuzzy_search(self, query: str, focus: bool = False) -> bool:
+        if not query:
+            self.restore_fuzzy_search_source()
+            return True
+        local_source = self.fuzzy_search_source()
+        if local_source is None:
+            return False
+        matches = fuzzy_match_media(query, local_source.items)
+        self.show_fuzzy_search_results(query, local_source, matches, focus=focus)
+        return True
+
+    def show_fuzzy_search_results(
+        self,
+        query: str,
+        local_source: BrowseState,
+        matches: list[MediaItem],
+        focus: bool = False,
+    ) -> None:
+        if self.browsing_stack and self.browsing_stack[-1].search:
+            self.browsing_stack.pop()
+        title = f"Fuzzy search: {query}"
+        state = BrowseState(
+            title,
+            matches,
+            local_source.selected_library,
+            search=True,
+            search_query=query,
+            source="fuzzy_search",
+            next_start=len(matches),
+            total=len(matches),
+            context_media=local_source.context_media,
+        )
+        self.browsing_stack.append(state)
+        self.show_browse_state(state)
+        if focus:
+            self.focus_media_browser()
+        self.set_status(f"{title}: {len(matches)} matches from {len(local_source.items)} loaded items")
+
+    def restore_fuzzy_search_source(self) -> None:
+        if self.browsing_stack and self.browsing_stack[-1].source == "fuzzy_search":
+            self.browsing_stack.pop()
+            if self.browsing_stack:
+                state = self.browsing_stack[-1]
+                self.show_browse_state(state)
+                self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items))
 
     def action_back_or_clear(self) -> None:
         search = self.query_one("#search", Input)
@@ -3376,6 +3459,50 @@ def media_metadata_label(media: MediaItem, include_kind: bool = True) -> str:
     return " · ".join(bits)
 
 
+def fuzzy_match_media(query: str, items: list[MediaItem]) -> list[MediaItem]:
+    scored = [(fuzzy_media_score(query, item), index, item) for index, item in enumerate(items)]
+    matches = [(score, index, item) for score, index, item in scored if score >= 0.58]
+    matches.sort(key=lambda candidate: (-candidate[0], candidate[1]))
+    return [item for _, _, item in matches]
+
+
+def fuzzy_media_score(query: str, item: MediaItem) -> float:
+    normalized_query = normalize_search_text(query)
+    if not normalized_query:
+        return 0.0
+    title = normalize_search_text(item.title)
+    subtitle = normalize_search_text(item.subtitle)
+    kind = normalize_search_text(kind_label(item.kind))
+    searchable = " ".join(value for value in (title, subtitle, kind) if value)
+    if not searchable:
+        return 0.0
+    if normalized_query in searchable:
+        return 1.0 if normalized_query in title else 0.92
+
+    query_tokens = normalized_query.split()
+    search_tokens = searchable.split()
+    if query_tokens and all(any(token in candidate for candidate in search_tokens) for token in query_tokens):
+        return 0.88
+
+    acronym = "".join(token[0] for token in search_tokens if token)
+    if normalized_query and (acronym.startswith(normalized_query) or normalized_query in acronym):
+        return 0.86
+
+    title_ratio = SequenceMatcher(None, normalized_query, title).ratio()
+    full_ratio = SequenceMatcher(None, normalized_query, searchable).ratio()
+    token_ratio = 0.0
+    if query_tokens and search_tokens:
+        token_ratio = sum(
+            max(SequenceMatcher(None, token, candidate).ratio() for candidate in search_tokens)
+            for token in query_tokens
+        ) / len(query_tokens)
+    return max(title_ratio, full_ratio, token_ratio * 0.9)
+
+
+def normalize_search_text(value: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", value.lower()))
+
+
 def grid_card_footer(media: MediaItem, selected: bool) -> str:
     progress = progress_bar(media.raw)
     if progress:
@@ -3735,8 +3862,8 @@ def render_help() -> str:
         "pageup/pagedown: move one grid page",
         "",
         "Search",
-        "/: search current library",
-        "g: search all libraries",
+        "/: fuzzy search loaded items in the current view",
+        "g: search all libraries through Plex",
         "",
         "Playback",
         "p: play selected media from beginning",

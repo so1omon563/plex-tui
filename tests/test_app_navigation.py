@@ -239,6 +239,82 @@ def test_initial_search_uses_configured_page_size():
     asyncio.run(run_initial_search_page_size_check())
 
 
+def test_current_view_search_uses_fuzzy_loaded_items():
+    app = PlexTuiApp()
+    library = LibraryItem("Movies", "1", "movie", object())
+    page = MediaPage([], start=0, total=0)
+    service = FakePagedService(page)
+    shown_states = []
+    statuses = []
+    app.config = AppConfig("http://plex", "token", "client-id")
+    app.service = service
+    app.selected_library = library
+    app.browsing_stack = [
+        BrowseState(
+            "Movies",
+            [
+                MediaItem("Blade Runner", "1982", "movie", "1", True, Raw()),
+                MediaItem("Interstellar", "2014", "movie", "2", True, Raw()),
+                MediaItem("The Matrix", "1999", "movie", "3", True, Raw()),
+            ],
+            library,
+            next_start=3,
+            total=3,
+        )
+    ]
+    app.call_from_thread = lambda callback, *args: callback(*args)
+    app.post_message = lambda message: None
+    app.show_loading_state = lambda *args: None
+    app.show_browse_state = shown_states.append
+    app.focus_media_browser = lambda: None
+    app.set_status = statuses.append
+
+    PlexTuiApp.run_search.__wrapped__(app, "interstelar")
+
+    assert service.search_calls == []
+    assert app.browsing_stack[-1].title == "Fuzzy search: interstelar"
+    assert [item.title for item in app.browsing_stack[-1].items] == ["Interstellar"]
+    assert shown_states == [app.browsing_stack[-1]]
+    assert statuses == ["Fuzzy search: interstelar: 1 matches from 3 loaded items"]
+
+
+def test_current_view_search_updates_results_while_typing():
+    app = PlexTuiApp()
+    library = LibraryItem("Movies", "1", "movie", object())
+    shown_states = []
+    statuses = []
+    app.config = AppConfig("http://plex", "token", "client-id")
+    app.input_mode = "search"
+    app.search_global = False
+    app.browsing_stack = [
+        BrowseState(
+            "Movies",
+            [
+                MediaItem("Blade Runner", "1982", "movie", "1", True, Raw()),
+                MediaItem("Interstellar", "2014", "movie", "2", True, Raw()),
+                MediaItem("The Matrix", "1999", "movie", "3", True, Raw()),
+            ],
+            library,
+            next_start=3,
+            total=3,
+        )
+    ]
+    app.show_browse_state = shown_states.append
+    app.set_status = statuses.append
+    app.focus_media_browser = lambda: None
+    search = SimpleNamespace(id="search")
+
+    app.on_input_changed(SimpleNamespace(input=search, value="inter"))
+    app.on_input_changed(SimpleNamespace(input=search, value=""))
+
+    assert app.browsing_stack[-1].title == "Movies"
+    assert shown_states[0].title == "Fuzzy search: inter"
+    assert [item.title for item in shown_states[0].items] == ["Interstellar"]
+    assert shown_states[-1].title == "Movies"
+    assert statuses[0] == "Fuzzy search: inter: 1 matches from 3 loaded items"
+    assert statuses[-1] == "Movies: 3 items"
+
+
 def test_load_more_media_can_preserve_selected_row():
     asyncio.run(run_load_more_media_preserve_selection_check())
 

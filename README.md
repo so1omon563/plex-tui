@@ -285,8 +285,8 @@ modes: select a library, press `space`, then open `Playlists`.
 | --- | --- |
 | `q` | Quit |
 | `ctrl+r` | Reload Plex connection |
-| `/` | Search current library |
-| `g` | Search all libraries |
+| `/` | Fuzzy search loaded items in the current view |
+| `g` | Search all libraries through Plex |
 | `?` | Show help |
 | `tab` / `shift+tab` | Move focus |
 | `l` | Focus libraries |
