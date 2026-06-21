@@ -70,6 +70,16 @@ async def wait_for_playlist_rows(app: PlexTuiApp, pilot: object, attempts: int =
     return rows
 
 
+async def wait_for_playlist_target_rows(app: PlexTuiApp, pilot: object, attempts: int = 80) -> list[object]:
+    rows = list(app.query_one("#media").children)
+    for _ in range(attempts):
+        if any(isinstance(row, PlaylistTargetRow) for row in rows):
+            return rows
+        await pilot.pause(0.1)
+        rows = list(app.query_one("#media").children)
+    return rows
+
+
 async def wait_for_calls(calls: list[object], pilot: object, attempts: int = 20) -> list[object]:
     for _ in range(attempts):
         if calls:
@@ -2389,7 +2399,7 @@ async def run_add_to_playlist_existing_check():
         await pilot.pause(0.2)
 
         app.action_add_to_playlist()
-        rows = await wait_for_playlist_rows(app, pilot)
+        rows = await wait_for_playlist_target_rows(app, pilot)
         target = next(row for row in rows if isinstance(row, PlaylistTargetRow))
         worker = app.choose_playlist_target(target.playlist)
         assert worker is not None
