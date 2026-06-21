@@ -8,6 +8,9 @@
 - Added live fuzzy search for the loaded current view, so `/` narrows results
   as you type and can match typos, acronyms, titles, and subtitles without
   making another Plex request.
+- Added read-only CLI commands for checking app status, listing libraries,
+  Continue Watching items, and Plex search results, with optional JSON output
+  for scripts.
 
 ## 0.4.13 - 2026-06-20
 
