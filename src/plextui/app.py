@@ -2439,7 +2439,7 @@ class PlexTuiApp(App[None]):
             self.show_browse_state(state, selected_key=selected_key)
             self.focus_media_browser()
         self.set_status(status)
-        self.set_timer(0.05, lambda: self.set_status(status), name="playlist-rename-status")
+        self.set_timer(0.2, lambda: self.set_status(status), name="playlist-rename-status")
 
     def action_delete_playlist(self) -> None:
         playlist = self.playlist_action_target()
@@ -2483,7 +2483,7 @@ class PlexTuiApp(App[None]):
                 self.show_browse_state(state)
                 self.focus_media_browser()
         self.set_status(status)
-        self.set_timer(0.05, lambda: self.set_status(status), name="playlist-delete-status")
+        self.set_timer(0.2, lambda: self.set_status(status), name="playlist-delete-status")
 
     def replace_playlist_reference(self, playlist_key: str, playlist: MediaItem) -> None:
         for state in self.browsing_stack:
@@ -2519,7 +2519,7 @@ class PlexTuiApp(App[None]):
         self.picker_media_key = None
         self.focus_media_browser()
         self.set_status(status)
-        self.set_timer(0.05, lambda: self.set_status(status), name="playlist-add-status")
+        self.set_timer(0.2, lambda: self.set_status(status), name="playlist-add-status")
 
     def apply_live_stream_choice(self, choice: StreamChoice, stream_type: str) -> bool:
         if self.player is None or not self.player.active or not self.picker_media_key:
@@ -2969,7 +2969,7 @@ class PlexTuiApp(App[None]):
         status = f"Removed {item_label} from {playlist.title}"
         self.set_status(status)
         self.set_timer(
-            0.05,
+            0.2,
             lambda: self.set_status(status),
             name="playlist-removal-status",
         )
