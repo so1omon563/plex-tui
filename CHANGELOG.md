@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expanded playlist management with a top-level Playlists entrypoint, bulk
+  item selection for playlist add/remove actions, playlist rename/delete
+  actions, richer playlist details, and playlist-specific Backspace/Delete
+  hints while browsing playlist contents.
 - Added opt-in experimental terminal playback through mpv's terminal video
   outputs. External mpv windows remain the default, while terminal playback
   prefers Kitty/Ghostty graphics, falls back to TCT text video, suspends the

@@ -150,6 +150,9 @@ class RawPlaylist:
     title = "Favorites"
     ratingKey = "playlist-1"
     key = "/playlists/1"
+    leafCount = 2
+    playlistType = "video"
+    smart = False
 
     def __init__(self) -> None:
         self.calls = []
@@ -165,6 +168,14 @@ class RawPlaylist:
     def removeItems(self, items):
         self.calls.append(("removeItems", items))
         return self
+
+    def _edit(self, **kwargs):
+        self.calls.append(("edit", kwargs))
+        self.title = kwargs.get("title", self.title)
+        return self
+
+    def delete(self):
+        self.calls.append(("delete",))
 
 
 class RawServer:
@@ -256,8 +267,11 @@ def test_playlist_helpers_create_add_and_remove_items():
 
     playlists = service.playlists()
     created = service.create_playlist("Weekend", item)
-    added = service.add_to_playlist(playlists[0], item)
-    removed = service.remove_from_playlist(playlists[0], item)
+    second = MediaItem("Second Movie", "", "movie", "2", True, SecondRawItem())
+    added = service.add_items_to_playlist(playlists[0], [item, second])
+    removed = service.remove_items_from_playlist(playlists[0], [item, second])
+    renamed = service.rename_playlist(playlists[0], "Renamed")
+    service.delete_playlist(playlists[0])
 
     assert service.server.calls == [
         ("playlists",),
@@ -267,9 +281,12 @@ def test_playlist_helpers_create_add_and_remove_items():
     assert created.title == "Weekend"
     assert added.title == "Favorites"
     assert removed.title == "Favorites"
+    assert renamed.title == "Renamed"
     assert service.server.raw_playlist.calls == [
-        ("addItems", [item.raw]),
-        ("removeItems", [item.raw]),
+        ("addItems", [item.raw, second.raw]),
+        ("removeItems", [item.raw, second.raw]),
+        ("edit", {"title": "Renamed"}),
+        ("delete",),
     ]
 
 

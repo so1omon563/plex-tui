@@ -81,10 +81,10 @@
   it is intentionally positioned as a novelty/experiment rather than a
   replacement for external mpv playback. Embedded video panes remain
   intentionally out of scope.
-- Playlist management can create playlists from selected media, add selected
-  media to existing playlists, and remove items while browsing a playlist.
-  Continue design passes for bulk playlist actions and richer playlist editing
-  if real-library use shows those workflows are needed.
+- Playlist management can browse all playlists from a top-level sidebar row,
+  create playlists from selected media, bulk-add selected playable media,
+  remove single or bulk-selected items while browsing a playlist, and rename or
+  delete playlists.
 - Later design passes: profile switching with auto sign-in.
 
 ## Technical Follow-Up

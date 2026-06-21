@@ -91,6 +91,7 @@ GRID_DETAIL_REFRESH_DELAY = 0.65
 LIST_DETAIL_REFRESH_DELAY = 0.35
 DETAIL_ARTWORK_REFRESH_DELAY = 0.55
 PLAYBACK_CONTROL_HINT = "controls c pause, z -10s, f +30s, x stop"
+PLAYLIST_REMOVE_HINT = "Playlist: Backspace/Delete removes from this playlist"
 GRID_PREFETCH_WORKERS = 3
 DETAIL_SUMMARY_WIDTH = 38
 DETAIL_LABEL_WIDTH = 20
@@ -133,6 +134,12 @@ class ContinueWatchingRow(ListItem):
         super().__init__(Label(self.label_text))
 
 
+class PlaylistsRow(ListItem):
+    def __init__(self) -> None:
+        self.label_text = "Playlists"
+        super().__init__(Label(self.label_text))
+
+
 class LibraryMenuRow(ListItem):
     def __init__(self, library: LibraryItem, entry: str, label: str, description: str) -> None:
         self.library = library
@@ -144,8 +151,10 @@ class LibraryMenuRow(ListItem):
 
 
 class MediaRow(ListItem):
-    def __init__(self, media: MediaItem) -> None:
+    def __init__(self, media: MediaItem, bulk_selected: bool = False) -> None:
         marker = "▶" if media.playable else "›"
+        if bulk_selected:
+            marker = "✓"
         metadata = media_metadata_label(media, include_kind=True)
         subtitle = f" · {metadata}" if metadata else ""
         progress = row_progress_marker(media.raw)
@@ -180,6 +189,7 @@ class MediaGrid(Static):
         self.rows = 1
         self.config: AppConfig | None = None
         self.artwork: dict[str, object] = {}
+        self.bulk_selected_keys: set[str] = set()
 
     @property
     def selected_media(self) -> MediaItem | None:
@@ -194,12 +204,14 @@ class MediaGrid(Static):
         config: AppConfig,
         columns: int,
         rows: int = 1,
+        bulk_selected_keys: set[str] | None = None,
     ) -> None:
         self.items = items
         self.selected_index = min(max(0, selected_index), max(0, len(items) - 1))
         self.columns = max(1, columns)
         self.rows = max(1, rows)
         self.config = config
+        self.bulk_selected_keys = set(bulk_selected_keys or set())
         self.artwork = {key: value for key, value in self.artwork.items() if key in {item.key for item in items}}
         self.refresh_grid()
         self.scroll_selected_visible()
@@ -257,7 +269,7 @@ class MediaGrid(Static):
         loaded_count = len(visible_keys.intersection(self.artwork))
         poster_count = sum(1 for item in visible_items if item.artwork_path)
         started = time.perf_counter()
-        self.update(render_media_grid(visible_items, selected_key, self.config, self.columns, self.artwork))
+        self.update(render_media_grid(visible_items, selected_key, self.config, self.columns, self.artwork, self.bulk_selected_keys))
         write_artwork_performance_log(
             "grid_render",
             started,
@@ -517,6 +529,9 @@ class PlexTuiApp(App[None]):
         Binding("escape", "back_or_clear", "Back"),
         Binding("p", "play_selected", "Play from start"),
         Binding("P", "add_to_playlist", "Playlist", show=False),
+        Binding("u", "toggle_bulk_selection", "Select", show=False),
+        Binding("e", "rename_playlist", "Rename playlist", show=False),
+        Binding("D", "delete_playlist", "Delete playlist", show=False),
         Binding("r", "resume_selected", "Resume"),
         Binding("w", "toggle_watched", "Watched", show=False),
         Binding("backspace", "remove_continue_watching", "Remove continue", show=False),
@@ -546,6 +561,8 @@ class PlexTuiApp(App[None]):
     selected_subtitle: StreamChoice | None
     selected_audio: StreamChoice | None
     picker_media_key: str | None
+    bulk_selected_keys: set[str]
+    playlist_picker_items: list[MediaItem]
     loading_more: bool
     suppress_auto_load: bool
     player: PlayerHandle | None
@@ -596,6 +613,8 @@ class PlexTuiApp(App[None]):
         self.selected_audio = None
         self.picker_media_key = None
         self.playlist_picker_item = None
+        self.playlist_picker_items = []
+        self.bulk_selected_keys = set()
         self.loading_more = False
         self.suppress_auto_load = False
         self.player = None
@@ -760,13 +779,13 @@ class PlexTuiApp(App[None]):
     def populate_libraries(self, libraries: list[LibraryItem], selected_library_key: str | None = None) -> None:
         selected_index = 0
         if selected_library_key is not None:
-            for index, library in enumerate(libraries, start=1):
+            for index, library in enumerate(libraries, start=2):
                 if library.key == selected_library_key:
                     selected_index = index
                     break
         self.replace_list_rows_async(
             "#libraries",
-            [ContinueWatchingRow(), *[LibraryRow(library) for library in libraries]],
+            [ContinueWatchingRow(), PlaylistsRow(), *[LibraryRow(library) for library in libraries]],
             selected_index,
             "library-list",
         )
@@ -775,6 +794,8 @@ class PlexTuiApp(App[None]):
         row = event.item
         if isinstance(row, ContinueWatchingRow):
             self.open_continue_watching()
+        elif isinstance(row, PlaylistsRow):
+            self.open_playlists()
         elif isinstance(row, LibraryRow):
             self.open_library_primary(row.library)
         elif isinstance(row, LibraryMenuRow):
@@ -806,6 +827,10 @@ class PlexTuiApp(App[None]):
             mark_active_row(event.list_view, row)
             self.show_detail_text("Resume movies and episodes Plex reports as ready to continue.")
             self.set_status(context_hint(row))
+        elif isinstance(row, PlaylistsRow):
+            mark_active_row(event.list_view, row)
+            self.show_detail_text("Browse all Plex playlists. Open a playlist to remove items, or select a playlist here to rename or delete it.")
+            self.set_status(context_hint(row))
         elif isinstance(row, LibraryRow):
             mark_active_row(event.list_view, row)
             self.set_status(context_hint(row))
@@ -816,7 +841,7 @@ class PlexTuiApp(App[None]):
         elif isinstance(row, MediaRow):
             mark_active_row(event.list_view, row)
             self.show_media_details(row.media)
-            self.set_status(context_hint(row))
+            self.set_status(media_row_status(row, self.browsing_stack[-1] if self.browsing_stack else None))
             self.maybe_auto_load_more(row.media)
         elif isinstance(row, LoadMoreRow):
             mark_active_row(event.list_view, row)
@@ -841,11 +866,11 @@ class PlexTuiApp(App[None]):
             self.set_status(context_hint(row))
         elif isinstance(row, PlaylistCreateRow):
             mark_active_row(event.list_view, row)
-            self.show_detail_text(render_playlist_create_details(self.playlist_picker_item))
+            self.show_detail_text(render_playlist_create_details(self.playlist_picker_items or self.playlist_picker_item))
             self.set_status(context_hint(row))
         elif isinstance(row, PlaylistTargetRow):
             mark_active_row(event.list_view, row)
-            self.show_detail_text(render_playlist_target_details(row.playlist, self.playlist_picker_item))
+            self.show_detail_text(render_playlist_target_details(row.playlist, self.playlist_picker_items or self.playlist_picker_item))
             self.set_status(context_hint(row))
         elif isinstance(row, (SettingsActionRow, SettingsHeaderRow, SettingsValueRow)):
             mark_active_row(event.list_view, row)
@@ -911,6 +936,9 @@ class PlexTuiApp(App[None]):
             return
         if isinstance(row, ContinueWatchingRow):
             self.set_status("Continue Watching opens directly with Enter")
+            return
+        if isinstance(row, PlaylistsRow):
+            self.set_status("Playlists opens directly with Enter")
             return
         self.set_status("Select a library first")
 
@@ -984,6 +1012,40 @@ class PlexTuiApp(App[None]):
 
         self.call_from_thread(update)
 
+    @work(thread=True)
+    def open_playlists(self) -> None:
+        if self.service is None:
+            return
+        title = "Playlists"
+        self.post_message(StatusChanged(f"Loading {title}..."))
+        self.call_from_thread(self.show_loading_state, title, "Loading Plex playlists.")
+        started = time.perf_counter()
+        try:
+            playlists = self.service.playlists()
+        except Exception as exc:
+            self.call_from_thread(self.show_error, f"failed to load playlists: {exc}")
+            return
+        write_performance_log(
+            "playlists_page",
+            started,
+            f"items={len(playlists)}",
+        )
+
+        def update() -> None:
+            state = BrowseState(
+                title,
+                playlists,
+                source="playlists",
+                next_start=len(playlists),
+                total=len(playlists),
+            )
+            self.browsing_stack = [state]
+            self.show_browse_state(state)
+            self.focus_media_browser()
+            self.set_status(render_browse_status(state))
+
+        self.call_from_thread(update)
+
     def maybe_auto_load_more(self, media: MediaItem) -> None:
         if self.suppress_auto_load:
             self.suppress_auto_load = False
@@ -998,6 +1060,44 @@ class PlexTuiApp(App[None]):
         if self.media_grid_visible():
             return self.query_one("#media-grid", MediaGrid).selected_media
         return selected_media_from_row(self.query_one("#media", ListView).highlighted_child)
+
+    def current_browse_state(self) -> BrowseState | None:
+        return self.browsing_stack[-1] if self.browsing_stack else None
+
+    def selected_bulk_items(self) -> list[MediaItem]:
+        state = self.current_browse_state()
+        if state is None or not self.bulk_selected_keys:
+            return []
+        return [item for item in state.items if item.key in self.bulk_selected_keys]
+
+    def playlist_action_items(self) -> list[MediaItem]:
+        selected = self.selected_bulk_items()
+        if selected:
+            return selected
+        media = self.selected_media()
+        return [media] if media is not None else []
+
+    def prune_bulk_selection(self, state: BrowseState) -> None:
+        valid_keys = {item.key for item in state.items}
+        self.bulk_selected_keys.intersection_update(valid_keys)
+
+    def action_toggle_bulk_selection(self) -> None:
+        media = self.selected_media()
+        state = self.current_browse_state()
+        if media is None or state is None:
+            self.set_status("No media selected")
+            return
+        if media.key in self.bulk_selected_keys:
+            self.bulk_selected_keys.remove(media.key)
+            status = f"Removed {media.title} from bulk selection"
+        else:
+            self.bulk_selected_keys.add(media.key)
+            status = f"Selected {media.title} for bulk actions"
+        self.show_browse_state(state, selected_key=media.key)
+        self.focus_media_browser()
+        count = len(self.selected_bulk_items())
+        label = "item" if count == 1 else "items"
+        self.set_status(f"{status} / {count} selected {label}")
 
     def focus_media_browser(self) -> None:
         if self.media_grid_visible():
@@ -1073,7 +1173,7 @@ class PlexTuiApp(App[None]):
             self.loading_more = False
             self.suppress_auto_load = True
             target_key = selected_key or first_new_key
-            status = render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items)
+            status = render_browse_status(state)
             if alphabet_direction and selected_key:
                 current_index = selected_media_index(state.items, selected_key)
                 next_index = alphabet_jump_index(state.items, current_index, alphabet_direction)
@@ -1119,7 +1219,7 @@ class PlexTuiApp(App[None]):
             self.browsing_stack.append(state)
             self.show_browse_state(state)
             self.focus_media_browser()
-            self.set_status(f"{media.title}: {len(children)} items")
+            self.set_status(render_browse_status(state))
 
         self.call_from_thread(update)
 
@@ -1130,6 +1230,7 @@ class PlexTuiApp(App[None]):
 
     def show_browse_state(self, state: BrowseState, selected_key: str | None = None) -> None:
         self.set_media_title(state.title)
+        self.prune_bulk_selection(state)
         if state.items:
             started = time.perf_counter()
             selected_index = selected_media_index(state.items, selected_key)
@@ -1138,11 +1239,11 @@ class PlexTuiApp(App[None]):
                 columns, rows = self.media_grid_geometry(
                     collection_cards=grid_items_are_collection_cards(state.items),
                 )
-                grid.set_items(state.items, selected_index, self.config, columns, rows)
+                grid.set_items(state.items, selected_index, self.config, columns, rows, self.bulk_selected_keys)
                 self.schedule_grid_prefetch(grid)
             else:
                 self.show_media_list()
-                rows, selected_row_index = media_rows(state.items, self.config, selected_index)
+                rows, selected_row_index = media_rows(state.items, self.config, selected_index, self.bulk_selected_keys)
                 if state.has_more:
                     rows.append(LoadMoreRow(len(state.items), state.total))
                 self.replace_media_rows(rows, selected_row_index)
@@ -1157,7 +1258,7 @@ class PlexTuiApp(App[None]):
                 state.title,
                 empty_state_message(state),
                 empty_state_action(state),
-                status=render_loaded_status(state.title, 0, state.total, state.has_more),
+                status=render_browse_status(state),
             )
 
     def show_loading_state(self, title: str, message: str = "Loading from Plex.") -> None:
@@ -1202,7 +1303,12 @@ class PlexTuiApp(App[None]):
         self.detail_refresh_token += 1
         token = self.detail_refresh_token
         details = media_details(item)
-        self.show_detail_text(render_detail_content(details, self.config, raw=item.raw))
+        self.show_detail_text(render_detail_content(
+            details,
+            self.config,
+            raw=item.raw,
+            context_actions=current_detail_actions(self.browsing_stack[-1] if self.browsing_stack else None, item),
+        ))
         delay = GRID_DETAIL_REFRESH_DELAY if self.media_grid_visible() else LIST_DETAIL_REFRESH_DELAY
         self.schedule_media_detail_refresh(item, token, delay)
 
@@ -1271,7 +1377,12 @@ class PlexTuiApp(App[None]):
             return
         selected = self.selected_media()
         if selected is not None and selected.key == full_item.key:
-            self.show_detail_text(render_detail_content(details, self.config, raw=full_item.raw))
+            self.show_detail_text(render_detail_content(
+                details,
+                self.config,
+                raw=full_item.raw,
+                context_actions=current_detail_actions(self.browsing_stack[-1] if self.browsing_stack else None, full_item),
+            ))
             self.schedule_media_detail_artwork_refresh(full_item, details, token)
 
     def schedule_media_detail_artwork_refresh(self, full_item: MediaItem, details: object, token: int) -> None:
@@ -2167,22 +2278,24 @@ class PlexTuiApp(App[None]):
         self.set_timer(0.05, lambda: self.set_status(status), name="stream-choice-status")
 
     def action_add_to_playlist(self) -> None:
-        media = self.selected_media()
-        if media is None:
+        items = self.playlist_action_items()
+        if not items:
             self.set_status("No media selected")
             return
-        if not media.playable:
+        unplayable = [item for item in items if not item.playable]
+        if unplayable:
             self.set_status("Select playable media before adding to a playlist")
             return
         if self.service is None:
             self.set_status("Connect to Plex before managing playlists")
             return
-        self.open_playlist_picker(media)
+        self.open_playlist_picker(items)
 
     @work(thread=True)
-    def open_playlist_picker(self, media: MediaItem) -> None:
+    def open_playlist_picker(self, items: list[MediaItem]) -> None:
         if self.service is None:
             return
+        media = items[0]
         self.post_message(StatusChanged("Loading playlists..."))
         try:
             playlists = self.service.playlists()
@@ -2196,6 +2309,7 @@ class PlexTuiApp(App[None]):
             self.settings_visible = False
             self.picker_media_key = media.key
             self.playlist_picker_item = media
+            self.playlist_picker_items = items
             self.set_media_title(f"Add to Playlist: {media.title}")
             rows: list[ListItem] = [PlaylistCreateRow()]
             rows.extend(PlaylistTargetRow(playlist) for playlist in playlists)
@@ -2203,42 +2317,45 @@ class PlexTuiApp(App[None]):
             self.replace_media_rows(rows, 0)
             view = self.query_one("#media", ListView)
             view.focus()
-            self.show_detail_text(render_playlist_picker_details(media, len(playlists)))
+            self.show_detail_text(render_playlist_picker_details(items, len(playlists)))
             self.set_status("Choose playlist target")
 
         self.call_from_thread(update)
 
     def choose_playlist_target(self, playlist: MediaItem) -> object | None:
-        item = self.playlist_picker_item
-        if item is None:
+        items = self.playlist_picker_items or ([self.playlist_picker_item] if self.playlist_picker_item is not None else [])
+        if not items:
             self.set_status("No media selected for playlist")
             return None
-        self.set_status(f"Adding {item.title} to {playlist.title}...")
-        return self.add_item_to_playlist(playlist, item)
+        self.set_status(f"Adding {playlist_items_label(items)} to {playlist.title}...")
+        return self.add_items_to_playlist(playlist, items)
 
     @work(thread=True, exclusive=True, group="playlist")
-    def add_item_to_playlist(self, playlist: MediaItem, item: MediaItem) -> None:
+    def add_items_to_playlist(self, playlist: MediaItem, items: list[MediaItem]) -> None:
         if self.service is None:
             return
         try:
-            updated_playlist = self.service.add_to_playlist(playlist, item)
+            updated_playlist = self.service.add_items_to_playlist(playlist, items)
         except Exception as exc:
             self.call_from_thread(self.show_error, f"failed to add to playlist: {exc}")
             return
-        self.call_from_thread(self.finish_playlist_add, updated_playlist, item)
+        self.call_from_thread(self.finish_playlist_add, updated_playlist, items)
+
+    def add_item_to_playlist(self, playlist: MediaItem, item: MediaItem) -> object | None:
+        return self.add_items_to_playlist(playlist, [item])
 
     def prompt_playlist_name(self) -> None:
-        item = self.playlist_picker_item
-        if item is None:
+        items = self.playlist_picker_items or ([self.playlist_picker_item] if self.playlist_picker_item is not None else [])
+        if not items:
             self.set_status("No media selected for playlist")
             return
         self.input_mode = "playlist_name"
         search = self.query_one("#search", Input)
-        search.placeholder = f"New playlist name for {item.title}"
+        search.placeholder = f"New playlist name for {playlist_items_label(items)}"
         search.value = ""
         search.display = True
         search.focus()
-        self.show_detail_text(f"Enter a name for a new playlist containing {item.title}.")
+        self.show_detail_text(f"Enter a name for a new playlist containing {playlist_items_label(items)}.")
         self.set_status("Enter new playlist name")
 
     def save_playlist_name_input(self, value: str) -> object | None:
@@ -2247,38 +2364,162 @@ class PlexTuiApp(App[None]):
             self.prompt_playlist_name()
             self.set_status("Playlist name is required")
             return None
-        item = self.playlist_picker_item
-        if item is None:
+        items = self.playlist_picker_items or ([self.playlist_picker_item] if self.playlist_picker_item is not None else [])
+        if not items:
             self.input_mode = ""
             self.set_status("No media selected for playlist")
             return None
         self.input_mode = ""
         self.set_status(f"Creating playlist {title}...")
-        return self.create_playlist_from_item(title, item)
+        return self.create_playlist_from_items(title, items)
+
+    def playlist_action_target(self) -> MediaItem | None:
+        media = self.selected_media()
+        if media is not None and media.kind == "playlist":
+            return media
+        state = self.current_browse_state()
+        if is_playlist_browse_state(state):
+            return state.context_media
+        return None
+
+    def action_rename_playlist(self) -> None:
+        playlist = self.playlist_action_target()
+        if playlist is None:
+            self.set_status("Select or open a playlist before renaming")
+            return
+        self.prompt_playlist_rename(playlist)
+
+    def prompt_playlist_rename(self, playlist: MediaItem) -> None:
+        self.playlist_picker_item = playlist
+        self.input_mode = "playlist_rename"
+        search = self.query_one("#search", Input)
+        search.placeholder = f"Rename playlist: {playlist.title}"
+        search.value = playlist.title
+        search.display = True
+        search.focus()
+        self.show_detail_text(f"Enter a new name for playlist {playlist.title}.")
+        self.set_status("Enter playlist name")
+
+    def save_playlist_rename_input(self, value: str) -> object | None:
+        title = value.strip()
+        playlist = self.playlist_picker_item
+        if playlist is None:
+            self.input_mode = ""
+            self.set_status("No playlist selected")
+            return None
+        if not title:
+            self.prompt_playlist_rename(playlist)
+            self.set_status("Playlist name is required")
+            return None
+        self.input_mode = ""
+        self.set_status(f"Renaming playlist {playlist.title}...")
+        return self.rename_playlist(playlist, title)
 
     @work(thread=True, exclusive=True, group="playlist")
-    def create_playlist_from_item(self, title: str, item: MediaItem) -> None:
+    def rename_playlist(self, playlist: MediaItem, title: str) -> None:
         if self.service is None:
             return
         try:
-            playlist = self.service.create_playlist(title, item)
+            renamed = self.service.rename_playlist(playlist, title)
+        except Exception as exc:
+            self.call_from_thread(self.show_error, f"failed to rename playlist: {exc}")
+            return
+        self.call_from_thread(self.apply_playlist_rename, playlist, renamed)
+
+    def apply_playlist_rename(self, old_playlist: MediaItem, renamed: MediaItem) -> None:
+        self.playlist_picker_item = None
+        self.replace_playlist_reference(old_playlist.key, renamed)
+        status = f"Renamed playlist to {renamed.title}"
+        state = self.current_browse_state()
+        selected_key = renamed.key
+        if state is not None:
+            if is_playlist_browse_state(state):
+                state.title = renamed.title
+                state.context_media = renamed
+            self.show_browse_state(state, selected_key=selected_key)
+            self.focus_media_browser()
+        self.set_status(status)
+        self.set_timer(0.2, lambda: self.set_status(status), name="playlist-rename-status")
+
+    def action_delete_playlist(self) -> None:
+        playlist = self.playlist_action_target()
+        if playlist is None:
+            self.set_status("Select or open a playlist before deleting")
+            return
+        action = f"delete_playlist:{playlist.key}"
+        if self.pending_confirmation_action != action:
+            self.pending_confirmation_action = action
+            self.playlist_picker_item = playlist
+            self.show_detail_text(f"Delete Playlist\n\n{playlist.title}\n\nPress D again to confirm.")
+            self.set_status(f"Press D again to delete playlist {playlist.title}")
+            return
+        self.pending_confirmation_action = ""
+        self.set_status(f"Deleting playlist {playlist.title}...")
+        return self.delete_playlist(playlist)
+
+    @work(thread=True, exclusive=True, group="playlist")
+    def delete_playlist(self, playlist: MediaItem) -> None:
+        if self.service is None:
+            return
+        try:
+            self.service.delete_playlist(playlist)
+        except Exception as exc:
+            self.call_from_thread(self.show_error, f"failed to delete playlist: {exc}")
+            return
+        self.call_from_thread(self.apply_playlist_delete, playlist)
+
+    def apply_playlist_delete(self, playlist: MediaItem) -> None:
+        self.playlist_picker_item = None
+        self.pending_confirmation_action = ""
+        status = f"Deleted playlist {playlist.title}"
+        state = self.current_browse_state()
+        if state is not None:
+            if is_playlist_browse_state(state) and state.context_media is not None and state.context_media.key == playlist.key:
+                self.browsing_stack.pop()
+                state = self.current_browse_state()
+            if state is not None:
+                state.items = [item for item in state.items if item.key != playlist.key]
+                state.total = max(0, state.total - 1) if state.total else len(state.items)
+                self.show_browse_state(state)
+                self.focus_media_browser()
+        self.set_status(status)
+        self.set_timer(0.2, lambda: self.set_status(status), name="playlist-delete-status")
+
+    def replace_playlist_reference(self, playlist_key: str, playlist: MediaItem) -> None:
+        for state in self.browsing_stack:
+            state.items = [playlist if item.key == playlist_key else item for item in state.items]
+            if state.context_media is not None and state.context_media.key == playlist_key:
+                state.context_media = playlist
+
+    @work(thread=True, exclusive=True, group="playlist")
+    def create_playlist_from_items(self, title: str, items: list[MediaItem]) -> None:
+        if self.service is None:
+            return
+        try:
+            playlist = self.service.create_playlist_from_items(title, items)
         except Exception as exc:
             self.call_from_thread(self.show_error, f"failed to create playlist: {exc}")
             return
-        self.call_from_thread(self.finish_playlist_add, playlist, item, created=True)
+        self.call_from_thread(self.finish_playlist_add, playlist, items, created=True)
 
-    def finish_playlist_add(self, playlist: MediaItem, item: MediaItem, created: bool = False) -> None:
-        status = f"Created playlist {playlist.title} with {item.title}" if created else f"Added {item.title} to {playlist.title}"
+    def create_playlist_from_item(self, title: str, item: MediaItem) -> object | None:
+        return self.create_playlist_from_items(title, [item])
+
+    def finish_playlist_add(self, playlist: MediaItem, items: list[MediaItem], created: bool = False) -> None:
+        item_label = playlist_items_label(items)
+        status = f"Created playlist {playlist.title} with {item_label}" if created else f"Added {item_label} to {playlist.title}"
         self.picker_visible = False
         self.playlist_picker_visible = False
         self.playlist_picker_item = None
+        self.playlist_picker_items = []
+        self.bulk_selected_keys.clear()
         if self.browsing_stack:
             state = self.browsing_stack[-1]
             self.show_browse_state(state, selected_key=self.picker_media_key)
         self.picker_media_key = None
         self.focus_media_browser()
         self.set_status(status)
-        self.set_timer(0.05, lambda: self.set_status(status), name="playlist-add-status")
+        self.set_timer(0.2, lambda: self.set_status(status), name="playlist-add-status")
 
     def apply_live_stream_choice(self, choice: StreamChoice, stream_type: str) -> bool:
         if self.player is None or not self.player.active or not self.picker_media_key:
@@ -2464,6 +2705,9 @@ class PlexTuiApp(App[None]):
             if self.input_mode == "playlist_name":
                 self.save_playlist_name_input(query)
                 return
+            if self.input_mode == "playlist_rename":
+                self.save_playlist_rename_input(query)
+                return
             search_global = self.search_global
             self.input_mode = ""
             if not search_global and self.apply_fuzzy_search(query, focus=True):
@@ -2599,10 +2843,11 @@ class PlexTuiApp(App[None]):
             if input_mode in {"mpv_window_size", "page_size", "auto_load_threshold", "grid_prefetch_pages"}:
                 self.action_show_settings()
                 return
-            if input_mode == "playlist_name":
+            if input_mode in {"playlist_name", "playlist_rename"}:
                 self.picker_visible = False
                 self.playlist_picker_visible = False
                 self.playlist_picker_item = None
+                self.playlist_picker_items = []
                 if self.browsing_stack:
                     state = self.browsing_stack[-1]
                     self.show_browse_state(state, selected_key=self.picker_media_key)
@@ -2677,8 +2922,9 @@ class PlexTuiApp(App[None]):
             if state.context_media is None:
                 self.set_status("Playlist context is unavailable")
                 return
-            self.set_status(f"Removing {media.title} from {state.context_media.title}...")
-            self.remove_playlist_item(state.context_media, media)
+            items = self.selected_bulk_items() or [media]
+            self.set_status(f"Removing {playlist_items_label(items)} from {state.context_media.title}...")
+            self.remove_playlist_items(state.context_media, items)
             return
         if state.source != "continue_watching":
             self.set_status("Open Continue Watching or a playlist before removing an item")
@@ -2686,37 +2932,45 @@ class PlexTuiApp(App[None]):
         self.set_status(f"Removing {media.title} from Continue Watching...")
         self.remove_continue_watching_item(media)
 
-    @work(thread=True, exclusive=True)
     def remove_playlist_item(self, playlist: MediaItem, media: MediaItem) -> None:
+        self.remove_playlist_items(playlist, [media])
+
+    @work(thread=True, exclusive=True)
+    def remove_playlist_items(self, playlist: MediaItem, items: list[MediaItem]) -> None:
         if self.service is None:
             return
         try:
-            self.service.remove_from_playlist(playlist, media)
+            self.service.remove_items_from_playlist(playlist, items)
         except Exception as exc:
             self.call_from_thread(self.show_error, f"failed to remove from playlist: {exc}")
             return
-        self.call_from_thread(self.apply_playlist_removal, playlist, media)
+        self.call_from_thread(self.apply_playlist_removal, playlist, items)
 
-    def apply_playlist_removal(self, playlist: MediaItem, media: MediaItem) -> None:
+    def apply_playlist_removal(self, playlist: MediaItem, items: list[MediaItem]) -> None:
+        removed_keys = {item.key for item in items}
+        item_label = playlist_items_label(items)
         if not self.browsing_stack or self.browsing_stack[-1].source != "playlist":
-            self.set_status(f"Removed {media.title} from {playlist.title}")
+            self.set_status(f"Removed {item_label} from {playlist.title}")
             return
         state = self.browsing_stack[-1]
-        index = selected_media_index(state.items, media.key)
-        state.items = [item for item in state.items if item.key != media.key]
-        state.total = max(0, state.total - 1) if state.total else len(state.items)
+        first_removed_key = items[0].key if items else ""
+        index = selected_media_index(state.items, first_removed_key)
+        state.items = [item for item in state.items if item.key not in removed_keys]
+        self.bulk_selected_keys.difference_update(removed_keys)
+        state.total = max(0, state.total - len(removed_keys)) if state.total else len(state.items)
         if not state.items:
             self.show_browse_state(state)
             self.show_detail_text("No items")
-            self.set_status(f"Removed {media.title} from {playlist.title}")
+            self.set_status(f"Removed {item_label} from {playlist.title}")
             return
         next_index = min(index, len(state.items) - 1)
         self.show_browse_state(state, selected_key=state.items[next_index].key)
         self.focus_media_browser()
-        self.set_status(f"Removed {media.title} from {playlist.title}")
+        status = f"Removed {item_label} from {playlist.title}"
+        self.set_status(status)
         self.set_timer(
-            0.05,
-            lambda: self.set_status(f"Removed {media.title} from {playlist.title}"),
+            0.2,
+            lambda: self.set_status(status),
             name="playlist-removal-status",
         )
 
@@ -3022,8 +3276,13 @@ def format_offset(milliseconds: int) -> str:
     return f"{minutes}:{secs:02d}"
 
 
-def render_details(details: object, config: AppConfig | None = None, raw: object | None = None) -> str:
-    lines = render_detail_header(details, config)
+def render_details(
+    details: object,
+    config: AppConfig | None = None,
+    raw: object | None = None,
+    context_actions: tuple[str, ...] = (),
+) -> str:
+    lines = render_detail_header(details, config, context_actions)
 
     metadata_rows = list(getattr(details, "metadata"))
     episode_context = episode_context_rows(details, metadata_rows)
@@ -3073,7 +3332,11 @@ def render_details(details: object, config: AppConfig | None = None, raw: object
     return "\n".join(lines)
 
 
-def render_detail_header(details: object, config: AppConfig | None = None) -> list[str]:
+def render_detail_header(
+    details: object,
+    config: AppConfig | None = None,
+    context_actions: tuple[str, ...] = (),
+) -> list[str]:
     title = getattr(details, "title")
     metadata = list(getattr(details, "metadata", []))
     title_lines = textwrap.wrap(title, width=DETAIL_SUMMARY_WIDTH) or [title]
@@ -3089,13 +3352,13 @@ def render_detail_header(details: object, config: AppConfig | None = None) -> li
     lines.extend([
         "",
         "Playback",
-        *playback_readiness_rows(bool(getattr(details, "playable")), progress),
+        *playback_readiness_rows(bool(getattr(details, "playable")), progress, context_actions),
         f"Artwork: {artwork}",
     ])
     return lines
 
 
-def playback_readiness_rows(playable: bool, progress: str = "") -> list[str]:
+def playback_readiness_rows(playable: bool, progress: str = "", context_actions: tuple[str, ...] = ()) -> list[str]:
     if playable:
         rows = [
             "Status: Ready to play",
@@ -3107,11 +3370,14 @@ def playback_readiness_rows(playable: bool, progress: str = "") -> list[str]:
             "r: resume saved progress",
             "Playlist: Press P",
         ])
+        rows.extend(context_actions)
         return rows
-    return [
+    rows = [
         "Status: Opens more items",
         "Action: Press Enter to open",
     ]
+    rows.extend(context_actions)
+    return rows
 
 
 def detail_metadata_value(metadata: list[tuple[str, str]], label: str) -> str:
@@ -3208,26 +3474,29 @@ def render_detail_content(
     config: AppConfig | None = None,
     artwork: object | None = None,
     raw: object | None = None,
+    context_actions: tuple[str, ...] = (),
 ) -> object:
-    text = render_details(details, config, raw)
+    text = render_details(details, config, raw, context_actions)
     if artwork is None:
         return text
     return Group(artwork, Text(""), text)
 
 
-def render_playlist_picker_details(media: MediaItem, playlist_count: int) -> str:
+def render_playlist_picker_details(media: MediaItem | list[MediaItem], playlist_count: int) -> str:
+    items = media if isinstance(media, list) else [media]
     count = f"{playlist_count} existing playlist" if playlist_count == 1 else f"{playlist_count} existing playlists"
     return "\n".join([
         "Add to Playlist",
-        media.title,
+        playlist_items_label(items),
         "",
-        "Choose New playlist... to create a playlist with this item.",
-        f"Or choose one of {count} to add the selected item.",
+        "Choose New playlist... to create a playlist with the selected media.",
+        f"Or choose one of {count} to add the selected media.",
     ])
 
 
-def render_playlist_create_details(media: MediaItem | None) -> str:
-    title = media.title if media is not None else "selected media"
+def render_playlist_create_details(media: MediaItem | list[MediaItem] | None) -> str:
+    items = [] if media is None else media if isinstance(media, list) else [media]
+    title = playlist_items_label(items) if items else "selected media"
     return "\n".join([
         "New Playlist",
         "",
@@ -3236,8 +3505,9 @@ def render_playlist_create_details(media: MediaItem | None) -> str:
     ])
 
 
-def render_playlist_target_details(playlist: MediaItem, media: MediaItem | None) -> str:
-    title = media.title if media is not None else "selected media"
+def render_playlist_target_details(playlist: MediaItem, media: MediaItem | list[MediaItem] | None) -> str:
+    items = [] if media is None else media if isinstance(media, list) else [media]
+    title = playlist_items_label(items) if items else "selected media"
     return "\n".join([
         playlist.title,
         "",
@@ -3245,16 +3515,25 @@ def render_playlist_target_details(playlist: MediaItem, media: MediaItem | None)
     ])
 
 
+def playlist_items_label(items: list[MediaItem]) -> str:
+    if len(items) == 1:
+        return items[0].title
+    label = "item" if len(items) == 1 else "items"
+    return f"{len(items)} selected {label}"
+
+
 def media_rows(
     items: list[MediaItem],
     config: AppConfig,
     selected_index: int,
+    bulk_selected_keys: set[str] | None = None,
 ) -> tuple[list[ListItem], int]:
-    return [media_row(item, config) for item in items], selected_index
+    selected_keys = bulk_selected_keys or set()
+    return [media_row(item, config, item.key in selected_keys) for item in items], selected_index
 
 
-def media_row(item: MediaItem, config: AppConfig) -> MediaRow:
-    return MediaRow(item)
+def media_row(item: MediaItem, config: AppConfig, bulk_selected: bool = False) -> MediaRow:
+    return MediaRow(item, bulk_selected=bulk_selected)
 
 
 def render_media_grid(
@@ -3263,6 +3542,7 @@ def render_media_grid(
     config: AppConfig,
     columns: int,
     artwork_overrides: dict[str, object] | None = None,
+    bulk_selected_keys: set[str] | None = None,
 ) -> object:
     rows = []
     collection_cards = grid_items_are_collection_cards(items)
@@ -3276,6 +3556,7 @@ def render_media_grid(
                 config,
                 artwork_overrides,
                 collection_card=collection_cards,
+                bulk_selected=item.key in (bulk_selected_keys or set()),
             )
             for item in chunk
         ]
@@ -3295,6 +3576,7 @@ def render_media_grid_card(
     config: AppConfig,
     artwork_overrides: dict[str, object] | None = None,
     collection_card: bool | None = None,
+    bulk_selected: bool = False,
 ) -> object:
     collection_card = is_collection_card(media) if collection_card is None else collection_card
     title_style = f"bold {UI_SELECTED_ACCENT}" if selected else f"bold {UI_GRID_TITLE}"
@@ -3311,7 +3593,7 @@ def render_media_grid_card(
         )
     else:
         artwork = center_renderable_lines(artwork, card_width)
-    footer = grid_card_footer(media, selected)
+    footer = grid_card_footer(media, selected, bulk_selected)
     return Group(
         artwork,
         *(grid_card_line(title, card_width, title_style) for title in title_lines),
@@ -3621,15 +3903,17 @@ def normalize_search_text(value: str) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", value.lower()))
 
 
-def grid_card_footer(media: MediaItem, selected: bool) -> str:
+def grid_card_footer(media: MediaItem, selected: bool, bulk_selected: bool = False) -> str:
     progress = progress_bar(media.raw)
+    bulk_prefix = "✓ " if bulk_selected else ""
     if progress:
-        return f"▶ {progress}" if selected else progress
+        selected_prefix = "▶ " if selected else ""
+        return f"{bulk_prefix}{selected_prefix}{progress}".strip()
     if selected:
-        return "▶ selected"
+        return f"{bulk_prefix}▶ selected".strip()
     if media.playable:
-        return "playable"
-    return "open"
+        return f"{bulk_prefix}playable".strip()
+    return f"{bulk_prefix}open".strip()
 
 
 def grid_card_line(value: str, width: int, style: str) -> Text:
@@ -4020,8 +4304,12 @@ def render_help() -> str:
         "x: stop launched mpv",
         "",
         "Playlist Management",
+        "enter on Playlists sidebar row: browse all playlists",
         "P: add selected media to an existing or new playlist",
-        "backspace/delete: remove selected item while browsing a playlist",
+        "u: toggle selected item for bulk playlist actions",
+        "backspace/delete: remove selected item from the open playlist",
+        "e: rename selected or open playlist",
+        "D: confirm delete selected or open playlist",
         "backspace/delete: remove selected item from Continue Watching",
         "",
         "Streams",
@@ -4097,6 +4385,8 @@ def library_menu_description(library: LibraryItem) -> str:
 def context_hint(row: object) -> str:
     if isinstance(row, ContinueWatchingRow):
         return "Libraries: Enter opens Continue Watching"
+    if isinstance(row, PlaylistsRow):
+        return "Libraries: Enter opens playlists"
     if isinstance(row, LibraryRow):
         return "Libraries: Enter opens primary view / Space opens alternate view"
     if isinstance(row, LibraryMenuRow):
@@ -4106,6 +4396,8 @@ def context_hint(row: object) -> str:
     if isinstance(row, EmptyStateRow):
         return row.action_text or "Media: No items available"
     if isinstance(row, MediaRow):
+        if row.media.kind == "playlist":
+            return "Media: Enter opens playlist / e rename / D delete"
         if row.media.playable:
             return "Media: Enter selects / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
@@ -4147,6 +4439,35 @@ def context_hint(row: object) -> str:
     if isinstance(row, SettingsValueRow):
         return "Settings: Current value"
     return "Enter selects row"
+
+
+def current_detail_actions(state: BrowseState | None, item: MediaItem | None = None) -> tuple[str, ...]:
+    if item is not None and item.kind == "playlist":
+        return (
+            "Playlist: Enter opens contents",
+            "Playlist: e renames / D deletes",
+        )
+    if is_playlist_browse_state(state):
+        return (PLAYLIST_REMOVE_HINT,)
+    return ()
+
+
+def media_row_status(row: MediaRow, state: BrowseState | None) -> str:
+    status = context_hint(row)
+    if is_playlist_browse_state(state):
+        status = f"{status} / Backspace/Delete remove from playlist"
+    return status
+
+
+def render_browse_status(state: BrowseState) -> str:
+    status = render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items)
+    if is_playlist_browse_state(state):
+        status = f"{status} / Backspace/Delete removes selected item"
+    return status
+
+
+def is_playlist_browse_state(state: BrowseState | None) -> bool:
+    return bool(state is not None and state.source == "playlist")
 
 
 def settings_action_kind(action: str) -> str:
@@ -4674,7 +4995,10 @@ def grid_status(grid: MediaGrid, state: BrowseState | None) -> str:
     current_page = min(page_count, (grid.selected_index // grid.page_size) + 1)
     selected = min(grid.selected_index + 1, total_loaded)
     total_text = f"{total_loaded} loaded" if total_available is None else f"{total_loaded} of {total_available} loaded"
-    return f"{context_hint(grid)} / item {selected} / page {current_page} of {page_count} / {total_text}{progress_count_suffix(grid.items)}"
+    status = f"{context_hint(grid)} / item {selected} / page {current_page} of {page_count} / {total_text}{progress_count_suffix(grid.items)}"
+    if is_playlist_browse_state(state):
+        status = f"{status} / Backspace/Delete remove from playlist"
+    return status
 
 
 def grid_page_key(items: list[MediaItem]) -> tuple[str, ...]:

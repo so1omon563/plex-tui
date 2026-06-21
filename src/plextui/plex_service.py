@@ -133,16 +133,38 @@ class PlexService:
         return [to_media_item(item) for item in self.server.playlists()]
 
     def create_playlist(self, title: str, item: MediaItem) -> MediaItem:
-        playlist = self.server.createPlaylist(title, items=[item.raw])
+        return self.create_playlist_from_items(title, [item])
+
+    def create_playlist_from_items(self, title: str, items: list[MediaItem]) -> MediaItem:
+        playlist = self.server.createPlaylist(title, items=[item.raw for item in items])
         return to_media_item(playlist)
 
     def add_to_playlist(self, playlist: MediaItem, item: MediaItem) -> MediaItem:
-        result = playlist.raw.addItems([item.raw])
+        return self.add_items_to_playlist(playlist, [item])
+
+    def add_items_to_playlist(self, playlist: MediaItem, items: list[MediaItem]) -> MediaItem:
+        result = playlist.raw.addItems([item.raw for item in items])
         return to_media_item(result or playlist.raw)
 
     def remove_from_playlist(self, playlist: MediaItem, item: MediaItem) -> MediaItem:
-        result = playlist.raw.removeItems([item.raw])
+        return self.remove_items_from_playlist(playlist, [item])
+
+    def remove_items_from_playlist(self, playlist: MediaItem, items: list[MediaItem]) -> MediaItem:
+        result = playlist.raw.removeItems([item.raw for item in items])
         return to_media_item(result or playlist.raw)
+
+    def rename_playlist(self, playlist: MediaItem, title: str) -> MediaItem:
+        edit = getattr(playlist.raw, "_edit", None)
+        if not callable(edit):
+            raise AttributeError("playlist does not support rename")
+        result = edit(title=title)
+        return to_media_item(result or playlist.raw)
+
+    def delete_playlist(self, playlist: MediaItem) -> None:
+        delete = getattr(playlist.raw, "delete", None)
+        if not callable(delete):
+            raise AttributeError("playlist does not support delete")
+        delete()
 
     def search_page(
         self,
@@ -263,6 +285,7 @@ def media_details(item: MediaItem) -> MediaDetails:
     facts = [kind_label(item.kind)]
     for value in (
         getattr(raw, "year", None),
+        playlist_count_label(raw),
         format_duration(getattr(raw, "duration", None)),
         edition_label(raw),
         watched_state(raw),
@@ -310,6 +333,9 @@ def metadata_fields(raw: Any) -> list[tuple[str, str]]:
         ("Type", getattr(raw, "TYPE", "")),
         ("Year", getattr(raw, "year", None)),
         ("Duration", format_duration(getattr(raw, "duration", None))),
+        ("Items", playlist_count_label(raw)),
+        ("Playlist Type", getattr(raw, "playlistType", None)),
+        ("Smart Playlist", bool_label(getattr(raw, "smart", None))),
         ("Edition", edition_label(raw)),
         ("Status", watched_state(raw)),
         ("Progress", progress_label(raw)),
@@ -323,6 +349,24 @@ def metadata_fields(raw: Any) -> list[tuple[str, str]]:
         if value:
             fields.append((label, str(value)))
     return fields
+
+
+def playlist_count_label(raw: Any) -> str:
+    count = getattr(raw, "leafCount", None)
+    if count is None:
+        return ""
+    try:
+        parsed = int(count)
+    except (TypeError, ValueError):
+        return ""
+    label = "item" if parsed == 1 else "items"
+    return f"{parsed} {label}"
+
+
+def bool_label(value: Any) -> str:
+    if value is None or value == "":
+        return ""
+    return "yes" if bool(value) else "no"
 
 
 def category_items(library: LibraryItem) -> list[MediaItem]:

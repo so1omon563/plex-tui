@@ -21,6 +21,7 @@ from plextui.app import (
     LibraryMenuRow,
     MediaGrid,
     MediaRow,
+    PlaylistsRow,
     PlaylistCreateRow,
     PlaylistTargetRow,
     PlexTuiApp,
@@ -37,6 +38,7 @@ from plextui.app import (
     card_artwork_fetch_size,
     card_artwork_pixel_size,
     context_hint,
+    current_detail_actions,
     detect_mpv,
     detail_artwork_enabled,
     effective_stream_preference_rows,
@@ -51,6 +53,7 @@ from plextui.app import (
     grid_status,
     library_menu_rows,
     media_row,
+    media_row_status,
     media_rows,
     next_detail_artwork_mode,
     next_artwork_renderer,
@@ -65,6 +68,7 @@ from plextui.app import (
     playback_exit_status,
     recent_debug_log_lines,
     render_audio_playback_preference,
+    render_browse_status,
     render_card_artwork,
     render_app_diagnostics,
     render_debug_log_details,
@@ -204,6 +208,28 @@ def test_render_details_skips_effective_playback_for_playlist_container():
     assert "Effective Playback" not in rendered
     assert "Audio Tracks\nNo audio tracks reported" in rendered
     assert "Subtitle Tracks\nNo subtitle tracks reported" in rendered
+
+
+def test_render_details_can_include_playlist_context_action():
+    details = MediaDetails(
+        title="Movie",
+        kind="movie",
+        facts=["Movie"],
+        metadata=[("Type", "movie")],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=True,
+    )
+
+    rendered = render_details(
+        details,
+        AppConfig("http://plex", "token", "client-id"),
+        context_actions=("Playlist: Backspace/Delete removes from this playlist",),
+    )
+
+    assert "Playlist: Press P" in rendered
+    assert "Playlist: Backspace/Delete removes from this playlist" in rendered
 
 
 def test_render_details_promotes_episode_context_under_title():
@@ -1130,8 +1156,12 @@ def test_render_help_groups_key_bindings():
     assert "r: resume selected media from saved progress" in rendered
     assert "w: mark selected media watched / unwatched" in rendered
     assert "Playlist Management" in rendered
+    assert "enter on Playlists sidebar row: browse all playlists" in rendered
     assert "P: add selected media to an existing or new playlist" in rendered
-    assert "backspace/delete: remove selected item while browsing a playlist" in rendered
+    assert "u: toggle selected item for bulk playlist actions" in rendered
+    assert "backspace/delete: remove selected item from the open playlist" in rendered
+    assert "e: rename selected or open playlist" in rendered
+    assert "D: confirm delete selected or open playlist" in rendered
     assert "backspace/delete: remove selected item from Continue Watching" in rendered
     assert "ctrl+r: reconnect / reload libraries" in rendered
     assert "PLEX_TUI_ARTWORK_LOG=1" in rendered
@@ -1140,6 +1170,7 @@ def test_render_help_groups_key_bindings():
 
 def test_playlist_picker_rows_and_details():
     media = MediaItem("Movie", "", "movie", "1", True, object())
+    second = MediaItem("Second", "", "movie", "2", True, object())
     playlist = MediaItem("Favorites", "", "playlist", "p1", False, object())
     create_row = PlaylistCreateRow()
     target_row = PlaylistTargetRow(playlist)
@@ -1151,6 +1182,8 @@ def test_playlist_picker_rows_and_details():
     assert "1 existing playlist" in render_playlist_picker_details(media, 1)
     assert "Create a playlist containing Movie" in render_playlist_create_details(media)
     assert "Add Movie to this playlist" in render_playlist_target_details(playlist, media)
+    assert "Create a playlist containing 2 selected items" in render_playlist_create_details([media, second])
+    assert "Add 2 selected items to this playlist" in render_playlist_target_details(playlist, [media, second])
 
 
 def test_footer_shows_core_bindings_and_help_keeps_full_reference():
@@ -1178,10 +1211,16 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
     assert shown_labels["resume_selected"] == "Resume"
     assert "alternate_library_action" in hidden
     assert "add_to_playlist" in hidden
+    assert "toggle_bulk_selection" in hidden
+    assert "rename_playlist" in hidden
+    assert "delete_playlist" in hidden
     assert "toggle_watched" in hidden
     assert "remove_continue_watching" in hidden
     assert hidden_keys_by_action["remove_continue_watching"] == {"backspace", "delete"}
     assert hidden_keys_by_action["add_to_playlist"] == {"P"}
+    assert hidden_keys_by_action["toggle_bulk_selection"] == {"u"}
+    assert hidden_keys_by_action["rename_playlist"] == {"e"}
+    assert hidden_keys_by_action["delete_playlist"] == {"D"}
     assert "audio_picker" in hidden
     assert "subtitle_picker" in hidden
     assert hidden_keys_by_action["toggle_playback_pause"] == {"c"}
@@ -1420,6 +1459,20 @@ def test_media_grid_page_status_counts_loaded_items():
     assert "1 in-progress item" in grid_status(grid, state)
 
 
+def test_playlist_context_hints_status_and_details_action():
+    item = MediaItem("Movie", "", "movie", "1", True, object(), artwork_path="/thumb")
+    playlist = MediaItem("Favorites", "", "playlist", "p1", False, object())
+    state = BrowseState("Favorites", [item], source="playlist", context_media=playlist, total=1)
+    row = MediaRow(item)
+    grid = MediaGrid()
+    grid.set_items([item], selected_index=0, config=AppConfig("http://plex", "token", "client"), columns=1)
+
+    assert current_detail_actions(state) == ("Playlist: Backspace/Delete removes from this playlist",)
+    assert "Backspace/Delete removes selected item" in render_browse_status(state)
+    assert "Backspace/Delete remove from playlist" in media_row_status(row, state)
+    assert "Backspace/Delete remove from playlist" in grid_status(grid, state)
+
+
 def test_context_hints_for_media_and_load_more():
     playable = MediaItem("Movie", "", "movie", "1", True, object())
     container = MediaItem("Show", "", "show", "2", False, object())
@@ -1433,6 +1486,10 @@ def test_context_hints_for_media_and_load_more():
         "Media: Enter selects / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
     )
     assert context_hint(MediaRow(container)) == "Media: Enter opens item"
+    assert context_hint(MediaRow(MediaItem("Favorites", "", "playlist", "p1", False, object()))) == (
+        "Media: Enter opens playlist / e rename / D delete"
+    )
+    assert context_hint(PlaylistsRow()) == "Libraries: Enter opens playlists"
     assert context_hint(grid) == (
         "Grid: Arrows/page select card / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
     )
