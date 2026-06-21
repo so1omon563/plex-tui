@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.7.1 - 2026-06-21
+
 - Expanded playlist management with a top-level Playlists entrypoint, bulk
   item selection for playlist add/remove actions, playlist rename/delete
   actions, richer playlist details, and playlist-specific Backspace/Delete
