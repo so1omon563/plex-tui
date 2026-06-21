@@ -1,10 +1,53 @@
 from __future__ import annotations
 
+import json
+from types import SimpleNamespace
+
 import pytest
 
 from plextui import __version__
 from plextui import __main__ as cli
 from plextui.config import AppConfig
+from plextui.models import LibraryItem, MediaItem
+from plextui.plex_service import MediaPage
+
+
+class FakeCliService:
+    def __init__(self, _config: AppConfig) -> None:
+        self.movie_library = LibraryItem("Movies", "1", "movie", object())
+        self.show_library = LibraryItem("TV Shows", "2", "show", object())
+        self.libraries_calls = 0
+        self.search_calls = []
+        self.continue_watching_calls = []
+
+    def libraries(self) -> list[LibraryItem]:
+        self.libraries_calls += 1
+        return [self.movie_library, self.show_library]
+
+    def continue_watching_page(self, start: int, size: int) -> MediaPage:
+        self.continue_watching_calls.append((start, size))
+        return MediaPage(
+            [
+                MediaItem(
+                    "Movie",
+                    "2024",
+                    "movie",
+                    "m1",
+                    True,
+                    SimpleNamespace(viewOffset=50_000, duration=100_000),
+                )
+            ],
+            start=0,
+            total=1,
+        )
+
+    def search_page(self, query: str, library: LibraryItem | None, start: int, size: int) -> MediaPage:
+        self.search_calls.append((query, library, start, size))
+        return MediaPage(
+            [MediaItem("Interstellar", "2014", "movie", "m2", True, SimpleNamespace())],
+            start=0,
+            total=1,
+        )
 
 
 def test_cli_prints_config_path(monkeypatch, capsys):
@@ -59,3 +102,117 @@ def test_cli_runs_smoke(monkeypatch):
 
     assert cli.main(["--smoke"]) == 0
     assert called
+
+
+def test_cli_lists_libraries(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "PlexService", FakeCliService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id"))
+
+    assert cli.main(["libraries"]) == 0
+
+    output = capsys.readouterr().out
+    assert "KEY" in output
+    assert "TYPE" in output
+    assert "Movies" in output
+    assert "TV Shows" in output
+
+
+def test_cli_lists_libraries_as_json(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "PlexService", FakeCliService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id"))
+
+    assert cli.main(["libraries", "--json"]) == 0
+
+    assert json.loads(capsys.readouterr().out) == [
+        {"key": "1", "title": "Movies", "kind": "movie"},
+        {"key": "2", "title": "TV Shows", "kind": "show"},
+    ]
+
+
+def test_cli_lists_continue_watching(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "PlexService", FakeCliService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id"))
+
+    assert cli.main(["continue-watching", "--limit", "5"]) == 0
+
+    output = capsys.readouterr().out
+    assert "Movie" in output
+    assert "50%" in output
+
+
+def test_cli_lists_continue_watching_as_json(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "PlexService", FakeCliService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id"))
+
+    assert cli.main(["continue-watching", "--json"]) == 0
+
+    assert json.loads(capsys.readouterr().out) == [
+        {
+            "key": "m1",
+            "title": "Movie",
+            "subtitle": "2024",
+            "kind": "movie",
+            "playable": True,
+            "progress_percent": 50,
+        }
+    ]
+
+
+def test_cli_searches_globally(monkeypatch, capsys):
+    service = None
+
+    class CapturingService(FakeCliService):
+        def __init__(self, config: AppConfig) -> None:
+            nonlocal service
+            super().__init__(config)
+            service = self
+
+    monkeypatch.setattr(cli, "PlexService", CapturingService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id"))
+
+    assert cli.main(["search", "interstellar", "--limit", "3"]) == 0
+
+    assert service is not None
+    assert service.search_calls == [("interstellar", None, 0, 3)]
+    assert "Interstellar" in capsys.readouterr().out
+
+
+def test_cli_searches_library_by_title_as_json(monkeypatch, capsys):
+    service = None
+
+    class CapturingService(FakeCliService):
+        def __init__(self, config: AppConfig) -> None:
+            nonlocal service
+            super().__init__(config)
+            service = self
+
+    monkeypatch.setattr(cli, "PlexService", CapturingService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id"))
+
+    assert cli.main(["search", "alien", "--library", "Movies", "--json"]) == 0
+
+    assert service is not None
+    assert service.search_calls == [("alien", service.movie_library, 0, 10)]
+    assert json.loads(capsys.readouterr().out)[0]["title"] == "Interstellar"
+
+
+def test_cli_search_reports_missing_library(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "PlexService", FakeCliService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id"))
+
+    assert cli.main(["search", "alien", "--library", "Music"]) == 2
+
+    assert capsys.readouterr().err == "plex-tui: library not found: Music\n"
+
+
+def test_cli_reports_connection_error(monkeypatch, capsys):
+    class BrokenService:
+        def __init__(self, _config: AppConfig) -> None:
+            raise ValueError("missing Plex config")
+
+    monkeypatch.setattr(cli, "PlexService", BrokenService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("", "", "client-id"))
+
+    assert cli.main(["libraries"]) == 2
+
+    assert capsys.readouterr().err == "plex-tui: missing Plex config\n"
