@@ -15,6 +15,7 @@ from plextui.app import (
     LibraryMenuRow,
     LoadMoreRow,
     PlexTuiApp,
+    PlaylistsRow,
     PlaylistCreateRow,
     PlaylistTargetRow,
     artwork_fetch_pixel_size,
@@ -178,6 +179,10 @@ def test_populate_libraries_highlights_first_rebuilt_row():
 
 def test_populate_libraries_adds_continue_watching_entrypoint():
     asyncio.run(run_continue_watching_entrypoint_check())
+
+
+def test_playlists_sidebar_entrypoint_opens_playlists():
+    asyncio.run(run_playlists_entrypoint_check())
 
 
 def test_populate_libraries_can_highlight_selected_library():
@@ -695,6 +700,22 @@ def test_playlist_browse_shows_remove_hint():
     asyncio.run(run_playlist_browse_remove_hint_check())
 
 
+def test_bulk_add_to_playlist_uses_selected_items():
+    asyncio.run(run_bulk_add_to_playlist_check())
+
+
+def test_bulk_remove_from_playlist_uses_selected_items():
+    asyncio.run(run_bulk_remove_from_playlist_check())
+
+
+def test_rename_playlist_updates_current_view():
+    asyncio.run(run_rename_playlist_check())
+
+
+def test_delete_playlist_removes_current_playlist():
+    asyncio.run(run_delete_playlist_check())
+
+
 def test_remove_continue_watching_removes_selected_item():
     asyncio.run(run_remove_continue_watching_check())
 
@@ -889,6 +910,7 @@ async def run_library_highlight_check():
         libraries_view.focus()
         await pilot.pause(0.2)
         await pilot.press("down")
+        await pilot.press("down")
         await pilot.pause(0.2)
 
         row = libraries_view.highlighted_child
@@ -913,8 +935,30 @@ async def run_continue_watching_entrypoint_check():
 
         rows = list(libraries_view.children)
         assert isinstance(rows[0], ContinueWatchingRow)
-        assert [row.library.title for row in rows[1:]] == ["Movies", "TV"]
+        assert isinstance(rows[1], PlaylistsRow)
+        assert [row.library.title for row in rows[2:]] == ["Movies", "TV"]
         assert libraries_view.highlighted_child is rows[0]
+
+
+async def run_playlists_entrypoint_check():
+    service = PlaylistService()
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
+        await pilot.pause(0.2)
+
+        app.open_playlists()
+        for _ in range(80):
+            if app.browsing_stack and app.browsing_stack[-1].source == "playlists":
+                break
+            await pilot.pause(0.1)
+
+        assert app.browsing_stack[-1].title == "Playlists"
+        assert [item.title for item in app.browsing_stack[-1].items] == ["Favorites"]
+        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Playlists"
 
 
 async def run_selected_library_highlight_check():
@@ -933,8 +977,9 @@ async def run_selected_library_highlight_check():
 
         rows = list(libraries_view.children)
         assert isinstance(rows[0], ContinueWatchingRow)
-        assert libraries_view.highlighted_child is rows[1]
-        assert rows[1].library.title == "Movies"
+        assert isinstance(rows[1], PlaylistsRow)
+        assert libraries_view.highlighted_child is rows[2]
+        assert rows[2].library.title == "Movies"
 
 
 async def run_load_more_row_check():
@@ -1074,6 +1119,7 @@ async def run_sidebar_library_selection_opens_default_library_check():
         libraries_view.focus()
         await pilot.pause(0.2)
         await pilot.press("down")
+        await pilot.press("down")
         await pilot.press("enter")
         await pilot.pause(0.5)
 
@@ -1092,6 +1138,7 @@ async def run_sidebar_library_space_menu_check():
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
         await pilot.pause(0.2)
+        await pilot.press("down")
         await pilot.press("down")
         await pilot.press("space")
         await pilot.pause(0.2)
@@ -1118,6 +1165,7 @@ async def run_sidebar_library_selection_menu_default_check():
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
         await pilot.pause(0.2)
+        await pilot.press("down")
         await pilot.press("down")
         await pilot.press("enter")
         await pilot.pause(0.2)
@@ -1185,8 +1233,8 @@ async def run_library_submenu_keyboard_flow_check():
 
         libraries_view = app.query_one("#libraries")
         rows = list(libraries_view.children)
-        assert libraries_view.highlighted_child is rows[1]
-        assert rows[1].library.title == "Movies"
+        assert libraries_view.highlighted_child is rows[2]
+        assert rows[2].library.title == "Movies"
         assert app.query_one("#media-grid").selected_media.title == "Blade Runner"
 
         libraries_view.focus()
@@ -2034,7 +2082,8 @@ async def run_settings_library_visibility_check():
         assert app.config.hidden_library_keys == ("2",)
         assert save_config.call_count == 1
         assert isinstance(rows[0], ContinueWatchingRow)
-        assert [row.library.title for row in rows[1:]] == ["Movies"]
+        assert isinstance(rows[1], PlaylistsRow)
+        assert [row.library.title for row in rows[2:]] == ["Movies"]
 
 
 async def run_settings_library_order_check():
@@ -2057,7 +2106,8 @@ async def run_settings_library_order_check():
         assert app.config.library_order_keys == ("2", "1", "3")
         assert save_config.call_count == 1
         assert isinstance(rows[0], ContinueWatchingRow)
-        assert [row.library.title for row in rows[1:]] == ["TV", "Movies", "Music"]
+        assert isinstance(rows[1], PlaylistsRow)
+        assert [row.library.title for row in rows[2:]] == ["TV", "Movies", "Music"]
 
         media_rows = list(app.query_one("#media").children)
         selected = app.query_one("#media").highlighted_child
@@ -2374,21 +2424,40 @@ class PlaylistService:
         self.add_calls = []
         self.create_calls = []
         self.remove_calls = []
+        self.rename_calls = []
+        self.delete_calls = []
 
     def playlists(self):
         return [self.playlist]
 
     def add_to_playlist(self, playlist, item):
-        self.add_calls.append((playlist.title, item.title))
+        return self.add_items_to_playlist(playlist, [item])
+
+    def add_items_to_playlist(self, playlist, items):
+        self.add_calls.append((playlist.title, [item.title for item in items]))
         return playlist
 
     def create_playlist(self, title, item):
-        self.create_calls.append((title, item.title))
+        return self.create_playlist_from_items(title, [item])
+
+    def create_playlist_from_items(self, title, items):
+        self.create_calls.append((title, [item.title for item in items]))
         return MediaItem(title, "", "playlist", "playlist-new", False, Raw())
 
     def remove_from_playlist(self, playlist, item):
-        self.remove_calls.append((playlist.title, item.title))
+        return self.remove_items_from_playlist(playlist, [item])
+
+    def remove_items_from_playlist(self, playlist, items):
+        self.remove_calls.append((playlist.title, [item.title for item in items]))
         return playlist
+
+    def rename_playlist(self, playlist, title):
+        self.rename_calls.append((playlist.title, title))
+        self.playlist = MediaItem(title, "", "playlist", playlist.key, False, playlist.raw)
+        return self.playlist
+
+    def delete_playlist(self, playlist):
+        self.delete_calls.append(playlist.title)
 
 
 async def run_add_to_playlist_existing_check():
@@ -2412,11 +2481,11 @@ async def run_add_to_playlist_existing_check():
             app,
             pilot,
             service.add_calls,
-            expected_calls=[("Favorites", "Movie")],
+            expected_calls=[("Favorites", ["Movie"])],
             expected_status="Added Movie to Favorites",
         )
 
-        assert add_calls == [("Favorites", "Movie")]
+        assert add_calls == [("Favorites", ["Movie"])]
         assert status == "Added Movie to Favorites"
         assert not app.picker_visible
 
@@ -2442,11 +2511,11 @@ async def run_add_to_playlist_create_check():
             app,
             pilot,
             service.create_calls,
-            expected_calls=[("Weekend", "Movie")],
+            expected_calls=[("Weekend", ["Movie"])],
             expected_status="Created playlist Weekend with Movie",
         )
 
-        assert create_calls == [("Weekend", "Movie")]
+        assert create_calls == [("Weekend", ["Movie"])]
         assert status == "Created playlist Weekend with Movie"
         assert not app.picker_visible
 
@@ -2468,7 +2537,7 @@ async def run_remove_playlist_item_check():
         app.action_remove_continue_watching()
         status = await wait_for_status(app, pilot, "Removed Movie from Favorites")
 
-        assert service.remove_calls == [("Favorites", "Movie")]
+        assert service.remove_calls == [("Favorites", ["Movie"])]
         assert [item.title for item in app.browsing_stack[-1].items] == ["Second"]
         assert app.selected_media() is not None
         assert app.selected_media().title == "Second"
@@ -2488,6 +2557,119 @@ async def run_playlist_browse_remove_hint_check():
 
         assert "Playlist: Backspace/Delete removes from this playlist" in app.query_one("#detail-content").content
         assert "Backspace/Delete remove from playlist" in app.query_one("#status").content
+
+
+async def run_bulk_add_to_playlist_check():
+    service = PlaylistService()
+    first = MediaItem("Movie", "", "movie", "1", True, Raw())
+    second = MediaItem("Second", "", "movie", "2", True, Raw())
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.browsing_stack = [BrowseState("Movies", [first, second], total=2)]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_toggle_bulk_selection()
+        await pilot.pause(0.2)
+        app.query_one("#media").index = 1
+        await pilot.pause(0.2)
+        app.action_toggle_bulk_selection()
+        await pilot.pause(0.2)
+        app.action_add_to_playlist()
+        rows = await wait_for_playlist_target_rows(app, pilot)
+        target = next(row for row in rows if isinstance(row, PlaylistTargetRow))
+        worker = app.choose_playlist_target(target.playlist)
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
+        add_calls, status = await wait_for_playlist_result(
+            app,
+            pilot,
+            service.add_calls,
+            expected_calls=[("Favorites", ["Movie", "Second"])],
+            expected_status="Added 2 selected items to Favorites",
+        )
+
+        assert add_calls == [("Favorites", ["Movie", "Second"])]
+        assert status == "Added 2 selected items to Favorites"
+        assert not app.bulk_selected_keys
+
+
+async def run_bulk_remove_from_playlist_check():
+    service = PlaylistService()
+    playlist = service.playlist
+    first = MediaItem("Movie", "", "movie", "1", True, Raw())
+    second = MediaItem("Second", "", "movie", "2", True, Raw())
+    third = MediaItem("Third", "", "movie", "3", True, Raw())
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.browsing_stack = [BrowseState("Favorites", [first, second, third], source="playlist", context_media=playlist, total=3)]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_toggle_bulk_selection()
+        await pilot.pause(0.2)
+        app.query_one("#media").index = 1
+        await pilot.pause(0.2)
+        app.action_toggle_bulk_selection()
+        await pilot.pause(0.2)
+        app.action_remove_continue_watching()
+        for _ in range(80):
+            if service.remove_calls == [("Favorites", ["Movie", "Second"])] and [item.title for item in app.browsing_stack[-1].items] == ["Third"]:
+                break
+            await pilot.pause(0.1)
+
+        assert service.remove_calls == [("Favorites", ["Movie", "Second"])]
+        assert [item.title for item in app.browsing_stack[-1].items] == ["Third"]
+        assert not app.bulk_selected_keys
+
+
+async def run_rename_playlist_check():
+    service = PlaylistService()
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.browsing_stack = [BrowseState("Playlists", [service.playlist], source="playlists", total=1)]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_rename_playlist()
+        worker = app.save_playlist_rename_input("Road Trip")
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
+
+        assert service.rename_calls == [("Favorites", "Road Trip")]
+        assert [item.title for item in app.browsing_stack[-1].items] == ["Road Trip"]
+        assert app.query_one("#status").content == "Renamed playlist to Road Trip"
+
+
+async def run_delete_playlist_check():
+    service = PlaylistService()
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.browsing_stack = [BrowseState("Playlists", [service.playlist], source="playlists", total=1)]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_delete_playlist()
+        assert app.pending_confirmation_action == "delete_playlist:playlist-1"
+        worker = app.action_delete_playlist()
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
+
+        assert service.delete_calls == ["Favorites"]
+        assert app.browsing_stack[-1].items == []
+        assert app.query_one("#status").content == "Deleted playlist Favorites"
 
 
 async def run_remove_continue_watching_check():

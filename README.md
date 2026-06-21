@@ -87,8 +87,9 @@ working today. Expect rough edges, but expect progress too.
 - Watched/unwatched toggling for selected playable Plex items.
 - Continue Watching episode rows show their show, season, and episode context,
   and items can be removed from the Continue Watching view.
-- Playlist management for creating playlists from selected media, adding media
-  to existing playlists, and removing items while browsing a playlist.
+- Playlist management for browsing all playlists, creating playlists from one
+  or more selected items, adding/removing items, and renaming or deleting
+  playlists.
 - Movie editions appear as distinct variants when Plex reports multiple
   editions for a selected movie.
 - Settings screen for stream preferences, playback mode and transcode quality,
@@ -288,21 +289,25 @@ Playback mode and window sizing:
 
 ## Playlist Management
 
-Playlist actions are available from selected playable media and from inside
-playlist views. When a playlist is open, the selected item can be removed from
-that playlist with the same `backspace` / `delete` removal action used by
-Continue Watching.
+Playlist actions are available from selected playable media, the top-level
+Playlists sidebar row, and from inside playlist views. Use `u` to build a bulk
+selection, then use the same add/remove actions on the selected set.
 
 | Key | Where | Action |
 | --- | --- | --- |
-| `P` | Playable media item | Open the Add to Playlist picker |
+| `enter` | Playlists sidebar row | Browse all Plex playlists |
+| `enter` | Playlist row/card | Open that playlist |
+| `u` | Media item | Toggle the item in the bulk selection |
+| `P` | Playable media item or bulk selection | Open the Add to Playlist picker |
 | `enter` | Add to Playlist picker | Add the selected media to an existing playlist |
 | `enter` | `New playlist...` row | Prompt for a name and create a playlist containing the selected media |
-| `backspace` / `delete` | Open playlist view | Remove the selected item from that playlist |
+| `backspace` / `delete` | Open playlist view | Remove the selected item or selected bulk items from that playlist |
+| `e` | Playlist row/card or open playlist | Rename the playlist |
+| `D` | Playlist row/card or open playlist | Confirm, then delete the playlist |
 
 The Add to Playlist picker lists `New playlist...` first, followed by existing
-Plex playlists. Playlist browsing itself is available from a library's browse
-modes: select a library, press `space`, then open `Playlists`.
+Plex playlists. Playlist browsing is available from the top-level sidebar
+`Playlists` row and from a library's browse modes.
 
 ## Key Bindings
 
@@ -326,7 +331,9 @@ modes: select a library, press `space`, then open `Playlists`.
 | `r` | Resume selected item from the saved Plex position |
 | `w` | Mark selected item watched / unwatched |
 | `P` | Add selected playable item to a playlist |
+| `u` | Toggle selected item for bulk playlist actions |
 | `backspace` / `delete` | Remove selected item from Continue Watching or a playlist |
+| `e` / `D` | Rename / delete selected or open playlist |
 | `a` / `s` | Choose audio / subtitle preference |
 | `A` / `S` | Clear audio preference / cycle subtitle mode |
 | `x` | Stop launched `mpv` |

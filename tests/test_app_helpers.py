@@ -21,6 +21,7 @@ from plextui.app import (
     LibraryMenuRow,
     MediaGrid,
     MediaRow,
+    PlaylistsRow,
     PlaylistCreateRow,
     PlaylistTargetRow,
     PlexTuiApp,
@@ -1155,8 +1156,12 @@ def test_render_help_groups_key_bindings():
     assert "r: resume selected media from saved progress" in rendered
     assert "w: mark selected media watched / unwatched" in rendered
     assert "Playlist Management" in rendered
+    assert "enter on Playlists sidebar row: browse all playlists" in rendered
     assert "P: add selected media to an existing or new playlist" in rendered
+    assert "u: toggle selected item for bulk playlist actions" in rendered
     assert "backspace/delete: remove selected item from the open playlist" in rendered
+    assert "e: rename selected or open playlist" in rendered
+    assert "D: confirm delete selected or open playlist" in rendered
     assert "backspace/delete: remove selected item from Continue Watching" in rendered
     assert "ctrl+r: reconnect / reload libraries" in rendered
     assert "PLEX_TUI_ARTWORK_LOG=1" in rendered
@@ -1203,10 +1208,16 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
     assert shown_labels["resume_selected"] == "Resume"
     assert "alternate_library_action" in hidden
     assert "add_to_playlist" in hidden
+    assert "toggle_bulk_selection" in hidden
+    assert "rename_playlist" in hidden
+    assert "delete_playlist" in hidden
     assert "toggle_watched" in hidden
     assert "remove_continue_watching" in hidden
     assert hidden_keys_by_action["remove_continue_watching"] == {"backspace", "delete"}
     assert hidden_keys_by_action["add_to_playlist"] == {"P"}
+    assert hidden_keys_by_action["toggle_bulk_selection"] == {"u"}
+    assert hidden_keys_by_action["rename_playlist"] == {"e"}
+    assert hidden_keys_by_action["delete_playlist"] == {"D"}
     assert "audio_picker" in hidden
     assert "subtitle_picker" in hidden
     assert hidden_keys_by_action["toggle_playback_pause"] == {"c"}
@@ -1472,6 +1483,10 @@ def test_context_hints_for_media_and_load_more():
         "Media: Enter selects / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
     )
     assert context_hint(MediaRow(container)) == "Media: Enter opens item"
+    assert context_hint(MediaRow(MediaItem("Favorites", "", "playlist", "p1", False, object()))) == (
+        "Media: Enter opens playlist / e rename / D delete"
+    )
+    assert context_hint(PlaylistsRow()) == "Libraries: Enter opens playlists"
     assert context_hint(grid) == (
         "Grid: Arrows/page select card / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
     )
