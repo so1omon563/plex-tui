@@ -34,11 +34,13 @@ def test_config_example_parses_and_uses_known_fields():
         "auto_load_threshold",
         "grid_prefetch_pages",
         "hidden_library_keys",
+        "library_order_keys",
         "artwork_mode",
         "artwork_renderer",
         "detail_artwork_mode",
         "grid_density",
         "media_view",
+        "library_enter_action",
         "theme",
     }
     assert raw["base_url"]
@@ -183,6 +185,7 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
         auto_load_threshold=25,
         grid_prefetch_pages=4,
         hidden_library_keys=("2", "7"),
+        library_order_keys=("7", "2"),
         grid_density="large",
     )
     config.save_config(saved)
@@ -192,12 +195,14 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     assert loaded.auto_load_threshold == 25
     assert loaded.grid_prefetch_pages == 4
     assert loaded.hidden_library_keys == ("2", "7")
+    assert loaded.library_order_keys == ("7", "2")
     assert loaded.grid_density == "large"
     text = config_file.read_text(encoding="utf-8")
     assert "page_size = 250" in text
     assert "auto_load_threshold = 25" in text
     assert "grid_prefetch_pages = 4" in text
     assert 'hidden_library_keys = "2,7"' in text
+    assert 'library_order_keys = "7,2"' in text
     assert 'grid_density = "large"' in text
 
 
@@ -218,6 +223,25 @@ def test_hidden_library_keys_parse_unique_csv_values(tmp_path, monkeypatch):
     loaded = config.load_config()
 
     assert loaded.hidden_library_keys == ("2", "7", "9")
+
+
+def test_library_order_keys_parse_unique_csv_values(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        '\n'.join([
+            'base_url = "http://plex"',
+            'token = "token"',
+            'client_identifier = "client"',
+            'library_order_keys = " 7,2,7, ,1 "',
+            "",
+        ]),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "config_path", lambda: config_file)
+
+    loaded = config.load_config()
+
+    assert loaded.library_order_keys == ("7", "2", "1")
 
 
 def test_deprecated_poster_view_normalizes_to_list(tmp_path, monkeypatch):

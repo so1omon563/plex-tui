@@ -86,6 +86,7 @@ from plextui.app import (
     render_subtitle_playback_preference,
     settings_rows,
     subtitle_preference_value,
+    ordered_libraries,
     visible_libraries,
     write_alphabet_jump_log,
     write_artwork_performance_log,
@@ -391,7 +392,13 @@ def test_settings_rows_are_grouped_with_action_values():
 
 
 def test_settings_rows_include_library_visibility_toggles():
-    config = AppConfig("http://plex", "token", "client-id", hidden_library_keys=("2",))
+    config = AppConfig(
+        "http://plex",
+        "token",
+        "client-id",
+        hidden_library_keys=("2",),
+        library_order_keys=("2", "1"),
+    )
     libraries = [
         LibraryItem("Movies", "1", "movie", object()),
         LibraryItem("TV", "2", "show", object()),
@@ -399,19 +406,41 @@ def test_settings_rows_include_library_visibility_toggles():
 
     labels = [getattr(row, "label_text") for row in settings_rows(config, libraries)]
 
-    assert "Library Visibility" in labels
-    assert "› Movies: Visible  (toggle)" in labels
+    assert "Libraries" in labels
     assert "› TV: Hidden  (toggle)" in labels
+    assert "› TV: Move up  (step)" in labels
+    assert "› TV: Move down  (step)" in labels
+    assert "› Movies: Visible  (toggle)" in labels
+    assert "› Movies: Move up  (step)" in labels
+    assert "› Movies: Move down  (step)" in labels
+    assert labels.index("› TV: Hidden  (toggle)") < labels.index("› Movies: Visible  (toggle)")
 
 
 def test_visible_libraries_filters_hidden_keys():
-    config = AppConfig("http://plex", "token", "client-id", hidden_library_keys=("2", "missing"))
+    config = AppConfig(
+        "http://plex",
+        "token",
+        "client-id",
+        hidden_library_keys=("2", "missing"),
+        library_order_keys=("2", "1"),
+    )
     libraries = [
         LibraryItem("Movies", "1", "movie", object()),
         LibraryItem("TV", "2", "show", object()),
     ]
 
     assert [library.title for library in visible_libraries(libraries, config)] == ["Movies"]
+
+
+def test_ordered_libraries_uses_saved_order_and_appends_new_libraries():
+    config = AppConfig("http://plex", "token", "client-id", library_order_keys=("3", "1", "missing"))
+    libraries = [
+        LibraryItem("Movies", "1", "movie", object()),
+        LibraryItem("TV", "2", "show", object()),
+        LibraryItem("Music", "3", "artist", object()),
+    ]
+
+    assert [library.title for library in ordered_libraries(libraries, config)] == ["Music", "Movies", "TV"]
 
 
 def test_settings_row_details_describe_action_types():
