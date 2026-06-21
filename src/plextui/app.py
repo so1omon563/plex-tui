@@ -2421,8 +2421,22 @@ class PlexTuiApp(App[None]):
             if self.input_mode == "playlist_name":
                 self.save_playlist_name_input(query)
                 return
+            search_global = self.search_global
             self.input_mode = ""
-            self.run_search(query, self.search_global)
+            if not search_global and self.apply_fuzzy_search(query, focus=True):
+                return
+            self.run_search(query, search_global)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id != "search":
+            return
+        if self.input_mode != "search" or self.search_global:
+            return
+        query = event.value.strip()
+        if query:
+            self.apply_fuzzy_search(query)
+        else:
+            self.restore_fuzzy_search_source()
 
     @work(thread=True, exclusive=True, group="search")
     def run_search(self, query: str, global_search: bool = False) -> None:
@@ -2436,23 +2450,7 @@ class PlexTuiApp(App[None]):
             self.call_from_thread(self.show_loading_state, title, f"Matching loaded items from {local_source.title}.")
 
             def update_fuzzy() -> None:
-                if self.browsing_stack and self.browsing_stack[-1].search:
-                    self.browsing_stack.pop()
-                state = BrowseState(
-                    title,
-                    matches,
-                    local_source.selected_library,
-                    search=True,
-                    search_query=query,
-                    source="fuzzy_search",
-                    next_start=len(matches),
-                    total=len(matches),
-                    context_media=local_source.context_media,
-                )
-                self.browsing_stack.append(state)
-                self.show_browse_state(state)
-                self.focus_media_browser()
-                self.set_status(f"{title}: {len(matches)} matches from {len(local_source.items)} loaded items")
+                self.show_fuzzy_search_results(query, local_source, matches, focus=True)
 
             self.call_from_thread(update_fuzzy)
             return
@@ -2501,6 +2499,52 @@ class PlexTuiApp(App[None]):
             if not state.search and state.items:
                 return state
         return None
+
+    def apply_fuzzy_search(self, query: str, focus: bool = False) -> bool:
+        if not query:
+            self.restore_fuzzy_search_source()
+            return True
+        local_source = self.fuzzy_search_source()
+        if local_source is None:
+            return False
+        matches = fuzzy_match_media(query, local_source.items)
+        self.show_fuzzy_search_results(query, local_source, matches, focus=focus)
+        return True
+
+    def show_fuzzy_search_results(
+        self,
+        query: str,
+        local_source: BrowseState,
+        matches: list[MediaItem],
+        focus: bool = False,
+    ) -> None:
+        if self.browsing_stack and self.browsing_stack[-1].search:
+            self.browsing_stack.pop()
+        title = f"Fuzzy search: {query}"
+        state = BrowseState(
+            title,
+            matches,
+            local_source.selected_library,
+            search=True,
+            search_query=query,
+            source="fuzzy_search",
+            next_start=len(matches),
+            total=len(matches),
+            context_media=local_source.context_media,
+        )
+        self.browsing_stack.append(state)
+        self.show_browse_state(state)
+        if focus:
+            self.focus_media_browser()
+        self.set_status(f"{title}: {len(matches)} matches from {len(local_source.items)} loaded items")
+
+    def restore_fuzzy_search_source(self) -> None:
+        if self.browsing_stack and self.browsing_stack[-1].source == "fuzzy_search":
+            self.browsing_stack.pop()
+            if self.browsing_stack:
+                state = self.browsing_stack[-1]
+                self.show_browse_state(state)
+                self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items))
 
     def action_back_or_clear(self) -> None:
         search = self.query_one("#search", Input)

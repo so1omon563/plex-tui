@@ -5,8 +5,9 @@
 - Added compact watched-progress indicators to media rows, grid cards, browse
   status, and details so partially watched movies and episodes show how far
   along they are.
-- Added fuzzy search for the loaded current view, so `/` can match typos,
-  acronyms, titles, and subtitles without making another Plex request.
+- Added live fuzzy search for the loaded current view, so `/` narrows results
+  as you type and can match typos, acronyms, titles, and subtitles without
+  making another Plex request.
 
 ## 0.4.13 - 2026-06-20
 
