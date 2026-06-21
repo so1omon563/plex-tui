@@ -37,6 +37,7 @@ from plextui.app import (
     card_artwork_fetch_size,
     card_artwork_pixel_size,
     context_hint,
+    current_detail_actions,
     detect_mpv,
     detail_artwork_enabled,
     effective_stream_preference_rows,
@@ -51,6 +52,7 @@ from plextui.app import (
     grid_status,
     library_menu_rows,
     media_row,
+    media_row_status,
     media_rows,
     next_detail_artwork_mode,
     next_artwork_renderer,
@@ -65,6 +67,7 @@ from plextui.app import (
     playback_exit_status,
     recent_debug_log_lines,
     render_audio_playback_preference,
+    render_browse_status,
     render_card_artwork,
     render_app_diagnostics,
     render_debug_log_details,
@@ -204,6 +207,28 @@ def test_render_details_skips_effective_playback_for_playlist_container():
     assert "Effective Playback" not in rendered
     assert "Audio Tracks\nNo audio tracks reported" in rendered
     assert "Subtitle Tracks\nNo subtitle tracks reported" in rendered
+
+
+def test_render_details_can_include_playlist_context_action():
+    details = MediaDetails(
+        title="Movie",
+        kind="movie",
+        facts=["Movie"],
+        metadata=[("Type", "movie")],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=True,
+    )
+
+    rendered = render_details(
+        details,
+        AppConfig("http://plex", "token", "client-id"),
+        context_actions=("Playlist: Backspace/Delete removes from this playlist",),
+    )
+
+    assert "Playlist: Press P" in rendered
+    assert "Playlist: Backspace/Delete removes from this playlist" in rendered
 
 
 def test_render_details_promotes_episode_context_under_title():
@@ -1131,7 +1156,7 @@ def test_render_help_groups_key_bindings():
     assert "w: mark selected media watched / unwatched" in rendered
     assert "Playlist Management" in rendered
     assert "P: add selected media to an existing or new playlist" in rendered
-    assert "backspace/delete: remove selected item while browsing a playlist" in rendered
+    assert "backspace/delete: remove selected item from the open playlist" in rendered
     assert "backspace/delete: remove selected item from Continue Watching" in rendered
     assert "ctrl+r: reconnect / reload libraries" in rendered
     assert "PLEX_TUI_ARTWORK_LOG=1" in rendered
@@ -1418,6 +1443,20 @@ def test_media_grid_page_status_counts_loaded_items():
     assert "page 2 of 3" in grid_status(grid, state)
     assert "12 of 30 loaded" in grid_status(grid, state)
     assert "1 in-progress item" in grid_status(grid, state)
+
+
+def test_playlist_context_hints_status_and_details_action():
+    item = MediaItem("Movie", "", "movie", "1", True, object(), artwork_path="/thumb")
+    playlist = MediaItem("Favorites", "", "playlist", "p1", False, object())
+    state = BrowseState("Favorites", [item], source="playlist", context_media=playlist, total=1)
+    row = MediaRow(item)
+    grid = MediaGrid()
+    grid.set_items([item], selected_index=0, config=AppConfig("http://plex", "token", "client"), columns=1)
+
+    assert current_detail_actions(state) == ("Playlist: Backspace/Delete removes from this playlist",)
+    assert "Backspace/Delete removes selected item" in render_browse_status(state)
+    assert "Backspace/Delete remove from playlist" in media_row_status(row, state)
+    assert "Backspace/Delete remove from playlist" in grid_status(grid, state)
 
 
 def test_context_hints_for_media_and_load_more():

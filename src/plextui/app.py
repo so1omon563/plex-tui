@@ -91,6 +91,7 @@ GRID_DETAIL_REFRESH_DELAY = 0.65
 LIST_DETAIL_REFRESH_DELAY = 0.35
 DETAIL_ARTWORK_REFRESH_DELAY = 0.55
 PLAYBACK_CONTROL_HINT = "controls c pause, z -10s, f +30s, x stop"
+PLAYLIST_REMOVE_HINT = "Playlist: Backspace/Delete removes from this playlist"
 GRID_PREFETCH_WORKERS = 3
 DETAIL_SUMMARY_WIDTH = 38
 DETAIL_LABEL_WIDTH = 20
@@ -816,7 +817,7 @@ class PlexTuiApp(App[None]):
         elif isinstance(row, MediaRow):
             mark_active_row(event.list_view, row)
             self.show_media_details(row.media)
-            self.set_status(context_hint(row))
+            self.set_status(media_row_status(row, self.browsing_stack[-1] if self.browsing_stack else None))
             self.maybe_auto_load_more(row.media)
         elif isinstance(row, LoadMoreRow):
             mark_active_row(event.list_view, row)
@@ -1073,7 +1074,7 @@ class PlexTuiApp(App[None]):
             self.loading_more = False
             self.suppress_auto_load = True
             target_key = selected_key or first_new_key
-            status = render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items)
+            status = render_browse_status(state)
             if alphabet_direction and selected_key:
                 current_index = selected_media_index(state.items, selected_key)
                 next_index = alphabet_jump_index(state.items, current_index, alphabet_direction)
@@ -1119,7 +1120,7 @@ class PlexTuiApp(App[None]):
             self.browsing_stack.append(state)
             self.show_browse_state(state)
             self.focus_media_browser()
-            self.set_status(f"{media.title}: {len(children)} items")
+            self.set_status(render_browse_status(state))
 
         self.call_from_thread(update)
 
@@ -1157,7 +1158,7 @@ class PlexTuiApp(App[None]):
                 state.title,
                 empty_state_message(state),
                 empty_state_action(state),
-                status=render_loaded_status(state.title, 0, state.total, state.has_more),
+                status=render_browse_status(state),
             )
 
     def show_loading_state(self, title: str, message: str = "Loading from Plex.") -> None:
@@ -1202,7 +1203,12 @@ class PlexTuiApp(App[None]):
         self.detail_refresh_token += 1
         token = self.detail_refresh_token
         details = media_details(item)
-        self.show_detail_text(render_detail_content(details, self.config, raw=item.raw))
+        self.show_detail_text(render_detail_content(
+            details,
+            self.config,
+            raw=item.raw,
+            context_actions=current_detail_actions(self.browsing_stack[-1] if self.browsing_stack else None),
+        ))
         delay = GRID_DETAIL_REFRESH_DELAY if self.media_grid_visible() else LIST_DETAIL_REFRESH_DELAY
         self.schedule_media_detail_refresh(item, token, delay)
 
@@ -1271,7 +1277,12 @@ class PlexTuiApp(App[None]):
             return
         selected = self.selected_media()
         if selected is not None and selected.key == full_item.key:
-            self.show_detail_text(render_detail_content(details, self.config, raw=full_item.raw))
+            self.show_detail_text(render_detail_content(
+                details,
+                self.config,
+                raw=full_item.raw,
+                context_actions=current_detail_actions(self.browsing_stack[-1] if self.browsing_stack else None),
+            ))
             self.schedule_media_detail_artwork_refresh(full_item, details, token)
 
     def schedule_media_detail_artwork_refresh(self, full_item: MediaItem, details: object, token: int) -> None:
@@ -3022,8 +3033,13 @@ def format_offset(milliseconds: int) -> str:
     return f"{minutes}:{secs:02d}"
 
 
-def render_details(details: object, config: AppConfig | None = None, raw: object | None = None) -> str:
-    lines = render_detail_header(details, config)
+def render_details(
+    details: object,
+    config: AppConfig | None = None,
+    raw: object | None = None,
+    context_actions: tuple[str, ...] = (),
+) -> str:
+    lines = render_detail_header(details, config, context_actions)
 
     metadata_rows = list(getattr(details, "metadata"))
     episode_context = episode_context_rows(details, metadata_rows)
@@ -3073,7 +3089,11 @@ def render_details(details: object, config: AppConfig | None = None, raw: object
     return "\n".join(lines)
 
 
-def render_detail_header(details: object, config: AppConfig | None = None) -> list[str]:
+def render_detail_header(
+    details: object,
+    config: AppConfig | None = None,
+    context_actions: tuple[str, ...] = (),
+) -> list[str]:
     title = getattr(details, "title")
     metadata = list(getattr(details, "metadata", []))
     title_lines = textwrap.wrap(title, width=DETAIL_SUMMARY_WIDTH) or [title]
@@ -3089,13 +3109,13 @@ def render_detail_header(details: object, config: AppConfig | None = None) -> li
     lines.extend([
         "",
         "Playback",
-        *playback_readiness_rows(bool(getattr(details, "playable")), progress),
+        *playback_readiness_rows(bool(getattr(details, "playable")), progress, context_actions),
         f"Artwork: {artwork}",
     ])
     return lines
 
 
-def playback_readiness_rows(playable: bool, progress: str = "") -> list[str]:
+def playback_readiness_rows(playable: bool, progress: str = "", context_actions: tuple[str, ...] = ()) -> list[str]:
     if playable:
         rows = [
             "Status: Ready to play",
@@ -3107,11 +3127,14 @@ def playback_readiness_rows(playable: bool, progress: str = "") -> list[str]:
             "r: resume saved progress",
             "Playlist: Press P",
         ])
+        rows.extend(context_actions)
         return rows
-    return [
+    rows = [
         "Status: Opens more items",
         "Action: Press Enter to open",
     ]
+    rows.extend(context_actions)
+    return rows
 
 
 def detail_metadata_value(metadata: list[tuple[str, str]], label: str) -> str:
@@ -3208,8 +3231,9 @@ def render_detail_content(
     config: AppConfig | None = None,
     artwork: object | None = None,
     raw: object | None = None,
+    context_actions: tuple[str, ...] = (),
 ) -> object:
-    text = render_details(details, config, raw)
+    text = render_details(details, config, raw, context_actions)
     if artwork is None:
         return text
     return Group(artwork, Text(""), text)
@@ -4021,7 +4045,7 @@ def render_help() -> str:
         "",
         "Playlist Management",
         "P: add selected media to an existing or new playlist",
-        "backspace/delete: remove selected item while browsing a playlist",
+        "backspace/delete: remove selected item from the open playlist",
         "backspace/delete: remove selected item from Continue Watching",
         "",
         "Streams",
@@ -4147,6 +4171,30 @@ def context_hint(row: object) -> str:
     if isinstance(row, SettingsValueRow):
         return "Settings: Current value"
     return "Enter selects row"
+
+
+def current_detail_actions(state: BrowseState | None) -> tuple[str, ...]:
+    if is_playlist_browse_state(state):
+        return (PLAYLIST_REMOVE_HINT,)
+    return ()
+
+
+def media_row_status(row: MediaRow, state: BrowseState | None) -> str:
+    status = context_hint(row)
+    if is_playlist_browse_state(state):
+        status = f"{status} / Backspace/Delete remove from playlist"
+    return status
+
+
+def render_browse_status(state: BrowseState) -> str:
+    status = render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items)
+    if is_playlist_browse_state(state):
+        status = f"{status} / Backspace/Delete removes selected item"
+    return status
+
+
+def is_playlist_browse_state(state: BrowseState | None) -> bool:
+    return bool(state is not None and state.source == "playlist")
 
 
 def settings_action_kind(action: str) -> str:
@@ -4674,7 +4722,10 @@ def grid_status(grid: MediaGrid, state: BrowseState | None) -> str:
     current_page = min(page_count, (grid.selected_index // grid.page_size) + 1)
     selected = min(grid.selected_index + 1, total_loaded)
     total_text = f"{total_loaded} loaded" if total_available is None else f"{total_loaded} of {total_available} loaded"
-    return f"{context_hint(grid)} / item {selected} / page {current_page} of {page_count} / {total_text}{progress_count_suffix(grid.items)}"
+    status = f"{context_hint(grid)} / item {selected} / page {current_page} of {page_count} / {total_text}{progress_count_suffix(grid.items)}"
+    if is_playlist_browse_state(state):
+        status = f"{status} / Backspace/Delete remove from playlist"
+    return status
 
 
 def grid_page_key(items: list[MediaItem]) -> tuple[str, ...]:

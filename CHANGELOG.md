@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Improved playlist removal discoverability by showing playlist-specific
+  Backspace/Delete hints while browsing playlist contents and in selected-item
+  details.
 - Added opt-in experimental terminal playback through mpv's terminal video
   outputs. External mpv windows remain the default, while terminal playback
   prefers Kitty/Ghostty graphics, falls back to TCT text video, suspends the

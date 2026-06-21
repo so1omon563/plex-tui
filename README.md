@@ -289,14 +289,16 @@ Playback mode and window sizing:
 ## Playlist Management
 
 Playlist actions are available from selected playable media and from inside
-playlist views.
+playlist views. When a playlist is open, the selected item can be removed from
+that playlist with the same `backspace` / `delete` removal action used by
+Continue Watching.
 
 | Key | Where | Action |
 | --- | --- | --- |
 | `P` | Playable media item | Open the Add to Playlist picker |
 | `enter` | Add to Playlist picker | Add the selected media to an existing playlist |
 | `enter` | `New playlist...` row | Prompt for a name and create a playlist containing the selected media |
-| `backspace` / `delete` | Playlist contents | Remove the selected item from that playlist |
+| `backspace` / `delete` | Open playlist view | Remove the selected item from that playlist |
 
 The Add to Playlist picker lists `New playlist...` first, followed by existing
 Plex playlists. Playlist browsing itself is available from a library's browse

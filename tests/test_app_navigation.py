@@ -691,6 +691,10 @@ def test_remove_playlist_item_updates_playlist_view():
     asyncio.run(run_remove_playlist_item_check())
 
 
+def test_playlist_browse_shows_remove_hint():
+    asyncio.run(run_playlist_browse_remove_hint_check())
+
+
 def test_remove_continue_watching_removes_selected_item():
     asyncio.run(run_remove_continue_watching_check())
 
@@ -2469,6 +2473,21 @@ async def run_remove_playlist_item_check():
         assert app.selected_media() is not None
         assert app.selected_media().title == "Second"
         assert status == "Removed Movie from Favorites"
+
+
+async def run_playlist_browse_remove_hint_check():
+    playlist = MediaItem("Favorites", "", "playlist", "playlist-1", False, Raw())
+    item = MediaItem("Movie", "", "movie", "1", True, Raw())
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.browsing_stack = [BrowseState("Favorites", [item], source="playlist", context_media=playlist, total=1)]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        assert "Playlist: Backspace/Delete removes from this playlist" in app.query_one("#detail-content").content
+        assert "Backspace/Delete remove from playlist" in app.query_one("#status").content
 
 
 async def run_remove_continue_watching_check():
