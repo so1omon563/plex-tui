@@ -18,6 +18,7 @@ class FakeCliService:
         self.show_library = LibraryItem("TV Shows", "2", "show", object())
         self.libraries_calls = 0
         self.search_calls = []
+        self.discover_calls = []
         self.continue_watching_calls = []
 
     @property
@@ -49,6 +50,14 @@ class FakeCliService:
         self.search_calls.append((query, library, start, size))
         return MediaPage(
             [MediaItem("Interstellar", "2014", "movie", "m2", True, SimpleNamespace())],
+            start=0,
+            total=1,
+        )
+
+    def discover_page(self, query: str, start: int, size: int) -> MediaPage:
+        self.discover_calls.append((query, start, size))
+        return MediaPage(
+            [MediaItem("Free Movie", "2024  Available: Tubi (free)", "movie", "plex://movie/1", False, SimpleNamespace())],
             start=0,
             total=1,
         )
@@ -237,6 +246,27 @@ def test_cli_searches_globally(monkeypatch, capsys):
     assert service is not None
     assert service.search_calls == [("interstellar", None, 0, 3)]
     assert "Interstellar" in capsys.readouterr().out
+
+
+def test_cli_searches_discover(monkeypatch, capsys):
+    service = None
+
+    class CapturingService(FakeCliService):
+        def __init__(self, config: AppConfig) -> None:
+            nonlocal service
+            super().__init__(config)
+            service = self
+
+    monkeypatch.setattr(cli, "PlexService", CapturingService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id", account_token="account"))
+
+    assert cli.main(["discover", "matrix", "--limit", "3"]) == 0
+
+    assert service is not None
+    assert service.discover_calls == [("matrix", 0, 3)]
+    output = capsys.readouterr().out
+    assert "Free Movie" in output
+    assert "Tubi" in output
 
 
 def test_cli_searches_library_by_title_as_json(monkeypatch, capsys):

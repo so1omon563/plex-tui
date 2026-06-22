@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from typing import Any
 
+from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
 
 from .config import AppConfig, config_path
@@ -12,6 +13,7 @@ from .models import LibraryItem, MediaDetails, MediaItem
 
 PLAYABLE_TYPES = {"movie", "episode", "track", "clip"}
 DEFAULT_PAGE_SIZE = 100
+DISCOVER_PROVIDERS = "discover,PLEXAVOD"
 
 KIND_LABELS: dict[str, str] = {
     "movie": "Movie",
@@ -74,6 +76,7 @@ class PlexService:
                 "missing Plex config. Set PLEX_TUI_BASE_URL and PLEX_TUI_TOKEN, "
                 f"or create {config_path()}"
             )
+        self.config = config
         self.server = PlexServer(config.base_url, config.token)
 
     @property
@@ -176,6 +179,13 @@ class PlexService:
         items = [to_media_item(item) for item in raw_items]
         return MediaPage(items=items, start=0, total=len(items))
 
+    def discover_page(self, query: str, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
+        if not self.config.account_token:
+            raise ValueError("missing Plex account token; start plex-tui and sign in first")
+        account = MyPlexAccount(token=self.config.account_token)
+        raw_items = account.searchDiscover(query, limit=start + size, providers=DISCOVER_PROVIDERS)
+        return sliced_media_page([to_discover_media_item(item) for item in raw_items], start, size)
+
     def continue_watching_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
         raw_items = list(self.server.library.onDeck())
         items = [to_media_item(item) for item in raw_items[start:start + size]]
@@ -260,6 +270,32 @@ def to_hub_media_item(raw: Any) -> MediaItem:
     if item.kind == "hub":
         return item
     return replace(item, kind="hub", playable=False)
+
+
+def to_discover_media_item(raw: Any) -> MediaItem:
+    item = to_media_item(raw)
+    subtitle = "  ".join(bit for bit in (item.subtitle, availability_label(raw)) if bit)
+    return replace(item, subtitle=subtitle, playable=False)
+
+
+def availability_label(raw: Any) -> str:
+    streaming_services = getattr(raw, "streamingServices", None)
+    if not callable(streaming_services):
+        return "Plex Discover"
+    try:
+        services = list(streaming_services())
+    except Exception:
+        return "Plex Discover"
+    labels = []
+    for service in services[:3]:
+        title = getattr(service, "title", "") or getattr(service, "platform", "")
+        offer = getattr(service, "offerType", "")
+        labels.append(f"{title} ({offer})" if title and offer else title or offer)
+    if not labels:
+        return "Plex Discover"
+    extra = len(services) - len(labels)
+    suffix = f" +{extra} more" if extra > 0 else ""
+    return "Available: " + ", ".join(labels) + suffix
 
 
 def media_details(item: MediaItem) -> MediaDetails:
