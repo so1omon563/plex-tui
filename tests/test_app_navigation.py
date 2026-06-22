@@ -1042,7 +1042,7 @@ async def run_playlists_entrypoint_check():
 async def run_discover_entrypoint_check(monkeypatch):
     opened_urls = []
     monkeypatch.setattr(app_module.webbrowser, "open", opened_urls.append)
-    item = MediaItem("The Matrix", "Available: 1. Plex (free)", "movie", "discover-1", False, DiscoverRaw())
+    item = MediaItem("The Matrix", "1 provider: Plex · Free", "movie", "discover-1", False, DiscoverRaw())
     service = FakePagedService(MediaPage([item], start=0, total=1))
     app = PlexTuiApp()
     async with app.run_test() as pilot:
@@ -1070,15 +1070,15 @@ async def run_discover_entrypoint_check(monkeypatch):
                 break
             await pilot.pause(0.1)
 
-        assert service.discover_calls == [("matrix", 0, 40)]
-        assert app.browsing_stack[-1].title == "Discover: matrix"
+        assert service.discover_calls == [("matrix", 0, 40, "movies_shows")]
+        assert app.browsing_stack[-1].title == "Discover Movies & Shows: matrix"
         assert app.query_one("#media").highlighted_child.media.title == "The Matrix"
 
         await pilot.press("enter")
         await pilot.pause(0.5)
 
         assert opened_urls == ["https://watch.plex.tv/movie"]
-        assert app.query_one("#status").content == "Opened: The Matrix - Plex (free)"
+        assert app.query_one("#status").content == "Opened: The Matrix - Plex · Free"
 
 
 async def run_discover_provider_picker_check(monkeypatch):
@@ -1086,7 +1086,7 @@ async def run_discover_provider_picker_check(monkeypatch):
     monkeypatch.setattr(app_module.webbrowser, "open", opened_urls.append)
     item = MediaItem(
         "The Matrix",
-        "Available: 1. Plex (free), 2. Prime (rent)",
+        "2 providers: Plex · Free, Prime · Rent",
         "movie",
         "discover-1",
         False,
@@ -1120,7 +1120,7 @@ async def run_discover_provider_picker_check(monkeypatch):
         rows = list(app.query_one("#media").children)
         assert app.picker_visible
         assert app.query_one("#media-title").content.removeprefix("▶ ") == "Availability: The Matrix"
-        assert [row.label for row in rows if isinstance(row, AvailabilityRow)] == ["Plex (free)", "Prime (rent)"]
+        assert [row.label for row in rows if isinstance(row, AvailabilityRow)] == ["Plex · Free", "Prime · Rent"]
 
         await pilot.press("down")
         await pilot.press("enter")
@@ -1129,7 +1129,7 @@ async def run_discover_provider_picker_check(monkeypatch):
         assert opened_urls == ["https://example.com/prime"]
         assert not app.picker_visible
         assert app.query_one("#media").highlighted_child.media.title == "The Matrix"
-        assert app.query_one("#status").content == "Opened: The Matrix - Prime (rent)"
+        assert app.query_one("#status").content == "Opened: The Matrix - Prime · Rent"
 
 
 async def run_discover_without_availability_check(monkeypatch):
@@ -1255,8 +1255,8 @@ class FakePagedService:
         self.continue_watching_calls.append((start, size))
         return self.page
 
-    def discover_page(self, query: str, start: int, size: int) -> MediaPage:
-        self.discover_calls.append((query, start, size))
+    def discover_page(self, query: str, start: int, size: int, media_type: str = "movies_shows") -> MediaPage:
+        self.discover_calls.append((query, start, size, media_type))
         return self.page
 
     def children(self, item: MediaItem) -> list[MediaItem]:
@@ -2290,8 +2290,10 @@ async def run_settings_action_check():
             assert app.config.grid_density == "large"
             app.run_settings_action("cycle_artwork_renderer")
             assert app.config.artwork_renderer == "auto"
+            app.run_settings_action("cycle_discover_media_type")
+            assert app.config.discover_media_type == "movie"
 
-        assert save_config.call_count == 15
+        assert save_config.call_count == 16
 
 
 async def run_settings_library_visibility_check():

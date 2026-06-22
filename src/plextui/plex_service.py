@@ -179,12 +179,24 @@ class PlexService:
         items = [to_media_item(item) for item in raw_items]
         return MediaPage(items=items, start=0, total=len(items))
 
-    def discover_page(self, query: str, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
+    def discover_page(
+        self,
+        query: str,
+        start: int = 0,
+        size: int = DEFAULT_PAGE_SIZE,
+        media_type: str = "movies_shows",
+    ) -> MediaPage:
         if not self.config.account_token:
             raise ValueError("missing Plex account token; start plex-tui and sign in first")
         account = MyPlexAccount(token=self.config.account_token)
-        raw_items = account.searchDiscover(query, limit=start + size, providers=DISCOVER_PROVIDERS)
-        return sliced_media_page([to_discover_media_item(item) for item in raw_items], start, size)
+        limit = start + size if media_type == "all" else (start + size) * 4
+        raw_items = account.searchDiscover(query, limit=limit, providers=DISCOVER_PROVIDERS)
+        items = [
+            item
+            for item in (to_discover_media_item(raw) for raw in raw_items)
+            if discover_media_type_matches(item, media_type)
+        ]
+        return sliced_media_page(items, start, size)
 
     def continue_watching_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
         raw_items = list(self.server.library.onDeck())
@@ -287,46 +299,63 @@ def to_discover_media_item(raw: Any) -> MediaItem:
     return replace(item, subtitle=subtitle, playable=False)
 
 
+def discover_media_type_matches(item: MediaItem, media_type: str) -> bool:
+    if media_type == "all":
+        return True
+    if media_type == "movies_shows":
+        return item.kind in {"movie", "show"}
+    return item.kind == media_type
+
+
 def availability_label(raw: Any) -> str:
-    streaming_services = getattr(raw, "streamingServices", None)
-    if not callable(streaming_services):
-        return "Plex Discover"
-    try:
-        services = list(streaming_services())
-    except Exception:
-        return "Plex Discover"
+    services = availability_services(raw)
     labels = []
-    for index, service in enumerate(services[:3], start=1):
-        title = getattr(service, "title", "") or getattr(service, "platform", "")
-        offer = getattr(service, "offerType", "")
-        label = f"{title} ({offer})" if title and offer else title or offer
+    for service in services[:3]:
+        label = provider_label(service)
         if label:
-            labels.append(f"{index}. {label}")
+            labels.append(label)
     if not labels:
-        return "Plex Discover"
+        return "No availability"
     extra = len(services) - len(labels)
     suffix = f" +{extra} more" if extra > 0 else ""
-    return "Available: " + ", ".join(labels) + suffix
+    provider_count = f"{len(services)} provider" if len(services) == 1 else f"{len(services)} providers"
+    return f"{provider_count}: " + ", ".join(labels) + suffix
 
 
 def availability_urls(raw: Any) -> list[tuple[str, str]]:
+    urls = []
+    for service in availability_services(raw):
+        url = str(getattr(service, "url", "") or "")
+        if url:
+            urls.append((provider_label(service) or "Provider", url))
+    return urls
+
+
+def availability_services(raw: Any) -> list[Any]:
     streaming_services = getattr(raw, "streamingServices", None)
     if not callable(streaming_services):
         return []
     try:
-        services = list(streaming_services())
+        return list(streaming_services())
     except Exception:
         return []
-    urls = []
-    for service in services:
-        url = str(getattr(service, "url", "") or "")
-        if not url:
-            continue
-        title = getattr(service, "title", "") or getattr(service, "platform", "") or "Provider"
-        offer = getattr(service, "offerType", "")
-        label = f"{title} ({offer})" if offer else str(title)
-        urls.append((label, url))
-    return urls
+
+
+def provider_label(service: Any) -> str:
+    title = str(getattr(service, "title", "") or getattr(service, "platform", "") or "Provider")
+    offer = offer_label(str(getattr(service, "offerType", "") or ""))
+    return f"{title} · {offer}" if offer else title
+
+
+def offer_label(offer: str) -> str:
+    labels = {
+        "free": "Free",
+        "rent": "Rent",
+        "buy": "Buy",
+        "subscription": "Subscription",
+        "sub": "Subscription",
+    }
+    return labels.get(offer.strip().lower(), offer.strip().title())
 
 
 def media_details(item: MediaItem) -> MediaDetails:

@@ -9,6 +9,10 @@
   clarified Discover availability details.
 - Changed startup to open Continue Watching by default instead of the first
   visible library.
+- Added a Discover result-type preference and CLI option, defaulting searches
+  to Movies & Shows while still allowing Movies, Shows, or All results.
+- Improved Discover availability labels so result rows and provider picks show
+  provider counts, offer types, and clearer no-availability states.
 
 ## 0.11.1 - 2026-06-22
 

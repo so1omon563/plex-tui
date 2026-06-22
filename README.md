@@ -95,7 +95,7 @@ working today. Expect rough edges, but expect progress too.
 - Settings screen for stream preferences, playback mode and transcode quality,
   artwork modes, grid density, page size, auto-load threshold, grid artwork
   prefetching, media view, library visibility/order, library Enter behavior,
-  optional sidebar entrypoints, and `mpv` window size.
+  Discover result type, optional sidebar entrypoints, and `mpv` window size.
 - App diagnostics view for version, paths, `mpv`, Plex connection, artwork, and
   browsing settings.
 
@@ -185,7 +185,7 @@ plex-tui libraries
 plex-tui continue-watching --limit 5
 plex-tui search "blade runner"
 plex-tui search "alien" --library Movies --json
-plex-tui discover "matrix" --limit 5
+plex-tui discover "matrix" --limit 5 --media-type movie
 plex-tui discover-open "matrix" --index 3 --service-index 1
 ```
 

@@ -15,6 +15,9 @@ from .models import LibraryItem, MediaItem
 from .plex_service import PlexService, availability_urls, kind_label, progress_percent
 
 
+DISCOVER_MEDIA_TYPE_CHOICES = ("movies-shows", "movie", "show", "all")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Browse Plex from a terminal UI.")
     parser.add_argument("--version", action="version", version=f"plex-tui {__version__}")
@@ -37,6 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     discover = subparsers.add_parser("discover", help="search Plex Discover and free streaming results")
     discover.add_argument("query", help="search query")
     discover.add_argument("--limit", type=positive_int, default=10, help="maximum items to print")
+    discover.add_argument("--media-type", choices=DISCOVER_MEDIA_TYPE_CHOICES, default="movies-shows", help="Discover result type")
     discover.add_argument("--json", action="store_true", help="print JSON output")
 
     discover_open = subparsers.add_parser("discover-open", help="open a Plex Discover availability URL")
@@ -44,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     discover_open.add_argument("--index", type=positive_int, default=1, help="1-based result index to open")
     discover_open.add_argument("--service-index", type=positive_int, default=1, help="1-based availability index to open")
     discover_open.add_argument("--limit", type=positive_int, default=10, help="maximum results to search")
+    discover_open.add_argument("--media-type", choices=DISCOVER_MEDIA_TYPE_CHOICES, default="movies-shows", help="Discover result type")
 
     search = subparsers.add_parser("search", help="search Plex without opening the TUI")
     search.add_argument("query", help="search query")
@@ -76,9 +81,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "continue-watching":
         return command_continue_watching(args.limit, args.json)
     if args.command == "discover":
-        return command_discover(args.query, args.limit, args.json)
+        return command_discover(args.query, args.limit, args.media_type, args.json)
     if args.command == "discover-open":
-        return command_discover_open(args.query, args.index, args.service_index, args.limit)
+        return command_discover_open(args.query, args.index, args.service_index, args.limit, args.media_type)
     if args.command == "search":
         return command_search(args.query, args.library, args.limit, args.json)
 
@@ -131,12 +136,12 @@ def command_continue_watching(limit: int, json_output: bool = False) -> int:
     return 0
 
 
-def command_discover(query: str, limit: int, json_output: bool = False) -> int:
+def command_discover(query: str, limit: int, media_type: str = "movies-shows", json_output: bool = False) -> int:
     service = connect_service()
     if service is None:
         return 2
     try:
-        page = service.discover_page(query, 0, limit)
+        page = service.discover_page(query, 0, limit, discover_media_type_key(media_type))
     except Exception as exc:
         print(f"plex-tui: {exc}", file=sys.stderr)
         return 2
@@ -147,12 +152,12 @@ def command_discover(query: str, limit: int, json_output: bool = False) -> int:
     return 0
 
 
-def command_discover_open(query: str, index: int, service_index: int, limit: int) -> int:
+def command_discover_open(query: str, index: int, service_index: int, limit: int, media_type: str = "movies-shows") -> int:
     service = connect_service()
     if service is None:
         return 2
     try:
-        page = service.discover_page(query, 0, limit)
+        page = service.discover_page(query, 0, limit, discover_media_type_key(media_type))
         item = page.items[index - 1]
     except IndexError:
         print(f"plex-tui: discover result index out of range: {index}", file=sys.stderr)
@@ -169,6 +174,10 @@ def command_discover_open(query: str, index: int, service_index: int, limit: int
     webbrowser.open(url)
     print(f"Opened: {item.title} - {label}")
     return 0
+
+
+def discover_media_type_key(value: str) -> str:
+    return "movies_shows" if value == "movies-shows" else value
 
 
 def command_search(query: str, library: str | None, limit: int, json_output: bool = False) -> int:

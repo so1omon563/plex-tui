@@ -56,6 +56,9 @@ client_identifier = "plex-tui-your-stable-client-id"
 # show_playlists and show_discover control optional sidebar entrypoints.
 # show_playlists = true
 # show_discover = true
+# discover_media_type controls Plex Discover filtering: movies_shows, movie,
+# show, or all. The default avoids noisy non-movie/show results.
+# discover_media_type = "movies_shows"
 
 # Optional artwork settings.
 # artwork_mode can be "on" or "off".
