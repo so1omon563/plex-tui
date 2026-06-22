@@ -167,6 +167,14 @@ class AvailabilityRow(ListItem):
         super().__init__(Label(f"› {label}"))
 
 
+class ResumeChoiceRow(ListItem):
+    def __init__(self, media: MediaItem, resume: bool) -> None:
+        self.media = media
+        self.resume = resume
+        self.label_text = "Resume" if resume else "Start over"
+        super().__init__(Label(f"› {self.label_text}"))
+
+
 class LibraryMenuRow(ListItem):
     def __init__(self, library: LibraryItem, entry: str, label: str, description: str) -> None:
         self.library = library
@@ -818,6 +826,8 @@ class PlexTuiApp(App[None]):
             self.prompt_discover_search()
         elif isinstance(row, AvailabilityRow):
             self.open_availability_url(row)
+        elif isinstance(row, ResumeChoiceRow):
+            self.choose_resume_playback(row)
         elif isinstance(row, LibraryRow):
             self.open_library_primary(row.library)
         elif isinstance(row, LibraryMenuRow):
@@ -860,6 +870,10 @@ class PlexTuiApp(App[None]):
         elif isinstance(row, AvailabilityRow):
             mark_active_row(event.list_view, row)
             self.show_detail_text(f"{row.media_title}\n\n{row.label}\n{row.url}")
+            self.set_status(context_hint(row))
+        elif isinstance(row, ResumeChoiceRow):
+            mark_active_row(event.list_view, row)
+            self.show_detail_text(f"{row.media.title}\n\n{row.label_text}")
             self.set_status(context_hint(row))
         elif isinstance(row, LibraryRow):
             mark_active_row(event.list_view, row)
@@ -2087,6 +2101,10 @@ class PlexTuiApp(App[None]):
             if self.update_preferences(discover_media_type=next_media_type):
                 self.refresh_settings_after_change(action, "Discover Type", discover_media_type_value(self.config))
             return
+        if action == "toggle_confirm_start_over":
+            if self.update_preferences(confirm_start_over=not self.config.confirm_start_over):
+                self.refresh_settings_after_change(action, "Start Over Prompt", show_setting_value(self.config.confirm_start_over))
+            return
         if action == "cycle_library_enter_action":
             next_action = next_library_enter_action(self.config.library_enter_action)
             if self.update_preferences(library_enter_action=next_action):
@@ -3227,8 +3245,14 @@ class PlexTuiApp(App[None]):
         if media is None:
             self.set_status("No media selected")
             return
+        self.play_media(media, resume)
+
+    def play_media(self, media: MediaItem, resume: bool) -> None:
         if not media.playable:
             self.set_status("Selected item is not directly playable")
+            return
+        if not resume and self.config.confirm_start_over and resume_offset_ms(media.raw):
+            self.show_resume_picker(media)
             return
         if resume and not resume_offset_ms(media.raw):
             self.set_status("No resume position for selected media; press p to play from the beginning")
@@ -3274,6 +3298,25 @@ class PlexTuiApp(App[None]):
         status = render_playback_status(media.title, self.player, self.config, audio_choice, subtitle_choice)
         self.set_status(status)
         self.set_playback_footer(status)
+
+    def show_resume_picker(self, media: MediaItem) -> None:
+        self.picker_visible = True
+        self.settings_visible = False
+        self.picker_media_key = media.key
+        self.set_media_title(f"Playback: {media.title}")
+        self.show_media_list()
+        self.replace_media_rows([ResumeChoiceRow(media, True), ResumeChoiceRow(media, False)], 0)
+        self.query_one("#media", ListView).focus()
+        self.show_detail_text(f"{media.title}\n\nChoose where playback should start.")
+        self.set_status("Choose resume or start over")
+
+    def choose_resume_playback(self, row: ResumeChoiceRow) -> None:
+        self.picker_visible = False
+        if self.browsing_stack:
+            self.show_browse_state(self.browsing_stack[-1], selected_key=self.picker_media_key)
+        self.picker_media_key = None
+        self.focus_media_browser()
+        self.play_media(row.media, row.resume)
 
     def play_terminal_media(
         self,
@@ -4315,6 +4358,7 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsHeaderRow("Playback"),
         SettingsActionRow(f"Playback Mode: {playback_mode_value(config)}", "cycle_playback_mode"),
         SettingsActionRow(f"Playback Display: {playback_display_value(config)}", "cycle_playback_display"),
+        SettingsActionRow(f"Start Over Prompt: {show_setting_value(config.confirm_start_over)}", "toggle_confirm_start_over"),
         SettingsActionRow(f"Terminal Video: {terminal_video_profile_value(config)}", "cycle_terminal_video_profile"),
         SettingsActionRow(f"Transcode Quality: {transcode_quality_value(config)}", "cycle_transcode_quality"),
         SettingsActionRow(f"mpv Window Size: {mpv_window_size_value(config)}", "cycle_mpv_window_size"),
@@ -4389,6 +4433,7 @@ def render_settings(config: AppConfig) -> str:
         [
             ("Playback Mode", playback_mode_value(config)),
             ("Playback Display", playback_display_value(config)),
+            ("Start Over Prompt", show_setting_value(config.confirm_start_over)),
             ("Terminal Video", terminal_video_profile_value(config)),
             ("Transcode Quality", transcode_quality_value(config)),
             ("mpv Window Size", mpv_window_size_value(config)),
@@ -4570,6 +4615,8 @@ def context_hint(row: object) -> str:
         return "Libraries: Enter searches Plex Discover"
     if isinstance(row, AvailabilityRow):
         return "Availability: Enter opens provider link"
+    if isinstance(row, ResumeChoiceRow):
+        return "Playback: Enter chooses start point"
     if isinstance(row, LibraryRow):
         return "Libraries: Enter opens primary view / Space opens alternate view"
     if isinstance(row, LibraryMenuRow):
@@ -4826,6 +4873,8 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         return f"Current playback mode: {playback_mode_value(config)}"
     if action == "cycle_playback_display":
         return f"Current playback display: {playback_display_value(config)}"
+    if action == "toggle_confirm_start_over":
+        return f"Current start-over prompt: {show_setting_value(config.confirm_start_over)}"
     if action == "cycle_terminal_video_profile":
         return f"Current terminal video: {terminal_video_profile_value(config)}"
     if action == "cycle_transcode_quality":
@@ -4886,6 +4935,8 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to choose auto/direct-default playback or force Plex transcoding."
     if action == "cycle_playback_display":
         return "Press Enter to choose external mpv windows or novelty terminal playback."
+    if action == "toggle_confirm_start_over":
+        return "Press Enter to ask before starting over when selected media can resume."
     if action == "cycle_terminal_video_profile":
         return "Press Enter to choose smooth, balanced, or sharp terminal playback."
     if action == "cycle_transcode_quality":
@@ -4945,6 +4996,7 @@ def settings_action_label(action: str) -> str:
         "cycle_subtitle_mode": "Subtitle Mode",
         "cycle_playback_mode": "Playback Mode",
         "cycle_playback_display": "Playback Display",
+        "toggle_confirm_start_over": "Start Over Prompt",
         "cycle_terminal_video_profile": "Terminal Video",
         "cycle_transcode_quality": "Transcode Quality",
         "cycle_mpv_window_size": "mpv Window Size",

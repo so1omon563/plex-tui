@@ -40,6 +40,7 @@ def test_config_example_parses_and_uses_known_fields():
         "show_playlists",
         "show_discover",
         "discover_media_type",
+        "confirm_start_over",
         "artwork_mode",
         "artwork_renderer",
         "detail_artwork_mode",
@@ -207,6 +208,7 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
         show_playlists=False,
         show_discover=False,
         discover_media_type="show",
+        confirm_start_over=False,
     )
     config.save_config(saved)
     loaded = config.load_config()
@@ -220,6 +222,7 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     assert loaded.show_playlists is False
     assert loaded.show_discover is False
     assert loaded.discover_media_type == "show"
+    assert loaded.confirm_start_over is False
     text = config_file.read_text(encoding="utf-8")
     assert "page_size = 250" in text
     assert "auto_load_threshold = 25" in text
@@ -230,6 +233,7 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     assert "show_playlists = false" in text
     assert "show_discover = false" in text
     assert 'discover_media_type = "show"' in text
+    assert "confirm_start_over = false" in text
 
 
 def test_hidden_library_keys_parse_unique_csv_values(tmp_path, monkeypatch):

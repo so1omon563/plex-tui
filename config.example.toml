@@ -36,6 +36,8 @@ client_identifier = "plex-tui-your-stable-client-id"
 # transcode_quality applies when playback_mode is "transcode". Values are
 # "original", "1080p_8", "720p_4", or "480p_2".
 # transcode_quality = "720p_4"
+# Ask before starting from the beginning when selected media can resume.
+# confirm_start_over = true
 
 # Optional browsing performance settings.
 # page_size controls how many Plex items each library/search request loads.

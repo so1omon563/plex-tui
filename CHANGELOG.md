@@ -15,6 +15,8 @@
   provider counts, offer types, and clearer no-availability states.
 - Improved Discover title searches so exact movie/show title matches suppress
   obvious adjacent-title noise when Plex returns it.
+- Added a default-on start-over prompt for resumable media so `p` asks whether
+  to resume or start from the beginning, with a Settings toggle to disable it.
 
 ## 0.11.1 - 2026-06-22
 

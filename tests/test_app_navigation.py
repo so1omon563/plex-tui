@@ -716,6 +716,10 @@ def test_playback_action_starts_from_beginning():
     asyncio.run(run_playback_starts_from_beginning_check())
 
 
+def test_playback_action_prompts_before_starting_over_resumable_media():
+    asyncio.run(run_playback_start_over_prompt_check())
+
+
 def test_resume_action_uses_saved_position():
     asyncio.run(run_resume_action_check())
 
@@ -2292,8 +2296,10 @@ async def run_settings_action_check():
             assert app.config.artwork_renderer == "auto"
             app.run_settings_action("cycle_discover_media_type")
             assert app.config.discover_media_type == "movie"
+            app.run_settings_action("toggle_confirm_start_over")
+            assert app.config.confirm_start_over is False
 
-        assert save_config.call_count == 16
+        assert save_config.call_count == 17
 
 
 async def run_settings_library_visibility_check():
@@ -2512,7 +2518,7 @@ async def run_playback_starts_from_beginning_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
-        app.config = AppConfig("http://plex", "token", "client-id")
+        app.config = AppConfig("http://plex", "token", "client-id", confirm_start_over=False)
         app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, ResumableRaw())])
         await pilot.pause(0.2)
 
@@ -2529,6 +2535,40 @@ async def run_playback_starts_from_beginning_check():
 
         assert launch.call_args.kwargs["resume"] is False
         assert "resume" not in app.query_one("#playback-footer").content
+
+
+async def run_playback_start_over_prompt_check():
+    class ResumableRaw(Raw):
+        viewOffset = 65_000
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, ResumableRaw())])
+        await pilot.pause(0.2)
+
+        player = SimpleNamespace(
+            title="Movie",
+            start_offset_ms=65_000,
+            stream_mode="transcode",
+            subtitle_count=0,
+            process=SimpleNamespace(poll=lambda: None),
+        )
+        with patch("plextui.app.play_with_mpv", return_value=player) as launch:
+            app.action_play_selected()
+            await pilot.pause(0.2)
+
+            assert not launch.called
+            assert app.picker_visible
+            assert app.query_one("#media-title").content.removeprefix("▶ ") == "Playback: Movie"
+            assert [row.label_text for row in app.query_one("#media").children] == ["Resume", "Start over"]
+
+            await pilot.press("enter")
+            await pilot.pause(0.2)
+
+        assert launch.call_args.kwargs["resume"] is True
+        assert "resume 1:05" in app.query_one("#playback-footer").content
 
 
 async def run_resume_action_check():
