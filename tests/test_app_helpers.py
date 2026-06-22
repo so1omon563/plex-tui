@@ -470,6 +470,7 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "› Library Enter: Library  (cycle)" in labels
     assert "› Playlists Sidebar: Shown  (toggle)" in labels
     assert "› Discover Sidebar: Shown  (toggle)" in labels
+    assert "› Discover Type: Movies & Shows  (cycle)" in labels
     assert "› Grid Density: Comfortable  (cycle)" in labels
     assert "› Artwork Renderer: Block  (cycle)" in labels
     assert "› Page Size: 80  (edit)" in labels

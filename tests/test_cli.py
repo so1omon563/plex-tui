@@ -67,12 +67,12 @@ class FakeCliService:
             total=1,
         )
 
-    def discover_page(self, query: str, start: int, size: int) -> MediaPage:
-        self.discover_calls.append((query, start, size))
+    def discover_page(self, query: str, start: int, size: int, media_type: str = "movies_shows") -> MediaPage:
+        self.discover_calls.append((query, start, size, media_type))
         return MediaPage(
             [
                 MediaItem("First Movie", "2024", "movie", "plex://movie/1", False, SimpleNamespace(title="First Movie")),
-                MediaItem("Free Movie", "2024  Available: 1. Tubi (free)", "movie", "plex://movie/2", False, FakeDiscoverRaw()),
+                MediaItem("Free Movie", "2024  1 provider: Tubi · Free", "movie", "plex://movie/2", False, FakeDiscoverRaw()),
             ],
             start=0,
             total=2,
@@ -279,11 +279,29 @@ def test_cli_searches_discover(monkeypatch, capsys):
     assert cli.main(["discover", "matrix", "--limit", "3"]) == 0
 
     assert service is not None
-    assert service.discover_calls == [("matrix", 0, 3)]
+    assert service.discover_calls == [("matrix", 0, 3, "movies_shows")]
     output = capsys.readouterr().out
     assert "IDX" in output
     assert "Free Movie" in output
-    assert "1. Tubi" in output
+    assert "Tubi" in output
+
+
+def test_cli_searches_discover_with_media_type(monkeypatch):
+    service = None
+
+    class CapturingService(FakeCliService):
+        def __init__(self, config: AppConfig) -> None:
+            nonlocal service
+            super().__init__(config)
+            service = self
+
+    monkeypatch.setattr(cli, "PlexService", CapturingService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id", account_token="account"))
+
+    assert cli.main(["discover", "matrix", "--media-type", "show"]) == 0
+
+    assert service is not None
+    assert service.discover_calls == [("matrix", 0, 10, "show")]
 
 
 def test_cli_opens_discover_availability(monkeypatch, capsys):
@@ -303,9 +321,9 @@ def test_cli_opens_discover_availability(monkeypatch, capsys):
     assert cli.main(["discover-open", "matrix", "--index", "2", "--limit", "3"]) == 0
 
     assert service is not None
-    assert service.discover_calls == [("matrix", 0, 3)]
+    assert service.discover_calls == [("matrix", 0, 3, "movies_shows")]
     assert opened == ["https://tubitv.example/movie"]
-    assert capsys.readouterr().out == "Opened: Free Movie - Tubi (free)\n"
+    assert capsys.readouterr().out == "Opened: Free Movie - Tubi · Free\n"
 
 
 def test_cli_discover_open_reports_missing_index(monkeypatch, capsys):

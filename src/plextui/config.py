@@ -26,6 +26,7 @@ TERMINAL_VIDEO_PROFILES = {"smooth", "balanced", "sharp"}
 TRANSCODE_QUALITIES = {"original", "1080p_8", "720p_4", "480p_2"}
 DEFAULT_MPV_WINDOW_SIZE = "80%"
 LIBRARY_ENTER_ACTIONS = {"library", "browse_modes"}
+DISCOVER_MEDIA_TYPES = {"movies_shows", "movie", "show", "all"}
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,7 @@ class AppConfig:
     library_order_keys: tuple[str, ...] = ()
     show_playlists: bool = True
     show_discover: bool = True
+    discover_media_type: str = "movies_shows"
 
 
 def config_path() -> Path:
@@ -161,6 +163,10 @@ def load_config() -> AppConfig:
     library_order_keys = csv_values(data.get("library_order_keys", ""))
     show_playlists = bool_value(data.get("show_playlists", "true"), True, "show_playlists")
     show_discover = bool_value(data.get("show_discover", "true"), True, "show_discover")
+    discover_media_type = data.get("discover_media_type", "movies_shows")
+    if discover_media_type not in DISCOVER_MEDIA_TYPES:
+        write_debug_log(f"invalid discover_media_type {discover_media_type!r}; using 'movies_shows'")
+        discover_media_type = "movies_shows"
     return AppConfig(
         base_url=base_url.strip(),
         token=token.strip(),
@@ -188,6 +194,7 @@ def load_config() -> AppConfig:
         library_order_keys=library_order_keys,
         show_playlists=show_playlists,
         show_discover=show_discover,
+        discover_media_type=discover_media_type,
     )
 
 
@@ -245,6 +252,8 @@ def save_config(config: AppConfig) -> None:
         lines.append("show_playlists = false")
     if not config.show_discover:
         lines.append("show_discover = false")
+    if config.discover_media_type != "movies_shows":
+        lines.append(f'discover_media_type = "{_toml_escape(config.discover_media_type)}"')
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

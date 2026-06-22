@@ -119,6 +119,7 @@ class BrowseState:
     next_start: int = 0
     total: int | None = None
     context_media: MediaItem | None = None
+    discover_media_type: str = "movies_shows"
 
     @property
     def has_more(self) -> bool:
@@ -1193,7 +1194,12 @@ class PlexTuiApp(App[None]):
         started = time.perf_counter()
         try:
             if state.source == "discover":
-                page = self.service.discover_page(state.search_query, state.next_start, self.config.page_size)
+                page = self.service.discover_page(
+                    state.search_query,
+                    state.next_start,
+                    self.config.page_size,
+                    state.discover_media_type,
+                )
             elif state.search:
                 page = self.service.search_page(state.search_query, state.selected_library, state.next_start, self.config.page_size)
             elif state.source == "continue_watching":
@@ -2076,6 +2082,11 @@ class PlexTuiApp(App[None]):
                 self.populate_libraries(visible_libraries(self.libraries, self.config))
                 self.refresh_settings_after_change(action, "Discover Sidebar", show_setting_value(self.config.show_discover))
             return
+        if action == "cycle_discover_media_type":
+            next_media_type = next_discover_media_type(self.config.discover_media_type)
+            if self.update_preferences(discover_media_type=next_media_type):
+                self.refresh_settings_after_change(action, "Discover Type", discover_media_type_value(self.config))
+            return
         if action == "cycle_library_enter_action":
             next_action = next_library_enter_action(self.config.library_enter_action)
             if self.update_preferences(library_enter_action=next_action):
@@ -2886,19 +2897,25 @@ class PlexTuiApp(App[None]):
     def run_discover_search(self, query: str) -> None:
         if not query or self.service is None:
             return
-        title = f"Discover: {query}"
+        media_type = self.config.discover_media_type
+        type_label = discover_media_type_value(self.config)
+        title = f"Discover {type_label}: {query}"
         self.post_message(StatusChanged(f"Searching Plex Discover for {query}..."))
-        self.call_from_thread(self.show_loading_state, title, "Searching Plex Discover and free streaming availability.")
+        self.call_from_thread(
+            self.show_loading_state,
+            title,
+            f"Searching Plex Discover {type_label.lower()} availability.",
+        )
         started = time.perf_counter()
         try:
-            page = self.service.discover_page(query, 0, self.config.page_size)
+            page = self.service.discover_page(query, 0, self.config.page_size, media_type)
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return
         write_performance_log(
             "discover_page",
             started,
-            f"query={query!r} size={self.config.page_size} items={len(page.items)} total={page.total}",
+            f"query={query!r} media_type={media_type!r} size={self.config.page_size} items={len(page.items)} total={page.total}",
         )
 
         def update() -> None:
@@ -2909,6 +2926,7 @@ class PlexTuiApp(App[None]):
                 source="discover",
                 next_start=page.next_start,
                 total=page.total,
+                discover_media_type=media_type,
             )
             self.browsing_stack = [state]
             self.show_browse_state(state)
@@ -4308,6 +4326,7 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsHeaderRow("Browsing"),
         SettingsActionRow(f"Playlists Sidebar: {show_setting_value(config.show_playlists)}", "toggle_show_playlists"),
         SettingsActionRow(f"Discover Sidebar: {show_setting_value(config.show_discover)}", "toggle_show_discover"),
+        SettingsActionRow(f"Discover Type: {discover_media_type_value(config)}", "cycle_discover_media_type"),
         SettingsActionRow(f"Library Enter: {library_enter_action_value(config)}", "cycle_library_enter_action"),
         SettingsActionRow(f"Media View: {media_view_value(config)}", "toggle_media_view"),
         SettingsActionRow(f"Grid Density: {grid_density_value(config)}", "cycle_grid_density"),
@@ -4396,6 +4415,7 @@ def render_settings(config: AppConfig) -> str:
             ("Library Enter", library_enter_action_value(config)),
             ("Playlists Sidebar", show_setting_value(config.show_playlists)),
             ("Discover Sidebar", show_setting_value(config.show_discover)),
+            ("Discover Type", discover_media_type_value(config)),
             ("Media View", media_view_value(config)),
             ("Grid Density", grid_density_value(config)),
             ("Page Size", str(config.page_size)),
@@ -4822,6 +4842,8 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         return f"Current Playlists sidebar: {show_setting_value(config.show_playlists)}"
     if action == "toggle_show_discover":
         return f"Current Discover sidebar: {show_setting_value(config.show_discover)}"
+    if action == "cycle_discover_media_type":
+        return f"Current Discover type: {discover_media_type_value(config)}"
     if action == "cycle_library_enter_action":
         return f"Current library Enter action: {library_enter_action_value(config)}"
     if action == "cycle_grid_density":
@@ -4882,6 +4904,8 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to show or hide Playlists in the sidebar."
     if action == "toggle_show_discover":
         return "Press Enter to show or hide Discover in the sidebar."
+    if action == "cycle_discover_media_type":
+        return "Press Enter to filter Discover searches by movies, shows, or all results."
     if action == "cycle_library_enter_action":
         return "Press Enter to choose whether library rows open all items or browse modes by default."
     if action == "cycle_grid_density":
@@ -4935,6 +4959,7 @@ def settings_action_label(action: str) -> str:
         "toggle_media_view": "Media View",
         "toggle_show_playlists": "Playlists Sidebar",
         "toggle_show_discover": "Discover Sidebar",
+        "cycle_discover_media_type": "Discover Type",
         "cycle_library_enter_action": "Library Enter",
         "cycle_grid_density": "Grid Density",
         "decrease_page_size": "Page Size: decrease",
@@ -5290,6 +5315,25 @@ def media_view_value(config: AppConfig) -> str:
 
 def show_setting_value(value: bool) -> str:
     return "Shown" if value else "Hidden"
+
+
+def discover_media_type_value(config: AppConfig) -> str:
+    labels = {
+        "movies_shows": "Movies & Shows",
+        "movie": "Movies",
+        "show": "Shows",
+        "all": "All",
+    }
+    return labels.get(config.discover_media_type, "Movies & Shows")
+
+
+def next_discover_media_type(value: str) -> str:
+    values = ["movies_shows", "movie", "show", "all"]
+    try:
+        index = values.index(value)
+    except ValueError:
+        return "movies_shows"
+    return values[(index + 1) % len(values)]
 
 
 def library_enter_action_value(config: AppConfig) -> str:

@@ -39,6 +39,18 @@ class SecondRawItem(RawItem):
     ratingKey = "2"
 
 
+class ShowRawItem(RawItem):
+    TYPE = "show"
+    title = "Second Show"
+    ratingKey = "show-2"
+
+
+class ClipRawItem(RawItem):
+    TYPE = "clip"
+    title = "Noisy Clip"
+    ratingKey = "clip-1"
+
+
 class DiscoverRawItem(RawItem):
     title = "Free Movie"
     ratingKey = "plex://movie/1"
@@ -380,22 +392,39 @@ def test_discover_page_uses_account_token_and_slices(monkeypatch):
 
         def searchDiscover(self, query, **kwargs):
             calls.append((query, kwargs))
-            return [DiscoverRawItem(), SecondRawItem()]
+            return [DiscoverRawItem(), ShowRawItem(), ClipRawItem(), SecondRawItem()]
 
     monkeypatch.setattr("plextui.plex_service.MyPlexAccount", FakeAccount)
     service = object.__new__(PlexService)
     service.config = type("Config", (), {"account_token": "account-token"})()
 
-    page = service.discover_page("matrix", start=0, size=1)
+    page = service.discover_page("matrix", start=0, size=2)
 
     assert calls == [
         ("token", "account-token"),
-        ("matrix", {"limit": 1, "providers": "discover,PLEXAVOD"}),
+        ("matrix", {"limit": 8, "providers": "discover,PLEXAVOD"}),
     ]
-    assert [item.title for item in page.items] == ["Free Movie"]
-    assert page.items[0].subtitle == "2024  Available: 1. Tubi (free)"
+    assert [item.title for item in page.items] == ["Free Movie", "Second Show"]
+    assert page.items[0].subtitle == "2024  1 provider: Tubi · Free"
     assert page.items[0].playable is False
-    assert page.total == 2
+    assert page.total == 3
+
+
+def test_discover_page_can_show_all_result_types(monkeypatch):
+    class FakeAccount:
+        def __init__(self, token):
+            pass
+
+        def searchDiscover(self, query, **kwargs):
+            return [DiscoverRawItem(), ClipRawItem()]
+
+    monkeypatch.setattr("plextui.plex_service.MyPlexAccount", FakeAccount)
+    service = object.__new__(PlexService)
+    service.config = type("Config", (), {"account_token": "account-token"})()
+
+    page = service.discover_page("matrix", start=0, size=2, media_type="all")
+
+    assert [item.title for item in page.items] == ["Free Movie", "Noisy Clip"]
 
 
 def test_discover_media_key_falls_back_when_rating_key_is_nan():
@@ -408,7 +437,7 @@ def test_discover_media_key_falls_back_when_rating_key_is_nan():
 
 
 def test_availability_urls_include_provider_labels():
-    assert availability_urls(DiscoverRawItem()) == [("Tubi (free)", "https://tubitv.example/movie")]
+    assert availability_urls(DiscoverRawItem()) == [("Tubi · Free", "https://tubitv.example/movie")]
 
 
 def test_media_details_include_audio_and_subtitle_locations():
