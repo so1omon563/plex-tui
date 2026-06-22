@@ -72,7 +72,7 @@ class FakeCliService:
         return MediaPage(
             [
                 MediaItem("First Movie", "2024", "movie", "plex://movie/1", False, SimpleNamespace(title="First Movie")),
-                MediaItem("Free Movie", "2024  Available: Tubi (free)", "movie", "plex://movie/2", False, FakeDiscoverRaw()),
+                MediaItem("Free Movie", "2024  Available: 1. Tubi (free)", "movie", "plex://movie/2", False, FakeDiscoverRaw()),
             ],
             start=0,
             total=2,
@@ -281,8 +281,9 @@ def test_cli_searches_discover(monkeypatch, capsys):
     assert service is not None
     assert service.discover_calls == [("matrix", 0, 3)]
     output = capsys.readouterr().out
+    assert "IDX" in output
     assert "Free Movie" in output
-    assert "Tubi" in output
+    assert "1. Tubi" in output
 
 
 def test_cli_opens_discover_availability(monkeypatch, capsys):

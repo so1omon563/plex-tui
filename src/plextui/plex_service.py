@@ -287,10 +287,12 @@ def availability_label(raw: Any) -> str:
     except Exception:
         return "Plex Discover"
     labels = []
-    for service in services[:3]:
+    for index, service in enumerate(services[:3], start=1):
         title = getattr(service, "title", "") or getattr(service, "platform", "")
         offer = getattr(service, "offerType", "")
-        labels.append(f"{title} ({offer})" if title and offer else title or offer)
+        label = f"{title} ({offer})" if title and offer else title or offer
+        if label:
+            labels.append(f"{index}. {label}")
     if not labels:
         return "Plex Discover"
     extra = len(services) - len(labels)

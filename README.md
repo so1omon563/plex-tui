@@ -186,7 +186,7 @@ plex-tui continue-watching --limit 5
 plex-tui search "blade runner"
 plex-tui search "alien" --library Movies --json
 plex-tui discover "matrix" --limit 5
-plex-tui discover-open "matrix" --index 3
+plex-tui discover-open "matrix" --index 3 --service-index 1
 ```
 
 `status`, `libraries`, `continue-watching`, `search`, and `discover` are

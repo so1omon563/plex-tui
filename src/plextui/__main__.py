@@ -143,7 +143,7 @@ def command_discover(query: str, limit: int, json_output: bool = False) -> int:
     if json_output:
         print(json.dumps([media_payload(item) for item in page.items], indent=2))
     else:
-        print_media_items(page.items)
+        print_discover_items(page.items)
     return 0
 
 
@@ -286,6 +286,22 @@ def print_media_items(items: list[MediaItem]) -> None:
                 item.subtitle,
             )
             for item in items
+        ],
+    )
+
+
+def print_discover_items(items: list[MediaItem]) -> None:
+    print_rows(
+        ["IDX", "TYPE", "PROGRESS", "TITLE", "DETAILS"],
+        [
+            (
+                str(index),
+                kind_label(item.kind),
+                media_progress(item),
+                item.title,
+                item.subtitle,
+            )
+            for index, item in enumerate(items, start=1)
         ],
     )
 

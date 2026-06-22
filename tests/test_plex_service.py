@@ -392,7 +392,7 @@ def test_discover_page_uses_account_token_and_slices(monkeypatch):
         ("matrix", {"limit": 1, "providers": "discover,PLEXAVOD"}),
     ]
     assert [item.title for item in page.items] == ["Free Movie"]
-    assert page.items[0].subtitle == "2024  Available: Tubi (free)"
+    assert page.items[0].subtitle == "2024  Available: 1. Tubi (free)"
     assert page.items[0].playable is False
     assert page.total == 2
 
