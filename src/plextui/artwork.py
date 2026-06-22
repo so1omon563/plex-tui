@@ -144,7 +144,7 @@ def add_token(url: str, token: str) -> str:
 
 
 def cached_artwork_path(path: str, config: AppConfig, width: int | None = None, height: int | None = None) -> Path:
-    source = f"{config.base_url}\0{path}"
+    source = f"external\0{path}" if path.startswith(("http://", "https://")) else f"{config.base_url}\0{path}"
     if width is not None or height is not None:
         source = f"{source}\0{width or ''}x{height or ''}"
     key = hashlib.sha256(source.encode("utf-8")).hexdigest()

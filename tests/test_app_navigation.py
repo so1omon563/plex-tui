@@ -32,6 +32,8 @@ from plextui.models import LibraryItem, MediaItem
 from plextui.player import PlayerError, StreamChoice
 from plextui.plex_service import MediaPage
 
+STARTUP_LOAD_SERVER = PlexTuiApp.load_server
+
 
 class Raw:
     TYPE = "movie"
@@ -55,6 +57,14 @@ class MultiProviderDiscoverRaw:
             SimpleNamespace(title="Plex", offerType="free", url="https://watch.plex.tv/movie"),
             SimpleNamespace(title="Prime", offerType="rent", url="https://example.com/prime"),
         ]
+
+
+class NoAvailabilityDiscoverRaw:
+    TYPE = "movie"
+    title = "No Availability Discover Raw"
+
+    def streamingServices(self):
+        return []
 
 
 @pytest.fixture(autouse=True)
@@ -202,6 +212,10 @@ def test_populate_libraries_adds_continue_watching_entrypoint():
     asyncio.run(run_continue_watching_entrypoint_check())
 
 
+def test_startup_opens_continue_watching_by_default(monkeypatch):
+    asyncio.run(run_startup_continue_watching_default_check(monkeypatch))
+
+
 def test_playlists_sidebar_entrypoint_opens_playlists():
     asyncio.run(run_playlists_entrypoint_check())
 
@@ -212,6 +226,10 @@ def test_discover_sidebar_entrypoint_searches_and_opens_first_availability(monke
 
 def test_discover_result_with_multiple_providers_opens_provider_picker(monkeypatch):
     asyncio.run(run_discover_provider_picker_check(monkeypatch))
+
+
+def test_discover_result_without_availability_does_not_fetch_children(monkeypatch):
+    asyncio.run(run_discover_without_availability_check(monkeypatch))
 
 
 def test_populate_libraries_can_highlight_selected_library():
@@ -971,6 +989,29 @@ async def run_continue_watching_entrypoint_check():
         assert libraries_view.highlighted_child is rows[0]
 
 
+async def run_startup_continue_watching_default_check(monkeypatch):
+    item = MediaItem("In Progress", "", "movie", "cw-1", True, Raw())
+    service = StartupService(MediaPage([item], start=0, total=1))
+    monkeypatch.setattr(PlexTuiApp, "load_server", STARTUP_LOAD_SERVER)
+    monkeypatch.setattr(app_module, "load_config", lambda: AppConfig("http://plex", "token", "client-id"))
+    monkeypatch.setattr(app_module, "PlexService", lambda config: service)
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        for _ in range(80):
+            if app.browsing_stack and app.browsing_stack[-1].source == "continue_watching":
+                break
+            await pilot.pause(0.1)
+
+        libraries_view = app.query_one("#libraries")
+        rows = list(libraries_view.children)
+        assert isinstance(rows[0], ContinueWatchingRow)
+        assert libraries_view.highlighted_child is rows[0]
+        assert app.browsing_stack[-1].source == "continue_watching"
+        assert app.query_one("#media").highlighted_child.media.title == "In Progress"
+        assert service.continue_watching_calls == [(0, 40)]
+        assert service.entry_calls == []
+
+
 async def run_playlists_entrypoint_check():
     service = PlaylistService()
     app = PlexTuiApp()
@@ -1085,6 +1126,41 @@ async def run_discover_provider_picker_check(monkeypatch):
         assert app.query_one("#status").content == "Opened: The Matrix - Prime (rent)"
 
 
+async def run_discover_without_availability_check(monkeypatch):
+    opened_urls = []
+    monkeypatch.setattr(app_module.webbrowser, "open", opened_urls.append)
+    item = MediaItem("The Matrix", "", "movie", "discover-1", False, NoAvailabilityDiscoverRaw())
+    service = FakePagedService(MediaPage([item], start=0, total=1))
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+        await pilot.press("down")
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.2)
+
+        app.query_one("#search").value = "matrix"
+        await pilot.press("enter")
+        for _ in range(80):
+            if app.browsing_stack and app.browsing_stack[-1].source == "discover":
+                break
+            await pilot.pause(0.1)
+
+        await pilot.press("enter")
+        status = await wait_for_status(app, pilot, "No availability links for The Matrix.")
+
+        assert status == "No availability links for The Matrix."
+        assert opened_urls == []
+        assert service.children_calls == []
+        assert app.browsing_stack[-1].source == "discover"
+
+
 async def run_selected_library_highlight_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
@@ -1155,6 +1231,7 @@ class FakePagedService:
         self.search_calls = []
         self.continue_watching_calls = []
         self.discover_calls = []
+        self.children_calls = []
 
     def library_page(self, library: LibraryItem, start: int, size: int) -> MediaPage:
         self.calls.append((library, start, size))
@@ -1175,6 +1252,21 @@ class FakePagedService:
     def discover_page(self, query: str, start: int, size: int) -> MediaPage:
         self.discover_calls.append((query, start, size))
         return self.page
+
+    def children(self, item: MediaItem) -> list[MediaItem]:
+        self.children_calls.append(item.key)
+        return []
+
+
+class StartupService(FakePagedService):
+    friendly_name = "Test Plex"
+
+    def __init__(self, page: MediaPage) -> None:
+        super().__init__(page)
+        self.entry_calls = []
+
+    def libraries(self) -> list[LibraryItem]:
+        return [LibraryItem("Movies", "1", "movie", object())]
 
 
 class FakeFlowService:

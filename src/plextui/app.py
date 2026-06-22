@@ -741,12 +741,8 @@ class PlexTuiApp(App[None]):
             self.title = f"plex-tui - {service.friendly_name}"
             self.set_status(f"Connected to {service.friendly_name}")
             visible = visible_libraries(libraries, self.config)
-            if visible:
-                self.populate_libraries(visible, selected_library_key=visible[0].key)
-                self.open_library_entry(visible[0])
-            else:
-                self.populate_libraries(visible)
-                self.open_continue_watching()
+            self.populate_libraries(visible)
+            self.open_continue_watching()
 
         self.call_from_thread(update)
 
@@ -1247,7 +1243,11 @@ class PlexTuiApp(App[None]):
     def open_media(self, media: MediaItem) -> None:
         if self.service is None:
             return
-        if self.current_browse_state_source() == "discover" and (urls := availability_urls(media.raw)):
+        if self.current_browse_state_source() == "discover":
+            urls = availability_urls(media.raw)
+            if not urls:
+                self.call_from_thread(self.set_status, f"No availability links for {media.title}.")
+                return
             if len(urls) > 1:
                 self.call_from_thread(self.show_availability_picker, media, urls)
                 return
@@ -3497,6 +3497,13 @@ def playback_readiness_rows(playable: bool, progress: str = "", context_actions:
         ])
         rows.extend(context_actions)
         return rows
+    if "Availability: No provider links found" in context_actions:
+        rows = [
+            "Status: No availability provider",
+            "Action: Choose another item",
+        ]
+        rows.extend(context_actions)
+        return rows
     if any(action.startswith("Availability:") for action in context_actions):
         rows = [
             "Status: Opens availability provider",
@@ -4573,8 +4580,10 @@ def context_hint(row: object) -> str:
 
 
 def current_detail_actions(state: BrowseState | None, item: MediaItem | None = None) -> tuple[str, ...]:
-    if state is not None and state.source == "discover" and item is not None and availability_urls(item.raw):
-        return ("Availability: Enter opens provider link",)
+    if state is not None and state.source == "discover" and item is not None:
+        if availability_urls(item.raw):
+            return ("Availability: Enter opens provider link",)
+        return ("Availability: No provider links found",)
     if item is not None and item.kind == "playlist":
         return (
             "Playlist: Enter opens contents",

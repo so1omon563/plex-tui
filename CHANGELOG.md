@@ -2,8 +2,11 @@
 
 ## Unreleased
 
-- Fixed Discover artwork for external Plex metadata image URLs and clarified
-  Discover availability details.
+- Fixed Discover artwork for external Plex metadata image URLs, stable grid
+  selection for Discover results, missing-availability selection hangs, and
+  clarified Discover availability details.
+- Changed startup to open Continue Watching by default instead of the first
+  visible library.
 
 ## 0.11.1 - 2026-06-22
 
