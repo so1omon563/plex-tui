@@ -3205,6 +3205,9 @@ class PlexTuiApp(App[None]):
 
     def apply_watched_state(self, media: MediaItem, watched: bool) -> None:
         self.detail_cache.pop(media.key, None)
+        if watched and self.current_browse_state_source() == "continue_watching":
+            self.refresh_continue_watching_after_watched(media)
+            return
         selected = self.selected_media()
         selected_key = selected.key if selected is not None else media.key
         if self.browsing_stack:
@@ -3223,6 +3226,33 @@ class PlexTuiApp(App[None]):
             self.show_media_details(media)
         label = "watched" if watched else "unwatched"
         self.set_status(f"Marked {media.title} {label}")
+
+    @work(thread=True, exclusive=True)
+    def refresh_continue_watching_after_watched(self, media: MediaItem) -> None:
+        if self.service is None:
+            self.call_from_thread(self.set_status, f"Marked {media.title} watched")
+            return
+        try:
+            page = self.service.continue_watching_page(0, self.config.page_size)
+        except Exception as exc:
+            self.call_from_thread(self.show_error, f"failed to refresh Continue Watching: {exc}")
+            return
+        self.call_from_thread(self.apply_continue_watching_refresh, media.title, page)
+
+    def apply_continue_watching_refresh(self, title: str, page: MediaPage) -> None:
+        state = BrowseState(
+            "Continue Watching",
+            page.items,
+            source="continue_watching",
+            next_start=page.next_start,
+            total=page.total,
+        )
+        self.browsing_stack = [state]
+        self.show_browse_state(state)
+        self.focus_media_browser()
+        status = f"Marked {title} watched"
+        self.set_status(status)
+        self.set_timer(0.05, lambda: self.set_status(status), name="continue-watching-watched-status")
 
     def refresh_visible_media_item(self, media: MediaItem) -> None:
         if self.media_grid_visible():

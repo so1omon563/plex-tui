@@ -17,6 +17,8 @@
   obvious adjacent-title noise when Plex returns it.
 - Added a default-on start-over prompt for resumable media so `p` asks whether
   to resume or start from the beginning, with a Settings toggle to disable it.
+- Refreshed Continue Watching after marking an episode watched so Plex can
+  surface the next episode when available.
 
 ## 0.11.1 - 2026-06-22
 
