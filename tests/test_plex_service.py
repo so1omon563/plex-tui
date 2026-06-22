@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from plextui.models import LibraryItem, MediaItem
 from plextui.plex_service import (
+    MediaPage,
     PlexService,
     artwork_path,
     category_items,
@@ -75,6 +76,11 @@ class RawHubItem:
     title = "Recently Released Movies"
     ratingKey = "hub-1"
     thumb = "/library/hubs/recently-released/thumb"
+
+
+class VodHubRawItem(RawHubItem):
+    title = "Plex Picks"
+    ratingKey = "vod-hub-1"
 
 
 class EditionRawItem(RawItem):
@@ -418,6 +424,28 @@ def test_discover_page_uses_account_token_and_slices(monkeypatch):
     assert page.items[0].subtitle == "2024  1 provider: Tubi · Free"
     assert page.items[0].playable is False
     assert page.total == 3
+
+
+def test_video_on_demand_page_uses_account_token_and_returns_hubs(monkeypatch):
+    calls = []
+
+    class FakeAccount:
+        def __init__(self, token):
+            calls.append(("token", token))
+
+        def videoOnDemand(self):
+            calls.append(("videoOnDemand", None))
+            return [VodHubRawItem()]
+
+    monkeypatch.setattr("plextui.plex_service.MyPlexAccount", FakeAccount)
+    service = object.__new__(PlexService)
+    service.config = type("Config", (), {"account_token": "account-token"})()
+
+    page = service.video_on_demand_page(start=0, size=10)
+
+    assert calls == [("token", "account-token"), ("videoOnDemand", None)]
+    assert isinstance(page, MediaPage)
+    assert [(item.title, item.kind, item.playable) for item in page.items] == [("Plex Picks", "hub", False)]
 
 
 def test_discover_page_can_show_all_result_types(monkeypatch):
