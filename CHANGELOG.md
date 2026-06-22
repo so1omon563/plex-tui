@@ -11,6 +11,8 @@
   `/hubs/...` paths.
 - Avoided per-row watched-progress reloads while rendering Plex-hosted online
   metadata lists.
+- Limited Plex-hosted VOD hub child fetches to the configured page size and
+  logged child-load timings.
 
 ## 0.12.4 - 2026-06-22
 

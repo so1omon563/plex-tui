@@ -1306,8 +1306,8 @@ class FakePagedService:
         self.video_on_demand_calls.append((start, size))
         return self.page
 
-    def children(self, item: MediaItem) -> list[MediaItem]:
-        self.children_calls.append(item.key)
+    def children(self, item: MediaItem, size: int = 40) -> list[MediaItem]:
+        self.children_calls.append((item.key, size))
         return []
 
 
@@ -1337,8 +1337,8 @@ class FakeFlowService:
         self.entry_calls.append((library, entry, start, size))
         return self.pages[(entry, start)]
 
-    def children(self, item: MediaItem) -> list[MediaItem]:
-        self.children_calls.append(item.key)
+    def children(self, item: MediaItem, size: int = 40) -> list[MediaItem]:
+        self.children_calls.append((item.key, size))
         return self.children_by_key.get(item.key, [])
 
 
@@ -1539,7 +1539,7 @@ async def run_library_submenu_keyboard_flow_check():
 
         await pilot.press("enter")
         await pilot.pause(0.5)
-        assert service.children_calls == ["hub-1"]
+        assert service.children_calls == [("hub-1", 40)]
         assert app.browsing_stack[-1].title == "Recently Added"
         assert app.query_one("#media-grid").selected_media.title == "Blade Runner"
 

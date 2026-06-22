@@ -1324,21 +1324,25 @@ class PlexTuiApp(App[None]):
             self.call_from_thread(self.set_status, f"Opened: {media.title} - {label}")
             return
         if media.playable:
+            started = time.perf_counter()
             try:
-                children = self.service.children(media)
+                children = self.service.children(media, self.config.page_size)
             except Exception:
                 children = []
+            write_performance_log("children_load", started, f"title={media.title!r} items={len(children)} playable=1")
             if not children:
                 self.call_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
                 return
         else:
             self.post_message(StatusChanged(f"Opening {media.title}..."))
             self.call_from_thread(self.show_loading_state, media.title, "Loading child items from Plex.")
+            started = time.perf_counter()
             try:
-                children = self.service.children(media)
+                children = self.service.children(media, self.config.page_size)
             except Exception as exc:
                 self.call_from_thread(self.show_error, str(exc))
                 return
+            write_performance_log("children_load", started, f"title={media.title!r} items={len(children)} playable=0")
         if not children:
             self.call_from_thread(self.show_empty_state, media.title, "No child items", "Go back and choose another item.")
             return
