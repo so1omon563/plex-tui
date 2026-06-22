@@ -6,6 +6,8 @@
   directly from the TUI, so Plex-hosted free titles can use the normal playback
   flow when Plex exposes stream URLs.
 - Added a visible On Plex sidebar row for the same VOD hub browsing path.
+- Fixed opening Plex-hosted VOD hubs whose child URLs are returned as relative
+  `/hubs/...` paths.
 
 ## 0.12.4 - 2026-06-22
 

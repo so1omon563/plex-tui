@@ -226,7 +226,7 @@ class PlexService:
         if hasattr(raw, "episodes"):
             return [to_media_item(child) for child in raw.episodes()]
         if hasattr(raw, "items"):
-            return [to_media_item(child) for child in raw.items()]
+            return [to_media_item(child) for child in hub_items(raw)]
         return []
 
     def category_page(self, category: CategoryRef, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
@@ -257,6 +257,18 @@ def media_page_from_raw(raw_items: Iterable[Any], start: int) -> MediaPage:
 def sliced_media_page(raw_items: list[Any], start: int, size: int) -> MediaPage:
     items = [item if isinstance(item, MediaItem) else to_media_item(item) for item in raw_items[start:start + size]]
     return MediaPage(items=items, start=start, total=len(raw_items))
+
+
+def hub_items(raw: Any) -> list[Any]:
+    key = str(getattr(raw, "key", "") or "")
+    server = getattr(raw, "_server", None)
+    vod_base = str(getattr(server, "VOD", "") or "")
+    fetch_items = getattr(raw, "fetchItems", None)
+    if key.startswith("/") and vod_base and callable(fetch_items):
+        items = list(fetch_items(f"{vod_base.rstrip('/')}{key}"))
+        to_online_metadata = getattr(server, "_toOnlineMetadata", None)
+        return list(to_online_metadata(items)) if callable(to_online_metadata) else items
+    return list(raw.items())
 
 
 def to_media_item(raw: Any) -> MediaItem:
