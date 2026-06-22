@@ -14,6 +14,7 @@ from plextui.app import (
     ContinueWatchingRow,
     DiscoverRow,
     EmptyStateRow,
+    LibraryRow,
     LibraryMenuRow,
     LoadMoreRow,
     PlexTuiApp,
@@ -683,6 +684,10 @@ def test_settings_toggle_library_visibility_updates_sidebar():
     asyncio.run(run_settings_library_visibility_check())
 
 
+def test_settings_toggle_sidebar_entrypoints_updates_sidebar():
+    asyncio.run(run_settings_sidebar_entrypoint_visibility_check())
+
+
 def test_settings_move_library_updates_sidebar_order():
     asyncio.run(run_settings_library_order_check())
 
@@ -1007,7 +1012,8 @@ async def run_startup_continue_watching_default_check(monkeypatch):
         assert isinstance(rows[0], ContinueWatchingRow)
         assert libraries_view.highlighted_child is rows[0]
         assert app.browsing_stack[-1].source == "continue_watching"
-        assert app.query_one("#media").highlighted_child.media.title == "In Progress"
+        selected = await wait_for_selected_title(app, pilot, "In Progress")
+        assert selected is not None
         assert service.continue_watching_calls == [(0, 40)]
         assert service.entry_calls == []
 
@@ -2310,6 +2316,32 @@ async def run_settings_library_visibility_check():
         assert isinstance(rows[1], PlaylistsRow)
         assert isinstance(rows[2], DiscoverRow)
         assert [row.library.title for row in rows[3:]] == ["Movies"]
+
+
+async def run_settings_sidebar_entrypoint_visibility_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        movies = LibraryItem("Movies", "1", "movie", object())
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.libraries = [movies]
+        app.populate_libraries(app.libraries)
+        await pilot.pause(0.2)
+
+        with patch("plextui.app.save_config") as save_config:
+            app.run_settings_action("toggle_show_playlists")
+            await pilot.pause(0.2)
+            app.run_settings_action("toggle_show_discover")
+            await pilot.pause(0.2)
+
+        rows = list(app.query_one("#libraries").children)
+        assert app.config.show_playlists is False
+        assert app.config.show_discover is False
+        assert save_config.call_count == 2
+        assert isinstance(rows[0], ContinueWatchingRow)
+        assert isinstance(rows[1], LibraryRow)
+        assert rows[1].library.title == "Movies"
+        assert not any(isinstance(row, PlaylistsRow | DiscoverRow) for row in rows)
 
 
 async def run_settings_library_order_check():

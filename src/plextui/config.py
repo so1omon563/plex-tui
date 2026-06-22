@@ -54,6 +54,8 @@ class AppConfig:
     grid_prefetch_pages: int = DEFAULT_GRID_PREFETCH_PAGES
     hidden_library_keys: tuple[str, ...] = ()
     library_order_keys: tuple[str, ...] = ()
+    show_playlists: bool = True
+    show_discover: bool = True
 
 
 def config_path() -> Path:
@@ -157,6 +159,8 @@ def load_config() -> AppConfig:
     )
     hidden_library_keys = csv_values(data.get("hidden_library_keys", ""))
     library_order_keys = csv_values(data.get("library_order_keys", ""))
+    show_playlists = bool_value(data.get("show_playlists", "true"), True, "show_playlists")
+    show_discover = bool_value(data.get("show_discover", "true"), True, "show_discover")
     return AppConfig(
         base_url=base_url.strip(),
         token=token.strip(),
@@ -182,6 +186,8 @@ def load_config() -> AppConfig:
         grid_prefetch_pages=grid_prefetch_pages,
         hidden_library_keys=hidden_library_keys,
         library_order_keys=library_order_keys,
+        show_playlists=show_playlists,
+        show_discover=show_discover,
     )
 
 
@@ -235,6 +241,10 @@ def save_config(config: AppConfig) -> None:
         lines.append(f'hidden_library_keys = "{_toml_escape(",".join(config.hidden_library_keys))}"')
     if config.library_order_keys:
         lines.append(f'library_order_keys = "{_toml_escape(",".join(config.library_order_keys))}"')
+    if not config.show_playlists:
+        lines.append("show_playlists = false")
+    if not config.show_discover:
+        lines.append("show_discover = false")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -265,6 +275,16 @@ def csv_values(value: str) -> tuple[str, ...]:
             values.append(item)
             seen.add(item)
     return tuple(values)
+
+
+def bool_value(value: str, default: bool, name: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in {"true", "1", "yes", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "off"}:
+        return False
+    write_debug_log(f"invalid {name} {value!r}; using {default}")
+    return default
 
 
 def _toml_escape(value: str) -> str:

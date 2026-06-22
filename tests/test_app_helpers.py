@@ -15,6 +15,7 @@ from plextui.app import (
     alphabet_jump_index,
     alphabet_section_groups,
     BrowseState,
+    ContinueWatchingRow,
     EmptyStateRow,
     LoadMoreRow,
     LibraryRow,
@@ -84,6 +85,7 @@ from plextui.app import (
     render_playback_status,
     render_subtitle_playback_preference,
     settings_rows,
+    sidebar_rows,
     subtitle_preference_value,
     ordered_libraries,
     visible_libraries,
@@ -466,6 +468,8 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "› mpv Window Size: 1280x720  (cycle)" in labels
     assert "› Set custom mpv window size  (edit)" in labels
     assert "› Library Enter: Library  (cycle)" in labels
+    assert "› Playlists Sidebar: Shown  (toggle)" in labels
+    assert "› Discover Sidebar: Shown  (toggle)" in labels
     assert "› Grid Density: Comfortable  (cycle)" in labels
     assert "› Artwork Renderer: Block  (cycle)" in labels
     assert "› Page Size: 80  (edit)" in labels
@@ -514,6 +518,16 @@ def test_visible_libraries_filters_hidden_keys():
     ]
 
     assert [library.title for library in visible_libraries(libraries, config)] == ["Movies"]
+
+
+def test_sidebar_rows_can_hide_optional_entrypoints():
+    config = AppConfig("http://plex", "token", "client-id", show_playlists=False, show_discover=False)
+    libraries = [LibraryItem("Movies", "1", "movie", object())]
+
+    rows = sidebar_rows(config, libraries)
+
+    assert [type(row) for row in rows] == [ContinueWatchingRow, LibraryRow]
+    assert rows[1].library.title == "Movies"
 
 
 def test_ordered_libraries_uses_saved_order_and_appends_new_libraries():

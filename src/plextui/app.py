@@ -794,14 +794,15 @@ class PlexTuiApp(App[None]):
 
     def populate_libraries(self, libraries: list[LibraryItem], selected_library_key: str | None = None) -> None:
         selected_index = 0
+        rows = sidebar_rows(self.config, libraries)
         if selected_library_key is not None:
-            for index, library in enumerate(libraries, start=3):
-                if library.key == selected_library_key:
+            for index, row in enumerate(rows):
+                if isinstance(row, LibraryRow) and row.library.key == selected_library_key:
                     selected_index = index
                     break
         self.replace_list_rows_async(
             "#libraries",
-            [ContinueWatchingRow(), PlaylistsRow(), DiscoverRow(), *[LibraryRow(library) for library in libraries]],
+            rows,
             selected_index,
             "library-list",
         )
@@ -2064,6 +2065,16 @@ class PlexTuiApp(App[None]):
             return
         if action == "toggle_media_view":
             self.action_toggle_media_view()
+            return
+        if action == "toggle_show_playlists":
+            if self.update_preferences(show_playlists=not self.config.show_playlists):
+                self.populate_libraries(visible_libraries(self.libraries, self.config))
+                self.refresh_settings_after_change(action, "Playlists Sidebar", show_setting_value(self.config.show_playlists))
+            return
+        if action == "toggle_show_discover":
+            if self.update_preferences(show_discover=not self.config.show_discover):
+                self.populate_libraries(visible_libraries(self.libraries, self.config))
+                self.refresh_settings_after_change(action, "Discover Sidebar", show_setting_value(self.config.show_discover))
             return
         if action == "cycle_library_enter_action":
             next_action = next_library_enter_action(self.config.library_enter_action)
@@ -4224,6 +4235,16 @@ def ordered_libraries(libraries: list[LibraryItem], config: AppConfig) -> list[L
     return ordered
 
 
+def sidebar_rows(config: AppConfig, libraries: list[LibraryItem]) -> list[ListItem]:
+    rows: list[ListItem] = [ContinueWatchingRow()]
+    if config.show_playlists:
+        rows.append(PlaylistsRow())
+    if config.show_discover:
+        rows.append(DiscoverRow())
+    rows.extend(LibraryRow(library) for library in libraries)
+    return rows
+
+
 def library_by_key(libraries: list[LibraryItem], key: str) -> LibraryItem | None:
     for library in libraries:
         if library.key == key:
@@ -4285,6 +4306,8 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsActionRow(f"Details Artwork: {detail_artwork_mode_value(config)}", "cycle_detail_artwork"),
         SettingsActionRow(f"Artwork Renderer: {artwork_renderer_value(config)}", "cycle_artwork_renderer"),
         SettingsHeaderRow("Browsing"),
+        SettingsActionRow(f"Playlists Sidebar: {show_setting_value(config.show_playlists)}", "toggle_show_playlists"),
+        SettingsActionRow(f"Discover Sidebar: {show_setting_value(config.show_discover)}", "toggle_show_discover"),
         SettingsActionRow(f"Library Enter: {library_enter_action_value(config)}", "cycle_library_enter_action"),
         SettingsActionRow(f"Media View: {media_view_value(config)}", "toggle_media_view"),
         SettingsActionRow(f"Grid Density: {grid_density_value(config)}", "cycle_grid_density"),
@@ -4371,6 +4394,8 @@ def render_settings(config: AppConfig) -> str:
         "Browsing",
         [
             ("Library Enter", library_enter_action_value(config)),
+            ("Playlists Sidebar", show_setting_value(config.show_playlists)),
+            ("Discover Sidebar", show_setting_value(config.show_discover)),
             ("Media View", media_view_value(config)),
             ("Grid Density", grid_density_value(config)),
             ("Page Size", str(config.page_size)),
@@ -4793,6 +4818,10 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         return f"Current artwork renderer: {artwork_renderer_value(config)}"
     if action == "toggle_media_view":
         return f"Current media view: {media_view_value(config)}"
+    if action == "toggle_show_playlists":
+        return f"Current Playlists sidebar: {show_setting_value(config.show_playlists)}"
+    if action == "toggle_show_discover":
+        return f"Current Discover sidebar: {show_setting_value(config.show_discover)}"
     if action == "cycle_library_enter_action":
         return f"Current library Enter action: {library_enter_action_value(config)}"
     if action == "cycle_grid_density":
@@ -4849,6 +4878,10 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to select this terminal artwork renderer."
     if action == "toggle_media_view":
         return "Press Enter to switch between list and grid browsing."
+    if action == "toggle_show_playlists":
+        return "Press Enter to show or hide Playlists in the sidebar."
+    if action == "toggle_show_discover":
+        return "Press Enter to show or hide Discover in the sidebar."
     if action == "cycle_library_enter_action":
         return "Press Enter to choose whether library rows open all items or browse modes by default."
     if action == "cycle_grid_density":
@@ -4900,6 +4933,8 @@ def settings_action_label(action: str) -> str:
         "artwork_renderer_kitty": "Artwork Renderer: Kitty",
         "cycle_artwork_renderer": "Artwork Renderer",
         "toggle_media_view": "Media View",
+        "toggle_show_playlists": "Playlists Sidebar",
+        "toggle_show_discover": "Discover Sidebar",
         "cycle_library_enter_action": "Library Enter",
         "cycle_grid_density": "Grid Density",
         "decrease_page_size": "Page Size: decrease",
@@ -5251,6 +5286,10 @@ def media_view_value(config: AppConfig) -> str:
     if config.media_view == "grid":
         return "Grid"
     return "List"
+
+
+def show_setting_value(value: bool) -> str:
+    return "Shown" if value else "Hidden"
 
 
 def library_enter_action_value(config: AppConfig) -> str:

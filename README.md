@@ -95,7 +95,7 @@ working today. Expect rough edges, but expect progress too.
 - Settings screen for stream preferences, playback mode and transcode quality,
   artwork modes, grid density, page size, auto-load threshold, grid artwork
   prefetching, media view, library visibility/order, library Enter behavior,
-  and `mpv` window size.
+  optional sidebar entrypoints, and `mpv` window size.
 - App diagnostics view for version, paths, `mpv`, Plex connection, artwork, and
   browsing settings.
 
