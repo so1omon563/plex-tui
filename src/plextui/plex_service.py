@@ -651,6 +651,8 @@ def progress_bar(raw: Any, width: int = 8) -> str:
 
 
 def row_progress_marker(raw: Any) -> str:
+    if is_online_metadata(raw):
+        return ""
     state = watched_state(raw)
     if state == "watched":
         return progress_bar(raw)
@@ -658,6 +660,12 @@ def row_progress_marker(raw: Any) -> str:
         bar = progress_bar(raw)
         return bar or f"[resume {format_position(resume_offset(raw))}]"
     return ""
+
+
+def is_online_metadata(raw: Any) -> bool:
+    server = getattr(raw, "_server", None)
+    baseurl = str(getattr(server, "_baseurl", "") or "")
+    return "metadata.provider.plex.tv" in baseurl
 
 
 def resume_offset(raw: Any) -> int:

@@ -9,6 +9,8 @@
 - Added a separate Settings/config toggle for the On Plex sidebar row.
 - Fixed opening Plex-hosted VOD hubs whose child URLs are returned as relative
   `/hubs/...` paths.
+- Avoided per-row watched-progress reloads while rendering Plex-hosted online
+  metadata lists.
 
 ## 0.12.4 - 2026-06-22
 

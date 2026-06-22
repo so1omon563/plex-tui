@@ -635,3 +635,17 @@ def test_progress_helpers_report_watched_resume_and_unwatched():
     assert row_progress_marker(Partial()) == "[#-------] 11%"
     assert watched_state(Unwatched()) == "unwatched"
     assert row_progress_marker(Unwatched()) == ""
+
+
+def test_online_metadata_row_progress_does_not_trigger_reload():
+    class OnlineServer:
+        _baseurl = "https://metadata.provider.plex.tv"
+
+    class OnlineRaw(RawItem):
+        _server = OnlineServer()
+
+        @property
+        def viewCount(self):
+            raise AssertionError("online list rows must not reload watch state")
+
+    assert row_progress_marker(OnlineRaw()) == ""
