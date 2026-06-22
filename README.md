@@ -193,7 +193,7 @@ plex-tui discover-open "matrix" --index 3 --service-index 1
 read-only helpers for quick checks and scripts. `discover-open` opens a selected
 Plex Discover availability URL in your browser. Launch `plex-tui` with no
 command for the full interactive browser, playback workflow, and sidebar
-Discover search for movie/show availability links.
+Discover search with movie/show provider selection.
 
 For local development:
 

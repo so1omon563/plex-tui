@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Added a TUI Discover entrypoint for searching Plex Discover and opening the
-  first provider availability link from movie/show results.
+- Added a TUI Discover entrypoint for searching Plex Discover and opening
+  provider availability links from movie/show results.
 - Added `plex-tui discover-open` to open a selected Plex Discover availability
   URL in the browser.
 - Added a read-only `plex-tui discover` CLI command for searching Plex Discover
