@@ -13,6 +13,8 @@
   to Movies & Shows while still allowing Movies, Shows, or All results.
 - Improved Discover availability labels so result rows and provider picks show
   provider counts, offer types, and clearer no-availability states.
+- Improved Discover title searches so exact movie/show title matches suppress
+  obvious adjacent-title noise when Plex returns it.
 
 ## 0.11.1 - 2026-06-22
 
