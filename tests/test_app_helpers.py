@@ -255,6 +255,35 @@ def test_render_details_can_show_discover_availability_action():
     assert current_detail_actions(state, item) == ("Availability: Enter opens provider link",)
 
 
+def test_render_details_can_show_missing_discover_availability():
+    class Raw:
+        def streamingServices(self):
+            return []
+
+    item = MediaItem("Movie", "", "movie", "1", False, Raw())
+    state = BrowseState("Discover: Movie", [item], source="discover")
+    details = MediaDetails(
+        title="Movie",
+        kind="movie",
+        facts=["Movie"],
+        metadata=[("Type", "movie")],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=False,
+    )
+
+    rendered = render_details(
+        details,
+        context_actions=current_detail_actions(state, item),
+    )
+
+    assert "Status: No availability provider" in rendered
+    assert "Availability: No provider links found" in rendered
+    assert "Status: Opens more items" not in rendered
+    assert current_detail_actions(state, item) == ("Availability: No provider links found",)
+
+
 def test_render_details_promotes_episode_context_under_title():
     details = MediaDetails(
         title="Band of the Hawk",

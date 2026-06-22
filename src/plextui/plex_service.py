@@ -253,7 +253,7 @@ def to_media_item(raw: Any) -> MediaItem:
     context = episode_context_label(raw) if kind == "episode" else ""
     bits = [context, str(year) if year else "", edition, duration]
     subtitle = "  ".join(bit for bit in bits if bit)
-    key = str(getattr(raw, "ratingKey", getattr(raw, "key", "")))
+    key = media_key(raw)
     return MediaItem(
         title=getattr(raw, "title", "Untitled"),
         subtitle=subtitle,
@@ -270,6 +270,15 @@ def to_hub_media_item(raw: Any) -> MediaItem:
     if item.kind == "hub":
         return item
     return replace(item, kind="hub", playable=False)
+
+
+def media_key(raw: Any) -> str:
+    for attr in ("ratingKey", "key", "guid"):
+        value = getattr(raw, attr, None)
+        if value is None or value == "" or value != value:
+            continue
+        return str(value)
+    return str(getattr(raw, "title", ""))
 
 
 def to_discover_media_item(raw: Any) -> MediaItem:

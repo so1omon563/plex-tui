@@ -7,6 +7,7 @@ from plextui.plex_service import (
     category_items,
     episode_context_label,
     kind_label,
+    media_key,
     media_details,
     progress_bar,
     progress_label,
@@ -395,6 +396,15 @@ def test_discover_page_uses_account_token_and_slices(monkeypatch):
     assert page.items[0].subtitle == "2024  Available: 1. Tubi (free)"
     assert page.items[0].playable is False
     assert page.total == 2
+
+
+def test_discover_media_key_falls_back_when_rating_key_is_nan():
+    class DiscoverResult(DiscoverRawItem):
+        ratingKey = float("nan")
+        key = "/library/metadata/discover-1"
+
+    assert media_key(DiscoverResult()) == "/library/metadata/discover-1"
+    assert to_media_item(DiscoverResult()).key == "/library/metadata/discover-1"
 
 
 def test_availability_urls_include_provider_labels():

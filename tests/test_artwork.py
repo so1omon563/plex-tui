@@ -67,6 +67,12 @@ def test_artwork_url_leaves_external_urls_alone_even_with_size():
     url = "https://metadata-static.plex.tv/poster.jpg"
 
     assert artwork_url(RawItem(), url, config, width=144, height=144) == url
+    assert cached_artwork_path(url, config, width=144, height=144) != cached_artwork_path(
+        "/metadata-static/poster.jpg",
+        config,
+        width=144,
+        height=144,
+    )
 
 
 def test_artwork_cache_key_includes_requested_size():
