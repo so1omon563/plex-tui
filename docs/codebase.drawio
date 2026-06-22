@@ -1,0 +1,76 @@
+<mxfile>
+  <diagram id="autolayout" name="Page-1">
+    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="plextui.auth" value="auth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="470" y="0" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="plextui.artwork" value="artwork" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="470" y="80" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="plextui.plex_service" value="plex_service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="470" y="230" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="plextui.config" value="config" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="620" y="120" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="plextui.models" value="models" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="620" y="230" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="plextui" value="plextui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="620" y="0" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="plextui.player" value="player" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="470" y="160" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="plextui.app" value="app" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="310" y="120" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="plextui.__main__" value="__main__" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="0" y="120" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="plextui.smoke" value="smoke" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="160" y="120" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="e0" value="" style="html=1;rounded=0;" edge="1" parent="1" source="plextui.__main__" target="plextui.smoke">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="120" y="150"/><mxPoint x="140" y="150"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e1" value="" style="html=1;rounded=0;" edge="1" parent="1" source="plextui.app" target="plextui.plex_service">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="370" y="210"/><mxPoint x="370" y="260"/><mxPoint x="370" y="260"/><mxPoint x="370" y="260"/><mxPoint x="460" y="260"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e2" value="" style="html=1;rounded=0;" edge="1" parent="1" source="plextui.app" target="plextui.artwork">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="430" y="130"/><mxPoint x="460" y="130"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e3" value="" style="html=1;rounded=0;" edge="1" parent="1" source="plextui.app" target="plextui.auth">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="370" y="80"/><mxPoint x="370" y="30"/><mxPoint x="370" y="30"/><mxPoint x="370" y="30"/><mxPoint x="460" y="30"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e4" value="" style="html=1;rounded=0;" edge="1" parent="1" source="plextui.app" target="plextui.player">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="430" y="170"/><mxPoint x="460" y="170"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e5" value="" style="html=1;rounded=0;" edge="1" parent="1" source="plextui.plex_service" target="plextui.config">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="600" y="250"/><mxPoint x="600" y="250"/><mxPoint x="600" y="250"/><mxPoint x="600" y="250"/><mxPoint x="600" y="170"/><mxPoint x="600" y="170"/><mxPoint x="600" y="170"/><mxPoint x="610" y="170"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e6" value="" style="html=1;rounded=0;" edge="1" parent="1" source="plextui.plex_service" target="plextui.models">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="590" y="270"/><mxPoint x="610" y="270"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e7" value="" style="html=1;rounded=0;" edge="1" parent="1" source="plextui.smoke" target="plextui.app">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="280" y="150"/><mxPoint x="300" y="150"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e8" value="" style="html=1;rounded=0;" edge="1" parent="1" source="plextui.artwork" target="plextui.config">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="590" y="130"/><mxPoint x="610" y="130"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e9" value="" style="html=1;rounded=0;" edge="1" parent="1" source="plextui.auth" target="plextui">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="590" y="20"/><mxPoint x="610" y="20"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e10" value="" style="html=1;rounded=0;" edge="1" parent="1" source="plextui.auth" target="plextui.config">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="600" y="40"/><mxPoint x="610" y="40"/><mxPoint x="610" y="40"/><mxPoint x="610" y="40"/><mxPoint x="610" y="120"/><mxPoint x="610" y="120"/><mxPoint x="610" y="120"/><mxPoint x="610" y="120"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e11" value="" style="html=1;rounded=0;" edge="1" parent="1" source="plextui.player" target="plextui.config">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="590" y="160"/><mxPoint x="610" y="160"/></Array></mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
