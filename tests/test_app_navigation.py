@@ -2388,11 +2388,14 @@ async def run_settings_sidebar_entrypoint_visibility_check():
             await pilot.pause(0.2)
             app.run_settings_action("toggle_show_discover")
             await pilot.pause(0.2)
+            app.run_settings_action("toggle_show_on_plex")
+            await pilot.pause(0.2)
 
         rows = list(app.query_one("#libraries").children)
         assert app.config.show_playlists is False
         assert app.config.show_discover is False
-        assert save_config.call_count == 2
+        assert app.config.show_on_plex is False
+        assert save_config.call_count == 3
         assert isinstance(rows[0], ContinueWatchingRow)
         assert isinstance(rows[1], LibraryRow)
         assert rows[1].library.title == "Movies"

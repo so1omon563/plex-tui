@@ -207,6 +207,7 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
         grid_density="large",
         show_playlists=False,
         show_discover=False,
+        show_on_plex=False,
         discover_media_type="show",
         confirm_start_over=False,
     )
@@ -221,6 +222,7 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     assert loaded.grid_density == "large"
     assert loaded.show_playlists is False
     assert loaded.show_discover is False
+    assert loaded.show_on_plex is False
     assert loaded.discover_media_type == "show"
     assert loaded.confirm_start_over is False
     text = config_file.read_text(encoding="utf-8")
@@ -232,6 +234,7 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     assert 'grid_density = "large"' in text
     assert "show_playlists = false" in text
     assert "show_discover = false" in text
+    assert "show_on_plex = false" in text
     assert 'discover_media_type = "show"' in text
     assert "confirm_start_over = false" in text
 

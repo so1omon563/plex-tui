@@ -57,6 +57,7 @@ class AppConfig:
     library_order_keys: tuple[str, ...] = ()
     show_playlists: bool = True
     show_discover: bool = True
+    show_on_plex: bool = True
     discover_media_type: str = "movies_shows"
     confirm_start_over: bool = True
 
@@ -164,6 +165,7 @@ def load_config() -> AppConfig:
     library_order_keys = csv_values(data.get("library_order_keys", ""))
     show_playlists = bool_value(data.get("show_playlists", "true"), True, "show_playlists")
     show_discover = bool_value(data.get("show_discover", "true"), True, "show_discover")
+    show_on_plex = bool_value(data.get("show_on_plex", "true"), True, "show_on_plex")
     confirm_start_over = bool_value(data.get("confirm_start_over", "true"), True, "confirm_start_over")
     discover_media_type = data.get("discover_media_type", "movies_shows")
     if discover_media_type not in DISCOVER_MEDIA_TYPES:
@@ -196,6 +198,7 @@ def load_config() -> AppConfig:
         library_order_keys=library_order_keys,
         show_playlists=show_playlists,
         show_discover=show_discover,
+        show_on_plex=show_on_plex,
         discover_media_type=discover_media_type,
         confirm_start_over=confirm_start_over,
     )
@@ -255,6 +258,8 @@ def save_config(config: AppConfig) -> None:
         lines.append("show_playlists = false")
     if not config.show_discover:
         lines.append("show_discover = false")
+    if not config.show_on_plex:
+        lines.append("show_on_plex = false")
     if not config.confirm_start_over:
         lines.append("confirm_start_over = false")
     if config.discover_media_type != "movies_shows":

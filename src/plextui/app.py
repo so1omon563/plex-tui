@@ -2143,6 +2143,11 @@ class PlexTuiApp(App[None]):
                 self.populate_libraries(visible_libraries(self.libraries, self.config))
                 self.refresh_settings_after_change(action, "Discover Sidebar", show_setting_value(self.config.show_discover))
             return
+        if action == "toggle_show_on_plex":
+            if self.update_preferences(show_on_plex=not self.config.show_on_plex):
+                self.populate_libraries(visible_libraries(self.libraries, self.config))
+                self.refresh_settings_after_change(action, "On Plex Sidebar", show_setting_value(self.config.show_on_plex))
+            return
         if action == "cycle_discover_media_type":
             next_media_type = next_discover_media_type(self.config.discover_media_type)
             if self.update_preferences(discover_media_type=next_media_type):
@@ -4379,6 +4384,7 @@ def sidebar_rows(config: AppConfig, libraries: list[LibraryItem]) -> list[ListIt
         rows.append(PlaylistsRow())
     if config.show_discover:
         rows.append(DiscoverRow())
+    if config.show_on_plex:
         rows.append(OnPlexRow())
     rows.extend(LibraryRow(library) for library in libraries)
     return rows
@@ -4448,6 +4454,7 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsHeaderRow("Browsing"),
         SettingsActionRow(f"Playlists Sidebar: {show_setting_value(config.show_playlists)}", "toggle_show_playlists"),
         SettingsActionRow(f"Discover Sidebar: {show_setting_value(config.show_discover)}", "toggle_show_discover"),
+        SettingsActionRow(f"On Plex Sidebar: {show_setting_value(config.show_on_plex)}", "toggle_show_on_plex"),
         SettingsActionRow(f"Discover Type: {discover_media_type_value(config)}", "cycle_discover_media_type"),
         SettingsActionRow(f"Library Enter: {library_enter_action_value(config)}", "cycle_library_enter_action"),
         SettingsActionRow(f"Media View: {media_view_value(config)}", "toggle_media_view"),
@@ -4538,6 +4545,7 @@ def render_settings(config: AppConfig) -> str:
             ("Library Enter", library_enter_action_value(config)),
             ("Playlists Sidebar", show_setting_value(config.show_playlists)),
             ("Discover Sidebar", show_setting_value(config.show_discover)),
+            ("On Plex Sidebar", show_setting_value(config.show_on_plex)),
             ("Discover Type", discover_media_type_value(config)),
             ("Media View", media_view_value(config)),
             ("Grid Density", grid_density_value(config)),
@@ -4971,6 +4979,8 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         return f"Current Playlists sidebar: {show_setting_value(config.show_playlists)}"
     if action == "toggle_show_discover":
         return f"Current Discover sidebar: {show_setting_value(config.show_discover)}"
+    if action == "toggle_show_on_plex":
+        return f"Current On Plex sidebar: {show_setting_value(config.show_on_plex)}"
     if action == "cycle_discover_media_type":
         return f"Current Discover type: {discover_media_type_value(config)}"
     if action == "cycle_library_enter_action":
@@ -5035,6 +5045,8 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to show or hide Playlists in the sidebar."
     if action == "toggle_show_discover":
         return "Press Enter to show or hide Discover in the sidebar."
+    if action == "toggle_show_on_plex":
+        return "Press Enter to show or hide On Plex in the sidebar."
     if action == "cycle_discover_media_type":
         return "Press Enter to filter Discover searches by movies, shows, or all results."
     if action == "cycle_library_enter_action":
