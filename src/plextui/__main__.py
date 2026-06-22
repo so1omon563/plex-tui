@@ -33,6 +33,11 @@ def build_parser() -> argparse.ArgumentParser:
     continue_watching.add_argument("--limit", type=positive_int, default=10, help="maximum items to print")
     continue_watching.add_argument("--json", action="store_true", help="print JSON output")
 
+    discover = subparsers.add_parser("discover", help="search Plex Discover and free streaming results")
+    discover.add_argument("query", help="search query")
+    discover.add_argument("--limit", type=positive_int, default=10, help="maximum items to print")
+    discover.add_argument("--json", action="store_true", help="print JSON output")
+
     search = subparsers.add_parser("search", help="search Plex without opening the TUI")
     search.add_argument("query", help="search query")
     search.add_argument("--library", help="library key or title to search within")
@@ -63,6 +68,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return command_status(args.json)
     if args.command == "continue-watching":
         return command_continue_watching(args.limit, args.json)
+    if args.command == "discover":
+        return command_discover(args.query, args.limit, args.json)
     if args.command == "search":
         return command_search(args.query, args.library, args.limit, args.json)
 
@@ -108,6 +115,22 @@ def command_continue_watching(limit: int, json_output: bool = False) -> int:
     if service is None:
         return 2
     page = service.continue_watching_page(0, limit)
+    if json_output:
+        print(json.dumps([media_payload(item) for item in page.items], indent=2))
+    else:
+        print_media_items(page.items)
+    return 0
+
+
+def command_discover(query: str, limit: int, json_output: bool = False) -> int:
+    service = connect_service()
+    if service is None:
+        return 2
+    try:
+        page = service.discover_page(query, 0, limit)
+    except Exception as exc:
+        print(f"plex-tui: {exc}", file=sys.stderr)
+        return 2
     if json_output:
         print(json.dumps([media_payload(item) for item in page.items], indent=2))
     else:

@@ -16,6 +16,12 @@ from plextui.plex_service import (
 )
 
 
+class Availability:
+    title = "Tubi"
+    offerType = "free"
+    platform = "tubi-tv"
+
+
 class RawItem:
     TYPE = "movie"
     title = "Movie"
@@ -28,6 +34,15 @@ class RawItem:
 class SecondRawItem(RawItem):
     title = "Second Movie"
     ratingKey = "2"
+
+
+class DiscoverRawItem(RawItem):
+    title = "Free Movie"
+    ratingKey = "plex://movie/1"
+    year = 2024
+
+    def streamingServices(self):
+        return [Availability()]
 
 
 class RawHubItem:
@@ -351,6 +366,33 @@ def test_global_search_page_is_bounded_and_not_paged():
     assert not page.has_more
     assert empty_page.items == []
     assert empty_page.total == 25
+
+
+def test_discover_page_uses_account_token_and_slices(monkeypatch):
+    calls = []
+
+    class FakeAccount:
+        def __init__(self, token):
+            calls.append(("token", token))
+
+        def searchDiscover(self, query, **kwargs):
+            calls.append((query, kwargs))
+            return [DiscoverRawItem(), SecondRawItem()]
+
+    monkeypatch.setattr("plextui.plex_service.MyPlexAccount", FakeAccount)
+    service = object.__new__(PlexService)
+    service.config = type("Config", (), {"account_token": "account-token"})()
+
+    page = service.discover_page("matrix", start=0, size=1)
+
+    assert calls == [
+        ("token", "account-token"),
+        ("matrix", {"limit": 1, "providers": "discover,PLEXAVOD"}),
+    ]
+    assert [item.title for item in page.items] == ["Free Movie"]
+    assert page.items[0].subtitle == "2024  Available: Tubi (free)"
+    assert page.items[0].playable is False
+    assert page.total == 2
 
 
 def test_media_details_include_audio_and_subtitle_locations():

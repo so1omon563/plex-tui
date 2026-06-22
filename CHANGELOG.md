@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a read-only `plex-tui discover` CLI command for searching Plex Discover
+  and free streaming availability with the saved account token.
 - Removed the `requests` runtime dependency by using Python's standard library
   for Plex server reachability checks.
 
