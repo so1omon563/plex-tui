@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.12.4 - 2026-06-22
+
 - Added Settings toggles to hide or show the Playlists and Discover sidebar
   entrypoints.
 - Fixed Discover artwork for external Plex metadata image URLs, stable grid
