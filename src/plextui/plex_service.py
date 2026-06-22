@@ -202,6 +202,13 @@ class PlexService:
             items = matching_items
         return sliced_media_page(items, start, size)
 
+    def video_on_demand_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
+        if not self.config.account_token:
+            raise ValueError("missing Plex account token; start plex-tui and sign in first")
+        account = MyPlexAccount(token=self.config.account_token)
+        hubs = [to_hub_media_item(raw) for raw in account.videoOnDemand()]
+        return sliced_media_page(hubs, start, size)
+
     def continue_watching_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
         raw_items = list(self.server.library.onDeck())
         items = [to_media_item(item) for item in raw_items[start:start + size]]

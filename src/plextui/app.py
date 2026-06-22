@@ -125,7 +125,7 @@ class BrowseState:
     def has_more(self) -> bool:
         if self.total is None or self.next_start >= self.total:
             return False
-        if self.source == "continue_watching":
+        if self.source in {"continue_watching", "vod"}:
             return True
         if self.source == "discover":
             return bool(self.search_query)
@@ -865,7 +865,7 @@ class PlexTuiApp(App[None]):
             self.set_status(context_hint(row))
         elif isinstance(row, DiscoverRow):
             mark_active_row(event.list_view, row)
-            self.show_detail_text("Search Plex Discover and open provider availability links in your browser.")
+            self.show_detail_text("Search Plex Discover, or press Space to browse Movies & Shows on Plex.")
             self.set_status(context_hint(row))
         elif isinstance(row, AvailabilityRow):
             mark_active_row(event.list_view, row)
@@ -985,9 +985,42 @@ class PlexTuiApp(App[None]):
             self.set_status("Playlists opens directly with Enter")
             return
         if isinstance(row, DiscoverRow):
-            self.set_status("Discover opens a Plex Discover search prompt")
+            self.open_video_on_demand()
             return
         self.set_status("Select a library first")
+
+    @work(thread=True)
+    def open_video_on_demand(self) -> None:
+        if self.service is None:
+            self.call_from_thread(self.set_status, "Connect to Plex before browsing On Plex")
+            return
+        self.post_message(StatusChanged("Loading Movies & Shows on Plex..."))
+        started = time.perf_counter()
+        try:
+            page = self.service.video_on_demand_page(0, self.config.page_size)
+        except Exception as exc:
+            self.call_from_thread(self.show_error, str(exc))
+            return
+        write_performance_log(
+            "video_on_demand_page",
+            started,
+            f"items={len(page.items)} total={page.total}",
+        )
+
+        def update() -> None:
+            state = BrowseState(
+                "Movies & Shows on Plex",
+                page.items,
+                source="vod",
+                next_start=page.next_start,
+                total=page.total,
+            )
+            self.browsing_stack = [state]
+            self.show_browse_state(state)
+            self.focus_media_browser()
+            self.set_status(render_browse_status(state))
+
+        self.call_from_thread(update)
 
     def prompt_discover_search(self) -> None:
         if self.service is None:
@@ -1214,6 +1247,8 @@ class PlexTuiApp(App[None]):
                     self.config.page_size,
                     state.discover_media_type,
                 )
+            elif state.source == "vod":
+                page = self.service.video_on_demand_page(state.next_start, self.config.page_size)
             elif state.search:
                 page = self.service.search_page(state.search_query, state.selected_library, state.next_start, self.config.page_size)
             elif state.source == "continue_watching":
@@ -4532,7 +4567,7 @@ def render_help() -> str:
     return "\n".join([
         "Navigation",
         "enter: open selected row",
-        "space: alternate library action",
+        "space: alternate library action / browse On Plex from Discover",
         "escape: go back / close current view",
         "tab / shift+tab: move focus",
         "l: focus libraries",
@@ -4642,7 +4677,7 @@ def context_hint(row: object) -> str:
     if isinstance(row, PlaylistsRow):
         return "Libraries: Enter opens playlists"
     if isinstance(row, DiscoverRow):
-        return "Libraries: Enter searches Plex Discover"
+        return "Libraries: Enter searches Plex Discover; Space opens On Plex"
     if isinstance(row, AvailabilityRow):
         return "Availability: Enter opens provider link"
     if isinstance(row, ResumeChoiceRow):

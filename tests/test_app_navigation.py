@@ -233,6 +233,10 @@ def test_discover_result_without_availability_does_not_fetch_children(monkeypatc
     asyncio.run(run_discover_without_availability_check(monkeypatch))
 
 
+def test_discover_alternate_action_opens_on_plex_vod():
+    asyncio.run(run_discover_vod_entrypoint_check())
+
+
 def test_populate_libraries_can_highlight_selected_library():
     asyncio.run(run_selected_library_highlight_check())
 
@@ -1175,6 +1179,31 @@ async def run_discover_without_availability_check(monkeypatch):
         assert app.browsing_stack[-1].source == "discover"
 
 
+async def run_discover_vod_entrypoint_check():
+    hub = MediaItem("Because You Watched Macross Plus", "Hub", "hub", "vod-hub-1", False, Raw())
+    service = FakePagedService(MediaPage([hub], start=0, total=1))
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+        await pilot.press("down")
+        await pilot.press("down")
+        await pilot.press("space")
+        for _ in range(80):
+            if app.browsing_stack and app.browsing_stack[-1].source == "vod":
+                break
+            await pilot.pause(0.1)
+
+        assert service.video_on_demand_calls == [(0, 40)]
+        assert app.browsing_stack[-1].title == "Movies & Shows on Plex"
+        assert app.query_one("#media").highlighted_child.media.title == "Because You Watched Macross Plus"
+
+
 async def run_selected_library_highlight_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
@@ -1245,6 +1274,7 @@ class FakePagedService:
         self.search_calls = []
         self.continue_watching_calls = []
         self.discover_calls = []
+        self.video_on_demand_calls = []
         self.children_calls = []
 
     def library_page(self, library: LibraryItem, start: int, size: int) -> MediaPage:
@@ -1265,6 +1295,10 @@ class FakePagedService:
 
     def discover_page(self, query: str, start: int, size: int, media_type: str = "movies_shows") -> MediaPage:
         self.discover_calls.append((query, start, size, media_type))
+        return self.page
+
+    def video_on_demand_page(self, start: int, size: int) -> MediaPage:
+        self.video_on_demand_calls.append((start, size))
         return self.page
 
     def children(self, item: MediaItem) -> list[MediaItem]:
