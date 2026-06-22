@@ -649,3 +649,111 @@ def test_online_metadata_row_progress_does_not_trigger_reload():
             raise AssertionError("online list rows must not reload watch state")
 
     assert row_progress_marker(OnlineRaw()) == ""
+
+
+def test_playable_online_metadata_children_do_not_probe_provider():
+    class OnlineServer:
+        _baseurl = "https://metadata.provider.plex.tv"
+
+    class OnlinePart:
+        _server = OnlineServer()
+
+    class OnlineMovie(RawItem):
+        class LocalServer:
+            _baseurl = "http://plex"
+
+        _server = LocalServer()
+
+        def items(self):
+            raise AssertionError("playable online metadata should not fetch children")
+
+        def iterParts(self):
+            return [OnlinePart()]
+
+    service = object.__new__(PlexService)
+    media = to_media_item(OnlineMovie())
+
+    assert media.playable
+    assert service.children(media) == []
+
+
+def test_online_metadata_show_child_errors_return_empty_list():
+    class OnlineServer:
+        _baseurl = "https://metadata.provider.plex.tv"
+
+    class OnlinePart:
+        _server = OnlineServer()
+
+    class OnlineShow(RawItem):
+        TYPE = "show"
+
+        def iterParts(self):
+            return [OnlinePart()]
+
+        def seasons(self):
+            raise RuntimeError("provider children endpoint not found")
+
+    service = object.__new__(PlexService)
+
+    assert service.children(to_media_item(OnlineShow())) == []
+
+
+def test_online_metadata_children_use_key_children_endpoint():
+    class OnlineServer:
+        _baseurl = "https://metadata.provider.plex.tv"
+
+    class OnlineSeason(RawItem):
+        TYPE = "season"
+        title = "Season 1"
+        key = "/library/metadata/season-1"
+
+    class OnlineShow(RawItem):
+        TYPE = "show"
+        key = "/library/metadata/show-1"
+        _server = OnlineServer()
+
+        def __init__(self):
+            self.calls = []
+
+        def fetchItems(self, key, **kwargs):
+            self.calls.append((key, kwargs))
+            return [OnlineSeason()]
+
+    service = object.__new__(PlexService)
+    raw = OnlineShow()
+
+    children = service.children(to_media_item(raw), size=5)
+
+    assert raw.calls == [("/library/metadata/show-1/children", {"maxresults": 5})]
+    assert [(child.title, child.kind) for child in children] == [("Season 1", "season")]
+
+
+def test_online_metadata_children_use_details_key_when_key_is_empty():
+    class OnlineServer:
+        _baseurl = "https://metadata.provider.plex.tv"
+
+    class OnlineEpisode(RawItem):
+        TYPE = "episode"
+        title = "Episode 1"
+
+    class OnlineSeason(RawItem):
+        TYPE = "season"
+        title = "Season 1"
+        key = ""
+        _details_key = "/library/metadata/season-1?includeBandwidths=1"
+        _server = OnlineServer()
+
+        def __init__(self):
+            self.calls = []
+
+        def fetchItems(self, key, **kwargs):
+            self.calls.append((key, kwargs))
+            return [OnlineEpisode()]
+
+    service = object.__new__(PlexService)
+    raw = OnlineSeason()
+
+    children = service.children(to_media_item(raw), size=6)
+
+    assert raw.calls == [("/library/metadata/season-1/children", {"maxresults": 6})]
+    assert [(child.title, child.kind) for child in children] == [("Episode 1", "episode")]

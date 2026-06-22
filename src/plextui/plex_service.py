@@ -218,13 +218,27 @@ class PlexService:
         raw = item.raw
         if isinstance(raw, CategoryRef):
             return self.category_page(raw, 0, DEFAULT_PAGE_SIZE).items
+        if item.playable and is_online_metadata(raw):
+            return []
         editions = movie_edition_items(raw)
         if len(editions) > 1:
             return editions
+        if is_online_metadata(raw):
+            return online_metadata_children(raw, size)
         if hasattr(raw, "seasons"):
-            return [to_media_item(child) for child in raw.seasons()]
+            try:
+                return [to_media_item(child) for child in raw.seasons()]
+            except Exception:
+                if is_online_metadata(raw):
+                    return []
+                raise
         if hasattr(raw, "episodes"):
-            return [to_media_item(child) for child in raw.episodes()]
+            try:
+                return [to_media_item(child) for child in raw.episodes()]
+            except Exception:
+                if is_online_metadata(raw):
+                    return []
+                raise
         if hasattr(raw, "items"):
             return [to_media_item(child) for child in hub_items(raw, size=size)]
         return []
@@ -663,7 +677,43 @@ def row_progress_marker(raw: Any) -> str:
 
 
 def is_online_metadata(raw: Any) -> bool:
-    server = getattr(raw, "_server", None)
+    if is_metadata_provider_server(getattr(raw, "_server", None)):
+        return True
+    iter_parts = getattr(raw, "iterParts", None)
+    if not callable(iter_parts):
+        return False
+    try:
+        parts = list(iter_parts())
+    except Exception:
+        return False
+    return bool(parts and is_metadata_provider_server(getattr(parts[0], "_server", None)))
+
+
+def online_metadata_children(raw: Any, size: int = DEFAULT_PAGE_SIZE) -> list[MediaItem]:
+    key = online_metadata_key(raw)
+    fetch_items = getattr(raw, "fetchItems", None)
+    if not key or not callable(fetch_items):
+        return []
+    try:
+        return [to_media_item(child) for child in fetch_items(f"{key.rstrip('/')}/children", maxresults=size)]
+    except Exception:
+        return []
+
+
+def online_metadata_key(raw: Any) -> str:
+    key = str(getattr(raw, "key", "") or "")
+    if key:
+        return key
+    details_key = str(getattr(raw, "_details_key", "") or "").split("?", 1)[0]
+    if details_key:
+        return details_key
+    guid = str(getattr(raw, "guid", "") or "")
+    if guid.startswith("plex://") and "/" in guid:
+        return "/library/metadata/" + guid.rsplit("/", 1)[-1]
+    return ""
+
+
+def is_metadata_provider_server(server: Any) -> bool:
     baseurl = str(getattr(server, "_baseurl", "") or "")
     return "metadata.provider.plex.tv" in baseurl
 

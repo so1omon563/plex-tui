@@ -166,6 +166,28 @@ def test_render_details_includes_subtitles_and_summary():
     assert "Summary text" in rendered
 
 
+def test_render_details_avoids_ready_to_play_for_online_provider_items():
+    details = MediaDetails(
+        title="Online Episode",
+        kind="episode",
+        facts=["Episode"],
+        metadata=[("Type", "episode")],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=True,
+    )
+
+    rendered = render_details(
+        details,
+        AppConfig("http://plex", "token", "client-id"),
+        context_actions=("Availability: Listed by Plex; playable stream checked on play",),
+    )
+
+    assert "Status: Listed by Plex; playable stream checked on play" in rendered
+    assert "Status: Ready to play" not in rendered
+
+
 def test_render_details_skips_effective_playback_for_playlist_container():
     class RawPlaylist:
         TYPE = "playlist"

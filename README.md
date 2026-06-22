@@ -197,6 +197,11 @@ Discover search with movie/show provider selection. In the TUI, press Space on
 the Discover sidebar row or select On Plex to browse Plex Movies & Shows VOD
 hubs.
 
+Some On Plex titles are listed by Plex but cannot be played through external
+players such as `mpv`. plex-tui marks those items unavailable when Plex does
+not provide a playable stream, including protected streams that Plex's own
+clients may handle differently.
+
 For local development:
 
 ```bash

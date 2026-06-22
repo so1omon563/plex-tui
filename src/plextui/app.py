@@ -83,6 +83,7 @@ from .player import (
 from .plex_service import (
     PlexService,
     availability_urls,
+    is_online_metadata,
     kind_label,
     media_details,
     progress_bar,
@@ -1324,15 +1325,8 @@ class PlexTuiApp(App[None]):
             self.call_from_thread(self.set_status, f"Opened: {media.title} - {label}")
             return
         if media.playable:
-            started = time.perf_counter()
-            try:
-                children = self.service.children(media, self.config.page_size)
-            except Exception:
-                children = []
-            write_performance_log("children_load", started, f"title={media.title!r} items={len(children)} playable=1")
-            if not children:
-                self.call_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
-                return
+            self.call_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
+            return
         else:
             self.post_message(StatusChanged(f"Opening {media.title}..."))
             self.call_from_thread(self.show_loading_state, media.title, "Loading child items from Plex.")
@@ -1342,7 +1336,11 @@ class PlexTuiApp(App[None]):
             except Exception as exc:
                 self.call_from_thread(self.show_error, str(exc))
                 return
-            write_performance_log("children_load", started, f"title={media.title!r} items={len(children)} playable=0")
+            write_performance_log(
+                "children_load",
+                started,
+                f"title={media.title!r} kind={media.kind!r} key={media.key!r} items={len(children)} playable=0",
+            )
         if not children:
             self.call_from_thread(self.show_empty_state, media.title, "No child items", "Go back and choose another item.")
             return
@@ -3335,7 +3333,7 @@ class PlexTuiApp(App[None]):
 
     def play_media(self, media: MediaItem, resume: bool) -> None:
         if not media.playable:
-            self.set_status("Selected item is not directly playable")
+            self.open_media(media)
             return
         if not resume and self.config.confirm_start_over and resume_offset_ms(media.raw):
             self.show_resume_picker(media)
@@ -3367,7 +3365,11 @@ class PlexTuiApp(App[None]):
                 )
         except PlayerError as exc:
             self.clear_playback_footer()
-            self.show_playback_error(str(exc))
+            error = str(exc)
+            if is_unavailable_vod_stream_error(error):
+                self.show_playback_unavailable(media.title, error)
+            else:
+                self.show_playback_error(error)
             return
         if self.player is not None and self.config.playback_display == "terminal":
             status = playback_exit_status(self.player, debug_log_path()) or f"Finished terminal playback for {media.title}"
@@ -3549,6 +3551,16 @@ class PlexTuiApp(App[None]):
         view.append(EmptyStateRow("Playback error", f"Debug log: {path}"))
         self.show_detail_text(render_playback_error_details(text, path))
 
+    def show_playback_unavailable(self, title: str, text: str) -> None:
+        self.detail_refresh_token += 1
+        self.cancel_media_detail_refresh()
+        self.set_media_title("Playback Unavailable")
+        view = self.show_media_list()
+        view.clear()
+        view.append(EmptyStateRow("Not available to play", "Choose another episode."))
+        self.show_detail_text(render_empty_state_details(title, text, "Choose another episode."))
+        self.set_status(f"Playback unavailable: {text}")
+
 
 def format_offset(milliseconds: int) -> str:
     seconds = max(0, milliseconds // 1000)
@@ -3643,8 +3655,11 @@ def render_detail_header(
 
 def playback_readiness_rows(playable: bool, progress: str = "", context_actions: tuple[str, ...] = ()) -> list[str]:
     if playable:
+        status = "Status: Ready to play"
+        if any(action.startswith("Availability: Listed by Plex") for action in context_actions):
+            status = "Status: Listed by Plex; playable stream checked on play"
         rows = [
-            "Status: Ready to play",
+            status,
         ]
         if progress:
             rows.append(f"Progress: {progress}")
@@ -4768,6 +4783,8 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
         if availability_urls(item.raw):
             return ("Availability: Enter opens provider link",)
         return ("Availability: No provider links found",)
+    if item is not None and item.playable and is_online_metadata(item.raw):
+        return ("Availability: Listed by Plex; playable stream checked on play",)
     if item is not None and item.kind == "playlist":
         return (
             "Playlist: Enter opens contents",
@@ -5861,6 +5878,10 @@ def render_playback_error_details(error: str, path: Path, max_lines: int = 12) -
     else:
         lines.append("No debug log entries yet.")
     return "\n".join(lines)
+
+
+def is_unavailable_vod_stream_error(error: str) -> bool:
+    return "does not provide a playable stream" in error
 
 
 def effective_stream_preference_rows(raw: object, config: AppConfig) -> list[tuple[str, str]]:

@@ -13,6 +13,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.request import urlopen
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from .config import write_debug_log
@@ -73,6 +74,7 @@ def play_with_mpv(
         log_debug("playback error: mpv was not found in PATH")
         raise PlayerError("mpv was not found in PATH. Install mpv and make sure it is available on PATH.")
 
+    browse_item = item
     selected_start_offset = resume_offset_ms(item)
     item = full_metadata(item)
     selected_subtitle = resolve_subtitle_choice(item, subtitle_choice)
@@ -80,7 +82,7 @@ def play_with_mpv(
     subtitles = external_subtitle_urls(item, selected_subtitle)
     stream_kwargs = {}
     force_transcode = playback_mode == "transcode"
-    direct_url = None if force_transcode else direct_play_url(item, selected_subtitle)
+    direct_url = None if force_transcode else direct_play_url(item, selected_subtitle) or direct_play_url(browse_item, selected_subtitle)
     fallback_subtitle_id = selected_subtitle_stream_id(item, selected_subtitle) if not subtitles and not direct_url else None
     if fallback_subtitle_id is not None:
         stream_kwargs["subtitleStreamID"] = fallback_subtitle_id
@@ -89,11 +91,14 @@ def play_with_mpv(
     if force_transcode:
         stream_kwargs.update(transcode_quality_kwargs(transcode_quality))
 
-    title = getattr(item, "title", "Plex")
+    title = getattr(item, "title", None) or getattr(browse_item, "title", None) or "Plex"
     start_offset = (resume_offset_ms(item) or selected_start_offset) if resume else 0
     if start_offset and direct_url is None:
         stream_kwargs["offset"] = plex_stream_offset(start_offset)
 
+    if is_online_metadata(item) and direct_url is None:
+        log_debug("playback error: Plex lists this item but does not provide a playable VOD stream")
+        raise PlayerError("Plex lists this item, but does not provide a playable stream for external players")
     try:
         url = direct_url or item.getStreamURL(**stream_kwargs)
     except Exception as exc:
@@ -102,6 +107,9 @@ def play_with_mpv(
     if not url:
         log_debug("playback error: Plex returned an empty stream URL")
         raise PlayerError("Plex returned an empty stream URL")
+    if direct_url and is_drm_vod_stream(url):
+        log_debug("playback error: Plex exposed a DRM-protected VOD stream")
+        raise PlayerError("Plex lists this item, but does not provide a playable stream for external players")
 
     stream_mode = "direct" if direct_url else "transcode"
     monitor_base_offset = start_offset if stream_mode == "transcode" and stream_kwargs.get("offset") else 0
@@ -145,7 +153,7 @@ def play_with_mpv(
             args,
             stdin=stdin,
             stdout=stdout if playback_display == "terminal" else subprocess.DEVNULL,
-            stderr=stderr if playback_display == "terminal" else subprocess.DEVNULL,
+            stderr=stderr if playback_display == "terminal" else subprocess.PIPE,
             start_new_session=playback_display != "terminal",
         )
     except OSError as exc:
@@ -155,6 +163,8 @@ def play_with_mpv(
         if tty is not None:
             tty.close()
     subtitle_count = active_subtitle_count(item, selected_subtitle)
+    if playback_display != "terminal":
+        log_mpv_stderr(process)
     monitor = ProgressMonitor(item, process, socket_path, start_offset, base_offset=monitor_base_offset)
     monitor.start()
     return PlayerHandle(
@@ -167,6 +177,19 @@ def play_with_mpv(
         monitor=monitor,
         process=process,
     )
+
+
+def log_mpv_stderr(process: subprocess.Popen[bytes]) -> None:
+    if getattr(process, "stderr", None) is None:
+        return
+
+    def read_stderr() -> None:
+        for raw_line in process.stderr or ():
+            line = raw_line.decode("utf-8", errors="replace").strip()
+            if line:
+                write_debug_log(f"mpv: {redact_tokens(line)}")
+
+    threading.Thread(target=read_stderr, name="plex-tui-mpv-stderr", daemon=True).start()
 
 
 class ProgressMonitor:
@@ -300,12 +323,45 @@ def plex_stream_offset(milliseconds: int) -> int:
 
 
 def full_metadata(item: Any) -> Any:
+    if is_online_metadata(item):
+        online_item = online_vod_metadata(item)
+        return online_item or item
     if not hasattr(item, "reload"):
         return item
     try:
         return item.reload()
     except Exception:
         return item
+
+
+def online_vod_metadata(item: Any) -> Any | None:
+    key = metadata_item_key(item)
+    server = getattr(item, "_server", None)
+    fetch_item = getattr(server, "fetchItem", None)
+    if not key or not callable(fetch_item):
+        return None
+    old_baseurl = getattr(server, "_baseurl", None)
+    try:
+        server._baseurl = vod_provider_base(item, server)
+        return fetch_item(key)
+    except Exception:
+        return None
+    finally:
+        if old_baseurl is not None:
+            server._baseurl = old_baseurl
+
+
+def metadata_item_key(item: Any) -> str:
+    key = str(getattr(item, "key", "") or "")
+    if key:
+        return key
+    details_key = str(getattr(item, "_details_key", "") or "").split("?", 1)[0]
+    if details_key:
+        return details_key
+    guid = str(getattr(item, "guid", "") or "")
+    if guid.startswith("plex://") and "/" in guid:
+        return "/library/metadata/" + guid.rsplit("/", 1)[-1]
+    return ""
 
 
 def resolve_subtitle_choice(item: Any, choice: StreamChoice | None) -> Any:
@@ -338,6 +394,8 @@ def transcode_quality_label(value: str) -> str:
 
 def external_subtitle_urls(item: Any, selected_subtitle: Any = None) -> list[str]:
     urls: list[str] = []
+    if is_online_metadata(item):
+        return urls
     if selected_subtitle == 0:
         return urls
     for part in iter_parts(item):
@@ -355,8 +413,25 @@ def external_subtitle_urls(item: Any, selected_subtitle: Any = None) -> list[str
 
 
 def direct_play_url(item: Any, selected_subtitle: Any = None) -> str | None:
+    if is_online_metadata(item):
+        return first_part_url(item)
     if not has_embedded_subtitles(item, selected_subtitle):
         return None
+    return first_part_url(item)
+
+
+def is_drm_vod_stream(url: str) -> bool:
+    if "vod.provider.plex.tv" not in url:
+        return False
+    try:
+        with urlopen(url, timeout=5) as response:
+            text = response.read(4096).decode("utf-8", errors="replace").lower()
+    except Exception:
+        return False
+    return "/cbcs/" in text or "method=sample-aes" in text
+
+
+def first_part_url(item: Any) -> str | None:
     parts = iter_parts(item)
     if not parts:
         return None
@@ -365,7 +440,33 @@ def direct_play_url(item: Any, selected_subtitle: Any = None) -> str | None:
     server = getattr(part, "_server", None)
     if not key or server is None:
         return None
-    return server.url(key, includeToken=True)
+    url = server.url(key, includeToken=True)
+    if is_metadata_provider_server(server):
+        vod_base = vod_provider_base(item, server)
+        metadata_base = str(getattr(server, "_baseurl", "") or "").rstrip("/")
+        if vod_base and metadata_base:
+            url = url.replace(metadata_base, vod_base, 1)
+    return url
+
+
+def vod_provider_base(item: Any, fallback_server: Any) -> str:
+    for candidate in (getattr(item, "_server", None), fallback_server):
+        baseurl = str(getattr(candidate, "VOD", "") or "")
+        if baseurl:
+            return baseurl.rstrip("/")
+    return "https://vod.provider.plex.tv"
+
+
+def is_online_metadata(item: Any) -> bool:
+    if is_metadata_provider_server(getattr(item, "_server", None)):
+        return True
+    parts = iter_parts(item)
+    return bool(parts and is_metadata_provider_server(getattr(parts[0], "_server", None)))
+
+
+def is_metadata_provider_server(server: Any) -> bool:
+    baseurl = str(getattr(server, "_baseurl", "") or "")
+    return "metadata.provider.plex.tv" in baseurl
 
 
 def has_embedded_subtitles(item: Any, selected_subtitle: Any = None) -> bool:

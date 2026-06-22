@@ -86,8 +86,6 @@ jobs:
           from-tag: ${{ needs.bump-version.outputs.previous_tag }}
           tag-prefix: v
           notes-format: grouped
-          move-major-tag: "true"
-          move-minor-tag: "true"
 
   publish-pypi:
     name: Publish to PyPI

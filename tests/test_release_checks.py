@@ -87,6 +87,21 @@ jobs:
     assert "release-creator" in result.message
 
 
+def test_release_workflow_rejects_floating_major_minor_tags(tmp_path):
+    write_release_fixture(tmp_path)
+    source = Path(".github/workflows/bump.yml").read_text(encoding="utf-8")
+    workflow = source.replace(
+        "notes-format: grouped",
+        'notes-format: grouped\n          move-major-tag: "true"\n          move-minor-tag: "true"',
+    )
+    (tmp_path / ".github/workflows/bump.yml").write_text(workflow, encoding="utf-8")
+
+    result = check_release.check_release_workflow(tmp_path)
+
+    assert not result.ok
+    assert "must not move floating major/minor tags" in result.message
+
+
 def test_homebrew_workflow_requires_bottle_publish_wiring(tmp_path):
     write_release_fixture(tmp_path)
     (tmp_path / ".github/workflows/post-release-homebrew.yml").write_text(
