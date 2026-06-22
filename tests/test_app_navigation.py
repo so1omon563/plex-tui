@@ -110,7 +110,7 @@ async def wait_for_playlist_target_rows(app: PlexTuiApp, pilot: object, attempts
             return rows
         await pilot.pause(0.1)
         rows = list(app.query_one("#media").children)
-    return rows
+    raise AssertionError(f"playlist target rows did not appear: {rows!r}")
 
 
 async def wait_for_calls(calls: list[object], pilot: object, attempts: int = 20) -> list[object]:
@@ -2800,7 +2800,8 @@ async def run_add_to_playlist_existing_check():
         app.config = AppConfig("http://plex", "token", "client-id")
         app.service = service
         app.show_media("Movies", [item])
-        await pilot.pause(0.2)
+        selected = await wait_for_selected_title(app, pilot, "Movie")
+        assert selected is item
 
         app.action_add_to_playlist()
         rows = await wait_for_playlist_target_rows(app, pilot)
