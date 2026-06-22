@@ -37,6 +37,8 @@ def test_config_example_parses_and_uses_known_fields():
         "grid_prefetch_pages",
         "hidden_library_keys",
         "library_order_keys",
+        "show_playlists",
+        "show_discover",
         "artwork_mode",
         "artwork_renderer",
         "detail_artwork_mode",
@@ -201,6 +203,8 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
         hidden_library_keys=("2", "7"),
         library_order_keys=("7", "2"),
         grid_density="large",
+        show_playlists=False,
+        show_discover=False,
     )
     config.save_config(saved)
     loaded = config.load_config()
@@ -211,6 +215,8 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     assert loaded.hidden_library_keys == ("2", "7")
     assert loaded.library_order_keys == ("7", "2")
     assert loaded.grid_density == "large"
+    assert loaded.show_playlists is False
+    assert loaded.show_discover is False
     text = config_file.read_text(encoding="utf-8")
     assert "page_size = 250" in text
     assert "auto_load_threshold = 25" in text
@@ -218,6 +224,8 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     assert 'hidden_library_keys = "2,7"' in text
     assert 'library_order_keys = "7,2"' in text
     assert 'grid_density = "large"' in text
+    assert "show_playlists = false" in text
+    assert "show_discover = false" in text
 
 
 def test_hidden_library_keys_parse_unique_csv_values(tmp_path, monkeypatch):

@@ -53,6 +53,9 @@ client_identifier = "plex-tui-your-stable-client-id"
 # library_order_keys pins the sidebar order. Use Settings to move libraries
 # after connecting, or list keys manually as comma-separated values.
 # library_order_keys = "2,1,4"
+# show_playlists and show_discover control optional sidebar entrypoints.
+# show_playlists = true
+# show_discover = true
 
 # Optional artwork settings.
 # artwork_mode can be "on" or "off".

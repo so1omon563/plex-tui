@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added Settings toggles to hide or show the Playlists and Discover sidebar
+  entrypoints.
 - Fixed Discover artwork for external Plex metadata image URLs, stable grid
   selection for Discover results, missing-availability selection hangs, and
   clarified Discover availability details.
