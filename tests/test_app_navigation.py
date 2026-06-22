@@ -9,6 +9,7 @@ import pytest
 
 import plextui.app as app_module
 from plextui.app import (
+    AvailabilityRow,
     BrowseState,
     ContinueWatchingRow,
     DiscoverRow,
@@ -43,6 +44,17 @@ class DiscoverRaw:
 
     def streamingServices(self):
         return [SimpleNamespace(title="Plex", offerType="free", url="https://watch.plex.tv/movie")]
+
+
+class MultiProviderDiscoverRaw:
+    TYPE = "movie"
+    title = "Multi Provider Discover Raw"
+
+    def streamingServices(self):
+        return [
+            SimpleNamespace(title="Plex", offerType="free", url="https://watch.plex.tv/movie"),
+            SimpleNamespace(title="Prime", offerType="rent", url="https://example.com/prime"),
+        ]
 
 
 @pytest.fixture(autouse=True)
@@ -196,6 +208,10 @@ def test_playlists_sidebar_entrypoint_opens_playlists():
 
 def test_discover_sidebar_entrypoint_searches_and_opens_first_availability(monkeypatch):
     asyncio.run(run_discover_entrypoint_check(monkeypatch))
+
+
+def test_discover_result_with_multiple_providers_opens_provider_picker(monkeypatch):
+    asyncio.run(run_discover_provider_picker_check(monkeypatch))
 
 
 def test_populate_libraries_can_highlight_selected_library():
@@ -1016,6 +1032,57 @@ async def run_discover_entrypoint_check(monkeypatch):
 
         assert opened_urls == ["https://watch.plex.tv/movie"]
         assert app.query_one("#status").content == "Opened: The Matrix - Plex (free)"
+
+
+async def run_discover_provider_picker_check(monkeypatch):
+    opened_urls = []
+    monkeypatch.setattr(app_module.webbrowser, "open", opened_urls.append)
+    item = MediaItem(
+        "The Matrix",
+        "Available: 1. Plex (free), 2. Prime (rent)",
+        "movie",
+        "discover-1",
+        False,
+        MultiProviderDiscoverRaw(),
+    )
+    service = FakePagedService(MediaPage([item], start=0, total=1))
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+        await pilot.press("down")
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.2)
+
+        app.query_one("#search").value = "matrix"
+        await pilot.press("enter")
+        for _ in range(80):
+            if app.browsing_stack and app.browsing_stack[-1].source == "discover":
+                break
+            await pilot.pause(0.1)
+
+        await pilot.press("enter")
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert app.picker_visible
+        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Availability: The Matrix"
+        assert [row.label for row in rows if isinstance(row, AvailabilityRow)] == ["Plex (free)", "Prime (rent)"]
+
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.5)
+
+        assert opened_urls == ["https://example.com/prime"]
+        assert not app.picker_visible
+        assert app.query_one("#media").highlighted_child.media.title == "The Matrix"
+        assert app.query_one("#status").content == "Opened: The Matrix - Prime (rent)"
 
 
 async def run_selected_library_highlight_check():

@@ -157,6 +157,15 @@ class DiscoverRow(ListItem):
         super().__init__(Label(self.label_text))
 
 
+class AvailabilityRow(ListItem):
+    def __init__(self, media_title: str, label: str, url: str) -> None:
+        self.media_title = media_title
+        self.label = label
+        self.url = url
+        self.label_text = label
+        super().__init__(Label(f"› {label}"))
+
+
 class LibraryMenuRow(ListItem):
     def __init__(self, library: LibraryItem, entry: str, label: str, description: str) -> None:
         self.library = library
@@ -809,6 +818,8 @@ class PlexTuiApp(App[None]):
             self.open_playlists()
         elif isinstance(row, DiscoverRow):
             self.prompt_discover_search()
+        elif isinstance(row, AvailabilityRow):
+            self.open_availability_url(row)
         elif isinstance(row, LibraryRow):
             self.open_library_primary(row.library)
         elif isinstance(row, LibraryMenuRow):
@@ -847,6 +858,10 @@ class PlexTuiApp(App[None]):
         elif isinstance(row, DiscoverRow):
             mark_active_row(event.list_view, row)
             self.show_detail_text("Search Plex Discover and open provider availability links in your browser.")
+            self.set_status(context_hint(row))
+        elif isinstance(row, AvailabilityRow):
+            mark_active_row(event.list_view, row)
+            self.show_detail_text(f"{row.media_title}\n\n{row.label}\n{row.url}")
             self.set_status(context_hint(row))
         elif isinstance(row, LibraryRow):
             mark_active_row(event.list_view, row)
@@ -1233,6 +1248,9 @@ class PlexTuiApp(App[None]):
         if self.service is None:
             return
         if self.current_browse_state_source() == "discover" and (urls := availability_urls(media.raw)):
+            if len(urls) > 1:
+                self.call_from_thread(self.show_availability_picker, media, urls)
+                return
             label, url = urls[0]
             webbrowser.open(url)
             self.call_from_thread(self.set_status, f"Opened: {media.title} - {label}")
@@ -1267,6 +1285,29 @@ class PlexTuiApp(App[None]):
             self.set_status(render_browse_status(state))
 
         self.call_from_thread(update)
+
+    def show_availability_picker(self, media: MediaItem, urls: list[tuple[str, str]]) -> None:
+        self.picker_visible = True
+        self.settings_visible = False
+        self.picker_media_key = media.key
+        self.set_media_title(f"Availability: {media.title}")
+        rows = [AvailabilityRow(media.title, label, url) for label, url in urls]
+        self.show_media_list()
+        self.replace_media_rows(rows, 0)
+        self.query_one("#media", ListView).focus()
+        self.show_detail_text(f"{media.title}\n\nChoose where to open this title.")
+        self.set_status("Choose availability provider")
+
+    def open_availability_url(self, row: AvailabilityRow) -> None:
+        webbrowser.open(row.url)
+        self.picker_visible = False
+        if self.browsing_stack:
+            self.show_browse_state(self.browsing_stack[-1], selected_key=self.picker_media_key)
+        self.picker_media_key = None
+        self.focus_media_browser()
+        status = f"Opened: {row.media_title} - {row.label}"
+        self.set_status(status)
+        self.set_timer(0.05, lambda: self.set_status(status), name="availability-choice-status")
 
     def show_media(self, title: str, items: list[MediaItem], selected_key: str | None = None) -> None:
         self.set_media_title(title)
@@ -4468,6 +4509,8 @@ def context_hint(row: object) -> str:
         return "Libraries: Enter opens playlists"
     if isinstance(row, DiscoverRow):
         return "Libraries: Enter searches Plex Discover"
+    if isinstance(row, AvailabilityRow):
+        return "Availability: Enter opens provider link"
     if isinstance(row, LibraryRow):
         return "Libraries: Enter opens primary view / Space opens alternate view"
     if isinstance(row, LibraryMenuRow):
@@ -4535,7 +4578,7 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
 
 def media_row_status(row: MediaRow, state: BrowseState | None) -> str:
     if state is not None and state.source == "discover" and availability_urls(row.media.raw):
-        return "Media: Enter opens first availability link in browser"
+        return "Media: Enter opens availability link or provider picker"
     status = context_hint(row)
     if is_playlist_browse_state(state):
         status = f"{status} / Backspace/Delete remove from playlist"
@@ -5081,7 +5124,7 @@ def grid_status(grid: MediaGrid, state: BrowseState | None) -> str:
     hint = context_hint(grid)
     selected_media = grid.selected_media
     if state is not None and state.source == "discover" and selected_media is not None and availability_urls(selected_media.raw):
-        hint = "Grid: Arrows/page select card / Enter opens first availability link in browser"
+        hint = "Grid: Arrows/page select card / Enter opens availability link or provider picker"
     status = f"{hint} / item {selected} / page {current_page} of {page_count} / {total_text}{progress_count_suffix(grid.items)}"
     if is_playlist_browse_state(state):
         status = f"{status} / Backspace/Delete remove from playlist"
