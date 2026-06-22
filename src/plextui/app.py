@@ -158,6 +158,12 @@ class DiscoverRow(ListItem):
         super().__init__(Label(self.label_text))
 
 
+class OnPlexRow(ListItem):
+    def __init__(self) -> None:
+        self.label_text = "On Plex"
+        super().__init__(Label(self.label_text))
+
+
 class AvailabilityRow(ListItem):
     def __init__(self, media_title: str, label: str, url: str) -> None:
         self.media_title = media_title
@@ -824,6 +830,8 @@ class PlexTuiApp(App[None]):
             self.open_playlists()
         elif isinstance(row, DiscoverRow):
             self.prompt_discover_search()
+        elif isinstance(row, OnPlexRow):
+            self.open_video_on_demand()
         elif isinstance(row, AvailabilityRow):
             self.open_availability_url(row)
         elif isinstance(row, ResumeChoiceRow):
@@ -865,7 +873,11 @@ class PlexTuiApp(App[None]):
             self.set_status(context_hint(row))
         elif isinstance(row, DiscoverRow):
             mark_active_row(event.list_view, row)
-            self.show_detail_text("Search Plex Discover, or press Space to browse Movies & Shows on Plex.")
+            self.show_detail_text("Search Plex Discover for movie/show availability.")
+            self.set_status(context_hint(row))
+        elif isinstance(row, OnPlexRow):
+            mark_active_row(event.list_view, row)
+            self.show_detail_text("Browse Plex-hosted Movies & Shows hubs.")
             self.set_status(context_hint(row))
         elif isinstance(row, AvailabilityRow):
             mark_active_row(event.list_view, row)
@@ -1312,21 +1324,25 @@ class PlexTuiApp(App[None]):
             self.call_from_thread(self.set_status, f"Opened: {media.title} - {label}")
             return
         if media.playable:
+            started = time.perf_counter()
             try:
-                children = self.service.children(media)
+                children = self.service.children(media, self.config.page_size)
             except Exception:
                 children = []
+            write_performance_log("children_load", started, f"title={media.title!r} items={len(children)} playable=1")
             if not children:
                 self.call_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
                 return
         else:
             self.post_message(StatusChanged(f"Opening {media.title}..."))
             self.call_from_thread(self.show_loading_state, media.title, "Loading child items from Plex.")
+            started = time.perf_counter()
             try:
-                children = self.service.children(media)
+                children = self.service.children(media, self.config.page_size)
             except Exception as exc:
                 self.call_from_thread(self.show_error, str(exc))
                 return
+            write_performance_log("children_load", started, f"title={media.title!r} items={len(children)} playable=0")
         if not children:
             self.call_from_thread(self.show_empty_state, media.title, "No child items", "Go back and choose another item.")
             return
@@ -2130,6 +2146,11 @@ class PlexTuiApp(App[None]):
             if self.update_preferences(show_discover=not self.config.show_discover):
                 self.populate_libraries(visible_libraries(self.libraries, self.config))
                 self.refresh_settings_after_change(action, "Discover Sidebar", show_setting_value(self.config.show_discover))
+            return
+        if action == "toggle_show_on_plex":
+            if self.update_preferences(show_on_plex=not self.config.show_on_plex):
+                self.populate_libraries(visible_libraries(self.libraries, self.config))
+                self.refresh_settings_after_change(action, "On Plex Sidebar", show_setting_value(self.config.show_on_plex))
             return
         if action == "cycle_discover_media_type":
             next_media_type = next_discover_media_type(self.config.discover_media_type)
@@ -4367,6 +4388,8 @@ def sidebar_rows(config: AppConfig, libraries: list[LibraryItem]) -> list[ListIt
         rows.append(PlaylistsRow())
     if config.show_discover:
         rows.append(DiscoverRow())
+    if config.show_on_plex:
+        rows.append(OnPlexRow())
     rows.extend(LibraryRow(library) for library in libraries)
     return rows
 
@@ -4435,6 +4458,7 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsHeaderRow("Browsing"),
         SettingsActionRow(f"Playlists Sidebar: {show_setting_value(config.show_playlists)}", "toggle_show_playlists"),
         SettingsActionRow(f"Discover Sidebar: {show_setting_value(config.show_discover)}", "toggle_show_discover"),
+        SettingsActionRow(f"On Plex Sidebar: {show_setting_value(config.show_on_plex)}", "toggle_show_on_plex"),
         SettingsActionRow(f"Discover Type: {discover_media_type_value(config)}", "cycle_discover_media_type"),
         SettingsActionRow(f"Library Enter: {library_enter_action_value(config)}", "cycle_library_enter_action"),
         SettingsActionRow(f"Media View: {media_view_value(config)}", "toggle_media_view"),
@@ -4525,6 +4549,7 @@ def render_settings(config: AppConfig) -> str:
             ("Library Enter", library_enter_action_value(config)),
             ("Playlists Sidebar", show_setting_value(config.show_playlists)),
             ("Discover Sidebar", show_setting_value(config.show_discover)),
+            ("On Plex Sidebar", show_setting_value(config.show_on_plex)),
             ("Discover Type", discover_media_type_value(config)),
             ("Media View", media_view_value(config)),
             ("Grid Density", grid_density_value(config)),
@@ -4567,7 +4592,7 @@ def render_help() -> str:
     return "\n".join([
         "Navigation",
         "enter: open selected row",
-        "space: alternate library action / browse On Plex from Discover",
+        "space: alternate library action",
         "escape: go back / close current view",
         "tab / shift+tab: move focus",
         "l: focus libraries",
@@ -4677,7 +4702,9 @@ def context_hint(row: object) -> str:
     if isinstance(row, PlaylistsRow):
         return "Libraries: Enter opens playlists"
     if isinstance(row, DiscoverRow):
-        return "Libraries: Enter searches Plex Discover; Space opens On Plex"
+        return "Libraries: Enter searches Plex Discover"
+    if isinstance(row, OnPlexRow):
+        return "Libraries: Enter browses Movies & Shows on Plex"
     if isinstance(row, AvailabilityRow):
         return "Availability: Enter opens provider link"
     if isinstance(row, ResumeChoiceRow):
@@ -4956,6 +4983,8 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         return f"Current Playlists sidebar: {show_setting_value(config.show_playlists)}"
     if action == "toggle_show_discover":
         return f"Current Discover sidebar: {show_setting_value(config.show_discover)}"
+    if action == "toggle_show_on_plex":
+        return f"Current On Plex sidebar: {show_setting_value(config.show_on_plex)}"
     if action == "cycle_discover_media_type":
         return f"Current Discover type: {discover_media_type_value(config)}"
     if action == "cycle_library_enter_action":
@@ -5020,6 +5049,8 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to show or hide Playlists in the sidebar."
     if action == "toggle_show_discover":
         return "Press Enter to show or hide Discover in the sidebar."
+    if action == "toggle_show_on_plex":
+        return "Press Enter to show or hide On Plex in the sidebar."
     if action == "cycle_discover_media_type":
         return "Press Enter to filter Discover searches by movies, shows, or all results."
     if action == "cycle_library_enter_action":

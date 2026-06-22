@@ -448,6 +448,46 @@ def test_video_on_demand_page_uses_account_token_and_returns_hubs(monkeypatch):
     assert [(item.title, item.kind, item.playable) for item in page.items] == [("Plex Picks", "hub", False)]
 
 
+def test_vod_hub_children_resolve_relative_hub_key():
+    class AccountServer:
+        VOD = "https://vod.provider.plex.tv"
+
+        def __init__(self):
+            self.converted = []
+
+        def _toOnlineMetadata(self, items):
+            self.converted.extend(items)
+            for item in items:
+                item.converted_to_online_metadata = True
+            return items
+
+    class VodHub:
+        TYPE = None
+        title = "Sci-Fi"
+        key = "/hubs/sections/movies/sci-fi"
+        ratingKey = "vod-hub"
+
+        def __init__(self):
+            self.calls = []
+            self._server = AccountServer()
+
+        def fetchItems(self, key, **kwargs):
+            self.calls.append((key, kwargs))
+            return [RawItem(), SecondRawItem()]
+
+        def items(self):
+            raise AssertionError("relative VOD hub keys must be fetched with the VOD host")
+
+    service = object.__new__(PlexService)
+    raw = VodHub()
+
+    children = service.children(to_media_item(raw), size=1)
+
+    assert raw.calls == [("https://vod.provider.plex.tv/hubs/sections/movies/sci-fi", {"maxresults": 1})]
+    assert raw._server.converted[0].converted_to_online_metadata is True
+    assert [child.title for child in children] == ["Movie"]
+
+
 def test_discover_page_can_show_all_result_types(monkeypatch):
     class FakeAccount:
         def __init__(self, token):
@@ -595,3 +635,17 @@ def test_progress_helpers_report_watched_resume_and_unwatched():
     assert row_progress_marker(Partial()) == "[#-------] 11%"
     assert watched_state(Unwatched()) == "unwatched"
     assert row_progress_marker(Unwatched()) == ""
+
+
+def test_online_metadata_row_progress_does_not_trigger_reload():
+    class OnlineServer:
+        _baseurl = "https://metadata.provider.plex.tv"
+
+    class OnlineRaw(RawItem):
+        _server = OnlineServer()
+
+        @property
+        def viewCount(self):
+            raise AssertionError("online list rows must not reload watch state")
+
+    assert row_progress_marker(OnlineRaw()) == ""

@@ -22,6 +22,7 @@ from plextui.app import (
     LibraryMenuRow,
     MediaGrid,
     MediaRow,
+    OnPlexRow,
     PlaylistsRow,
     PlaylistCreateRow,
     PlaylistTargetRow,
@@ -35,6 +36,7 @@ from plextui.app import (
     current_detail_actions,
     detect_mpv,
     detail_artwork_enabled,
+    DiscoverRow,
     effective_stream_preference_rows,
     format_offset,
     fuzzy_match_media,
@@ -471,6 +473,7 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "› Library Enter: Library  (cycle)" in labels
     assert "› Playlists Sidebar: Shown  (toggle)" in labels
     assert "› Discover Sidebar: Shown  (toggle)" in labels
+    assert "› On Plex Sidebar: Shown  (toggle)" in labels
     assert "› Discover Type: Movies & Shows  (cycle)" in labels
     assert "› Grid Density: Comfortable  (cycle)" in labels
     assert "› Artwork Renderer: Block  (cycle)" in labels
@@ -523,13 +526,29 @@ def test_visible_libraries_filters_hidden_keys():
 
 
 def test_sidebar_rows_can_hide_optional_entrypoints():
-    config = AppConfig("http://plex", "token", "client-id", show_playlists=False, show_discover=False)
+    config = AppConfig(
+        "http://plex",
+        "token",
+        "client-id",
+        show_playlists=False,
+        show_discover=False,
+        show_on_plex=False,
+    )
     libraries = [LibraryItem("Movies", "1", "movie", object())]
 
     rows = sidebar_rows(config, libraries)
 
     assert [type(row) for row in rows] == [ContinueWatchingRow, LibraryRow]
     assert rows[1].library.title == "Movies"
+
+
+def test_sidebar_rows_can_show_on_plex_without_discover():
+    config = AppConfig("http://plex", "token", "client-id", show_discover=False)
+    libraries = [LibraryItem("Movies", "1", "movie", object())]
+
+    rows = sidebar_rows(config, libraries)
+
+    assert [type(row) for row in rows] == [ContinueWatchingRow, PlaylistsRow, OnPlexRow, LibraryRow]
 
 
 def test_ordered_libraries_uses_saved_order_and_appends_new_libraries():

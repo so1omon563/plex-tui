@@ -5,6 +5,15 @@
 - Added a Discover alternate action to browse Plex Movies & Shows VOD hubs
   directly from the TUI, so Plex-hosted free titles can use the normal playback
   flow when Plex exposes stream URLs.
+- Added a visible On Plex sidebar row for the same VOD hub browsing path.
+- Added a separate Settings/config toggle for the On Plex sidebar row.
+- Fixed opening Plex-hosted VOD hubs whose child URLs are returned as relative
+  `/hubs/...` paths.
+- Avoided per-row watched-progress reloads while rendering Plex-hosted online
+  metadata lists.
+- Limited Plex-hosted VOD hub child fetches to the configured page size and
+  logged child-load timings, including when Plex returns more items than
+  requested.
 
 ## 0.12.4 - 2026-06-22
 
