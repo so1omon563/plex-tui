@@ -298,6 +298,26 @@ def availability_label(raw: Any) -> str:
     return "Available: " + ", ".join(labels) + suffix
 
 
+def availability_urls(raw: Any) -> list[tuple[str, str]]:
+    streaming_services = getattr(raw, "streamingServices", None)
+    if not callable(streaming_services):
+        return []
+    try:
+        services = list(streaming_services())
+    except Exception:
+        return []
+    urls = []
+    for service in services:
+        url = str(getattr(service, "url", "") or "")
+        if not url:
+            continue
+        title = getattr(service, "title", "") or getattr(service, "platform", "") or "Provider"
+        offer = getattr(service, "offerType", "")
+        label = f"{title} ({offer})" if offer else str(title)
+        urls.append((label, url))
+    return urls
+
+
 def media_details(item: MediaItem) -> MediaDetails:
     raw = item.raw
     facts = [kind_label(item.kind)]

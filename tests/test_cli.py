@@ -12,6 +12,19 @@ from plextui.models import LibraryItem, MediaItem
 from plextui.plex_service import MediaPage
 
 
+class FakeAvailability:
+    title = "Tubi"
+    offerType = "free"
+    url = "https://tubitv.example/movie"
+
+
+class FakeDiscoverRaw:
+    title = "Free Movie"
+
+    def streamingServices(self):
+        return [FakeAvailability()]
+
+
 class FakeCliService:
     def __init__(self, _config: AppConfig) -> None:
         self.movie_library = LibraryItem("Movies", "1", "movie", object())
@@ -57,9 +70,12 @@ class FakeCliService:
     def discover_page(self, query: str, start: int, size: int) -> MediaPage:
         self.discover_calls.append((query, start, size))
         return MediaPage(
-            [MediaItem("Free Movie", "2024  Available: Tubi (free)", "movie", "plex://movie/1", False, SimpleNamespace())],
+            [
+                MediaItem("First Movie", "2024", "movie", "plex://movie/1", False, SimpleNamespace(title="First Movie")),
+                MediaItem("Free Movie", "2024  Available: Tubi (free)", "movie", "plex://movie/2", False, FakeDiscoverRaw()),
+            ],
             start=0,
-            total=1,
+            total=2,
         )
 
 
@@ -267,6 +283,37 @@ def test_cli_searches_discover(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "Free Movie" in output
     assert "Tubi" in output
+
+
+def test_cli_opens_discover_availability(monkeypatch, capsys):
+    service = None
+    opened = []
+
+    class CapturingService(FakeCliService):
+        def __init__(self, config: AppConfig) -> None:
+            nonlocal service
+            super().__init__(config)
+            service = self
+
+    monkeypatch.setattr(cli, "PlexService", CapturingService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id", account_token="account"))
+    monkeypatch.setattr(cli.webbrowser, "open", lambda url: opened.append(url))
+
+    assert cli.main(["discover-open", "matrix", "--index", "2", "--limit", "3"]) == 0
+
+    assert service is not None
+    assert service.discover_calls == [("matrix", 0, 3)]
+    assert opened == ["https://tubitv.example/movie"]
+    assert capsys.readouterr().out == "Opened: Free Movie - Tubi (free)\n"
+
+
+def test_cli_discover_open_reports_missing_index(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "PlexService", FakeCliService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id", account_token="account"))
+
+    assert cli.main(["discover-open", "matrix", "--index", "9"]) == 2
+
+    assert capsys.readouterr().err == "plex-tui: discover result index out of range: 9\n"
 
 
 def test_cli_searches_library_by_title_as_json(monkeypatch, capsys):

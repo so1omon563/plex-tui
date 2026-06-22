@@ -186,10 +186,12 @@ plex-tui continue-watching --limit 5
 plex-tui search "blade runner"
 plex-tui search "alien" --library Movies --json
 plex-tui discover "matrix" --limit 5
+plex-tui discover-open "matrix" --index 3
 ```
 
 `status`, `libraries`, `continue-watching`, `search`, and `discover` are
-read-only helpers for quick checks and scripts. Launch `plex-tui` with no
+read-only helpers for quick checks and scripts. `discover-open` opens a selected
+Plex Discover availability URL in your browser. Launch `plex-tui` with no
 command for the full interactive browser and playback workflow.
 
 For local development:

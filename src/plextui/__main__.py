@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import webbrowser
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,7 @@ from . import __version__
 from .app import detect_mpv, render_app_diagnostics
 from .config import config_path, debug_log_path, load_config
 from .models import LibraryItem, MediaItem
-from .plex_service import PlexService, kind_label, progress_percent
+from .plex_service import PlexService, availability_urls, kind_label, progress_percent
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,6 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
     discover.add_argument("query", help="search query")
     discover.add_argument("--limit", type=positive_int, default=10, help="maximum items to print")
     discover.add_argument("--json", action="store_true", help="print JSON output")
+
+    discover_open = subparsers.add_parser("discover-open", help="open a Plex Discover availability URL")
+    discover_open.add_argument("query", help="search query")
+    discover_open.add_argument("--index", type=positive_int, default=1, help="1-based result index to open")
+    discover_open.add_argument("--service-index", type=positive_int, default=1, help="1-based availability index to open")
+    discover_open.add_argument("--limit", type=positive_int, default=10, help="maximum results to search")
 
     search = subparsers.add_parser("search", help="search Plex without opening the TUI")
     search.add_argument("query", help="search query")
@@ -70,6 +77,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return command_continue_watching(args.limit, args.json)
     if args.command == "discover":
         return command_discover(args.query, args.limit, args.json)
+    if args.command == "discover-open":
+        return command_discover_open(args.query, args.index, args.service_index, args.limit)
     if args.command == "search":
         return command_search(args.query, args.library, args.limit, args.json)
 
@@ -135,6 +144,30 @@ def command_discover(query: str, limit: int, json_output: bool = False) -> int:
         print(json.dumps([media_payload(item) for item in page.items], indent=2))
     else:
         print_media_items(page.items)
+    return 0
+
+
+def command_discover_open(query: str, index: int, service_index: int, limit: int) -> int:
+    service = connect_service()
+    if service is None:
+        return 2
+    try:
+        page = service.discover_page(query, 0, limit)
+        item = page.items[index - 1]
+    except IndexError:
+        print(f"plex-tui: discover result index out of range: {index}", file=sys.stderr)
+        return 2
+    except Exception as exc:
+        print(f"plex-tui: {exc}", file=sys.stderr)
+        return 2
+    urls = availability_urls(item.raw)
+    try:
+        label, url = urls[service_index - 1]
+    except IndexError:
+        print(f"plex-tui: availability index out of range: {service_index}", file=sys.stderr)
+        return 2
+    webbrowser.open(url)
+    print(f"Opened: {item.title} - {label}")
     return 0
 
 
