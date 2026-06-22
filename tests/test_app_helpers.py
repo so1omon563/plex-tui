@@ -463,6 +463,7 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "› Subtitle Mode: Auto  (cycle)" in labels
     assert "› Playback Mode: Auto / direct default  (cycle)" in labels
     assert "› Playback Display: External mpv window  (cycle)" in labels
+    assert "› Start Over Prompt: Shown  (toggle)" in labels
     assert "› Terminal Video: Smooth (15 fps / 640px)  (cycle)" in labels
     assert "› Transcode Quality: Original  (cycle)" in labels
     assert "› mpv Window Size: 1280x720  (cycle)" in labels
