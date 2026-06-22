@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import textwrap
 import time
+import webbrowser
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, replace
 from difflib import SequenceMatcher
@@ -79,7 +80,15 @@ from .player import (
     toggle_mpv_pause,
     transcode_quality_label,
 )
-from .plex_service import PlexService, kind_label, media_details, progress_bar, row_progress_marker, watched_state
+from .plex_service import (
+    PlexService,
+    availability_urls,
+    kind_label,
+    media_details,
+    progress_bar,
+    row_progress_marker,
+    watched_state,
+)
 GRID_CARD_GAP = 2
 GRID_COLLECTION_CARD_EXTRA_WIDTH = 8
 GRID_DENSITY_SPECS = {
@@ -117,6 +126,8 @@ class BrowseState:
             return False
         if self.source == "continue_watching":
             return True
+        if self.source == "discover":
+            return bool(self.search_query)
         if self.search:
             return bool(self.search_query and self.selected_library is not None and not self.global_search)
         return self.selected_library is not None
@@ -137,6 +148,12 @@ class ContinueWatchingRow(ListItem):
 class PlaylistsRow(ListItem):
     def __init__(self) -> None:
         self.label_text = "Playlists"
+        super().__init__(Label(self.label_text))
+
+
+class DiscoverRow(ListItem):
+    def __init__(self) -> None:
+        self.label_text = "Discover"
         super().__init__(Label(self.label_text))
 
 
@@ -773,13 +790,13 @@ class PlexTuiApp(App[None]):
     def populate_libraries(self, libraries: list[LibraryItem], selected_library_key: str | None = None) -> None:
         selected_index = 0
         if selected_library_key is not None:
-            for index, library in enumerate(libraries, start=2):
+            for index, library in enumerate(libraries, start=3):
                 if library.key == selected_library_key:
                     selected_index = index
                     break
         self.replace_list_rows_async(
             "#libraries",
-            [ContinueWatchingRow(), PlaylistsRow(), *[LibraryRow(library) for library in libraries]],
+            [ContinueWatchingRow(), PlaylistsRow(), DiscoverRow(), *[LibraryRow(library) for library in libraries]],
             selected_index,
             "library-list",
         )
@@ -790,6 +807,8 @@ class PlexTuiApp(App[None]):
             self.open_continue_watching()
         elif isinstance(row, PlaylistsRow):
             self.open_playlists()
+        elif isinstance(row, DiscoverRow):
+            self.prompt_discover_search()
         elif isinstance(row, LibraryRow):
             self.open_library_primary(row.library)
         elif isinstance(row, LibraryMenuRow):
@@ -824,6 +843,10 @@ class PlexTuiApp(App[None]):
         elif isinstance(row, PlaylistsRow):
             mark_active_row(event.list_view, row)
             self.show_detail_text("Browse all Plex playlists. Open a playlist to remove items, or select a playlist here to rename or delete it.")
+            self.set_status(context_hint(row))
+        elif isinstance(row, DiscoverRow):
+            mark_active_row(event.list_view, row)
+            self.show_detail_text("Search Plex Discover and open provider availability links in your browser.")
             self.set_status(context_hint(row))
         elif isinstance(row, LibraryRow):
             mark_active_row(event.list_view, row)
@@ -934,7 +957,24 @@ class PlexTuiApp(App[None]):
         if isinstance(row, PlaylistsRow):
             self.set_status("Playlists opens directly with Enter")
             return
+        if isinstance(row, DiscoverRow):
+            self.set_status("Discover opens a Plex Discover search prompt")
+            return
         self.set_status("Select a library first")
+
+    def prompt_discover_search(self) -> None:
+        if self.service is None:
+            self.set_status("Connect to Plex before searching Discover")
+            return
+        self.search_global = False
+        self.input_mode = "discover_search"
+        search = self.query_one("#search", Input)
+        search.placeholder = "Search Plex Discover"
+        search.value = ""
+        search.display = True
+        search.focus()
+        self.set_focus_pane(main=True)
+        self.set_status("Discover: enter a search query")
 
     @work(thread=True)
     def open_library_entry(self, library: LibraryItem, entry: str = "library", label: str | None = None) -> None:
@@ -1058,6 +1098,10 @@ class PlexTuiApp(App[None]):
     def current_browse_state(self) -> BrowseState | None:
         return self.browsing_stack[-1] if self.browsing_stack else None
 
+    def current_browse_state_source(self) -> str:
+        state = self.current_browse_state()
+        return state.source if state is not None else ""
+
     def selected_bulk_items(self) -> list[MediaItem]:
         state = self.current_browse_state()
         if state is None or not self.bulk_selected_keys:
@@ -1136,7 +1180,9 @@ class PlexTuiApp(App[None]):
         self.post_message(StatusChanged(f"Loading more {state.title}..."))
         started = time.perf_counter()
         try:
-            if state.search:
+            if state.source == "discover":
+                page = self.service.discover_page(state.search_query, state.next_start, self.config.page_size)
+            elif state.search:
                 page = self.service.search_page(state.search_query, state.selected_library, state.next_start, self.config.page_size)
             elif state.source == "continue_watching":
                 page = self.service.continue_watching_page(state.next_start, self.config.page_size)
@@ -1185,6 +1231,11 @@ class PlexTuiApp(App[None]):
     @work(thread=True)
     def open_media(self, media: MediaItem) -> None:
         if self.service is None:
+            return
+        if self.current_browse_state_source() == "discover" and (urls := availability_urls(media.raw)):
+            label, url = urls[0]
+            webbrowser.open(url)
+            self.call_from_thread(self.set_status, f"Opened: {media.title} - {label}")
             return
         if media.playable:
             try:
@@ -2702,6 +2753,10 @@ class PlexTuiApp(App[None]):
             if self.input_mode == "playlist_rename":
                 self.save_playlist_rename_input(query)
                 return
+            if self.input_mode == "discover_search":
+                self.input_mode = ""
+                self.run_discover_search(query)
+                return
             search_global = self.search_global
             self.input_mode = ""
             if not search_global and self.apply_fuzzy_search(query, focus=True):
@@ -2769,6 +2824,41 @@ class PlexTuiApp(App[None]):
                 total=page.total,
             )
             self.browsing_stack.append(state)
+            self.show_browse_state(state)
+            self.focus_media_browser()
+            self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more, page.items))
+
+        self.call_from_thread(update)
+
+    @work(thread=True, exclusive=True, group="search")
+    def run_discover_search(self, query: str) -> None:
+        if not query or self.service is None:
+            return
+        title = f"Discover: {query}"
+        self.post_message(StatusChanged(f"Searching Plex Discover for {query}..."))
+        self.call_from_thread(self.show_loading_state, title, "Searching Plex Discover and free streaming availability.")
+        started = time.perf_counter()
+        try:
+            page = self.service.discover_page(query, 0, self.config.page_size)
+        except Exception as exc:
+            self.call_from_thread(self.show_error, str(exc))
+            return
+        write_performance_log(
+            "discover_page",
+            started,
+            f"query={query!r} size={self.config.page_size} items={len(page.items)} total={page.total}",
+        )
+
+        def update() -> None:
+            state = BrowseState(
+                title,
+                page.items,
+                search_query=query,
+                source="discover",
+                next_start=page.next_start,
+                total=page.total,
+            )
+            self.browsing_stack = [state]
             self.show_browse_state(state)
             self.focus_media_browser()
             self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more, page.items))
@@ -4376,6 +4466,8 @@ def context_hint(row: object) -> str:
         return "Libraries: Enter opens Continue Watching"
     if isinstance(row, PlaylistsRow):
         return "Libraries: Enter opens playlists"
+    if isinstance(row, DiscoverRow):
+        return "Libraries: Enter searches Plex Discover"
     if isinstance(row, LibraryRow):
         return "Libraries: Enter opens primary view / Space opens alternate view"
     if isinstance(row, LibraryMenuRow):
@@ -4442,6 +4534,8 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
 
 
 def media_row_status(row: MediaRow, state: BrowseState | None) -> str:
+    if state is not None and state.source == "discover" and availability_urls(row.media.raw):
+        return "Media: Enter opens first availability link in browser"
     status = context_hint(row)
     if is_playlist_browse_state(state):
         status = f"{status} / Backspace/Delete remove from playlist"
@@ -4984,7 +5078,11 @@ def grid_status(grid: MediaGrid, state: BrowseState | None) -> str:
     current_page = min(page_count, (grid.selected_index // grid.page_size) + 1)
     selected = min(grid.selected_index + 1, total_loaded)
     total_text = f"{total_loaded} loaded" if total_available is None else f"{total_loaded} of {total_available} loaded"
-    status = f"{context_hint(grid)} / item {selected} / page {current_page} of {page_count} / {total_text}{progress_count_suffix(grid.items)}"
+    hint = context_hint(grid)
+    selected_media = grid.selected_media
+    if state is not None and state.source == "discover" and selected_media is not None and availability_urls(selected_media.raw):
+        hint = "Grid: Arrows/page select card / Enter opens first availability link in browser"
+    status = f"{hint} / item {selected} / page {current_page} of {page_count} / {total_text}{progress_count_suffix(grid.items)}"
     if is_playlist_browse_state(state):
         status = f"{status} / Backspace/Delete remove from playlist"
     return status

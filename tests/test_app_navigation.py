@@ -11,6 +11,7 @@ import plextui.app as app_module
 from plextui.app import (
     BrowseState,
     ContinueWatchingRow,
+    DiscoverRow,
     EmptyStateRow,
     LibraryMenuRow,
     LoadMoreRow,
@@ -34,6 +35,14 @@ from plextui.plex_service import MediaPage
 class Raw:
     TYPE = "movie"
     title = "Raw"
+
+
+class DiscoverRaw:
+    TYPE = "movie"
+    title = "Discover Raw"
+
+    def streamingServices(self):
+        return [SimpleNamespace(title="Plex", offerType="free", url="https://watch.plex.tv/movie")]
 
 
 @pytest.fixture(autouse=True)
@@ -183,6 +192,10 @@ def test_populate_libraries_adds_continue_watching_entrypoint():
 
 def test_playlists_sidebar_entrypoint_opens_playlists():
     asyncio.run(run_playlists_entrypoint_check())
+
+
+def test_discover_sidebar_entrypoint_searches_and_opens_first_availability(monkeypatch):
+    asyncio.run(run_discover_entrypoint_check(monkeypatch))
 
 
 def test_populate_libraries_can_highlight_selected_library():
@@ -911,6 +924,7 @@ async def run_library_highlight_check():
         await pilot.pause(0.2)
         await pilot.press("down")
         await pilot.press("down")
+        await pilot.press("down")
         await pilot.pause(0.2)
 
         row = libraries_view.highlighted_child
@@ -936,7 +950,8 @@ async def run_continue_watching_entrypoint_check():
         rows = list(libraries_view.children)
         assert isinstance(rows[0], ContinueWatchingRow)
         assert isinstance(rows[1], PlaylistsRow)
-        assert [row.library.title for row in rows[2:]] == ["Movies", "TV"]
+        assert isinstance(rows[2], DiscoverRow)
+        assert [row.library.title for row in rows[3:]] == ["Movies", "TV"]
         assert libraries_view.highlighted_child is rows[0]
 
 
@@ -961,6 +976,48 @@ async def run_playlists_entrypoint_check():
         assert app.query_one("#media-title").content.removeprefix("▶ ") == "Playlists"
 
 
+async def run_discover_entrypoint_check(monkeypatch):
+    opened_urls = []
+    monkeypatch.setattr(app_module.webbrowser, "open", opened_urls.append)
+    item = MediaItem("The Matrix", "Available: 1. Plex (free)", "movie", "discover-1", False, DiscoverRaw())
+    service = FakePagedService(MediaPage([item], start=0, total=1))
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+        await pilot.press("down")
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause(0.2)
+
+        search = app.query_one("#search")
+        assert search.display
+        assert app.input_mode == "discover_search"
+        assert search.placeholder == "Search Plex Discover"
+
+        search.value = "matrix"
+        await pilot.press("enter")
+        for _ in range(80):
+            if app.browsing_stack and app.browsing_stack[-1].source == "discover":
+                break
+            await pilot.pause(0.1)
+
+        assert service.discover_calls == [("matrix", 0, 40)]
+        assert app.browsing_stack[-1].title == "Discover: matrix"
+        assert app.query_one("#media").highlighted_child.media.title == "The Matrix"
+
+        await pilot.press("enter")
+        await pilot.pause(0.5)
+
+        assert opened_urls == ["https://watch.plex.tv/movie"]
+        assert app.query_one("#status").content == "Opened: The Matrix - Plex (free)"
+
+
 async def run_selected_library_highlight_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
@@ -978,8 +1035,9 @@ async def run_selected_library_highlight_check():
         rows = list(libraries_view.children)
         assert isinstance(rows[0], ContinueWatchingRow)
         assert isinstance(rows[1], PlaylistsRow)
-        assert libraries_view.highlighted_child is rows[2]
-        assert rows[2].library.title == "Movies"
+        assert isinstance(rows[2], DiscoverRow)
+        assert libraries_view.highlighted_child is rows[3]
+        assert rows[3].library.title == "Movies"
 
 
 async def run_load_more_row_check():
@@ -1029,6 +1087,7 @@ class FakePagedService:
         self.entry_calls = []
         self.search_calls = []
         self.continue_watching_calls = []
+        self.discover_calls = []
 
     def library_page(self, library: LibraryItem, start: int, size: int) -> MediaPage:
         self.calls.append((library, start, size))
@@ -1044,6 +1103,10 @@ class FakePagedService:
 
     def continue_watching_page(self, start: int, size: int) -> MediaPage:
         self.continue_watching_calls.append((start, size))
+        return self.page
+
+    def discover_page(self, query: str, start: int, size: int) -> MediaPage:
+        self.discover_calls.append((query, start, size))
         return self.page
 
 
@@ -1120,6 +1183,7 @@ async def run_sidebar_library_selection_opens_default_library_check():
         await pilot.pause(0.2)
         await pilot.press("down")
         await pilot.press("down")
+        await pilot.press("down")
         await pilot.press("enter")
         await pilot.pause(0.5)
 
@@ -1138,6 +1202,7 @@ async def run_sidebar_library_space_menu_check():
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
         await pilot.pause(0.2)
+        await pilot.press("down")
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("space")
@@ -1165,6 +1230,7 @@ async def run_sidebar_library_selection_menu_default_check():
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
         await pilot.pause(0.2)
+        await pilot.press("down")
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("enter")
@@ -1233,8 +1299,8 @@ async def run_library_submenu_keyboard_flow_check():
 
         libraries_view = app.query_one("#libraries")
         rows = list(libraries_view.children)
-        assert libraries_view.highlighted_child is rows[2]
-        assert rows[2].library.title == "Movies"
+        assert libraries_view.highlighted_child is rows[3]
+        assert rows[3].library.title == "Movies"
         assert app.query_one("#media-grid").selected_media.title == "Blade Runner"
 
         libraries_view.focus()
@@ -2083,7 +2149,8 @@ async def run_settings_library_visibility_check():
         assert save_config.call_count == 1
         assert isinstance(rows[0], ContinueWatchingRow)
         assert isinstance(rows[1], PlaylistsRow)
-        assert [row.library.title for row in rows[2:]] == ["Movies"]
+        assert isinstance(rows[2], DiscoverRow)
+        assert [row.library.title for row in rows[3:]] == ["Movies"]
 
 
 async def run_settings_library_order_check():
@@ -2107,7 +2174,8 @@ async def run_settings_library_order_check():
         assert save_config.call_count == 1
         assert isinstance(rows[0], ContinueWatchingRow)
         assert isinstance(rows[1], PlaylistsRow)
-        assert [row.library.title for row in rows[2:]] == ["TV", "Movies", "Music"]
+        assert isinstance(rows[2], DiscoverRow)
+        assert [row.library.title for row in rows[3:]] == ["TV", "Movies", "Music"]
 
         media_rows = list(app.query_one("#media").children)
         selected = app.query_one("#media").highlighted_child
