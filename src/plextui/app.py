@@ -3497,6 +3497,13 @@ def playback_readiness_rows(playable: bool, progress: str = "", context_actions:
         ])
         rows.extend(context_actions)
         return rows
+    if any(action.startswith("Availability:") for action in context_actions):
+        rows = [
+            "Status: Opens availability provider",
+            "Action: Press Enter to choose/open",
+        ]
+        rows.extend(context_actions)
+        return rows
     rows = [
         "Status: Opens more items",
         "Action: Press Enter to open",
@@ -4566,6 +4573,8 @@ def context_hint(row: object) -> str:
 
 
 def current_detail_actions(state: BrowseState | None, item: MediaItem | None = None) -> tuple[str, ...]:
+    if state is not None and state.source == "discover" and item is not None and availability_urls(item.raw):
+        return ("Availability: Enter opens provider link",)
     if item is not None and item.kind == "playlist":
         return (
             "Playlist: Enter opens contents",

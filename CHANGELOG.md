@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed Discover artwork for external Plex metadata image URLs and clarified
+  Discover availability details.
+
 ## 0.11.1 - 2026-06-22
 
 - Added a TUI Discover entrypoint for searching Plex Discover and opening

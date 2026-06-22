@@ -104,6 +104,9 @@ def fetch_artwork(raw: Any, path: str, config: AppConfig, width: int | None = No
 
 
 def artwork_url(raw: Any, path: str, config: AppConfig, width: int | None = None, height: int | None = None) -> str:
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+
     if width is not None and height is not None:
         return transcode_artwork_url(path, config, width, height)
 
@@ -114,10 +117,7 @@ def artwork_url(raw: Any, path: str, config: AppConfig, width: int | None = None
         except Exception:
             pass
 
-    if path.startswith("http://") or path.startswith("https://"):
-        url = path
-    else:
-        url = f"{config.base_url.rstrip('/')}/{path.lstrip('/')}"
+    url = f"{config.base_url.rstrip('/')}/{path.lstrip('/')}"
     return add_token(url, config.token)
 
 

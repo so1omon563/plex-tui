@@ -62,6 +62,13 @@ def test_artwork_url_can_request_transcoded_size():
     assert "X-Plex-Token=token" in url
 
 
+def test_artwork_url_leaves_external_urls_alone_even_with_size():
+    config = AppConfig(base_url="http://plex", token="token", client_identifier="client")
+    url = "https://metadata-static.plex.tv/poster.jpg"
+
+    assert artwork_url(RawItem(), url, config, width=144, height=144) == url
+
+
 def test_artwork_cache_key_includes_requested_size():
     config = AppConfig(base_url="http://plex", token="token", client_identifier="client")
 
