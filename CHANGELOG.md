@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Removed the `requests` runtime dependency by using Python's standard library
+  for Plex server reachability checks.
+
 ## 0.7.1 - 2026-06-21
 
 - Expanded playlist management with a top-level Playlists entrypoint, bulk
