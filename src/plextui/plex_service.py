@@ -287,15 +287,37 @@ def availability_label(raw: Any) -> str:
     except Exception:
         return "Plex Discover"
     labels = []
-    for service in services[:3]:
+    for index, service in enumerate(services[:3], start=1):
         title = getattr(service, "title", "") or getattr(service, "platform", "")
         offer = getattr(service, "offerType", "")
-        labels.append(f"{title} ({offer})" if title and offer else title or offer)
+        label = f"{title} ({offer})" if title and offer else title or offer
+        if label:
+            labels.append(f"{index}. {label}")
     if not labels:
         return "Plex Discover"
     extra = len(services) - len(labels)
     suffix = f" +{extra} more" if extra > 0 else ""
     return "Available: " + ", ".join(labels) + suffix
+
+
+def availability_urls(raw: Any) -> list[tuple[str, str]]:
+    streaming_services = getattr(raw, "streamingServices", None)
+    if not callable(streaming_services):
+        return []
+    try:
+        services = list(streaming_services())
+    except Exception:
+        return []
+    urls = []
+    for service in services:
+        url = str(getattr(service, "url", "") or "")
+        if not url:
+            continue
+        title = getattr(service, "title", "") or getattr(service, "platform", "") or "Provider"
+        offer = getattr(service, "offerType", "")
+        label = f"{title} ({offer})" if offer else str(title)
+        urls.append((label, url))
+    return urls
 
 
 def media_details(item: MediaItem) -> MediaDetails:

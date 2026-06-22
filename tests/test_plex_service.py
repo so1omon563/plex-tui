@@ -12,6 +12,7 @@ from plextui.plex_service import (
     progress_label,
     row_progress_marker,
     to_media_item,
+    availability_urls,
     watched_state,
 )
 
@@ -20,6 +21,7 @@ class Availability:
     title = "Tubi"
     offerType = "free"
     platform = "tubi-tv"
+    url = "https://tubitv.example/movie"
 
 
 class RawItem:
@@ -390,9 +392,13 @@ def test_discover_page_uses_account_token_and_slices(monkeypatch):
         ("matrix", {"limit": 1, "providers": "discover,PLEXAVOD"}),
     ]
     assert [item.title for item in page.items] == ["Free Movie"]
-    assert page.items[0].subtitle == "2024  Available: Tubi (free)"
+    assert page.items[0].subtitle == "2024  Available: 1. Tubi (free)"
     assert page.items[0].playable is False
     assert page.total == 2
+
+
+def test_availability_urls_include_provider_labels():
+    assert availability_urls(DiscoverRawItem()) == [("Tubi (free)", "https://tubitv.example/movie")]
 
 
 def test_media_details_include_audio_and_subtitle_locations():
