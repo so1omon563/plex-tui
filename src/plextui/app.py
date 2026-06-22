@@ -158,6 +158,12 @@ class DiscoverRow(ListItem):
         super().__init__(Label(self.label_text))
 
 
+class OnPlexRow(ListItem):
+    def __init__(self) -> None:
+        self.label_text = "On Plex"
+        super().__init__(Label(self.label_text))
+
+
 class AvailabilityRow(ListItem):
     def __init__(self, media_title: str, label: str, url: str) -> None:
         self.media_title = media_title
@@ -824,6 +830,8 @@ class PlexTuiApp(App[None]):
             self.open_playlists()
         elif isinstance(row, DiscoverRow):
             self.prompt_discover_search()
+        elif isinstance(row, OnPlexRow):
+            self.open_video_on_demand()
         elif isinstance(row, AvailabilityRow):
             self.open_availability_url(row)
         elif isinstance(row, ResumeChoiceRow):
@@ -865,7 +873,11 @@ class PlexTuiApp(App[None]):
             self.set_status(context_hint(row))
         elif isinstance(row, DiscoverRow):
             mark_active_row(event.list_view, row)
-            self.show_detail_text("Search Plex Discover, or press Space to browse Movies & Shows on Plex.")
+            self.show_detail_text("Search Plex Discover for movie/show availability.")
+            self.set_status(context_hint(row))
+        elif isinstance(row, OnPlexRow):
+            mark_active_row(event.list_view, row)
+            self.show_detail_text("Browse Plex-hosted Movies & Shows hubs.")
             self.set_status(context_hint(row))
         elif isinstance(row, AvailabilityRow):
             mark_active_row(event.list_view, row)
@@ -4367,6 +4379,7 @@ def sidebar_rows(config: AppConfig, libraries: list[LibraryItem]) -> list[ListIt
         rows.append(PlaylistsRow())
     if config.show_discover:
         rows.append(DiscoverRow())
+        rows.append(OnPlexRow())
     rows.extend(LibraryRow(library) for library in libraries)
     return rows
 
@@ -4567,7 +4580,7 @@ def render_help() -> str:
     return "\n".join([
         "Navigation",
         "enter: open selected row",
-        "space: alternate library action / browse On Plex from Discover",
+        "space: alternate library action",
         "escape: go back / close current view",
         "tab / shift+tab: move focus",
         "l: focus libraries",
@@ -4677,7 +4690,9 @@ def context_hint(row: object) -> str:
     if isinstance(row, PlaylistsRow):
         return "Libraries: Enter opens playlists"
     if isinstance(row, DiscoverRow):
-        return "Libraries: Enter searches Plex Discover; Space opens On Plex"
+        return "Libraries: Enter searches Plex Discover"
+    if isinstance(row, OnPlexRow):
+        return "Libraries: Enter browses Movies & Shows on Plex"
     if isinstance(row, AvailabilityRow):
         return "Availability: Enter opens provider link"
     if isinstance(row, ResumeChoiceRow):

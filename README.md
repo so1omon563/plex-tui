@@ -194,7 +194,8 @@ read-only helpers for quick checks and scripts. `discover-open` opens a selected
 Plex Discover availability URL in your browser. Launch `plex-tui` with no
 command for the full interactive browser, playback workflow, and sidebar
 Discover search with movie/show provider selection. In the TUI, press Space on
-the Discover sidebar row to browse Plex Movies & Shows VOD hubs.
+the Discover sidebar row or select On Plex to browse Plex Movies & Shows VOD
+hubs.
 
 For local development:
 

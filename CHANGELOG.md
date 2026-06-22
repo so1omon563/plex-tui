@@ -5,6 +5,7 @@
 - Added a Discover alternate action to browse Plex Movies & Shows VOD hubs
   directly from the TUI, so Plex-hosted free titles can use the normal playback
   flow when Plex exposes stream URLs.
+- Added a visible On Plex sidebar row for the same VOD hub browsing path.
 
 ## 0.12.4 - 2026-06-22
 
