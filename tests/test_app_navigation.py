@@ -19,7 +19,7 @@ from plextui.app import (
     PlaylistCreateRow,
     PlaylistTargetRow,
     artwork_fetch_pixel_size,
-    card_artwork_pixel_size,
+    card_artwork_fetch_size,
     grid_artwork_cache_key,
     grid_page_key,
     render_loaded_status,
@@ -501,7 +501,7 @@ def test_detail_artwork_fetches_resized_detail_and_card_artwork(monkeypatch):
         include_card_artwork=True,
     )
 
-    assert requested_sizes == [(30, 40), card_artwork_pixel_size(app.config)]
+    assert requested_sizes == [(30, 40), card_artwork_fetch_size(app.config)]
     assert app.rendered_grid_artwork_cache[grid_artwork_cache_key(full_item, app.config)] == "card-art"
 
 

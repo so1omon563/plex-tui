@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import parse_qs, urlsplit
+
 from plextui import __version__
 from plextui.auth import LoginSession, reachable_advertised_urls, reachable_server_choices, plex_headers
 from plextui.config import AppConfig
@@ -149,8 +151,11 @@ def test_login_wait_falls_back_to_reachable_advertised_urls(monkeypatch):
         "http://24.255.40.151:17734": FakeResponse(404, "not found"),
     }
 
+    def fake_urlopen(request, timeout):
+        return responses[urlsplit(request.full_url).scheme + "://" + urlsplit(request.full_url).netloc]
+
     monkeypatch.setattr("plextui.auth.MyPlexAccount", lambda token: FakeAccount(resources))
-    monkeypatch.setattr("plextui.auth.requests.get", lambda uri, **kwargs: responses[uri])
+    monkeypatch.setattr("plextui.auth.urlopen", fake_urlopen)
     session = object.__new__(LoginSession)
     session.config = AppConfig("", "", "client-id")
     session.pin_login = FakePinLogin("account-token")
@@ -176,26 +181,36 @@ def test_reachable_advertised_urls_accepts_plex_protocol_header(monkeypatch):
     resource = FakeResource("My Plex", "server-token", ["http://plex.example:32400"])
     seen = {}
 
-    def fake_get(uri, **kwargs):
-        seen["uri"] = uri
-        seen["headers"] = kwargs["headers"]
-        seen["params"] = kwargs["params"]
-        seen["timeout"] = kwargs["timeout"]
+    def fake_urlopen(request, timeout):
+        url = urlsplit(request.full_url)
+        seen["uri"] = f"{url.scheme}://{url.netloc}"
+        seen["headers"] = dict(request.header_items())
+        seen["params"] = parse_qs(url.query)
+        seen["timeout"] = timeout
         return FakeResponse(200, "", {"X-Plex-Protocol": "1.0"})
 
-    monkeypatch.setattr("plextui.auth.requests.get", fake_get)
+    monkeypatch.setattr("plextui.auth.urlopen", fake_urlopen)
 
     assert reachable_advertised_urls(resource, timeout=2) == ["http://plex.example:32400"]
     assert seen == {
         "uri": "http://plex.example:32400",
-        "headers": {"X-Plex-Token": "server-token"},
-        "params": {"X-Plex-Token": "server-token"},
+        "headers": {"X-plex-token": "server-token"},
+        "params": {"X-Plex-Token": ["server-token"]},
         "timeout": 2,
     }
 
 
 class FakeResponse:
     def __init__(self, status_code: int, text: str, headers: dict[str, str] | None = None) -> None:
-        self.status_code = status_code
+        self.status = status_code
         self.text = text
         self.headers = headers or {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self, size: int = -1) -> bytes:
+        return self.text.encode("utf-8")

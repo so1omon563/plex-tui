@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import ipaddress
 import webbrowser
-from dataclasses import dataclass
-from urllib.parse import SplitResult, urlparse
+from dataclasses import dataclass, replace
+from urllib.parse import SplitResult, urlencode, urlparse
+from urllib.request import Request, urlopen
 
-import requests
 from plexapi.myplex import MyPlexAccount, MyPlexPinLogin, MyPlexResource
 
 from . import __version__
@@ -139,29 +139,11 @@ class LoginSession:
 
 
 def save_server_choice(config: AppConfig, account_token: str, choice: ServerChoice) -> AppConfig:
-    saved = AppConfig(
+    saved = replace(
+        config,
         base_url=choice.uri,
         token=choice.resource.accessToken,
-        client_identifier=config.client_identifier,
         account_token=account_token,
-        preferred_audio_language=config.preferred_audio_language,
-        preferred_subtitle_language=config.preferred_subtitle_language,
-        subtitle_mode=config.subtitle_mode,
-        artwork_mode=config.artwork_mode,
-        artwork_renderer=config.artwork_renderer,
-        detail_artwork_mode=config.detail_artwork_mode,
-        grid_density=config.grid_density,
-        media_view=config.media_view,
-        theme=config.theme,
-        mpv_window_size=config.mpv_window_size,
-        playback_mode=config.playback_mode,
-        playback_display=config.playback_display,
-        terminal_video_profile=config.terminal_video_profile,
-        transcode_quality=config.transcode_quality,
-        page_size=config.page_size,
-        auto_load_threshold=config.auto_load_threshold,
-        grid_prefetch_pages=config.grid_prefetch_pages,
-        hidden_library_keys=config.hidden_library_keys,
     )
     save_config(saved)
     return saved
@@ -208,18 +190,18 @@ def reachable_advertised_urls(resource: MyPlexResource, timeout: int) -> list[st
 
 
 def plex_root_responds(uri: str, token: str, timeout: int) -> bool:
+    url = f"{uri}{'&' if '?' in uri else '?'}{urlencode({'X-Plex-Token': token})}"
+    request = Request(url, headers={"X-Plex-Token": token})
     try:
-        response = requests.get(
-            uri,
-            headers={"X-Plex-Token": token},
-            params={"X-Plex-Token": token},
-            timeout=timeout,
-        )
-    except requests.RequestException:
+        with urlopen(request, timeout=timeout) as response:
+            status = response.status
+            text = response.read(4096).decode("utf-8", errors="replace")
+            headers = response.headers
+    except OSError:
         return False
-    if response.status_code not in {200, 201, 204}:
+    if status not in {200, 201, 204}:
         return False
-    return "MediaContainer" in response.text or response.headers.get("X-Plex-Protocol") == "1.0"
+    return "MediaContainer" in text or headers.get("X-Plex-Protocol") == "1.0"
 
 
 def plex_headers(config: AppConfig) -> dict[str, str]:

@@ -126,28 +126,16 @@ class PlexService:
             return sliced_media_page(category_items(library), start, size)
         raise ValueError(f"unknown library entry: {entry}")
 
-    def library_items(self, library: LibraryItem) -> list[MediaItem]:
-        return self.library_page(library, 0, DEFAULT_PAGE_SIZE).items
-
     def playlists(self) -> list[MediaItem]:
         return [to_media_item(item) for item in self.server.playlists()]
-
-    def create_playlist(self, title: str, item: MediaItem) -> MediaItem:
-        return self.create_playlist_from_items(title, [item])
 
     def create_playlist_from_items(self, title: str, items: list[MediaItem]) -> MediaItem:
         playlist = self.server.createPlaylist(title, items=[item.raw for item in items])
         return to_media_item(playlist)
 
-    def add_to_playlist(self, playlist: MediaItem, item: MediaItem) -> MediaItem:
-        return self.add_items_to_playlist(playlist, [item])
-
     def add_items_to_playlist(self, playlist: MediaItem, items: list[MediaItem]) -> MediaItem:
         result = playlist.raw.addItems([item.raw for item in items])
         return to_media_item(result or playlist.raw)
-
-    def remove_from_playlist(self, playlist: MediaItem, item: MediaItem) -> MediaItem:
-        return self.remove_items_from_playlist(playlist, [item])
 
     def remove_items_from_playlist(self, playlist: MediaItem, items: list[MediaItem]) -> MediaItem:
         result = playlist.raw.removeItems([item.raw for item in items])
@@ -207,12 +195,6 @@ class PlexService:
         if hasattr(raw, "items"):
             return [to_media_item(child) for child in raw.items()]
         return []
-
-    def search(self, query: str, library: LibraryItem | None = None) -> list[MediaItem]:
-        if library is not None:
-            return self.search_page(query, library, 0, DEFAULT_PAGE_SIZE).items
-        source: Iterable[Any] = self.server.search(query, limit=DEFAULT_PAGE_SIZE)
-        return [to_media_item(item) for item in source]
 
     def category_page(self, category: CategoryRef, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
         raw = category.raw

@@ -199,21 +199,5 @@ def read_init_version(path: Path) -> str:
     return match.group(1)
 
 
-def read_assignment(path: Path, name: str) -> str:
-    text = path.read_text(encoding="utf-8")
-    match = re.search(rf"^{re.escape(name)}=([^\n]+)$", text, re.MULTILINE)
-    if not match:
-        raise ValueError(f"{path} missing {name} assignment")
-    return match.group(1).strip().strip('"')
-
-
-def read_srcinfo_value(path: Path, name: str) -> str:
-    text = path.read_text(encoding="utf-8")
-    match = re.search(rf"^\s*{re.escape(name)} = ([^\n]+)$", text, re.MULTILINE)
-    if not match:
-        raise ValueError(f"{path} missing {name} value")
-    return match.group(1).strip()
-
-
 if __name__ == "__main__":
     sys.exit(main())

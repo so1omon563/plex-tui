@@ -393,12 +393,6 @@ class StatusChanged(Message):
 
 
 FOCUS_TITLE_PREFIX = "▶ "
-UI_PANE_BORDER = "#7f8fa6"
-UI_FOCUS_BORDER = "#88c0d0"
-UI_FOCUS_BACKGROUND = "#303b4a"
-UI_PANE_TITLE_BACKGROUND = "#3b4252"
-UI_ACTIVE_ROW_BACKGROUND = "#b48ead"
-UI_ACTIVE_ROW_TEXT = "#151923"
 UI_SELECTED_ACCENT = "#e5a00d"
 UI_GRID_TITLE = "#d8dee9"
 UI_GRID_MUTED = "#9aa3b8"
@@ -3963,11 +3957,6 @@ def render_card_artwork(data: bytes, config: AppConfig) -> object:
         return protocol_artwork
     artwork = render_artwork(data, width=width, max_height=height)
     return Group(*artwork.split("\n"))
-
-
-def card_artwork_pixel_size(config: AppConfig) -> tuple[int, int]:
-    spec = grid_density_spec(config)
-    return int(spec["art_width"]), int(spec["art_height"]) * 2
 
 
 def card_artwork_fetch_size(config: AppConfig) -> tuple[int, int]:
