@@ -60,6 +60,16 @@ class DiscoverRawItem(RawItem):
         return [Availability()]
 
 
+class BackToFutureRawItem(DiscoverRawItem):
+    title = "Back to the Future"
+    ratingKey = "plex://movie/back-to-the-future"
+
+
+class BackToSchoolRawItem(DiscoverRawItem):
+    title = "Back to School"
+    ratingKey = "plex://movie/back-to-school"
+
+
 class RawHubItem:
     TYPE = None
     title = "Recently Released Movies"
@@ -425,6 +435,23 @@ def test_discover_page_can_show_all_result_types(monkeypatch):
     page = service.discover_page("matrix", start=0, size=2, media_type="all")
 
     assert [item.title for item in page.items] == ["Free Movie", "Noisy Clip"]
+
+
+def test_discover_page_prefers_query_title_matches(monkeypatch):
+    class FakeAccount:
+        def __init__(self, token):
+            pass
+
+        def searchDiscover(self, query, **kwargs):
+            return [BackToSchoolRawItem(), BackToFutureRawItem(), ShowRawItem()]
+
+    monkeypatch.setattr("plextui.plex_service.MyPlexAccount", FakeAccount)
+    service = object.__new__(PlexService)
+    service.config = type("Config", (), {"account_token": "account-token"})()
+
+    page = service.discover_page("Back to the Future", start=0, size=10)
+
+    assert [item.title for item in page.items] == ["Back to the Future"]
 
 
 def test_discover_media_key_falls_back_when_rating_key_is_nan():

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
+import re
 from typing import Any
 
 from plexapi.myplex import MyPlexAccount
@@ -196,6 +197,9 @@ class PlexService:
             for item in (to_discover_media_item(raw) for raw in raw_items)
             if discover_media_type_matches(item, media_type)
         ]
+        matching_items = [item for item in items if discover_title_matches(query, item)]
+        if matching_items:
+            items = matching_items
         return sliced_media_page(items, start, size)
 
     def continue_watching_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
@@ -305,6 +309,18 @@ def discover_media_type_matches(item: MediaItem, media_type: str) -> bool:
     if media_type == "movies_shows":
         return item.kind in {"movie", "show"}
     return item.kind == media_type
+
+
+def discover_title_matches(query: str, item: MediaItem) -> bool:
+    query_tokens = [token for token in title_tokens(query) if token not in {"a", "an", "and", "of", "the", "to"}]
+    if not query_tokens:
+        return False
+    title = set(title_tokens(item.title))
+    return all(token in title for token in query_tokens)
+
+
+def title_tokens(value: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", value.lower())
 
 
 def availability_label(raw: Any) -> str:
