@@ -225,6 +225,36 @@ def test_render_details_can_include_playlist_context_action():
     assert "Playlist: Backspace/Delete removes from this playlist" in rendered
 
 
+def test_render_details_can_show_discover_availability_action():
+    class Raw:
+        def streamingServices(self):
+            return [SimpleNamespace(title="Plex", offerType="free", url="https://watch.plex.tv/movie")]
+
+    item = MediaItem("Movie", "", "movie", "1", False, Raw())
+    state = BrowseState("Discover: Movie", [item], source="discover")
+    details = MediaDetails(
+        title="Movie",
+        kind="movie",
+        facts=["Movie"],
+        metadata=[("Type", "movie")],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=False,
+    )
+
+    rendered = render_details(
+        details,
+        context_actions=("Availability: Enter opens provider link",),
+    )
+
+    assert "Status: Opens availability provider" in rendered
+    assert "Action: Press Enter to choose/open" in rendered
+    assert "Availability: Enter opens provider link" in rendered
+    assert "Status: Opens more items" not in rendered
+    assert current_detail_actions(state, item) == ("Availability: Enter opens provider link",)
+
+
 def test_render_details_promotes_episode_context_under_title():
     details = MediaDetails(
         title="Band of the Hawk",
