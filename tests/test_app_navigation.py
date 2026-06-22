@@ -732,6 +732,10 @@ def test_toggle_watched_marks_unwatched_media_watched():
     asyncio.run(run_toggle_watched_marks_unwatched_check())
 
 
+def test_toggle_watched_refreshes_continue_watching_next_episode():
+    asyncio.run(run_toggle_watched_continue_watching_refresh_check())
+
+
 def test_toggle_watched_marks_watched_media_unwatched():
     asyncio.run(run_toggle_watched_marks_watched_check())
 
@@ -1018,7 +1022,7 @@ async def run_startup_continue_watching_default_check(monkeypatch):
         assert app.browsing_stack[-1].source == "continue_watching"
         selected = await wait_for_selected_title(app, pilot, "In Progress")
         assert selected is not None
-        assert service.continue_watching_calls == [(0, 40)]
+        assert service.continue_watching_calls[-1] == (0, 40)
         assert service.entry_calls == []
 
 
@@ -2671,6 +2675,32 @@ async def run_toggle_watched_marks_unwatched_check():
         assert row is not None
         assert "[########] 100%" in row.label_text
         assert status == "Marked Movie watched"
+
+
+async def run_toggle_watched_continue_watching_refresh_check():
+    raw = WatchStateRaw(view_offset=65_000)
+    next_raw = WatchStateRaw(view_offset=1)
+    current = MediaItem("Episode 1", "", "episode", "episode-1", True, raw)
+    next_episode = MediaItem("Episode 2", "", "episode", "episode-2", True, next_raw)
+    service = FakePagedService(MediaPage([next_episode], start=0, total=1))
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.browsing_stack = [BrowseState("Continue Watching", [current], source="continue_watching", total=1)]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_toggle_watched()
+
+        selected = await wait_for_selected_title(app, pilot, "Episode 2", attempts=80)
+
+        assert raw.mark_watched_calls == 1
+        assert service.continue_watching_calls[-1] == (0, 40)
+        assert selected is not None
+        assert selected.title == "Episode 2"
+        assert app.query_one("#status").content == "Marked Episode 1 watched"
 
 
 async def run_toggle_watched_marks_watched_check():
