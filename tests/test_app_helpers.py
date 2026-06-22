@@ -25,18 +25,11 @@ from plextui.app import (
     PlaylistCreateRow,
     PlaylistTargetRow,
     PlexTuiApp,
-    UI_ACTIVE_ROW_BACKGROUND,
-    UI_ACTIVE_ROW_TEXT,
-    UI_FOCUS_BACKGROUND,
-    UI_FOCUS_BORDER,
     UI_GRID_DIM,
     UI_GRID_MUTED,
     UI_GRID_TITLE,
-    UI_PANE_BORDER,
-    UI_PANE_TITLE_BACKGROUND,
     UI_SELECTED_ACCENT,
     card_artwork_fetch_size,
-    card_artwork_pixel_size,
     context_hint,
     current_detail_actions,
     detect_mpv,
@@ -900,11 +893,6 @@ def test_collection_grid_titles_wrap_to_two_lines():
         "Movies",
     ]
     assert grid_card_title_lines("Recently Released Movies", config) == ["Recently Rel..."]
-
-
-def test_card_artwork_pixel_size_tracks_terminal_render_size():
-    assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="comfortable")) == (18, 18)
-    assert card_artwork_pixel_size(AppConfig("http://plex", "token", "client", grid_density="large")) == (24, 24)
 
 
 def test_card_artwork_fetch_size_uses_higher_resolution_for_kitty(monkeypatch):

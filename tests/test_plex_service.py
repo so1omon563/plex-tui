@@ -266,7 +266,7 @@ def test_playlist_helpers_create_add_and_remove_items():
     item = MediaItem("Movie", "", "movie", "1", True, RawItem())
 
     playlists = service.playlists()
-    created = service.create_playlist("Weekend", item)
+    created = service.create_playlist_from_items("Weekend", [item])
     second = MediaItem("Second Movie", "", "movie", "2", True, SecondRawItem())
     added = service.add_items_to_playlist(playlists[0], [item, second])
     removed = service.remove_items_from_playlist(playlists[0], [item, second])
