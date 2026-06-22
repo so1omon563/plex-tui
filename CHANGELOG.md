@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.11.1 - 2026-06-22
+
 - Added a TUI Discover entrypoint for searching Plex Discover and opening
   provider availability links from movie/show results.
 - Added `plex-tui discover-open` to open a selected Plex Discover availability
