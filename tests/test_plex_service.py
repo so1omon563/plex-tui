@@ -473,7 +473,7 @@ def test_vod_hub_children_resolve_relative_hub_key():
 
         def fetchItems(self, key, **kwargs):
             self.calls.append((key, kwargs))
-            return [RawItem()]
+            return [RawItem(), SecondRawItem()]
 
         def items(self):
             raise AssertionError("relative VOD hub keys must be fetched with the VOD host")
@@ -481,9 +481,9 @@ def test_vod_hub_children_resolve_relative_hub_key():
     service = object.__new__(PlexService)
     raw = VodHub()
 
-    children = service.children(to_media_item(raw), size=40)
+    children = service.children(to_media_item(raw), size=1)
 
-    assert raw.calls == [("https://vod.provider.plex.tv/hubs/sections/movies/sci-fi", {"maxresults": 40})]
+    assert raw.calls == [("https://vod.provider.plex.tv/hubs/sections/movies/sci-fi", {"maxresults": 1})]
     assert raw._server.converted[0].converted_to_online_metadata is True
     assert [child.title for child in children] == ["Movie"]
 

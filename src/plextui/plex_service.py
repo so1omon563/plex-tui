@@ -265,7 +265,7 @@ def hub_items(raw: Any, size: int = DEFAULT_PAGE_SIZE) -> list[Any]:
     vod_base = str(getattr(server, "VOD", "") or "")
     fetch_items = getattr(raw, "fetchItems", None)
     if key.startswith("/") and vod_base and callable(fetch_items):
-        items = list(fetch_items(f"{vod_base.rstrip('/')}{key}", maxresults=size))
+        items = list(fetch_items(f"{vod_base.rstrip('/')}{key}", maxresults=size))[:size]
         to_online_metadata = getattr(server, "_toOnlineMetadata", None)
         return list(to_online_metadata(items)) if callable(to_online_metadata) else items
     return list(raw.items())
