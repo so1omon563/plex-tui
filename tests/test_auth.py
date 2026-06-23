@@ -234,8 +234,10 @@ def test_switch_profile_saves_profile_and_home_tokens(monkeypatch):
         users=users,
     )
     saved = {}
+    root_checks = []
 
     monkeypatch.setattr("plextui.auth.MyPlexAccount", lambda token: home_account)
+    monkeypatch.setattr("plextui.auth.plex_root_responds", lambda *args: root_checks.append(args) or True)
     monkeypatch.setattr("plextui.auth.save_config", lambda config: saved.setdefault("config", config))
 
     switched = switch_profile(
@@ -246,6 +248,7 @@ def test_switch_profile_saves_profile_and_home_tokens(monkeypatch):
     assert switched.token == "kid-server-token"
     assert switched.account_token == "Kid-token"
     assert switched.home_account_token == "home-token"
+    assert root_checks == []
     assert saved["config"] == switched
 
 

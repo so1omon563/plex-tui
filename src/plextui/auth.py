@@ -199,30 +199,29 @@ def switch_profile(config: AppConfig, choice: ProfileChoice, pin: str = "") -> A
     else:
         account = home_account.switchHomeUser(choice.user, pin=pin or None)
     account_token = str(account.authToken)
-    if config.base_url and plex_root_responds(config.base_url, account_token, timeout=5):
+    server_choices = reachable_server_choices([
+        resource
+        for resource in account.resources()
+        if "server" in str(resource.provides)
+    ])
+    if server_choices:
+        selected = matching_server_choice(server_choices, config.base_url) or sorted(server_choices, key=lambda c: c.sort_key)[0]
+        saved = replace(
+            config,
+            base_url=selected.uri,
+            token=selected.resource.accessToken,
+            account_token=account_token,
+            home_account_token=home_token,
+        )
+    elif config.base_url and plex_root_responds(config.base_url, account_token, timeout=5):
         saved = replace(
             config,
             token=account_token,
             account_token=account_token,
             home_account_token=home_token,
         )
-        save_config(saved)
-        return saved
-    server_choices = reachable_server_choices([
-        resource
-        for resource in account.resources()
-        if "server" in str(resource.provides)
-    ])
-    if not server_choices:
+    else:
         raise RuntimeError("No reachable Plex server connections found for this profile")
-    selected = matching_server_choice(server_choices, config.base_url) or sorted(server_choices, key=lambda c: c.sort_key)[0]
-    saved = replace(
-        config,
-        base_url=selected.uri,
-        token=selected.resource.accessToken,
-        account_token=account_token,
-        home_account_token=home_token,
-    )
     save_config(saved)
     return saved
 
