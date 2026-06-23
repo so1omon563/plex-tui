@@ -85,7 +85,9 @@
   create playlists from selected media, bulk-add selected playable media,
   remove single or bulk-selected items while browsing a playlist, and rename or
   delete playlists.
-- Later design passes: profile switching with auto sign-in.
+- Profile switching is available from Settings for Plex Home profiles. Continue
+  refining signed-in edge cases such as PIN failures, profile-specific server
+  reachability, and startup profile restore behavior as real use exposes them.
 
 ## Technical Follow-Up
 

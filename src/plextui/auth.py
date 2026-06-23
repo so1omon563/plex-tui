@@ -97,6 +97,15 @@ class ServerChoice:
             return False
 
 
+@dataclass(frozen=True)
+class ProfileChoice:
+    title: str
+    key: str
+    protected: bool
+    current: bool
+    user: object | None = None
+
+
 class LoginSession:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
@@ -144,9 +153,85 @@ def save_server_choice(config: AppConfig, account_token: str, choice: ServerChoi
         base_url=choice.uri,
         token=choice.resource.accessToken,
         account_token=account_token,
+        home_account_token=account_token,
     )
     save_config(saved)
     return saved
+
+
+def profile_choices(config: AppConfig) -> list[ProfileChoice]:
+    home_token = config.home_account_token or config.account_token
+    if not home_token:
+        raise RuntimeError("Plex account login is required before switching profiles")
+    home_account = MyPlexAccount(token=home_token)
+    active_account = MyPlexAccount(token=config.account_token or home_token)
+    active_id = str(getattr(active_account, "id", ""))
+    choices = [
+        ProfileChoice(
+            profile_title(home_account),
+            str(getattr(home_account, "id", "")),
+            bool(getattr(home_account, "protected", False)),
+            str(getattr(home_account, "id", "")) == active_id,
+        )
+    ]
+    for user in home_account.users():
+        if not getattr(user, "home", False):
+            continue
+        choices.append(
+            ProfileChoice(
+                profile_title(user),
+                str(getattr(user, "id", "")),
+                bool(getattr(user, "protected", False)),
+                str(getattr(user, "id", "")) == active_id,
+                user=user,
+            )
+        )
+    return choices
+
+
+def switch_profile(config: AppConfig, choice: ProfileChoice, pin: str = "") -> AppConfig:
+    home_token = config.home_account_token or config.account_token
+    if not home_token:
+        raise RuntimeError("Plex account login is required before switching profiles")
+    home_account = MyPlexAccount(token=home_token)
+    if choice.user is None or choice.key == str(getattr(home_account, "id", "")):
+        account = home_account
+    else:
+        account = home_account.switchHomeUser(choice.user, pin=pin or None)
+    server_choices = reachable_server_choices([
+        resource
+        for resource in account.resources()
+        if "server" in str(resource.provides)
+    ])
+    if not server_choices:
+        raise RuntimeError("No reachable Plex server connections found for this profile")
+    selected = matching_server_choice(server_choices, config.base_url) or sorted(server_choices, key=lambda c: c.sort_key)[0]
+    saved = replace(
+        config,
+        base_url=selected.uri,
+        token=selected.resource.accessToken,
+        account_token=account.authToken,
+        home_account_token=home_token,
+    )
+    save_config(saved)
+    return saved
+
+
+def matching_server_choice(choices: list[ServerChoice], base_url: str) -> ServerChoice | None:
+    target = base_url.rstrip("/")
+    for choice in choices:
+        if choice.uri.rstrip("/") == target:
+            return choice
+    return None
+
+
+def profile_title(profile: object) -> str:
+    return (
+        str(getattr(profile, "title", "") or "")
+        or str(getattr(profile, "friendlyName", "") or "")
+        or str(getattr(profile, "username", "") or "")
+        or "Plex Profile"
+    )
 
 
 def reachable_server_choices(resources: list[MyPlexResource], timeout: int = 5) -> list[ServerChoice]:

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added Settings-based Plex Home profile switching with PIN prompts for
+  protected profiles.
 - Clarified in-app library management by showing hidden-library counts and
   disambiguating duplicate library names in Settings.
 - Added a security policy for private vulnerability reporting, supported
