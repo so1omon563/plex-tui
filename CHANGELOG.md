@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed Plex Home profile switching when Plex does not advertise reachable
+  server resources for the switched profile, while the current server URL still
+  accepts that profile token.
 - Added Settings-based Plex Home profile switching with PIN prompts for
   protected profiles.
 - Clarified in-app library management by showing hidden-library counts and
