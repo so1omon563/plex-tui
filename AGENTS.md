@@ -92,7 +92,7 @@ contracts for these durable areas:
 - `packaging/`: Homebrew and AUR notes plus source AUR metadata.
 - `docs/`: research notes and README visual assets.
 - Root docs and config examples: README, PACKAGING, RELEASE, ROADMAP,
-  CHANGELOG, Makefile, pyproject, and `config.example.toml`.
+  CHANGELOG, SECURITY, Makefile, pyproject, and `config.example.toml`.
 
 Add child AGENTS.md files only when a subtree needs local rules that would make
 this root rail too broad.
@@ -248,6 +248,8 @@ GitHub CLI notes:
 Never commit real Plex tokens, account tokens, debug logs, or local config files.
 Use `config.example.toml` for examples. Logs should redact tokens; preserve that
 behavior when changing playback or request diagnostics.
+Use `SECURITY.md` for vulnerability reporting policy and keep it aligned with
+token handling, packaging, and release automation changes.
 
 
 ## Optional Local Tooling

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a security policy for private vulnerability reporting, supported
+  versions, and security-sensitive project areas.
+
 ## 0.12.7 - 2026-06-22
 
 - Added a Discover alternate action to browse Plex Movies & Shows VOD hubs
