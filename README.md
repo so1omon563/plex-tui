@@ -94,8 +94,9 @@ working today. Expect rough edges, but expect progress too.
   editions for a selected movie.
 - Settings screen for stream preferences, playback mode and transcode quality,
   artwork modes, grid density, page size, auto-load threshold, grid artwork
-  prefetching, media view, library visibility/order, library Enter behavior,
-  Discover result type, optional sidebar entrypoints, and `mpv` window size.
+  prefetching, media view, library visibility/order, duplicate library
+  disambiguation, library Enter behavior, Discover result type, optional
+  sidebar entrypoints, and `mpv` window size.
 - App diagnostics view for version, paths, `mpv`, Plex connection, artwork, and
   browsing settings.
 
@@ -221,6 +222,10 @@ the terminal.
 
 The login flow writes a config file with the selected server URL and token. Use
 the Settings screen or `plex-tui --config-path` to find the active file.
+
+If your Plex server has multiple libraries with the same name, use Settings to
+hide or reorder individual sidebar libraries. Duplicate library names show their
+type and Plex key in Settings so each row is identifiable.
 
 You can also configure a server manually. macOS config path:
 

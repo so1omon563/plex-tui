@@ -531,6 +531,22 @@ def test_settings_rows_include_library_visibility_toggles():
     assert labels.index("› TV: Hidden  (toggle)") < labels.index("› Movies: Visible  (toggle)")
 
 
+def test_settings_rows_disambiguate_duplicate_library_names():
+    config = AppConfig("http://plex", "token", "client-id")
+    libraries = [
+        LibraryItem("Movies", "1", "movie", object()),
+        LibraryItem("Movies", "7", "movie", object()),
+        LibraryItem("TV", "2", "show", object()),
+    ]
+
+    labels = [getattr(row, "label_text") for row in settings_rows(config, libraries)]
+
+    assert "  Sidebar visibility: None" in labels
+    assert "› Movies (movie #1): Visible  (toggle)" in labels
+    assert "› Movies (movie #7): Visible  (toggle)" in labels
+    assert "› TV: Visible  (toggle)" in labels
+
+
 def test_visible_libraries_filters_hidden_keys():
     config = AppConfig(
         "http://plex",
