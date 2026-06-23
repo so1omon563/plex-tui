@@ -186,9 +186,30 @@ class RawLibraryHub:
     def __init__(self) -> None:
         self.calls = []
 
+    def hubs(self, **kwargs):
+        self.calls.append(("hubs", kwargs))
+        return [RawHub([RawItem(), SecondRawItem()])]
+
     def onDeck(self):
         self.calls.append(())
         return [RawItem(), SecondRawItem()]
+
+
+class RawLibraryOnDeck:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def onDeck(self):
+        self.calls.append(())
+        return [RawItem(), SecondRawItem()]
+
+
+class RawHub:
+    def __init__(self, items) -> None:
+        self._items = items
+
+    def items(self):
+        return self._items
 
 
 class RawPlaylist:
@@ -228,6 +249,10 @@ class RawServer:
     def __init__(self) -> None:
         self.calls = []
         self.raw_playlist = RawPlaylist()
+
+    def continueWatching(self):
+        self.calls.append(("continueWatching",))
+        return [RawItem(), SecondRawItem()]
 
     def search(self, query, **kwargs):
         self.calls.append((query, kwargs))
@@ -369,19 +394,51 @@ def test_search_page_fetches_single_library_search_page():
     assert page.has_more
 
 
-def test_continue_watching_page_fetches_on_deck_page():
+def test_continue_watching_page_fetches_home_continue_hub():
     raw_library = RawLibraryHub()
+    service = object.__new__(PlexService)
+    service.server = RawServer()
+    service.server.library = raw_library
+
+    page = service.continue_watching_page(start=1, size=1)
+
+    assert service.server.calls == []
+    assert raw_library.calls == [("hubs", {"identifier": "home.continue"})]
+    assert len(page.items) == 1
+    assert page.items[0].title == "Second Movie"
+    assert page.start == 1
+    assert page.total == 2
+    assert not page.has_more
+
+
+def test_continue_watching_page_falls_back_to_continue_watching_endpoint():
+    raw_library = RawLibraryHub()
+
+    def broken_hubs(**kwargs):
+        raw_library.calls.append(("hubs", kwargs))
+        raise RuntimeError("unsupported")
+
+    raw_library.hubs = broken_hubs
+    service = object.__new__(PlexService)
+    service.server = RawServer()
+    service.server.library = raw_library
+
+    page = service.continue_watching_page(start=1, size=1)
+
+    assert raw_library.calls == [("hubs", {"identifier": "home.continue"})]
+    assert service.server.calls == [("continueWatching",)]
+    assert page.items[0].title == "Second Movie"
+
+
+def test_continue_watching_page_falls_back_to_on_deck():
+    raw_library = RawLibraryOnDeck()
     service = object.__new__(PlexService)
     service.server = type("Server", (), {"library": raw_library})()
 
     page = service.continue_watching_page(start=1, size=1)
 
     assert raw_library.calls == [()]
-    assert len(page.items) == 1
     assert page.items[0].title == "Second Movie"
-    assert page.start == 1
-    assert page.total == 2
-    assert not page.has_more
 
 
 def test_global_search_page_is_bounded_and_not_paged():

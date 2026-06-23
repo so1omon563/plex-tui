@@ -210,7 +210,15 @@ class PlexService:
         return sliced_media_page(hubs, start, size)
 
     def continue_watching_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
-        raw_items = list(self.server.library.onDeck())
+        hubs = getattr(self.server.library, "hubs", None)
+        if callable(hubs):
+            try:
+                raw_items = [item for hub in hubs(identifier="home.continue") for item in hub.items()]
+                return sliced_media_page(raw_items, start, size)
+            except Exception:
+                pass
+        continue_watching = getattr(self.server, "continueWatching", None)
+        raw_items = list(continue_watching() if callable(continue_watching) else self.server.library.onDeck())
         items = [to_media_item(item) for item in raw_items[start:start + size]]
         return MediaPage(items=items, start=start, total=len(raw_items))
 

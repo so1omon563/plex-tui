@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fixed Plex Home profile switching to prefer profile-specific server resource
+  tokens, falling back to the switched account token only when Plex does not
+  advertise reachable server resources for that profile.
+- Fixed Continue Watching to load from Plex's profile-aware home continue hub
+  instead of broader server-level On Deck and Continue Watching endpoints.
 - Added Settings-based Plex Home profile switching with PIN prompts for
   protected profiles.
 - Clarified in-app library management by showing hidden-library counts and

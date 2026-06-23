@@ -234,8 +234,10 @@ def test_switch_profile_saves_profile_and_home_tokens(monkeypatch):
         users=users,
     )
     saved = {}
+    root_checks = []
 
     monkeypatch.setattr("plextui.auth.MyPlexAccount", lambda token: home_account)
+    monkeypatch.setattr("plextui.auth.plex_root_responds", lambda *args: root_checks.append(args) or True)
     monkeypatch.setattr("plextui.auth.save_config", lambda config: saved.setdefault("config", config))
 
     switched = switch_profile(
@@ -244,6 +246,45 @@ def test_switch_profile_saves_profile_and_home_tokens(monkeypatch):
     )
 
     assert switched.token == "kid-server-token"
+    assert switched.account_token == "Kid-token"
+    assert switched.home_account_token == "home-token"
+    assert root_checks == []
+    assert saved["config"] == switched
+
+
+def test_switch_profile_reuses_current_server_when_profile_has_no_resources(monkeypatch):
+    users = [FakeUser("Kid", 2)]
+    profile_account = FakeAccount([], token="Kid-token", account_id=2, title="Kid")
+    home_account = FakeAccount(
+        [FakeResource("My Plex", "owner-server-token", [], reachable_uri="http://plex.example:32400")],
+        token="home-token",
+        account_id=1,
+        title="Owner",
+        users=users,
+    )
+    saved = {}
+    root_checks = []
+
+    def switch_home_user(user, pin=None):
+        return profile_account
+
+    def plex_root_responds(uri, token, timeout):
+        root_checks.append((uri, token, timeout))
+        return uri == "http://plex.example:32400" and token == "Kid-token"
+
+    home_account.switchHomeUser = switch_home_user
+    monkeypatch.setattr("plextui.auth.MyPlexAccount", lambda token: home_account)
+    monkeypatch.setattr("plextui.auth.plex_root_responds", plex_root_responds)
+    monkeypatch.setattr("plextui.auth.save_config", lambda config: saved.setdefault("config", config))
+
+    switched = switch_profile(
+        AppConfig("http://plex.example:32400", "owner-server-token", "client", account_token="home-token"),
+        ProfileChoice("Kid", "2", False, False, users[0]),
+    )
+
+    assert root_checks == [("http://plex.example:32400", "Kid-token", 5)]
+    assert switched.base_url == "http://plex.example:32400"
+    assert switched.token == "Kid-token"
     assert switched.account_token == "Kid-token"
     assert switched.home_account_token == "home-token"
     assert saved["config"] == switched
