@@ -709,6 +709,10 @@ def test_playback_error_shows_recent_debug_log(tmp_path):
     asyncio.run(run_playback_error_check(tmp_path))
 
 
+def test_unavailable_vod_stream_uses_clean_error_view():
+    asyncio.run(run_unavailable_vod_stream_check())
+
+
 def test_playback_footer_shows_active_playback():
     asyncio.run(run_playback_footer_check())
 
@@ -723,6 +727,35 @@ def test_playback_action_starts_from_beginning():
 
 def test_playback_action_prompts_before_starting_over_resumable_media():
     asyncio.run(run_playback_start_over_prompt_check())
+
+
+def test_playback_action_opens_container_media():
+    app = PlexTuiApp()
+    media = MediaItem("Bubblegum Crisis", "TV Show", "show", "show-1", False, Raw())
+
+    with patch.object(app, "open_media") as open_media:
+        app.play_media(media, resume=False)
+
+    open_media.assert_called_once_with(media)
+
+
+def test_open_playable_media_does_not_fetch_children():
+    asyncio.run(run_open_playable_media_does_not_fetch_children_check())
+
+
+async def run_open_playable_media_does_not_fetch_children_check():
+    item = MediaItem("Cabaret", "", "movie", "movie-1", True, Raw())
+    service = FakePagedService(MediaPage([item], start=0, total=1))
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.service = service
+        app.config = AppConfig("http://plex", "token", "client-id")
+
+        app.open_media(item)
+        await wait_for_status(app, pilot, "Selected Cabaret. Press p to play.")
+
+        assert service.children_calls == []
 
 
 def test_resume_action_uses_saved_position():
@@ -2492,6 +2525,30 @@ async def run_playback_error_check(tmp_path):
         assert "mpv missing" in details
         assert f"Debug log: {log}" in details
         assert "playback error: mpv missing" in details
+
+
+async def run_unavailable_vod_stream_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.show_media("Movies", [MediaItem("Special", "", "episode", "1", True, Raw())])
+        await pilot.pause(0.2)
+
+        with patch(
+            "plextui.app.play_with_mpv",
+            side_effect=PlayerError(
+                "Plex lists this item, but does not provide a playable stream for external players"
+            ),
+        ):
+            app.action_play_selected()
+        await pilot.pause(0.2)
+
+        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Playback Unavailable"
+        details = app.query_one("#detail-content").content
+        assert "Special" in details
+        assert "Plex lists this item, but does not provide a playable stream for external players" in details
+        assert "Debug log:" not in details
 
 
 async def run_playback_footer_check():

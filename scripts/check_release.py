@@ -102,8 +102,6 @@ def check_release_workflow(root: Path) -> CheckResult:
         "uses: so1omon563/release-creator@v1",
         "tag: ${{ needs.bump-version.outputs.new_tag }}",
         "from-tag: ${{ needs.bump-version.outputs.previous_tag }}",
-        "move-major-tag:",
-        "move-minor-tag:",
         "uses: pypa/gh-action-pypi-publish@release/v1",
         "id-token: write",
     ]
@@ -113,6 +111,9 @@ def check_release_workflow(root: Path) -> CheckResult:
 
     if "publish-pypi:" not in workflow or "create-release" not in workflow:
         return CheckResult(False, "bump.yml must publish PyPI after creating a release")
+
+    if "move-major-tag:" in workflow or "move-minor-tag:" in workflow:
+        return CheckResult(False, "bump.yml must not move floating major/minor tags")
 
     return CheckResult(True, "bump.yml contains PR merge tagging, release creation, and PyPI publish wiring")
 

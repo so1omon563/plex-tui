@@ -7,6 +7,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from plextui.player import (
+    direct_play_url,
+    full_metadata,
+    is_drm_vod_stream,
     PlayerError,
     ProgressMonitor,
     StreamChoice,
@@ -30,6 +33,8 @@ def debug_log_path(tmp_path, monkeypatch):
 
 
 class Server:
+    _baseurl = "http://plex"
+
     def url(self, key: str, includeToken: bool = False) -> str:
         return "http://plex" + key
 
@@ -137,6 +142,179 @@ def test_playback_can_start_from_beginning_instead_of_resuming():
     assert handle.start_offset_ms == 0
     assert "--start=65.000" not in args
     assert item.kwargs == {}
+
+
+def test_online_metadata_playback_uses_part_url():
+    class OnlineServer(Server):
+        _baseurl = "https://metadata.provider.plex.tv"
+
+    class OnlinePart(Part):
+        _server = OnlineServer()
+
+    class OnlineItem(Item):
+        _server = Server()
+
+        def getStreamURL(self, **kwargs):
+            raise AssertionError("online metadata playback should prefer the part URL")
+
+        def iterParts(self):
+            return [OnlinePart()]
+
+    item = OnlineItem()
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        handle = play_with_mpv(item)
+
+    args = popen.call_args.args[0]
+    assert args[-1] == "http://plex/library/parts/1/file.mkv"
+    assert not any(arg.startswith("--sub-file=") for arg in args)
+    assert handle.stream_mode == "direct"
+
+
+def test_online_metadata_playback_uses_browse_part_after_reload_loses_parts():
+    class OnlineServer(Server):
+        _baseurl = "https://metadata.provider.plex.tv"
+
+    class OnlinePart(Part):
+        _server = OnlineServer()
+
+    class FullItem(Item):
+        _server = OnlineServer()
+
+    class BrowseItem(Item):
+        def reload(self):
+            return FullItem()
+
+        def iterParts(self):
+            return [OnlinePart()]
+
+    item = BrowseItem()
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        handle = play_with_mpv(item)
+
+    args = popen.call_args.args[0]
+    assert args[-1] == "http://plex/library/parts/1/file.mkv"
+    assert handle.stream_mode == "direct"
+
+
+def test_online_metadata_direct_url_uses_vod_provider_host():
+    class OnlineServer:
+        _baseurl = "https://metadata.provider.plex.tv"
+        VOD = "https://vod.provider.plex.tv"
+
+        def url(self, key: str, includeToken: bool = False) -> str:
+            token = "?X-Plex-Token=token" if includeToken else ""
+            return self._baseurl + key + token
+
+    class OnlinePart(Part):
+        key = "/library/parts/provider-hls.m3u8"
+        _server = OnlineServer()
+
+    class OnlineItem(Item):
+        _server = OnlineServer()
+
+        def iterParts(self):
+            return [OnlinePart()]
+
+    assert direct_play_url(OnlineItem()) == (
+        "https://vod.provider.plex.tv/library/parts/provider-hls.m3u8?X-Plex-Token=token"
+    )
+
+
+def test_online_metadata_full_metadata_fetches_from_vod_provider_and_restores_server():
+    class OnlineServer:
+        _baseurl = "https://metadata.provider.plex.tv"
+
+        def __init__(self):
+            self.fetch_baseurls = []
+
+        def fetchItem(self, key: str):
+            self.fetch_baseurls.append((self._baseurl, key))
+            return type("FullItem", (), {"title": "Episode", "_server": self})()
+
+    class OnlineItem(Item):
+        key = "/library/metadata/episode-1"
+
+        def __init__(self):
+            self._server = OnlineServer()
+
+    item = OnlineItem()
+    full = full_metadata(item)
+
+    assert full.title == "Episode"
+    assert item._server.fetch_baseurls == [
+        ("https://vod.provider.plex.tv", "/library/metadata/episode-1")
+    ]
+    assert item._server._baseurl == "https://metadata.provider.plex.tv"
+
+
+def test_online_metadata_without_vod_stream_raises_player_error():
+    class OnlineServer:
+        _baseurl = "https://metadata.provider.plex.tv"
+
+    class OnlineItem(Item):
+        title = "Special"
+        _server = OnlineServer()
+
+        def reload(self):
+            raise AssertionError("online metadata without VOD media should not reload")
+
+        def iterParts(self):
+            return []
+
+        def getStreamURL(self, **kwargs):
+            raise AssertionError("unavailable online metadata should not request transcode")
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen") as popen,
+    ):
+        with pytest.raises(PlayerError, match="does not provide a playable stream"):
+            play_with_mpv(OnlineItem())
+
+    popen.assert_not_called()
+
+
+def test_drm_vod_stream_detection(monkeypatch):
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, size):
+            return b"#EXTM3U\nhttps://vod-content.plexvideos.com/streams/id/session/cbcs/stream.m3u8"
+
+    monkeypatch.setattr("plextui.player.urlopen", lambda *args, **kwargs: Response())
+
+    assert is_drm_vod_stream("https://vod.provider.plex.tv/library/parts/item-hls.m3u8")
+
+
+def test_non_drm_vod_stream_detection(monkeypatch):
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, size):
+            return b"#EXTM3U\nhttps://vod-content.plexvideos.com/streams/id/plain/stream.m3u8"
+
+    monkeypatch.setattr("plextui.player.urlopen", lambda *args, **kwargs: Response())
+
+    assert not is_drm_vod_stream("https://vod.provider.plex.tv/library/parts/item-hls.m3u8")
 
 
 def test_playback_keeps_selected_resume_offset_when_reload_omits_it():

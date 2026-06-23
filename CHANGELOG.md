@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.12.7 - 2026-06-22
+
 - Added a Discover alternate action to browse Plex Movies & Shows VOD hubs
   directly from the TUI, so Plex-hosted free titles can use the normal playback
   flow when Plex exposes stream URLs.
@@ -14,6 +16,28 @@
 - Limited Plex-hosted VOD hub child fetches to the configured page size and
   logged child-load timings, including when Plex returns more items than
   requested.
+- Changed playback shortcuts on non-playable hub items to open their child
+  items instead of stopping at a "not directly playable" status.
+- Fixed Plex-hosted online movie playback to prefer the media part URL instead
+  of a metadata-provider transcode URL that mpv can reject.
+- Resolved Plex-hosted playback URLs through the VOD provider host and hydrated
+  online episodes there, fixing playable movie failures and episode playback
+  crashes from On Plex hubs.
+- Reported unavailable Plex-hosted VOD episodes cleanly when Plex lists them
+  but does not provide a stream external players can play.
+- Detected Plex-hosted DRM-protected VOD playlists before launching mpv, so
+  those items show the unavailable-playback view instead of appearing to play
+  with no window or audio.
+- Clarified On Plex detail-pane and README language so Plex-listed online
+  titles are not promised as playable until playback confirms a usable stream.
+- Stopped probing child items when opening playable media, avoiding Plex-hosted
+  provider `/children` 404s before playback.
+- Skipped external subtitle URL attachment for Plex-hosted online metadata
+  playback so mpv can try the HLS stream directly.
+- Logged external mpv stderr to the debug log and avoided full-screen Plex
+  errors when Plex-hosted show child loading returns provider 404s.
+- Loaded Plex-hosted show and season children through the working key-based
+  online metadata `/children` endpoint.
 
 ## 0.12.4 - 2026-06-22
 
