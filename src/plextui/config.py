@@ -35,6 +35,7 @@ class AppConfig:
     token: str
     client_identifier: str
     account_token: str = ""
+    home_account_token: str = ""
     preferred_audio_language: str = ""
     preferred_subtitle_language: str = ""
     subtitle_mode: str = "auto"
@@ -86,6 +87,7 @@ def load_config() -> AppConfig:
     token = os.environ.get("PLEX_TUI_TOKEN") or data.get("token", "")
     client_identifier = data.get("client_identifier") or f"plex-tui-{uuid.uuid4()}"
     account_token = data.get("account_token", "")
+    home_account_token = data.get("home_account_token", "")
     preferred_audio_language = data.get("preferred_audio_language", "")
     preferred_subtitle_language = data.get("preferred_subtitle_language", "")
     subtitle_mode = data.get("subtitle_mode", "auto")
@@ -176,6 +178,7 @@ def load_config() -> AppConfig:
         token=token.strip(),
         client_identifier=client_identifier.strip(),
         account_token=account_token.strip(),
+        home_account_token=home_account_token.strip(),
         preferred_audio_language=preferred_audio_language.strip(),
         preferred_subtitle_language=preferred_subtitle_language.strip(),
         subtitle_mode=subtitle_mode.strip(),
@@ -214,6 +217,8 @@ def save_config(config: AppConfig) -> None:
     ]
     if config.account_token:
         lines.append(f'account_token = "{_toml_escape(config.account_token)}"')
+    if config.home_account_token and config.home_account_token != config.account_token:
+        lines.append(f'home_account_token = "{_toml_escape(config.home_account_token)}"')
     if config.preferred_audio_language:
         lines.append(f'preferred_audio_language = "{_toml_escape(config.preferred_audio_language)}"')
     if config.preferred_subtitle_language:

@@ -24,6 +24,7 @@ def test_config_example_parses_and_uses_known_fields():
         "token",
         "client_identifier",
         "account_token",
+        "home_account_token",
         "preferred_audio_language",
         "preferred_subtitle_language",
         "subtitle_mode",
@@ -237,6 +238,24 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     assert "show_on_plex = false" in text
     assert 'discover_media_type = "show"' in text
     assert "confirm_start_over = false" in text
+
+
+def test_home_account_token_only_saves_when_different_from_active_profile(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    monkeypatch.setattr(config, "config_path", lambda: config_file)
+
+    config.save_config(config.AppConfig("http://plex", "server", "client", account_token="home", home_account_token="home"))
+    assert "home_account_token" not in config_file.read_text(encoding="utf-8")
+
+    saved = config.AppConfig("http://plex", "server", "client", account_token="kid", home_account_token="home")
+    config.save_config(saved)
+    loaded = config.load_config()
+
+    text = config_file.read_text(encoding="utf-8")
+    assert 'account_token = "kid"' in text
+    assert 'home_account_token = "home"' in text
+    assert loaded.account_token == "kid"
+    assert loaded.home_account_token == "home"
 
 
 def test_hidden_library_keys_parse_unique_csv_values(tmp_path, monkeypatch):

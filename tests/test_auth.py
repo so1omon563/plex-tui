@@ -3,7 +3,7 @@ from __future__ import annotations
 from urllib.parse import parse_qs, urlsplit
 
 from plextui import __version__
-from plextui.auth import LoginSession, reachable_advertised_urls, reachable_server_choices, plex_headers
+from plextui.auth import LoginSession, ProfileChoice, profile_choices, reachable_advertised_urls, reachable_server_choices, plex_headers, switch_profile
 from plextui.config import AppConfig
 
 
@@ -59,11 +59,48 @@ class FakeResource:
 
 
 class FakeAccount:
-    def __init__(self, resources: list[FakeResource]) -> None:
+    def __init__(
+        self,
+        resources: list[FakeResource],
+        *,
+        token: str = "account-token",
+        account_id: int = 1,
+        title: str = "Owner",
+        users: list[object] | None = None,
+    ) -> None:
         self._resources = resources
+        self.authToken = token
+        self.id = account_id
+        self.title = title
+        self.username = title
+        self.friendlyName = title
+        self.protected = False
+        self._users = users or []
 
     def resources(self) -> list[FakeResource]:
         return self._resources
+
+    def users(self) -> list[object]:
+        return self._users
+
+    def switchHomeUser(self, user, pin=None):
+        if pin == "bad":
+            raise RuntimeError("bad pin")
+        return FakeAccount(
+            [FakeResource("My Plex", "kid-server-token", [], reachable_uri="http://plex.example:32400")],
+            token=f"{user.username}-token",
+            account_id=user.id,
+            title=user.title,
+        )
+
+
+class FakeUser:
+    def __init__(self, title: str, user_id: int, *, home: bool = True, protected: bool = False) -> None:
+        self.title = title
+        self.username = title
+        self.id = user_id
+        self.home = home
+        self.protected = protected
 
 
 def test_login_start_returns_url_when_browser_open_fails(monkeypatch):
@@ -164,6 +201,52 @@ def test_login_wait_falls_back_to_reachable_advertised_urls(monkeypatch):
 
     assert [choice.uri for choice in choices] == ["http://192.168.0.13:32400"]
     assert choices[0].verified
+
+
+def test_profile_choices_include_current_home_users(monkeypatch):
+    users = [
+        FakeUser("Kid", 2, protected=True),
+        FakeUser("Friend", 3, home=False),
+    ]
+
+    def fake_account(token: str) -> FakeAccount:
+        if token == "kid-token":
+            return FakeAccount([], token=token, account_id=2, title="Kid")
+        return FakeAccount([], token=token, account_id=1, title="Owner", users=users)
+
+    monkeypatch.setattr("plextui.auth.MyPlexAccount", fake_account)
+
+    choices = profile_choices(AppConfig("http://plex", "server", "client", account_token="kid-token", home_account_token="home-token"))
+
+    assert [(choice.title, choice.key, choice.protected, choice.current) for choice in choices] == [
+        ("Owner", "1", False, False),
+        ("Kid", "2", True, True),
+    ]
+
+
+def test_switch_profile_saves_profile_and_home_tokens(monkeypatch):
+    users = [FakeUser("Kid", 2)]
+    home_account = FakeAccount(
+        [FakeResource("My Plex", "owner-server-token", [], reachable_uri="http://plex.example:32400")],
+        token="home-token",
+        account_id=1,
+        title="Owner",
+        users=users,
+    )
+    saved = {}
+
+    monkeypatch.setattr("plextui.auth.MyPlexAccount", lambda token: home_account)
+    monkeypatch.setattr("plextui.auth.save_config", lambda config: saved.setdefault("config", config))
+
+    switched = switch_profile(
+        AppConfig("http://plex.example:32400", "owner-server-token", "client", account_token="home-token"),
+        ProfileChoice("Kid", "2", False, False, users[0]),
+    )
+
+    assert switched.token == "kid-server-token"
+    assert switched.account_token == "Kid-token"
+    assert switched.home_account_token == "home-token"
+    assert saved["config"] == switched
 
 
 def test_reachable_server_choices_deduplicates_connected_urls():

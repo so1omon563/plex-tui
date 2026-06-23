@@ -8,6 +8,8 @@ client_identifier = "plex-tui-your-stable-client-id"
 
 # Optional account token saved by Plex PIN login.
 # account_token = "your-plex-account-token"
+# Optional original Plex Home token saved after profile switching.
+# home_account_token = "your-plex-home-account-token"
 
 # Optional stream preferences. Use Plex language codes when possible.
 # preferred_audio_language = "jpn"

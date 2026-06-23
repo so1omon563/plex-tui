@@ -421,6 +421,7 @@ def test_render_settings_hides_tokens():
     assert "secret" not in rendered
     assert "Server Token:  saved" in rendered
     assert "Account Token: saved" in rendered
+    assert "Home Token:    saved" in rendered
     assert "Cache Path:" in rendered
     assert "Debug Log:" in rendered
 
@@ -484,6 +485,8 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "Browsing" in labels
     assert "Diagnostics" in labels
     assert "  Server: http://plex" in labels
+    assert "  Home Token: not set" in labels
+    assert "› Switch Plex profile  (run)" in labels
     assert "› Subtitle Mode: Auto  (cycle)" in labels
     assert "› Playback Mode: Auto / direct default  (cycle)" in labels
     assert "› Playback Display: External mpv window  (cycle)" in labels

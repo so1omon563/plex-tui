@@ -39,7 +39,7 @@ from .artwork import (
     render_protocol_artwork,
     resolve_protocol_renderer,
 )
-from .auth import LoginSession, ServerChoice, save_server_choice
+from .auth import LoginSession, ProfileChoice, ServerChoice, profile_choices, save_server_choice, switch_profile
 from .config import (
     DEFAULT_AUTO_LOAD_THRESHOLD,
     DEFAULT_GRID_PREFETCH_PAGES,
@@ -380,6 +380,16 @@ class ServerRow(ListItem):
         self.choice = choice
 
 
+class ProfileRow(ListItem):
+    def __init__(self, choice: ProfileChoice) -> None:
+        self.choice = choice
+        marker = "* " if choice.current else "  "
+        suffix = " (current)" if choice.current else ""
+        locked = " [PIN]" if choice.protected else ""
+        self.label_text = f"{marker}{choice.title}{locked}{suffix}"
+        super().__init__(Label(self.label_text))
+
+
 class StreamRow(ListItem):
     def __init__(self, choice: StreamChoice, stream_type: str, current: bool = False) -> None:
         marker = "* " if current else "  "
@@ -591,6 +601,7 @@ class PlexTuiApp(App[None]):
     search_global: bool
     input_mode: str
     pending_confirmation_action: str
+    pending_profile_choice: ProfileChoice | None
     help_visible: bool
     settings_visible: bool
     picker_visible: bool
@@ -641,6 +652,7 @@ class PlexTuiApp(App[None]):
         self.search_global = False
         self.input_mode = ""
         self.pending_confirmation_action = ""
+        self.pending_profile_choice = None
         self.help_visible = False
         self.settings_visible = False
         self.picker_visible = False
@@ -847,6 +859,8 @@ class PlexTuiApp(App[None]):
             self.load_more_media()
         elif isinstance(row, ServerRow):
             self.choose_server(row.choice)
+        elif isinstance(row, ProfileRow):
+            self.choose_profile(row.choice)
         elif isinstance(row, StreamRow):
             self.choose_stream(row.choice, row.stream_type)
         elif isinstance(row, PlaylistCreateRow):
@@ -918,6 +932,12 @@ class PlexTuiApp(App[None]):
                 )
             )
             self.set_status(context_hint(row))
+        elif isinstance(row, ProfileRow):
+            mark_active_row(event.list_view, row)
+            protected = "PIN required" if row.choice.protected else "No PIN required"
+            current = "\n\nCurrent profile" if row.choice.current else ""
+            self.show_detail_text(f"{row.choice.title}\n\n{protected}{current}")
+            self.set_status(context_hint(row))
         elif isinstance(row, StreamRow):
             mark_active_row(event.list_view, row)
             self.set_status(context_hint(row))
@@ -963,6 +983,69 @@ class PlexTuiApp(App[None]):
             return
         self.set_status(f"Saved server {choice.name}. Connecting...")
         self.load_server()
+
+    @work(thread=True)
+    def load_profiles(self) -> None:
+        self.post_message(StatusChanged("Loading Plex profiles..."))
+        try:
+            choices = profile_choices(self.config)
+        except Exception as exc:
+            self.call_from_thread(self.show_error, str(exc))
+            return
+
+        def show_choices() -> None:
+            self.settings_visible = False
+            self.set_media_title("Switch Profile")
+            view = self.show_media_list()
+            view.clear()
+            for choice in choices:
+                view.append(ProfileRow(choice))
+            view.focus()
+            self.show_detail_text("Choose a Plex Home profile. PIN-protected profiles will ask for a PIN before switching.")
+            self.set_status("Select a Plex profile and press Enter")
+
+        self.call_from_thread(show_choices)
+
+    def choose_profile(self, choice: ProfileChoice) -> None:
+        if choice.current:
+            self.set_status(f"{choice.title} is already active")
+            return
+        if choice.protected:
+            self.prompt_profile_pin(choice)
+            return
+        self.switch_to_profile(choice)
+
+    def prompt_profile_pin(self, choice: ProfileChoice) -> None:
+        self.pending_profile_choice = choice
+        self.input_mode = "profile_pin"
+        search = self.query_one("#search", Input)
+        search.placeholder = f"PIN for {choice.title}"
+        search.value = ""
+        search.password = True
+        search.display = True
+        search.focus()
+        self.set_focus_pane(main=True)
+        self.set_status(f"Enter PIN for {choice.title}")
+
+    @work(thread=True)
+    def switch_to_profile(self, choice: ProfileChoice, pin: str = "") -> None:
+        self.post_message(StatusChanged(f"Switching to {choice.title}..."))
+        try:
+            self.config = switch_profile(self.config, choice, pin)
+        except Exception as exc:
+            self.call_from_thread(self.show_error, f"Profile switch failed: {exc}")
+            return
+
+        def reconnect() -> None:
+            self.pending_profile_choice = None
+            self.settings_visible = False
+            self.selected_audio = None
+            self.selected_subtitle = None
+            self.detail_cache = {}
+            self.set_status(f"Switched to {choice.title}. Reconnecting...")
+            self.load_server()
+
+        self.call_from_thread(reconnect)
 
     def open_library_menu(self, library: LibraryItem) -> None:
         self.selected_library = library
@@ -1044,6 +1127,7 @@ class PlexTuiApp(App[None]):
         search = self.query_one("#search", Input)
         search.placeholder = "Search Plex Discover"
         search.value = ""
+        search.password = False
         search.display = True
         search.focus()
         self.set_focus_pane(main=True)
@@ -1671,6 +1755,7 @@ class PlexTuiApp(App[None]):
         search = self.query_one("#search", Input)
         search.placeholder = "Fuzzy search loaded items"
         search.value = ""
+        search.password = False
         search.display = True
         search.focus()
         self.set_focus_pane(main=True)
@@ -1681,6 +1766,7 @@ class PlexTuiApp(App[None]):
         search = self.query_one("#search", Input)
         search.placeholder = "Search all libraries through Plex"
         search.value = ""
+        search.password = False
         search.display = True
         search.focus()
         self.set_focus_pane(main=True)
@@ -2086,6 +2172,9 @@ class PlexTuiApp(App[None]):
             self.selected_audio = None
             self.selected_subtitle = None
             self.begin_login()
+            return
+        if action == "switch_profile":
+            self.load_profiles()
             return
         if action == "clear_tracks":
             self.pending_confirmation_action = ""
@@ -2533,6 +2622,7 @@ class PlexTuiApp(App[None]):
         search = self.query_one("#search", Input)
         search.placeholder = f"New playlist name for {playlist_items_label(items)}"
         search.value = ""
+        search.password = False
         search.display = True
         search.focus()
         self.show_detail_text(f"Enter a name for a new playlist containing {playlist_items_label(items)}.")
@@ -2575,6 +2665,7 @@ class PlexTuiApp(App[None]):
         search = self.query_one("#search", Input)
         search.placeholder = f"Rename playlist: {playlist.title}"
         search.value = playlist.title
+        search.password = False
         search.display = True
         search.focus()
         self.show_detail_text(f"Enter a new name for playlist {playlist.title}.")
@@ -2763,6 +2854,7 @@ class PlexTuiApp(App[None]):
         search = self.query_one("#search", Input)
         search.placeholder = f'mpv window size: 80%, 90%, 1280x720, or empty for default {DEFAULT_MPV_WINDOW_SIZE}'
         search.value = self.config.mpv_window_size
+        search.password = False
         search.display = True
         search.focus()
         self.show_detail_text(
@@ -2795,6 +2887,7 @@ class PlexTuiApp(App[None]):
         search = self.query_one("#search", Input)
         search.placeholder = f"{label}: {minimum}-{maximum}, or empty for default {default}"
         search.value = str(current)
+        search.password = False
         search.display = True
         search.focus()
         self.show_detail_text(f"Enter {label.lower()} as a whole number from {minimum} to {maximum}. Submit empty to reset to {default}.")
@@ -2856,6 +2949,13 @@ class PlexTuiApp(App[None]):
             query = event.value.strip()
             event.input.display = False
             event.input.value = ""
+            event.input.password = False
+            if self.input_mode == "profile_pin":
+                choice = self.pending_profile_choice
+                self.input_mode = ""
+                if choice is not None:
+                    self.switch_to_profile(choice, query)
+                return
             if self.input_mode == "mpv_window_size":
                 self.save_mpv_window_size_input(query)
                 return
@@ -4473,8 +4573,10 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsValueRow(f"Server: {config.base_url or 'not set'}"),
         SettingsValueRow(f"Server Token: {'saved' if config.token else 'not set'}"),
         SettingsValueRow(f"Account Token: {'saved' if config.account_token else 'not set'}"),
+        SettingsValueRow(f"Home Token: {'saved' if (config.home_account_token or config.account_token) else 'not set'}"),
         SettingsActionRow("Reconnect / reload libraries", "reload"),
         SettingsActionRow("Relogin with Plex", "relogin"),
+        SettingsActionRow("Switch Plex profile", "switch_profile"),
         SettingsHeaderRow("Streams"),
         SettingsValueRow(f"Audio Preference: {preference_value(config.preferred_audio_language)}"),
         SettingsActionRow(f"Subtitle Mode: {subtitle_mode_value(config)}", "cycle_subtitle_mode"),
@@ -4540,8 +4642,9 @@ def render_settings(config: AppConfig) -> str:
             ("Server", config.base_url or "not set"),
             ("Server Token", "saved" if config.token else "not set"),
             ("Account Token", "saved" if config.account_token else "not set"),
+            ("Home Token", "saved" if (config.home_account_token or config.account_token) else "not set"),
         ],
-        ["Reconnect / reload libraries", "Relogin with Plex"],
+        ["Reconnect / reload libraries", "Relogin with Plex", "Switch Plex profile"],
     )
     append_settings_section(
         lines,
@@ -4773,6 +4876,8 @@ def context_hint(row: object) -> str:
         return "Grid: Arrows/page select card / Enter opens item"
     if isinstance(row, ServerRow):
         return "Servers: Enter selects server"
+    if isinstance(row, ProfileRow):
+        return "Profiles: Enter switches profile"
     if isinstance(row, StreamRow):
         return "Streams: Enter saves preference"
     if isinstance(row, PlaylistCreateRow):
@@ -4994,6 +5099,8 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         )
     if action == "clear_audio":
         return f"Current audio preference: {preference_value(config.preferred_audio_language)}"
+    if action == "switch_profile":
+        return f"Profile switching: {'available' if (config.home_account_token or config.account_token) else 'login required'}"
     if action in {"subtitle_auto", "subtitle_none", "clear_subtitle"}:
         return (
             f"Current subtitle mode: {subtitle_mode_value(config)}\n"
@@ -5062,6 +5169,8 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to reconnect and reload libraries."
     if action == "relogin":
         return "Press Enter to start Plex login again."
+    if action == "switch_profile":
+        return "Press Enter to choose a Plex Home profile. PIN-protected profiles ask for a PIN."
     if action == "subtitle_auto":
         return "Press Enter to let Plex or saved language preference choose subtitles."
     if action == "subtitle_none":
@@ -5132,6 +5241,7 @@ def settings_action_label(action: str) -> str:
         "clear_subtitle": "Clear subtitle preference",
         "reload": "Reconnect / reload libraries",
         "relogin": "Relogin with Plex",
+        "switch_profile": "Switch Plex profile",
         "subtitle_auto": "Set subtitles to Auto",
         "subtitle_none": "Set subtitles to None",
         "cycle_subtitle_mode": "Subtitle Mode",

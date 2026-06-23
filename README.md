@@ -70,6 +70,7 @@ working today. Expect rough edges, but expect progress too.
 ## Features
 
 - Plex PIN login and server selection.
+- Plex Home profile switching from Settings, including PIN-protected profiles.
 - Paged library browsing with automatic loading near the end of loaded items.
 - Library submenu entrypoints for all items, Recommended, Collections,
   Playlists, and Categories. Library rows open all items by default; Space
@@ -226,6 +227,9 @@ the Settings screen or `plex-tui --config-path` to find the active file.
 If your Plex server has multiple libraries with the same name, use Settings to
 hide or reorder individual sidebar libraries. Duplicate library names show their
 type and Plex key in Settings so each row is identifiable.
+
+Use Settings to switch Plex Home profiles after login. Protected profiles prompt
+for their PIN before reconnecting with that profile's server and account tokens.
 
 You can also configure a server manually. macOS config path:
 
