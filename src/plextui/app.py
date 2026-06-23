@@ -4416,18 +4416,44 @@ def library_by_key(libraries: list[LibraryItem], key: str) -> LibraryItem | None
     return None
 
 
-def library_visibility_row(library: LibraryItem, config: AppConfig) -> SettingsActionRow:
+def library_settings_label(library: LibraryItem, duplicate_titles: set[str]) -> str:
+    if library.title not in duplicate_titles:
+        return library.title
+    return f"{library.title} ({library.kind} #{library.key})"
+
+
+def duplicate_library_titles(libraries: list[LibraryItem]) -> set[str]:
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for library in libraries:
+        if library.title in seen:
+            duplicates.add(library.title)
+        seen.add(library.title)
+    return duplicates
+
+
+def library_visibility_row(
+    library: LibraryItem,
+    config: AppConfig,
+    duplicate_titles: set[str] | None = None,
+) -> SettingsActionRow:
     state = "Hidden" if library.key in config.hidden_library_keys else "Visible"
+    label = library_settings_label(library, duplicate_titles or set())
     return SettingsActionRow(
-        f"{library.title}: {state}",
+        f"{label}: {state}",
         f"toggle_library_visibility:{library.key}",
     )
 
 
-def library_order_row(library: LibraryItem, direction: str) -> SettingsActionRow:
+def library_order_row(
+    library: LibraryItem,
+    direction: str,
+    duplicate_titles: set[str] | None = None,
+) -> SettingsActionRow:
     label = "Move up" if direction == "up" else "Move down"
+    library_label = library_settings_label(library, duplicate_titles or set())
     return SettingsActionRow(
-        f"{library.title}: {label}",
+        f"{library_label}: {label}",
         f"move_library_{direction}:{library.key}",
     )
 
@@ -4485,10 +4511,12 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
     if libraries:
         rows.append(SettingsHeaderRow("Libraries"))
         ordered = ordered_libraries(libraries, config)
+        rows.append(SettingsValueRow(f"Sidebar visibility: {hidden_library_count_value(config)}"))
+        duplicate_titles = duplicate_library_titles(ordered)
         for library in ordered:
-            rows.append(library_visibility_row(library, config))
-            rows.append(library_order_row(library, "up"))
-            rows.append(library_order_row(library, "down"))
+            rows.append(library_visibility_row(library, config, duplicate_titles))
+            rows.append(library_order_row(library, "up", duplicate_titles))
+            rows.append(library_order_row(library, "down", duplicate_titles))
     rows.extend([
         SettingsHeaderRow("Diagnostics"),
         SettingsValueRow(f"Config Path: {config_path()}"),
