@@ -1099,7 +1099,8 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
     assert "▶ selected" in selected_text
     assert "┏" not in selected_text
     assert "▶ selected" not in unselected_text
-    assert "playable" in unselected_text
+    assert "playable" not in unselected_text
+    assert "Movie · 2024" not in unselected_text
 
 
 def test_grid_card_footer_shows_watch_progress():
@@ -1114,7 +1115,7 @@ def test_grid_card_footer_shows_watch_progress():
 
     assert "[####----] 50%" in str(selected.renderables[3])
     assert "▶ [####----] 50%" in str(selected.renderables[3])
-    assert "[####----] 50%" in str(unselected.renderables[3])
+    assert "[####----] 50%" not in str(unselected.renderables[3])
 
 
 def test_grid_card_styles_follow_visual_state_tokens():
@@ -1189,7 +1190,7 @@ def test_render_media_grid_text_snapshot_distinguishes_missing_and_collection_ar
     assert "Blade Runner" in text
     assert "Recently Added" in text
     assert "──┼──" in text
-    assert "playable" in text
+    assert "playable" not in text
     assert "▶ selected" in text
 
 

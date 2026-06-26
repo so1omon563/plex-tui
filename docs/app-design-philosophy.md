@@ -90,6 +90,8 @@ normal libraries are hidden, because it is a primary watching workflow.
 
 Focus should be obvious but not loud. Border weight, pane title treatment, and
 row highlight should work together so the active pane is visible at a glance.
+Pane titles should orient the reader without behaving like filled title bars;
+the media and selected row should carry more visual energy than pane chrome.
 
 ### Main Browse Pane
 
@@ -99,6 +101,8 @@ compare adjacent items.
 - List view should prioritize title, year, edition, duration, progress, and
   resume/watched state in a predictable order.
 - Grid view should keep poster art dominant for playable media.
+- In grid view, unselected media cards should recede to poster and title while
+  the selected card earns richer metadata and progress.
 - Collection-only grid pages should use roomier spacing and left alignment so
   they read as browse choices.
 - Mixed pages should not let container cards visually overpower real media.
@@ -109,10 +113,9 @@ The details pane should follow this hierarchy:
 
 1. Title and immediate context.
 2. Playability and primary action.
-3. Media facts and progress.
-4. Preferences and effective playback choices.
-5. Track lists.
-6. Summary or diagnostics.
+3. Summary.
+4. Catalog and production metadata.
+5. Technical playback, artwork, and stream details.
 
 Episode context deserves special handling because a standalone episode title is
 often not enough. Show, season, and episode number should be visible near the

@@ -492,6 +492,14 @@ class PlexTuiApp(App[None]):
         margin: 0 1;
     }
 
+    #libraries {
+        padding: 1 1;
+    }
+
+    #media {
+        padding: 1 2;
+    }
+
     #status {
         height: 1;
         padding: 0 1;
@@ -506,14 +514,12 @@ class PlexTuiApp(App[None]):
     }
 
     .pane-title {
-        text-style: bold;
-        padding: 0 1;
-        background: $panel;
+        color: $text-muted;
+        padding: 1 2 0 2;
     }
 
     .focused-pane > .pane-title {
-        background: $primary;
-        color: $text;
+        color: $primary;
     }
 
     #detail-content {
@@ -4060,13 +4066,34 @@ def render_media_grid_card(
         )
     else:
         artwork = center_renderable_lines(artwork, card_width)
-    footer = grid_card_footer(media, selected, bulk_selected)
+    secondary_lines = grid_card_secondary_lines(media, selected, config, bulk_selected, collection_card)
     return Group(
         artwork,
         *(grid_card_line(title, card_width, title_style) for title in title_lines),
-        grid_card_line(subtitle, card_width, UI_GRID_MUTED),
-        grid_card_line(footer, card_width, f"bold {UI_SELECTED_ACCENT}" if selected else UI_GRID_DIM),
+        *secondary_lines,
     )
+
+
+def grid_card_secondary_lines(
+    media: MediaItem,
+    selected: bool,
+    config: AppConfig,
+    bulk_selected: bool,
+    collection_card: bool,
+) -> list[Text]:
+    card_width = grid_card_width(config, collection_card=collection_card)
+    subtitle = grid_card_text(grid_card_subtitle(media), config, collection_card=collection_card)
+    footer = grid_card_footer(media, selected, bulk_selected)
+    if selected or collection_card or bulk_selected:
+        footer_style = f"bold {UI_SELECTED_ACCENT}" if selected else UI_GRID_DIM
+        return [
+            grid_card_line(subtitle, card_width, UI_GRID_MUTED),
+            grid_card_line(footer, card_width, footer_style),
+        ]
+    return [
+        grid_card_line("", card_width, UI_GRID_MUTED),
+        grid_card_line("", card_width, UI_GRID_DIM),
+    ]
 
 
 def grid_items_are_collection_cards(items: list[MediaItem]) -> bool:
