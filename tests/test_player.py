@@ -122,6 +122,9 @@ def test_playback_applies_selected_streams_and_resume_offset(debug_log_path):
     args = popen.call_args.args[0]
     assert handle.start_offset_ms == 65000
     assert handle.command[0] == "mpv"
+    assert "--no-terminal" in args
+    assert "--force-window=immediate" in args
+    assert "--focus-on=all" in args
     assert "--start=65.000" not in args
     assert "--sub-file=http://plex/library/streams/1" in args
     assert item.kwargs == {"audioStreamID": 42, "offset": 65}
@@ -375,6 +378,9 @@ def test_terminal_playback_uses_tct_and_terminal_output():
     kwargs = popen.call_args.kwargs
     assert "--vo=tct" in args
     assert "--terminal=yes" in args
+    assert "--no-terminal" not in args
+    assert "--force-window=immediate" not in args
+    assert "--focus-on=all" not in args
     assert "--vo-tct-buffering=frame" in args
     assert "--vo-tct-width=100" in args
     assert "--vo-tct-height=28" in args

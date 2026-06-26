@@ -18,6 +18,7 @@ from plextui.app import (
     LibraryRow,
     LibraryMenuRow,
     LoadMoreRow,
+    MediaGrid,
     OnPlexRow,
     PlexTuiApp,
     PlaylistsRow,
@@ -30,6 +31,7 @@ from plextui.app import (
     render_loaded_status,
     should_auto_load_more,
 )
+from textual.widgets import ListView
 from plextui.config import AppConfig
 from plextui.models import LibraryItem, MediaItem
 from plextui.player import PlayerError, StreamChoice
@@ -211,6 +213,10 @@ def test_show_media_highlights_first_rebuilt_row():
 
 def test_focus_actions_mark_active_pane():
     asyncio.run(run_focus_pane_check())
+
+
+def test_left_right_respect_focused_pane():
+    asyncio.run(run_left_right_focus_ownership_check())
 
 
 def test_tab_focus_updates_active_pane_marker():
@@ -977,6 +983,43 @@ async def run_focus_pane_check():
         assert app.query_one("#details").has_class("focused-pane")
         assert app.query_one("#details-title").content == "▶ Details"
         assert not app.query_one("#main").has_class("focused-pane")
+
+
+async def run_left_right_focus_ownership_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        app.populate_libraries([
+            LibraryItem("Movies", "1", "movie", object()),
+            LibraryItem("TV Shows", "2", "show", object()),
+        ])
+        app.show_media(
+            "Movies",
+            [
+                MediaItem("First", "", "movie", "1", True, Raw()),
+                MediaItem("Second", "", "movie", "2", True, Raw()),
+            ],
+        )
+        await pilot.pause(0.2)
+
+        libraries = app.query_one("#libraries", ListView)
+        grid = app.query_one("#media-grid", MediaGrid)
+        highlighted_library_row = libraries.highlighted_child
+        assert grid.selected_media.title == "First"
+
+        app.action_focus_details()
+        await pilot.press("right")
+        await pilot.pause(0.1)
+
+        assert libraries.highlighted_child is highlighted_library_row
+        assert grid.selected_media.title == "First"
+
+        app.action_focus_media()
+        await pilot.press("right")
+        await pilot.pause(0.1)
+
+        assert grid.selected_media.title == "Second"
 
 
 async def run_tab_focus_pane_check():

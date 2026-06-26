@@ -1832,10 +1832,14 @@ class PlexTuiApp(App[None]):
     def action_grid_left(self) -> None:
         if self.adjust_highlighted_setting(-1):
             return
+        if not self.media_grid_has_focus():
+            return
         self.move_grid_selection(-1)
 
     def action_grid_right(self) -> None:
         if self.adjust_highlighted_setting(1):
+            return
+        if not self.media_grid_has_focus():
             return
         self.move_grid_selection(1)
 
@@ -1898,6 +1902,9 @@ class PlexTuiApp(App[None]):
         grid = self.query_one("#media-grid", MediaGrid)
         if self.media_grid_visible():
             grid.move_selection(direction)
+
+    def media_grid_has_focus(self) -> bool:
+        return self.media_grid_visible() and self.focused is self.query_one("#media-grid", MediaGrid)
 
     def schedule_grid_prefetch(self, grid: MediaGrid) -> None:
         if not artwork_enabled(self.config):

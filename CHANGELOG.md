@@ -9,6 +9,10 @@
   unselected grid cards recede behind the selected media card.
 - Fixed slow Discover/search submissions so the hidden search input no longer
   traps normal shortcuts like Escape or resume.
+- Fixed external mpv playback so the video window opens immediately while
+  plex-tui stays running.
+- Fixed left/right arrow handling so focused panes keep ownership instead of
+  letting media-grid movement leak across the interface.
 - Fixed Plex Home profile switching to prefer profile-specific server resource
   tokens, falling back to the switched account token only when Plex does not
   advertise reachable server resources for that profile.
