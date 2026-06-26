@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reworked the Details pane into a quieter media-case style layout that leads
+  with title, editorial facts, playback actions, and summary before catalog and
+  technical stream information.
 - Fixed Plex Home profile switching to prefer profile-specific server resource
   tokens, falling back to the switched account token only when Plex does not
   advertise reachable server resources for that profile.

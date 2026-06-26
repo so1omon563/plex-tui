@@ -467,8 +467,7 @@ class PlexTuiApp(App[None]):
     }
 
     #sidebar.focused-pane {
-        border: heavy $primary;
-        background: $boost;
+        border: solid $primary;
     }
 
     #main {
@@ -477,18 +476,16 @@ class PlexTuiApp(App[None]):
     }
 
     #main.focused-pane {
-        border: heavy $primary;
-        background: $boost;
+        border: solid $primary;
     }
 
     #details {
-        width: 42;
+        width: 44;
         border: solid $panel;
     }
 
     #details.focused-pane {
-        border: heavy $primary;
-        background: $boost;
+        border: solid $primary;
     }
 
     #search {
@@ -520,7 +517,7 @@ class PlexTuiApp(App[None]):
     }
 
     #detail-content {
-        padding: 0 1;
+        padding: 1 2;
         width: 1fr;
         height: auto;
     }
@@ -541,7 +538,7 @@ class PlexTuiApp(App[None]):
     }
 
     #media-grid {
-        padding: 0 1;
+        padding: 1 2;
     }
     """
     BINDINGS = [
@@ -904,6 +901,7 @@ class PlexTuiApp(App[None]):
             self.set_status(context_hint(row))
         elif isinstance(row, LibraryRow):
             mark_active_row(event.list_view, row)
+            self.show_detail_text(library_row_description(row.library, self.config))
             self.set_status(context_hint(row))
         elif isinstance(row, LibraryMenuRow):
             mark_active_row(event.list_view, row)
@@ -3677,10 +3675,9 @@ def render_details(
     raw: object | None = None,
     context_actions: tuple[str, ...] = (),
 ) -> str:
-    lines = render_detail_header(details, config, context_actions)
-
-    metadata_rows = list(getattr(details, "metadata"))
-    episode_context = episode_context_rows(details, metadata_rows)
+    header_metadata_rows = list(getattr(details, "metadata"))
+    metadata_rows = list(header_metadata_rows)
+    episode_context = episode_context_rows(details, header_metadata_rows)
     if episode_context:
         metadata_rows = [
             (label, value)
@@ -3688,108 +3685,157 @@ def render_details(
             if label not in EPISODE_CONTEXT_LABEL_SET
         ]
 
-    metadata = [*detail_key_value_rows(metadata_rows)]
-    append_detail_section(lines, "Metadata", metadata or ["No metadata reported"])
+    lines = render_detail_header(details, header_metadata_rows, config, context_actions)
 
+    summary = getattr(details, "summary")
+    if summary:
+        append_detail_section(lines, "Summary", wrapped_detail_text(summary))
+
+    for heading, rows in grouped_metadata_sections(metadata_rows):
+        append_detail_section(lines, heading, detail_key_value_rows(rows))
+    if not metadata_rows:
+        append_detail_section(lines, "Catalog", ["No metadata reported"])
+
+    technical_rows: list[str] = []
+    artwork = artwork_status(details, config)
+    technical_rows.extend(detail_key_value_rows([("Artwork", artwork)]))
     if config is not None:
-        append_detail_section(
-            lines,
-            "Preferences",
-            detail_key_value_rows([
-                ("Audio", preference_value(config.preferred_audio_language)),
-                ("Subtitles", f"{subtitle_mode_value(config)} / {subtitle_language_value(config)}"),
-                ("Playback Mode", playback_mode_value(config)),
-                ("Playback Display", playback_display_value(config)),
-                ("Transcode Quality", transcode_quality_value(config)),
-            ]),
-        )
+        technical_rows.extend(detail_key_value_rows([
+            ("Playback Mode", playback_mode_value(config)),
+            ("Playback Display", playback_display_value(config)),
+            ("Transcode Quality", transcode_quality_value(config)),
+        ]))
         if raw is not None and bool(getattr(details, "playable")):
             effective = effective_stream_preference_rows(raw, config)
             if effective:
-                append_detail_section(lines, "Effective Playback", detail_key_value_rows(effective))
+                technical_rows.append("")
+                technical_rows.append("Effective Playback")
+                technical_rows.extend(detail_key_value_rows(effective))
+    append_detail_section(lines, "Technical", technical_rows)
 
     audio = getattr(details, "audio", [])
+    missing_stream_rows = []
     if audio:
         append_detail_section(lines, stream_section_heading("Audio Tracks", audio), detail_list_rows(audio))
     else:
-        append_detail_section(lines, "Audio Tracks", ["No audio tracks reported"])
+        missing_stream_rows.append(("Audio", "none reported"))
 
     subtitles = getattr(details, "subtitles")
     if subtitles:
         append_detail_section(lines, stream_section_heading("Subtitle Tracks", subtitles), detail_list_rows(subtitles))
     else:
-        append_detail_section(lines, "Subtitle Tracks", ["No subtitle tracks reported"])
+        missing_stream_rows.append(("Subtitles", "none reported"))
 
-    summary = getattr(details, "summary")
-    if summary:
-        append_detail_section(lines, "Summary", wrapped_detail_text(summary))
+    if missing_stream_rows:
+        append_detail_section(lines, "Streams", detail_key_value_rows(missing_stream_rows))
 
     return "\n".join(lines)
 
 
 def render_detail_header(
     details: object,
+    metadata: list[tuple[str, str]],
     config: AppConfig | None = None,
     context_actions: tuple[str, ...] = (),
 ) -> list[str]:
     title = getattr(details, "title")
-    metadata = list(getattr(details, "metadata", []))
     title_lines = textwrap.wrap(title, width=DETAIL_SUMMARY_WIDTH) or [title]
     episode_context = episode_context_summary(details, metadata)
     context_lines = textwrap.wrap(episode_context, width=DETAIL_SUMMARY_WIDTH) if episode_context else []
-    facts = [str(fact) for fact in getattr(details, "facts", []) if fact]
-    artwork = artwork_status(details, config)
     progress = detail_metadata_value(metadata, "Progress")
-    title_width = max(len(line) for line in [*title_lines, *context_lines])
-    lines = [*title_lines, *context_lines, "-" * min(max(title_width, 8), DETAIL_SUMMARY_WIDTH)]
-    if facts:
-        lines.extend(textwrap.wrap(" / ".join(facts), width=DETAIL_SUMMARY_WIDTH) or [""])
-    lines.extend([
+    title_width = max(len(line) for line in [*title_lines, *context_lines, *primary_fact_lines(details, metadata)])
+    lines = [
+        *title_lines,
+        *context_lines,
+        "=" * min(max(title_width, 8), DETAIL_SUMMARY_WIDTH),
+        *primary_fact_lines(details, metadata),
         "",
         "Playback",
-        *playback_readiness_rows(bool(getattr(details, "playable")), progress, context_actions),
-        f"Artwork: {artwork}",
-    ])
+        *playback_readiness_rows(bool(getattr(details, "playable")), progress, config, context_actions),
+    ]
     return lines
 
 
-def playback_readiness_rows(playable: bool, progress: str = "", context_actions: tuple[str, ...] = ()) -> list[str]:
+def primary_fact_lines(details: object, metadata: list[tuple[str, str]]) -> list[str]:
+    kind = kind_label(str(getattr(details, "kind", "")))
+    compact = [
+        detail_metadata_value(metadata, "Year"),
+        detail_metadata_value(metadata, "Duration"),
+        detail_metadata_value(metadata, "Content Rating"),
+    ]
+    compact_line = " • ".join(value for value in compact if value)
+    progress = detail_metadata_value(metadata, "Progress")
+    rows = [kind]
+    if compact_line:
+        rows.append(compact_line)
+    if progress:
+        rows.append(progress)
+    return rows
+
+
+def playback_readiness_rows(
+    playable: bool,
+    progress: str = "",
+    config: AppConfig | None = None,
+    context_actions: tuple[str, ...] = (),
+) -> list[str]:
+    preference_rows = []
+    if config is not None:
+        preference_rows = [
+            f"Audio: {preference_value(config.preferred_audio_language)}",
+            f"Subtitles: {subtitle_mode_value(config)} / {subtitle_language_value(config)}",
+        ]
     if playable:
-        status = "Status: Ready to play"
+        status = "Ready to play"
         if any(action.startswith("Availability: Listed by Plex") for action in context_actions):
-            status = "Status: Listed by Plex; playable stream checked on play"
+            status = "Listed by Plex; stream checked on play"
         rows = [
             status,
         ]
         if progress:
-            rows.append(f"Progress: {progress}")
-        rows.extend([
-            "p: play from beginning",
-            "r: resume saved progress",
-            "Playlist: Press P",
-        ])
+            rows.append(f"Resume: {progress}")
+        rows.extend(preference_rows)
+        rows.extend(["p: play from beginning", "r: resume saved progress", "Playlist: Press P"])
         rows.extend(context_actions)
         return rows
     if "Availability: No provider links found" in context_actions:
         rows = [
-            "Status: No availability provider",
-            "Action: Choose another item",
+            "No availability provider",
+            "Choose another item",
         ]
         rows.extend(context_actions)
         return rows
     if any(action.startswith("Availability:") for action in context_actions):
         rows = [
-            "Status: Opens availability provider",
-            "Action: Press Enter to choose/open",
+            "Opens availability provider",
+            "Enter: choose/open",
         ]
         rows.extend(context_actions)
         return rows
     rows = [
-        "Status: Opens more items",
-        "Action: Press Enter to open",
+        "Opens more items",
+        "Enter: open",
     ]
     rows.extend(context_actions)
     return rows
+
+
+def grouped_metadata_sections(metadata: list[tuple[str, str]]) -> list[tuple[str, list[tuple[str, str]]]]:
+    section_labels = [
+        ("Production", {"Year", "Content Rating", "Rating", "Studio"}),
+        ("Catalog", {"Type", "Duration", "Items", "Playlist Type", "Smart Playlist", "Edition", "Status", "Progress", "Episode"}),
+    ]
+    used: set[str] = set()
+    sections: list[tuple[str, list[tuple[str, str]]]] = []
+    for heading, labels in section_labels:
+        rows = [(label, value) for label, value in metadata if label in labels]
+        if rows:
+            used.update(label for label, _value in rows)
+            sections.append((heading, rows))
+    remaining = [(label, value) for label, value in metadata if label not in used]
+    if remaining:
+        sections.append(("Metadata", remaining))
+    return sections
 
 
 def detail_metadata_value(metadata: list[tuple[str, str]], label: str) -> str:
@@ -4826,6 +4872,20 @@ def library_entry_label(entry: str) -> str:
 
 def library_entry_glyph(entry: str) -> str:
     return LIBRARY_ENTRY_GLYPHS.get(entry, "›")
+
+
+def library_row_description(library: LibraryItem, config: AppConfig) -> str:
+    enter_action = "Open Library view" if config.library_enter_action == "library" else "Choose browse view"
+    space_action = "Choose browse view" if config.library_enter_action == "library" else "Open Library view"
+    return "\n".join([
+        library.title,
+        "",
+        "Default view: Library",
+        f"Enter: {enter_action}",
+        f"Space: {space_action}",
+        "",
+        "Library view opens all items. Browse view lets you choose Recommended, Collections, Playlists, or Categories.",
+    ])
 
 
 def library_menu_description(library: LibraryItem) -> str:

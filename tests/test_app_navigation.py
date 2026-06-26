@@ -1004,6 +1004,7 @@ async def run_library_highlight_check():
         ]
 
         app.populate_libraries(libraries)
+        app.show_detail_text("Browse Plex-hosted Movies & Shows hubs.")
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
         await pilot.pause(0.2)
@@ -1017,6 +1018,12 @@ async def run_library_highlight_check():
         assert row is not None
         assert row.has_class("active-row")
         assert row.library.title == "Movies"
+        details = app.query_one("#detail-content").content
+        assert "Movies" in details
+        assert "Default view: Library" in details
+        assert "Enter: Open Library view" in details
+        assert "Space: Choose browse view" in details
+        assert "Browse Plex-hosted Movies & Shows hubs." not in details
 
 
 async def run_continue_watching_entrypoint_check():

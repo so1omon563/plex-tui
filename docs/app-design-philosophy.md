@@ -64,12 +64,13 @@ titles without scanning a wall of identical rows. Spacing should be meaningful:
 roomier when cards represent navigation choices, tighter when browsing real
 media.
 
-### Details Are An Inspector
+### Details Are A Case Insert
 
-The details pane should behave like an inspector, not a dumping ground. The
-highest-value context belongs at the top in readable phrases. Secondary metadata,
-preferences, tracks, and diagnostics should be grouped below with predictable
-section names.
+The details pane should feel like the inside cover of a physical media case:
+title first, then a compact editorial identity block, then practical playback
+actions, summary, catalog metadata, and finally technical stream details.
+Technical information remains available, but it should not compete with the
+identity of the selected media.
 
 ### Visible Controls Stay Compact
 
@@ -196,8 +197,9 @@ Already aligned:
   failed to load.
 - Library browse modes support watching-first defaults while keeping alternate
   modes available.
-- Details now elevate episode context and split playback, preferences, tracks,
-  and summaries.
+- Details now read like a media case insert: title and editorial facts lead,
+  playback stays action-oriented, metadata is grouped, and technical stream
+  details come last.
 - Empty, loading, and Plex error states use intentional rows and inspector
   details instead of blank lists or generic error blobs.
 - Library browse-mode rows reuse the collection glyph vocabulary as compact
@@ -222,8 +224,8 @@ Still uneven:
 
 1. Pane and focus polish: make active pane, active row, and pane title treatment
    feel like one system.
-2. Details-pane hierarchy: tighten section spacing, labels, and high-value
-   context for media, playlists, settings, and errors.
+2. Details-pane hierarchy: keep media identity and next actions above catalog
+   metadata and technical stream details.
 3. List/grid metadata rhythm: align title, subtitle, progress, edition, and
    action language across both browse modes.
 4. Settings scan pass: preserve compact rows while making current values easier
