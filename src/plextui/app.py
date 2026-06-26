@@ -621,6 +621,8 @@ class PlexTuiApp(App[None]):
     pending_grid_prefetches: list[tuple[list[MediaItem], tuple[str, ...], str, float]]
     rendered_grid_artwork_cache: dict[tuple[str, str], object]
     last_grid_prefetch_page: tuple[str, ...]
+    search_return_state: BrowseState | None
+    search_token: int
     applying_config_theme: bool
     detail_refresh_token: int
     detail_refresh_timer: Timer | None
@@ -674,6 +676,8 @@ class PlexTuiApp(App[None]):
         self.pending_grid_prefetches = []
         self.rendered_grid_artwork_cache = {}
         self.last_grid_prefetch_page = ()
+        self.search_return_state = None
+        self.search_token = 0
         self.applying_config_theme = False
         self.detail_refresh_token = 0
         self.detail_refresh_timer = None
@@ -2994,13 +2998,17 @@ class PlexTuiApp(App[None]):
                 return
             if self.input_mode == "discover_search":
                 self.input_mode = ""
-                self.run_discover_search(query)
+                self.focus_media_browser()
+                token = self.start_search_return()
+                self.run_discover_search(query, token)
                 return
             search_global = self.search_global
             self.input_mode = ""
             if not search_global and self.apply_fuzzy_search(query, focus=True):
                 return
-            self.run_search(query, search_global)
+            self.focus_media_browser()
+            token = self.start_search_return()
+            self.run_search(query, search_global, token)
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id != "search":
@@ -3014,7 +3022,7 @@ class PlexTuiApp(App[None]):
             self.restore_fuzzy_search_source()
 
     @work(thread=True, exclusive=True, group="search")
-    def run_search(self, query: str, global_search: bool = False) -> None:
+    def run_search(self, query: str, global_search: bool = False, token: int = 0) -> None:
         if not query:
             return
         local_source = None if global_search else self.fuzzy_search_source()
@@ -3041,6 +3049,8 @@ class PlexTuiApp(App[None]):
             library = None if global_search else self.selected_library
             page = self.service.search_page(query, library, 0, self.config.page_size)
         except Exception as exc:
+            if self.search_was_cancelled(token):
+                return
             self.call_from_thread(self.show_error, str(exc))
             return
         write_performance_log(
@@ -3050,6 +3060,9 @@ class PlexTuiApp(App[None]):
         )
 
         def update() -> None:
+            if self.search_was_cancelled(token):
+                return
+            self.search_return_state = None
             if self.browsing_stack and self.browsing_stack[-1].search:
                 self.browsing_stack.pop()
             state = BrowseState(
@@ -3070,7 +3083,7 @@ class PlexTuiApp(App[None]):
         self.call_from_thread(update)
 
     @work(thread=True, exclusive=True, group="search")
-    def run_discover_search(self, query: str) -> None:
+    def run_discover_search(self, query: str, token: int = 0) -> None:
         if not query or self.service is None:
             return
         media_type = self.config.discover_media_type
@@ -3086,6 +3099,8 @@ class PlexTuiApp(App[None]):
         try:
             page = self.service.discover_page(query, 0, self.config.page_size, media_type)
         except Exception as exc:
+            if self.search_was_cancelled(token):
+                return
             self.call_from_thread(self.show_error, str(exc))
             return
         write_performance_log(
@@ -3095,6 +3110,9 @@ class PlexTuiApp(App[None]):
         )
 
         def update() -> None:
+            if self.search_was_cancelled(token):
+                return
+            self.search_return_state = None
             state = BrowseState(
                 title,
                 page.items,
@@ -3110,6 +3128,14 @@ class PlexTuiApp(App[None]):
             self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more, page.items))
 
         self.call_from_thread(update)
+
+    def start_search_return(self) -> int:
+        self.search_token += 1
+        self.search_return_state = self.browsing_stack[-1] if self.browsing_stack else None
+        return self.search_token
+
+    def search_was_cancelled(self, token: int) -> bool:
+        return bool(token and token != self.search_token)
 
     def fuzzy_search_source(self) -> BrowseState | None:
         for state in reversed(self.browsing_stack):
@@ -3166,6 +3192,8 @@ class PlexTuiApp(App[None]):
     def action_back_or_clear(self) -> None:
         search = self.query_one("#search", Input)
         if search.display:
+            self.search_token += 1
+            self.workers.cancel_group(self, "search")
             search.value = ""
             search.display = False
             input_mode = self.input_mode
@@ -3188,6 +3216,16 @@ class PlexTuiApp(App[None]):
                 state = self.browsing_stack[-1]
                 self.show_browse_state(state)
             self.focus_media_browser()
+            return
+
+        if self.search_return_state is not None:
+            self.search_token += 1
+            self.workers.cancel_group(self, "search")
+            state = self.search_return_state
+            self.search_return_state = None
+            self.show_browse_state(state)
+            self.focus_media_browser()
+            self.set_status(state.title)
             return
 
         if self.help_visible or self.settings_visible or self.picker_visible:
