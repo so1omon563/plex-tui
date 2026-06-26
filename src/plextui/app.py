@@ -3696,40 +3696,50 @@ def render_details(
     if not metadata_rows:
         append_detail_section(lines, "Catalog", ["No metadata reported"])
 
-    technical_rows: list[str] = []
-    artwork = artwork_status(details, config)
-    technical_rows.extend(detail_key_value_rows([("Artwork", artwork)]))
-    if config is not None:
-        technical_rows.extend(detail_key_value_rows([
-            ("Playback Mode", playback_mode_value(config)),
-            ("Playback Display", playback_display_value(config)),
-            ("Transcode Quality", transcode_quality_value(config)),
-        ]))
-        if raw is not None and bool(getattr(details, "playable")):
-            effective = effective_stream_preference_rows(raw, config)
-            if effective:
-                technical_rows.append("")
-                technical_rows.append("Effective Playback")
-                technical_rows.extend(detail_key_value_rows(effective))
-    append_detail_section(lines, "Technical", technical_rows)
-
+    technical_rows = technical_detail_rows(details, config, raw)
     audio = getattr(details, "audio", [])
     missing_stream_rows = []
     if audio:
-        append_detail_section(lines, stream_section_heading("Audio Tracks", audio), detail_list_rows(audio))
+        technical_rows.append("")
+        technical_rows.append(stream_section_heading("Audio Tracks", audio))
+        technical_rows.extend(detail_list_rows(audio))
     else:
         missing_stream_rows.append(("Audio", "none reported"))
 
     subtitles = getattr(details, "subtitles")
     if subtitles:
-        append_detail_section(lines, stream_section_heading("Subtitle Tracks", subtitles), detail_list_rows(subtitles))
+        technical_rows.append("")
+        technical_rows.append(stream_section_heading("Subtitle Tracks", subtitles))
+        technical_rows.extend(detail_list_rows(subtitles))
     else:
         missing_stream_rows.append(("Subtitles", "none reported"))
 
     if missing_stream_rows:
-        append_detail_section(lines, "Streams", detail_key_value_rows(missing_stream_rows))
+        technical_rows.append("")
+        technical_rows.append("Streams")
+        technical_rows.extend(detail_key_value_rows(missing_stream_rows))
+
+    append_detail_section(lines, "Technical", technical_rows)
 
     return "\n".join(lines)
+
+
+def technical_detail_rows(details: object, config: AppConfig | None = None, raw: object | None = None) -> list[str]:
+    rows = detail_key_value_rows([("Artwork", artwork_status(details, config))])
+    if config is None:
+        return rows
+    rows.extend(detail_key_value_rows([
+        ("Playback Mode", playback_mode_value(config)),
+        ("Playback Display", playback_display_value(config)),
+        ("Transcode Quality", transcode_quality_value(config)),
+    ]))
+    if raw is not None and bool(getattr(details, "playable")):
+        effective = effective_stream_preference_rows(raw, config)
+        if effective:
+            rows.append("")
+            rows.append("Effective Playback")
+            rows.extend(detail_key_value_rows(effective))
+    return rows
 
 
 def render_detail_header(
@@ -3743,11 +3753,10 @@ def render_detail_header(
     episode_context = episode_context_summary(details, metadata)
     context_lines = textwrap.wrap(episode_context, width=DETAIL_SUMMARY_WIDTH) if episode_context else []
     progress = detail_metadata_value(metadata, "Progress")
-    title_width = max(len(line) for line in [*title_lines, *context_lines, *primary_fact_lines(details, metadata)])
     lines = [
         *title_lines,
         *context_lines,
-        "=" * min(max(title_width, 8), DETAIL_SUMMARY_WIDTH),
+        "",
         *primary_fact_lines(details, metadata),
         "",
         "Playback",
@@ -3782,8 +3791,8 @@ def playback_readiness_rows(
     preference_rows = []
     if config is not None:
         preference_rows = [
-            f"Audio: {preference_value(config.preferred_audio_language)}",
-            f"Subtitles: {subtitle_mode_value(config)} / {subtitle_language_value(config)}",
+            f"Audio preference {preference_value(config.preferred_audio_language)}",
+            f"Subtitles {subtitle_mode_value(config)} / {subtitle_language_value(config)}",
         ]
     if playable:
         status = "Ready to play"
@@ -3793,9 +3802,9 @@ def playback_readiness_rows(
             status,
         ]
         if progress:
-            rows.append(f"Resume: {progress}")
+            rows.append(f"Resume from {progress}")
         rows.extend(preference_rows)
-        rows.extend(["p: play from beginning", "r: resume saved progress", "Playlist: Press P"])
+        rows.extend(["Press p to play from beginning", "Press r to resume saved progress", "Press P to add to a playlist"])
         rows.extend(context_actions)
         return rows
     if "Availability: No provider links found" in context_actions:
@@ -3808,13 +3817,13 @@ def playback_readiness_rows(
     if any(action.startswith("Availability:") for action in context_actions):
         rows = [
             "Opens availability provider",
-            "Enter: choose/open",
+            "Press Enter to choose or open",
         ]
         rows.extend(context_actions)
         return rows
     rows = [
         "Opens more items",
-        "Enter: open",
+        "Press Enter to open",
     ]
     rows.extend(context_actions)
     return rows

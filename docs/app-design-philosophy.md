@@ -70,7 +70,8 @@ The details pane should feel like the inside cover of a physical media case:
 title first, then a compact editorial identity block, then practical playback
 actions, summary, catalog metadata, and finally technical stream details.
 Technical information remains available, but it should not compete with the
-identity of the selected media.
+identity of the selected media. Use whitespace for grouping; avoid ASCII
+dividers that make the panel feel like console output.
 
 ### Visible Controls Stay Compact
 

@@ -147,23 +147,26 @@ def test_render_details_includes_subtitles_and_summary():
         ),
     )
 
-    assert "Title\n==============\nMovie\n1m / 10m (11%)" in rendered
+    assert "Title\n\nMovie\n1m / 10m (11%)" in rendered
+    assert "====" not in rendered
     assert "Movie" in rendered
     assert "Playback\nReady to play" in rendered
-    assert "Resume: 1m / 10m (11%)" in rendered
-    assert "p: play from beginning" in rendered
-    assert "r: resume saved progress" in rendered
-    assert "Playlist: Press P" in rendered
+    assert "Resume from 1m / 10m (11%)" in rendered
+    assert "Press p to play from beginning" in rendered
+    assert "Press r to resume saved progress" in rendered
+    assert "Press P to add to a playlist" in rendered
     assert "Catalog" in rendered
     assert "Technical" in rendered
-    assert "Audio: jpn" in rendered
-    assert "Subtitles: Preferred / eng" in rendered
+    assert "Audio preference jpn" in rendered
+    assert "Subtitles Preferred / eng" in rendered
     assert "Artwork: available" in rendered
     assert "Audio Tracks (1)" in rendered
     assert "Subtitle Tracks (1)" in rendered
     assert "- Japanese (aac, 2ch, selected)" in rendered
     assert "- English (srt, selected)" in rendered
     assert "Summary text" in rendered
+    assert rendered.index("Summary") < rendered.index("Catalog")
+    assert rendered.index("Catalog") < rendered.index("Technical")
 
 
 def test_render_details_avoids_ready_to_play_for_online_provider_items():
@@ -223,8 +226,10 @@ def test_render_details_skips_effective_playback_for_playlist_container():
     )
 
     assert "Playback\nOpens more items" in rendered
-    assert "Enter: open" in rendered
+    assert "Press Enter to open" in rendered
     assert "Effective Playback" not in rendered
+    assert "Technical" in rendered
+    assert rendered.index("Technical") < rendered.index("Streams")
     assert "Streams\nAudio:     none reported" in rendered
     assert "Subtitles: none reported" in rendered
 
@@ -247,7 +252,7 @@ def test_render_details_can_include_playlist_context_action():
         context_actions=("Playlist: Backspace/Delete removes from this playlist",),
     )
 
-    assert "Playlist: Press P" in rendered
+    assert "Press P to add to a playlist" in rendered
     assert "Playlist: Backspace/Delete removes from this playlist" in rendered
 
 
@@ -275,7 +280,7 @@ def test_render_details_can_show_discover_availability_action():
     )
 
     assert "Opens availability provider" in rendered
-    assert "Enter: choose/open" in rendered
+    assert "Press Enter to choose or open" in rendered
     assert "Availability: Enter opens provider link" in rendered
     assert "Opens more items" not in rendered
     assert current_detail_actions(state, item) == ("Availability: Enter opens provider link",)
@@ -334,7 +339,8 @@ def test_render_details_promotes_episode_context_under_title():
 
     rendered = render_details(details)
 
-    assert "Band of the Hawk\nBerserk - Season 1 - S01E02\n==========================" in rendered
+    assert "Band of the Hawk\nBerserk - Season 1 - S01E02\n\nEpisode" in rendered
+    assert "====" not in rendered
     assert "1997 • 23m • TV-MA" in rendered
     assert rendered.index("Berserk - Season 1 - S01E02") < rendered.index("Production")
     assert "in progress / S01E02" not in rendered
@@ -360,7 +366,7 @@ def test_render_details_uses_clear_empty_states_and_wraps_summary():
     rendered = render_details(details)
 
     assert "Opens more items" in rendered
-    assert "Enter: open" in rendered
+    assert "Press Enter to open" in rendered
     assert "No metadata reported" in rendered
     assert "Audio:     none reported" in rendered
     assert "Subtitles: none reported" in rendered
