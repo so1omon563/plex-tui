@@ -662,7 +662,7 @@ class PlexTuiApp(App[None]):
                 yield ListView(id="libraries")
             with Vertical(id="main"):
                 yield Static("Media", id="media-title", classes="pane-title")
-                yield Input(placeholder="Fuzzy search loaded items", id="search")
+                yield Input(placeholder="Search current view", id="search")
                 yield ListView(id="media")
                 with VerticalScroll(id="media-grid-scroll"):
                     yield MediaGrid()
@@ -1801,7 +1801,7 @@ class PlexTuiApp(App[None]):
         self.search_global = False
         self.input_mode = "search"
         search = self.query_one("#search", Input)
-        search.placeholder = "Fuzzy search loaded items"
+        search.placeholder = "Search current view"
         search.value = ""
         search.password = False
         search.display = True
@@ -3047,7 +3047,7 @@ class PlexTuiApp(App[None]):
                 return
             search_global = self.search_global
             self.input_mode = ""
-            if not search_global and self.apply_fuzzy_search(query, focus=True):
+            if not search_global and self.apply_fuzzy_search(query, focus=True, require_complete=True):
                 return
             self.focus_media_browser()
             token = self.start_search_return()
@@ -3069,7 +3069,7 @@ class PlexTuiApp(App[None]):
         if not query:
             return
         local_source = None if global_search else self.fuzzy_search_source()
-        if local_source is not None:
+        if local_source is not None and fuzzy_source_is_complete(local_source):
             matches = fuzzy_match_media(query, local_source.items)
             title = f"Fuzzy search: {query}"
             self.post_message(StatusChanged(f"Fuzzy searching {local_source.title} for {query}..."))
@@ -3186,12 +3186,12 @@ class PlexTuiApp(App[None]):
                 return state
         return None
 
-    def apply_fuzzy_search(self, query: str, focus: bool = False) -> bool:
+    def apply_fuzzy_search(self, query: str, focus: bool = False, require_complete: bool = False) -> bool:
         if not query:
             self.restore_fuzzy_search_source()
             return True
         local_source = self.fuzzy_search_source()
-        if local_source is None:
+        if local_source is None or (require_complete and not fuzzy_source_is_complete(local_source)):
             return False
         matches = fuzzy_match_media(query, local_source.items)
         self.show_fuzzy_search_results(query, local_source, matches, focus=focus)
@@ -4942,7 +4942,7 @@ def render_help() -> str:
         "pageup/pagedown: move one grid page",
         "",
         "Search",
-        "/: fuzzy search loaded items in the current view",
+        "/: search current view or library",
         "g: search all libraries through Plex",
         "",
         "Playback",
@@ -5046,6 +5046,10 @@ def library_menu_description(library: LibraryItem) -> str:
         "▤ Playlists: library playlists.",
         "◈ Categories: genre/category groupings.",
     ])
+
+
+def fuzzy_source_is_complete(state: BrowseState) -> bool:
+    return not state.has_more
 
 
 def context_hint(row: object) -> str:

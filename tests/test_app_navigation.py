@@ -367,6 +367,44 @@ def test_current_view_search_uses_fuzzy_loaded_items():
     assert statuses == ["Fuzzy search: interstelar: 1 matches from 3 loaded items"]
 
 
+def test_current_library_search_queries_plex_when_library_is_not_fully_loaded():
+    app = PlexTuiApp()
+    library = LibraryItem("TV Shows", "2", "show", object())
+    gantz = MediaItem("Gantz", "TV Show", "gantz", "show-1", False, Raw())
+    service = FakePagedService(MediaPage([gantz], start=0, total=1))
+    shown_states = []
+    statuses = []
+    app.config = AppConfig("http://plex", "token", "client-id")
+    app.service = service
+    app.selected_library = library
+    app.browsing_stack = [
+        BrowseState(
+            "TV Shows",
+            [
+                MediaItem("Attack on Titan", "", "show", "1", False, Raw()),
+                MediaItem("Berserk", "", "show", "2", False, Raw()),
+            ],
+            library,
+            next_start=2,
+            total=100,
+        )
+    ]
+    app.call_from_thread = lambda callback, *args: callback(*args)
+    app.post_message = lambda message: None
+    app.show_loading_state = lambda *args: None
+    app.show_browse_state = shown_states.append
+    app.focus_media_browser = lambda: None
+    app.set_status = statuses.append
+
+    PlexTuiApp.run_search.__wrapped__(app, "gantz")
+
+    assert service.search_calls == [("gantz", library, 0, 40)]
+    assert app.browsing_stack[-1].title == "Search: gantz"
+    assert [item.title for item in app.browsing_stack[-1].items] == ["Gantz"]
+    assert shown_states == [app.browsing_stack[-1]]
+    assert statuses == ["Search: gantz: 1 items"]
+
+
 def test_current_view_search_updates_results_while_typing():
     app = PlexTuiApp()
     library = LibraryItem("Movies", "1", "movie", object())

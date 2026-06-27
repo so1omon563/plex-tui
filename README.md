@@ -342,7 +342,7 @@ Plex playlists. Playlist browsing is available from the top-level sidebar
 | --- | --- |
 | `q` | Quit |
 | `ctrl+r` | Reload Plex connection |
-| `/` | Fuzzy search loaded items in the current view |
+| `/` | Search the current view or library |
 | `g` | Search all libraries through Plex |
 | `?` | Show help |
 | `tab` / `shift+tab` | Switch focus between Libraries and Media |
