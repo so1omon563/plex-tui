@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.13.1 - 2026-06-26
+
 - Fixed release packaging so package metadata can be republished with a version
   that matches the release tag, and gave Homebrew more time for PyPI indexing.
 
