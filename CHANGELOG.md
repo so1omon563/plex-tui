@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added built-in mpv network/cache options to reduce startup buffering for
+  larger Plex streams.
+
 ## 0.13.1 - 2026-06-26
 
 - Fixed release packaging so package metadata can be republished with a version
