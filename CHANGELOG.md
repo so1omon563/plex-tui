@@ -17,8 +17,8 @@
   available directly through `d`.
 - Tuned grid interaction hierarchy so selected cards carry action/progress
   context while pane borders recede when unfocused.
-- Added a quiet selected-artwork frame and subdued inactive-pane row highlights
-  so focus remains obvious while navigating quickly.
+- Subdued inactive-pane row highlights so focus remains clearer while
+  preserving stable grid card geometry.
 - Fixed Plex Home profile switching to prefer profile-specific server resource
   tokens, falling back to the switched account token only when Plex does not
   advertise reachable server resources for that profile.
