@@ -131,7 +131,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          for attempt in {1..30}; do
+          for attempt in {1..60}; do
             if python -m pip install \
               --dry-run \
               --ignore-installed \
@@ -142,7 +142,7 @@ jobs:
               exit 0
             fi
 
-            echo "plex-tui ${VERSION} is not available from PyPI yet; retrying (${attempt}/30)."
+            echo "plex-tui ${VERSION} is not available from PyPI yet; retrying (${attempt}/60)."
             sleep 10
           done
 
