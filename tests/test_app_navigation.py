@@ -2845,8 +2845,9 @@ async def run_playback_footer_check():
         assert footer.content == (
             "Playing Movie / resume 1:05 / mode transcode / quality 720p 4 Mbps / 2 subtitles / "
             "audio jpn not found, Plex/default; "
-            "subtitles eng not found, Plex/default / controls c pause, z -10s, f +30s, x stop"
+            "subtitles eng not found, Plex/default"
         )
+        assert app.query_one("#status").content != footer.content
 
 
 async def run_playback_controls_check():
@@ -3490,7 +3491,7 @@ async def run_stream_picker_live_switch_check():
         switch.assert_called_once_with(app.player, item.raw, choice, "subtitle")
         assert status == expected_status
         assert app.query_one("#playback-footer").content == (
-            "Movie: subtitle None (disable subtitles) / controls c pause, z -10s, f +30s, x stop"
+            "Movie: subtitle None (disable subtitles)"
         )
 
 

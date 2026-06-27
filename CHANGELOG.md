@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Clarified that active playback controls only work while plex-tui has focus,
+  moved forward seek from `f` to `.` to avoid mpv's fullscreen key, and removed
+  duplicate playback control hints from the footer.
+
 ## 0.13.3 - 2026-06-26
 
 - Fixed current-library search so submitted `/` searches query Plex when the

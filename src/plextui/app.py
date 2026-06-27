@@ -100,7 +100,7 @@ GRID_DENSITY_SPECS = {
 GRID_DETAIL_REFRESH_DELAY = 0.65
 LIST_DETAIL_REFRESH_DELAY = 0.35
 DETAIL_ARTWORK_REFRESH_DELAY = 0.55
-PLAYBACK_CONTROL_HINT = "controls c pause, z -10s, f +30s, x stop"
+PLAYBACK_CONTROL_HINT = "plex-tui focused: c pause, z -10s, . +30s, x stop"
 PLAYLIST_REMOVE_HINT = "Playlist: Backspace/Delete removes from this playlist"
 GRID_PREFETCH_WORKERS = 3
 DETAIL_SUMMARY_WIDTH = 38
@@ -614,7 +614,7 @@ class PlexTuiApp(App[None]):
         Binding("S", "cycle_subtitle_mode", "Sub mode", show=False),
         Binding("c", "toggle_playback_pause", "Pause", show=False),
         Binding("z", "seek_playback_backward", "-10s", show=False),
-        Binding("f", "seek_playback_forward", "+30s", show=False),
+        Binding("period", "seek_playback_forward", "+30s", show=False),
         Binding("x", "stop_playback", "Stop", show=False),
     ]
 
@@ -2854,7 +2854,7 @@ class PlexTuiApp(App[None]):
         except Exception:
             return False
         if updated:
-            self.set_playback_footer(f"{self.player.title}: {stream_type} {choice.label} / {PLAYBACK_CONTROL_HINT}")
+            self.set_playback_footer(f"{self.player.title}: {stream_type} {choice.label}")
         return updated
 
     def media_by_key(self, media_key: str) -> MediaItem | None:
@@ -3591,7 +3591,6 @@ class PlexTuiApp(App[None]):
             render_playback_details(media.title, self.player, playback_config, audio_choice, subtitle_choice)
         )
         status = render_playback_status(media.title, self.player, playback_config, audio_choice, subtitle_choice)
-        self.set_status(status)
         self.set_playback_footer(status)
 
     def show_resume_picker(self, media: MediaItem) -> None:
@@ -4965,7 +4964,8 @@ def render_help() -> str:
         "o: play optimized transcode for slow streams",
         "c: pause / resume active mpv playback",
         "z: seek active playback back 10 seconds",
-        "f: seek active playback forward 30 seconds",
+        ".: seek active playback forward 30 seconds",
+        "Playback controls only work while plex-tui is focused; use mpv keys in the video window.",
         "w: mark selected media watched / unwatched",
         "x: stop launched mpv",
         "",
@@ -5995,7 +5995,6 @@ def render_playback_status(
     if player.subtitle_count:
         details.append(f"{player.subtitle_count} subtitles")
     details.append(render_playback_preferences(config, audio_choice, subtitle_choice))
-    details.append(PLAYBACK_CONTROL_HINT)
     return " / ".join(details)
 
 
@@ -6043,7 +6042,8 @@ def playback_control_rows(config: AppConfig) -> list[str]:
     return [
         "c: pause / resume active playback",
         "z: seek back 10 seconds",
-        "f: seek forward 30 seconds",
+        ".: seek forward 30 seconds",
+        "Controls only work while plex-tui is focused.",
         "x: stop playback",
     ]
 
