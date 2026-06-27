@@ -11,6 +11,8 @@
   traps normal shortcuts like Escape or resume.
 - Fixed external mpv playback so the video window opens immediately while
   plex-tui stays running.
+- Fixed cached grid artwork so changing card density does not reuse images
+  rendered for the previous poster size.
 - Fixed left/right arrow handling so focused panes keep ownership instead of
   letting media-grid movement leak across the interface.
 - Changed Tab focus to switch between Libraries and Media only, with Details

@@ -44,6 +44,7 @@ from plextui.app import (
     grid_card_title_lines,
     grid_card_width,
     grid_geometry_for_size,
+    grid_artwork_cache_key,
     grid_items_are_collection_cards,
     grid_page_key,
     grid_status,
@@ -1004,6 +1005,22 @@ def test_grid_density_cycles_and_changes_card_width():
     assert grid_card_width(AppConfig("http://plex", "token", "client", grid_density="compact")) < grid_card_width(
         AppConfig("http://plex", "token", "client", grid_density="large")
     )
+
+
+def test_grid_artwork_cache_changes_with_render_size():
+    item = MediaItem("Movie", "", "movie", "1", True, object(), artwork_path="/thumb")
+    compact = AppConfig("http://plex", "token", "client", media_view="grid", grid_density="compact")
+    large = AppConfig("http://plex", "token", "client", media_view="grid", grid_density="large")
+    grid = MediaGrid()
+
+    grid.set_items([item], selected_index=0, config=compact, columns=1)
+    grid.set_artwork("1", "compact-art")
+
+    assert grid_artwork_cache_key(item, compact) != grid_artwork_cache_key(item, large)
+
+    grid.set_items([item], selected_index=0, config=large, columns=1)
+
+    assert grid.artwork == {}
 
 
 def test_grid_geometry_uses_density_at_common_terminal_sizes():

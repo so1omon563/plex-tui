@@ -231,6 +231,7 @@ class MediaGrid(Static):
         self.rows = 1
         self.config: AppConfig | None = None
         self.artwork: dict[str, object] = {}
+        self.artwork_cache_context: tuple[str, str, int, int, int, int] | None = None
         self.bulk_selected_keys: set[str] = set()
 
     @property
@@ -252,7 +253,11 @@ class MediaGrid(Static):
         self.selected_index = min(max(0, selected_index), max(0, len(items) - 1))
         self.columns = max(1, columns)
         self.rows = max(1, rows)
+        next_artwork_context = grid_artwork_cache_context(config)
+        if next_artwork_context != self.artwork_cache_context:
+            self.artwork = {}
         self.config = config
+        self.artwork_cache_context = next_artwork_context
         self.bulk_selected_keys = set(bulk_selected_keys or set())
         self.artwork = {key: value for key, value in self.artwork.items() if key in {item.key for item in items}}
         self.refresh_grid()
@@ -623,7 +628,8 @@ class PlexTuiApp(App[None]):
     prefetched_grid_pages: set[tuple[str, ...]]
     active_grid_prefetch_pages: set[tuple[str, ...]]
     pending_grid_prefetches: list[tuple[list[MediaItem], tuple[str, ...], str, float]]
-    rendered_grid_artwork_cache: dict[tuple[str, str], object]
+    rendered_grid_artwork_cache: dict[tuple[str, str, str, int, int, int, int], object]
+    current_grid_artwork_context: tuple[str, str, int, int, int, int] | None
     last_grid_prefetch_page: tuple[str, ...]
     search_return_state: BrowseState | None
     search_token: int
@@ -679,6 +685,7 @@ class PlexTuiApp(App[None]):
         self.active_grid_prefetch_pages = set()
         self.pending_grid_prefetches = []
         self.rendered_grid_artwork_cache = {}
+        self.current_grid_artwork_context = None
         self.last_grid_prefetch_page = ()
         self.search_return_state = None
         self.search_token = 0
@@ -1484,6 +1491,13 @@ class PlexTuiApp(App[None]):
             started = time.perf_counter()
             selected_index = selected_media_index(state.items, selected_key)
             if self.config.media_view == "grid":
+                grid_artwork_context = grid_artwork_cache_context(self.config)
+                if grid_artwork_context != self.current_grid_artwork_context:
+                    self.prefetched_grid_pages = set()
+                    self.active_grid_prefetch_pages = set()
+                    self.pending_grid_prefetches = []
+                    self.last_grid_prefetch_page = ()
+                    self.current_grid_artwork_context = grid_artwork_context
                 grid = self.show_media_grid()
                 columns, rows = self.media_grid_geometry(
                     collection_cards=grid_items_are_collection_cards(state.items),
@@ -4518,8 +4532,16 @@ def artwork_fetch_pixel_size(config: AppConfig, width: int, height: int) -> tupl
     return width, height * 2
 
 
-def grid_artwork_cache_key(item: MediaItem, config: AppConfig) -> tuple[str, str, str]:
-    return item.artwork_path, config.grid_density, config.artwork_renderer
+def grid_artwork_cache_context(config: AppConfig) -> tuple[str, str, int, int, int, int]:
+    spec = grid_density_spec(config)
+    width = int(spec["art_width"])
+    height = int(spec["art_height"])
+    fetch_width, fetch_height = artwork_fetch_pixel_size(config, width, height)
+    return config.grid_density, config.artwork_renderer, width, height, fetch_width, fetch_height
+
+
+def grid_artwork_cache_key(item: MediaItem, config: AppConfig) -> tuple[str, str, str, int, int, int, int]:
+    return item.artwork_path, *grid_artwork_cache_context(config)
 
 
 def grid_density_spec(config: AppConfig | None) -> dict[str, int]:
