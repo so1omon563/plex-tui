@@ -3060,12 +3060,17 @@ class PlexTuiApp(App[None]):
             return
         query = event.value.strip()
         if query:
-            self.apply_fuzzy_search(query)
+            if self.apply_fuzzy_search(query, require_complete=True):
+                return
+            if self.search_return_state is None:
+                self.search_return_state = self.fuzzy_search_source()
+            self.search_token += 1
+            self.run_search(query, False, self.search_token, live=True)
         else:
             self.restore_fuzzy_search_source()
 
     @work(thread=True, exclusive=True, group="search")
-    def run_search(self, query: str, global_search: bool = False, token: int = 0) -> None:
+    def run_search(self, query: str, global_search: bool = False, token: int = 0, live: bool = False) -> None:
         if not query:
             return
         local_source = None if global_search else self.fuzzy_search_source()
@@ -3105,7 +3110,8 @@ class PlexTuiApp(App[None]):
         def update() -> None:
             if self.search_was_cancelled(token):
                 return
-            self.search_return_state = None
+            if not live:
+                self.search_return_state = None
             if self.browsing_stack and self.browsing_stack[-1].search:
                 self.browsing_stack.pop()
             state = BrowseState(
@@ -3231,6 +3237,13 @@ class PlexTuiApp(App[None]):
                 state = self.browsing_stack[-1]
                 self.show_browse_state(state)
                 self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items))
+            return
+        if self.browsing_stack and self.browsing_stack[-1].search and self.search_return_state is not None:
+            self.browsing_stack.pop()
+            state = self.search_return_state
+            self.search_return_state = None
+            self.show_browse_state(state)
+            self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items))
 
     def action_back_or_clear(self) -> None:
         search = self.query_one("#search", Input)

@@ -405,6 +405,57 @@ def test_current_library_search_queries_plex_when_library_is_not_fully_loaded():
     assert statuses == ["Search: gantz: 1 items"]
 
 
+def test_live_current_library_search_queries_plex_when_library_is_not_fully_loaded():
+    app = PlexTuiApp()
+    library = LibraryItem("TV Shows", "2", "show", object())
+    gantz = MediaItem("Gantz", "TV Show", "gantz", "show-1", False, Raw())
+    service = FakePagedService(MediaPage([gantz], start=0, total=1))
+    shown_states = []
+    statuses = []
+    app.config = AppConfig("http://plex", "token", "client-id")
+    app.service = service
+    app.input_mode = "search"
+    app.search_global = False
+    app.search_return_state = None
+    app.search_token = 0
+    app.selected_library = library
+    app.browsing_stack = [
+        BrowseState(
+            "TV Shows",
+            [
+                MediaItem("Attack on Titan", "", "show", "1", False, Raw()),
+                MediaItem("Berserk", "", "show", "2", False, Raw()),
+            ],
+            library,
+            next_start=2,
+            total=100,
+        )
+    ]
+    app.call_from_thread = lambda callback, *args: callback(*args)
+    app.post_message = lambda message: None
+    app.show_loading_state = lambda *args: None
+    app.show_browse_state = shown_states.append
+    app.focus_media_browser = lambda: None
+    app.set_status = statuses.append
+    app.run_search = lambda query, global_search=False, token=0, live=False: PlexTuiApp.run_search.__wrapped__(
+        app,
+        query,
+        global_search,
+        token,
+        live,
+    )
+    search = SimpleNamespace(id="search")
+
+    app.on_input_changed(SimpleNamespace(input=search, value="gantz"))
+    app.on_input_changed(SimpleNamespace(input=search, value=""))
+
+    assert service.search_calls == [("gantz", library, 0, 40)]
+    assert shown_states[0].title == "Search: gantz"
+    assert [item.title for item in shown_states[0].items] == ["Gantz"]
+    assert shown_states[-1].title == "TV Shows"
+    assert statuses[-1] == "TV Shows: 2 of 100 items loaded"
+
+
 def test_current_view_search_updates_results_while_typing():
     app = PlexTuiApp()
     library = LibraryItem("Movies", "1", "movie", object())
