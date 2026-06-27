@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.12.12 - 2026-06-26
+
 - Reworked the Details pane into a quieter media-case style layout that leads
   with title, editorial facts, playback actions, and summary before catalog and
   technical stream information.
