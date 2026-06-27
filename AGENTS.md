@@ -111,7 +111,8 @@ through `mpv`.
 - `.github/workflows/`: CI plus PyPI/TestPyPI/AUR validation workflows.
 - `packaging/`: Homebrew and AUR maintenance notes; `packaging/aur/` contains
   the source copy of `PKGBUILD` and `.SRCINFO`.
-- `README.md`, `PACKAGING.md`, `RELEASE.md`, `ROADMAP.md`: user and release docs.
+- `README.md`, `CONTRIBUTING.md`, `PACKAGING.md`, `RELEASE.md`, `ROADMAP.md`:
+  user, contributor, and release docs.
 - `config.example.toml`: example user configuration.
 
 ## Build, Test, and Development Commands

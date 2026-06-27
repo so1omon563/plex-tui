@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Refreshed the public README presentation around the current three-pane visual
+  language, moved detailed usage into a dedicated user guide, and added
+  contributor, docs-index, and architecture guidance.
+
 ## 0.13.6 - 2026-06-27
 
 - Saved the active Plex Home profile name after profile switches and surfaced it

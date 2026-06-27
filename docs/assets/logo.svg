@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="160" viewBox="0 0 640 160" role="img" aria-labelledby="title desc">
+  <title id="title">plex-tui</title>
+  <desc id="desc">A restrained terminal-style wordmark for plex-tui.</desc>
+  <rect width="640" height="160" rx="18" fill="#0f1113"/>
+  <rect x="28" y="28" width="584" height="104" rx="10" fill="none" stroke="#1d9bf0" stroke-width="3"/>
+  <path d="M65 61 L93 80 L65 99" fill="none" stroke="#d9a300" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M122 103 H216" stroke="#7b8794" stroke-width="8" stroke-linecap="round"/>
+  <text x="250" y="94" fill="#d7d7d7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="48" letter-spacing="0">plex-tui</text>
+</svg>

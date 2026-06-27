@@ -58,12 +58,13 @@ presentation.
 
 ## Screenshots
 
-Current examples live in the README screenshot set:
+Current examples live in the screenshot set:
 
 - `docs/assets/collection-recommended.png`
 - `docs/assets/collection-categories.png`
 - `docs/assets/grid-view.png`
 - `docs/assets/continue-watching.png`
+- `docs/assets/tv-shows.png`
 - `docs/assets/list-view.png`
 - `docs/assets/browse-modes.png`
 - `docs/assets/block-renderer-tv-grid.png`
