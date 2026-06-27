@@ -34,14 +34,6 @@ brew install plex-tui
 plex-tui --smoke
 ```
 
-## What It Does
-
-1. Browse Plex libraries through a focused terminal interface.
-2. Navigate with explicit keyboard flows.
-3. Launch playback through `mpv` while Plex remains the source.
-4. Keep diagnostics near the running app.
-5. Fit macOS and Linux terminal habits.
-
 ## What It Feels Like
 
 plex-tui is not a server administration tool and it is not a retro terminal
@@ -77,6 +69,14 @@ direct playback actions visible without changing modes.
 
 TV libraries use the same browsing rhythm as movies while keeping show context
 clear as you move into seasons and episodes.
+
+## What It Does
+
+1. Browse Plex libraries through a focused terminal interface.
+2. Navigate with explicit keyboard flows.
+3. Launch playback through `mpv` while Plex remains the source.
+4. Keep diagnostics near the running app.
+5. Fit macOS and Linux terminal habits.
 
 ## Install
 
