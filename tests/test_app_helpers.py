@@ -1280,7 +1280,8 @@ def test_render_help_groups_key_bindings():
     assert "Settings" in rendered
     assert "Paths" in rendered
     assert "Debug log:" in rendered
-    assert "d: focus details" in rendered
+    assert "tab / shift+tab: switch libraries / media focus" in rendered
+    assert "d: focus details directly" in rendered
     assert "v: toggle list/grid view" in rendered
     assert "left/right: move across grid cards" in rendered
     assert "p: play selected media from beginning" in rendered

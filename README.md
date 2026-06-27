@@ -338,9 +338,10 @@ Plex playlists. Playlist browsing is available from the top-level sidebar
 | `/` | Fuzzy search loaded items in the current view |
 | `g` | Search all libraries through Plex |
 | `?` | Show help |
-| `tab` / `shift+tab` | Move focus |
+| `tab` / `shift+tab` | Switch focus between Libraries and Media |
 | `l` | Focus libraries |
 | `m` | Focus media |
+| `d` | Focus details directly |
 | `space` | Run the alternate action for a selected library |
 | `v` | Toggle list/grid view |
 | `pageup` / `pagedown` | Move one page in grid view |

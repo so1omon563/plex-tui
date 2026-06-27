@@ -1043,10 +1043,9 @@ async def run_tab_focus_pane_check():
         await pilot.press("tab")
         await pilot.pause(0.2)
 
-        assert app.query_one("#details").has_class("focused-pane")
-        assert app.query_one("#details-title").content == "▶ Details"
+        assert app.query_one("#sidebar").has_class("focused-pane")
+        assert app.query_one("#libraries-title").content == "▶ Libraries"
         assert not app.query_one("#main").has_class("focused-pane")
-        assert not app.query_one("#media-title").content.startswith("▶ ")
 
         await pilot.press("shift+tab")
         await pilot.pause(0.2)
@@ -1054,6 +1053,12 @@ async def run_tab_focus_pane_check():
         assert app.query_one("#main").has_class("focused-pane")
         assert app.query_one("#media-title").content.startswith("▶ ")
         assert not app.query_one("#details").has_class("focused-pane")
+
+        await pilot.press("d")
+        await pilot.pause(0.2)
+
+        assert app.query_one("#details").has_class("focused-pane")
+        assert app.query_one("#details-title").content == "▶ Details"
 
 
 async def run_library_highlight_check():

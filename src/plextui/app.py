@@ -1797,19 +1797,15 @@ class PlexTuiApp(App[None]):
         focused_id = getattr(self.focused, "id", "")
         if focused_id == "libraries":
             self.action_focus_media()
-        elif focused_id in {"media", "media-grid", "search"}:
-            self.action_focus_details()
         else:
             self.action_focus_libraries()
 
     def action_focus_previous(self) -> None:
         focused_id = getattr(self.focused, "id", "")
-        if focused_id == "libraries":
-            self.action_focus_details()
-        elif focused_id == "detail-scroll":
-            self.action_focus_media()
-        else:
+        if focused_id in {"media", "media-grid", "search"}:
             self.action_focus_libraries()
+        else:
+            self.action_focus_media()
 
     def action_toggle_media_view(self) -> None:
         next_view = next_media_view(self.config.media_view)
@@ -4867,10 +4863,10 @@ def render_help() -> str:
         "enter: open selected row",
         "space: alternate library action",
         "escape: go back / close current view",
-        "tab / shift+tab: move focus",
+        "tab / shift+tab: switch libraries / media focus",
         "l: focus libraries",
         "m: focus media list",
-        "d: focus details",
+        "d: focus details directly",
         "v: toggle list/grid view",
         "[: jump to previous alphabet section",
         "]: jump to next alphabet section",
