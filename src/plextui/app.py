@@ -463,7 +463,7 @@ class PlexTuiApp(App[None]):
 
     #sidebar {
         width: 30;
-        border: solid $panel;
+        border: solid $background;
     }
 
     #sidebar.focused-pane {
@@ -472,7 +472,7 @@ class PlexTuiApp(App[None]):
 
     #main {
         width: 1fr;
-        border: solid $panel;
+        border: solid $background;
     }
 
     #main.focused-pane {
@@ -481,7 +481,7 @@ class PlexTuiApp(App[None]):
 
     #details {
         width: 44;
-        border: solid $panel;
+        border: solid $background;
     }
 
     #details.focused-pane {
@@ -4443,9 +4443,13 @@ def grid_card_footer(media: MediaItem, selected: bool, bulk_selected: bool = Fal
     bulk_prefix = "✓ " if bulk_selected else ""
     if progress:
         selected_prefix = "▶ " if selected else ""
-        return f"{bulk_prefix}{selected_prefix}{progress}".strip()
+        if selected:
+            action = "watched" if watched_state(media.raw) == "watched" else "resume"
+            return f"{bulk_prefix}{selected_prefix}{action} {progress}".strip()
+        return f"{bulk_prefix}{progress}".strip()
     if selected:
-        return f"{bulk_prefix}▶ selected".strip()
+        action = "play" if media.playable else "open"
+        return f"{bulk_prefix}▶ {action}".strip()
     if media.playable:
         return f"{bulk_prefix}playable".strip()
     return f"{bulk_prefix}open".strip()

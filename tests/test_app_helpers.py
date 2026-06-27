@@ -1096,9 +1096,9 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
     unselected_text = "\n".join(str(renderable) for renderable in unselected.renderables)
     assert "Movie" in selected_text
     assert "Movie · 2024" in selected_text
-    assert "▶ selected" in selected_text
+    assert "▶ play" in selected_text
     assert "┏" not in selected_text
-    assert "▶ selected" not in unselected_text
+    assert "▶ play" not in unselected_text
     assert "playable" not in unselected_text
     assert "Movie · 2024" not in unselected_text
 
@@ -1114,7 +1114,7 @@ def test_grid_card_footer_shows_watch_progress():
     unselected = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"))
 
     assert "[####----] 50%" in str(selected.renderables[3])
-    assert "▶ [####----] 50%" in str(selected.renderables[3])
+    assert "▶ resume [####----] 50%" in str(selected.renderables[3])
     assert "[####----] 50%" not in str(unselected.renderables[3])
 
 
@@ -1191,7 +1191,7 @@ def test_render_media_grid_text_snapshot_distinguishes_missing_and_collection_ar
     assert "Recently Added" in text
     assert "──┼──" in text
     assert "playable" not in text
-    assert "▶ selected" in text
+    assert "▶ open" in text
 
 
 def test_grid_rows_are_centered_in_media_pane():
@@ -1372,7 +1372,7 @@ def test_focus_css_styles_all_panes():
     assert "#sidebar.focused-pane" in css
     assert "#main.focused-pane" in css
     assert "#details.focused-pane" in css
-    assert css.count("border: solid $panel;") == 3
+    assert css.count("border: solid $background;") == 3
     assert css.count("border: solid $primary;") == 3
     assert "background: $panel;" in css
     assert "background: $accent;" in css

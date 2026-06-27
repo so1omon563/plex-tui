@@ -91,7 +91,7 @@ contracts for these durable areas:
   release staging, and post-release automation.
 - `packaging/`: Homebrew and AUR notes plus source AUR metadata.
 - `docs/`: research notes and README visual assets.
-- Root docs and config examples: README, PACKAGING, RELEASE, ROADMAP,
+- Root docs and config examples: README, DESIGN, PACKAGING, RELEASE, ROADMAP,
   CHANGELOG, SECURITY, Makefile, pyproject, and `config.example.toml`.
 
 Add child AGENTS.md files only when a subtree needs local rules that would make

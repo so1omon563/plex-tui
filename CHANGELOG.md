@@ -15,6 +15,8 @@
   letting media-grid movement leak across the interface.
 - Changed Tab focus to switch between Libraries and Media only, with Details
   available directly through `d`.
+- Tuned grid interaction hierarchy so selected cards carry action/progress
+  context while pane borders recede when unfocused.
 - Fixed Plex Home profile switching to prefer profile-specific server resource
   tokens, falling back to the switched account token only when Plex does not
   advertise reachable server resources for that profile.
