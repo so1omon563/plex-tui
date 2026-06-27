@@ -959,6 +959,7 @@ async def run_focus_pane_check():
         app.action_focus_libraries()
         await pilot.pause(0.1)
         assert app.query_one("#sidebar").has_class("focused-pane")
+        assert not app.query_one("#sidebar").has_class("context-pane")
         assert not app.query_one("#main").has_class("focused-pane")
         assert app.query_one("#libraries-title").content == "Libraries"
         assert app.query_one("#media-title").content == "Movies"
@@ -967,6 +968,7 @@ async def run_focus_pane_check():
         await pilot.pause(0.1)
         assert app.query_one("#main").has_class("focused-pane")
         assert not app.query_one("#sidebar").has_class("focused-pane")
+        assert app.query_one("#sidebar").has_class("context-pane")
         assert not app.query_one("#details").has_class("focused-pane")
         assert app.query_one("#media-title").content == "Movies"
         assert app.query_one("#libraries-title").content == "Libraries"
@@ -974,6 +976,7 @@ async def run_focus_pane_check():
         app.action_focus_details()
         await pilot.pause(0.1)
         assert app.query_one("#details").has_class("focused-pane")
+        assert app.query_one("#sidebar").has_class("context-pane")
         assert app.query_one("#details-title").content == "Details"
         assert not app.query_one("#main").has_class("focused-pane")
 

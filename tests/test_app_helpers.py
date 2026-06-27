@@ -1387,6 +1387,7 @@ def test_focus_css_styles_all_panes():
     css = PlexTuiApp.CSS
 
     assert "#sidebar.focused-pane" in css
+    assert "#sidebar.context-pane .active-row" in css
     assert "#main.focused-pane" in css
     assert "#details.focused-pane" in css
     assert css.count("border: solid $background;") == 3

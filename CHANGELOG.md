@@ -7,6 +7,8 @@
   technical stream information.
 - Quieted the overall app composition by reducing pane-title chrome and letting
   unselected grid cards recede behind the selected media card.
+- Softened the Libraries pane when focus is in the media grid so it reads more
+  like orientation than the active browsing surface.
 - Fixed slow Discover/search submissions so the hidden search input no longer
   traps normal shortcuts like Escape or resume.
 - Fixed external mpv playback so the video window opens immediately while

@@ -474,6 +474,19 @@ class PlexTuiApp(App[None]):
         border: solid $primary;
     }
 
+    #sidebar.context-pane .pane-title {
+        color: #778196;
+    }
+
+    #sidebar.context-pane ListItem {
+        color: #778196;
+    }
+
+    #sidebar.context-pane .active-row {
+        color: $text-muted;
+        text-style: none;
+    }
+
     #main {
         width: 1fr;
         border: solid $background;
@@ -722,6 +735,7 @@ class PlexTuiApp(App[None]):
 
     def set_focus_pane(self, *, sidebar: bool = False, main: bool = False, details: bool = False) -> None:
         self.query_one("#sidebar").set_class(sidebar, "focused-pane")
+        self.query_one("#sidebar").set_class(not sidebar, "context-pane")
         self.query_one("#main").set_class(main, "focused-pane")
         self.query_one("#details").set_class(details, "focused-pane")
         self.update_pane_title("#libraries-title", "Libraries")
