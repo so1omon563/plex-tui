@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.13.6 - 2026-06-27
+
 - Saved the active Plex Home profile name after profile switches and surfaced it
   in Settings so startup restore state is visible without exposing tokens.
 - Fixed grid artwork after profile switching so stale cached-page markers do
