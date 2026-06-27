@@ -599,6 +599,7 @@ class PlexTuiApp(App[None]):
         Binding("comma", "show_settings", "Settings"),
         Binding("escape", "back_or_clear", "Back"),
         Binding("p", "play_selected", "Play from start"),
+        Binding("o", "play_optimized", "Optimized", show=False),
         Binding("P", "add_to_playlist", "Playlist", show=False),
         Binding("u", "toggle_bulk_selection", "Select", show=False),
         Binding("e", "rename_playlist", "Rename playlist", show=False),
@@ -3303,6 +3304,13 @@ class PlexTuiApp(App[None]):
     def action_resume_selected(self) -> None:
         self.play_selected_media(resume=True)
 
+    def action_play_optimized(self) -> None:
+        media = self.selected_media()
+        if media is None:
+            self.set_status("No media selected")
+            return
+        self.play_media(media, bool(resume_offset_ms(media.raw)), playback_mode="transcode")
+
     def action_toggle_watched(self) -> None:
         media = self.selected_media()
         if media is None:
@@ -3515,10 +3523,11 @@ class PlexTuiApp(App[None]):
             return
         self.play_media(media, resume)
 
-    def play_media(self, media: MediaItem, resume: bool) -> None:
+    def play_media(self, media: MediaItem, resume: bool, playback_mode: str | None = None) -> None:
         if not media.playable:
             self.open_media(media)
             return
+        playback_config = replace(self.config, playback_mode=playback_mode or self.config.playback_mode)
         if not resume and self.config.confirm_start_over and resume_offset_ms(media.raw):
             self.show_resume_picker(media)
             return
@@ -3534,14 +3543,14 @@ class PlexTuiApp(App[None]):
         try:
             stop_mpv(self.player)
             if self.config.playback_display == "terminal":
-                self.player = self.play_terminal_media(media, subtitle_choice, audio_choice, resume)
+                self.player = self.play_terminal_media(media, subtitle_choice, audio_choice, resume, playback_config)
             else:
                 self.player = play_with_mpv(
                     media.raw,
                     subtitle_choice=subtitle_choice,
                     audio_choice=audio_choice,
                     window_size=effective_mpv_window_size(self.config),
-                    playback_mode=self.config.playback_mode,
+                    playback_mode=playback_config.playback_mode,
                     playback_display=self.config.playback_display,
                     terminal_video_profile=self.config.terminal_video_profile,
                     transcode_quality=self.config.transcode_quality,
@@ -3565,9 +3574,9 @@ class PlexTuiApp(App[None]):
         self.detail_refresh_token += 1
         self.cancel_media_detail_refresh()
         self.show_detail_text(
-            render_playback_details(media.title, self.player, self.config, audio_choice, subtitle_choice)
+            render_playback_details(media.title, self.player, playback_config, audio_choice, subtitle_choice)
         )
-        status = render_playback_status(media.title, self.player, self.config, audio_choice, subtitle_choice)
+        status = render_playback_status(media.title, self.player, playback_config, audio_choice, subtitle_choice)
         self.set_status(status)
         self.set_playback_footer(status)
 
@@ -3596,6 +3605,7 @@ class PlexTuiApp(App[None]):
         subtitle_choice: StreamChoice | None,
         audio_choice: StreamChoice | None,
         resume: bool,
+        playback_config: AppConfig,
     ) -> PlayerHandle:
         try:
             with self.suspend():
@@ -3604,7 +3614,7 @@ class PlexTuiApp(App[None]):
                     subtitle_choice=subtitle_choice,
                     audio_choice=audio_choice,
                     window_size=effective_mpv_window_size(self.config),
-                    playback_mode=self.config.playback_mode,
+                    playback_mode=playback_config.playback_mode,
                     playback_display=self.config.playback_display,
                     terminal_video_profile=self.config.terminal_video_profile,
                     transcode_quality=self.config.transcode_quality,
@@ -3892,7 +3902,12 @@ def playback_readiness_rows(
         if progress:
             rows.append(f"Resume from {progress}")
         rows.extend(preference_rows)
-        rows.extend(["Press p to play from beginning", "Press r to resume saved progress", "Press P to add to a playlist"])
+        rows.extend([
+            "Press p to play from beginning",
+            "Press r to resume saved progress",
+            "Press o to play optimized stream",
+            "Press P to add to a playlist",
+        ])
         rows.extend(context_actions)
         return rows
     if "Availability: No provider links found" in context_actions:
@@ -4933,6 +4948,7 @@ def render_help() -> str:
         "Playback",
         "p: play selected media from beginning",
         "r: resume selected media from saved progress",
+        "o: play optimized transcode for slow streams",
         "c: pause / resume active mpv playback",
         "z: seek active playback back 10 seconds",
         "f: seek active playback forward 30 seconds",
@@ -5057,12 +5073,12 @@ def context_hint(row: object) -> str:
         if row.media.kind == "playlist":
             return "Media: Enter opens playlist / e rename / D delete"
         if row.media.playable:
-            return "Media: Enter selects / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
+            return "Media: Enter selects / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
     if isinstance(row, MediaGrid):
         media = row.selected_media
         if media is not None and media.playable:
-            return "Grid: Arrows/page select card / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
+            return "Grid: Arrows/page select card / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
         return "Grid: Arrows/page select card / Enter opens item"
     if isinstance(row, ServerRow):
         return "Servers: Enter selects server"

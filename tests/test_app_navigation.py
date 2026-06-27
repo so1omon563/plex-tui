@@ -750,6 +750,10 @@ def test_playback_action_prompts_before_starting_over_resumable_media():
     asyncio.run(run_playback_start_over_prompt_check())
 
 
+def test_optimized_playback_action_forces_transcode_for_one_launch():
+    asyncio.run(run_optimized_playback_action_check())
+
+
 def test_playback_action_opens_container_media():
     app = PlexTuiApp()
     media = MediaItem("Bubblegum Crisis", "TV Show", "show", "show-1", False, Raw())
@@ -2803,6 +2807,35 @@ async def run_playback_start_over_prompt_check():
 
         assert launch.call_args.kwargs["resume"] is True
         assert "resume 1:05" in app.query_one("#playback-footer").content
+
+
+async def run_optimized_playback_action_check():
+    class ResumableRaw(Raw):
+        viewOffset = 65_000
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", transcode_quality="720p_4")
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, ResumableRaw())])
+        await pilot.pause(0.2)
+
+        player = SimpleNamespace(
+            title="Movie",
+            start_offset_ms=65_000,
+            stream_mode="transcode",
+            subtitle_count=0,
+            process=SimpleNamespace(poll=lambda: None),
+        )
+        with patch("plextui.app.play_with_mpv", return_value=player) as launch:
+            app.action_play_optimized()
+        await pilot.pause(0.2)
+
+        assert launch.call_args.kwargs["playback_mode"] == "transcode"
+        assert launch.call_args.kwargs["transcode_quality"] == "720p_4"
+        assert launch.call_args.kwargs["resume"] is True
+        assert app.config.playback_mode == "auto"
+        assert "mode transcode / quality 720p 4 Mbps" in app.query_one("#playback-footer").content
 
 
 async def run_resume_action_check():

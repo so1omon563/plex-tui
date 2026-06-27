@@ -84,7 +84,8 @@ working today. Expect rough edges, but expect progress too.
   paths still show what happened and what to try next.
 - External subtitle support and direct playback for embedded PGS/VOBSUB tracks.
 - Audio and subtitle pickers with saved language preferences.
-- Separate play-from-start and resume actions with Plex progress reporting.
+- Separate play-from-start, resume, and optimized-transcode actions with Plex
+  progress reporting.
 - Watched/unwatched toggling for selected playable Plex items.
 - Continue Watching episode rows show their show, season, and episode context,
   and items can be removed from the Continue Watching view.
@@ -272,6 +273,7 @@ Common playback actions:
 | --- | --- |
 | `p` | Play the selected item from the beginning |
 | `r` | Resume from the saved Plex position when available |
+| `o` | Play an optimized/transcoded stream for slow-starting media |
 | `c` | Pause or resume the active `mpv` playback |
 | `z` | Seek active playback back 10 seconds |
 | `f` | Seek active playback forward 30 seconds |
@@ -283,6 +285,9 @@ Playback behavior:
 - Plex progress is updated in the background while playback is active.
 - Pause and seek controls are sent to the active `mpv` process through its IPC
   socket after playback is launched.
+- If a large file chugs or takes too long to start, press `o` on the selected
+  item to request an optimized Plex transcode for that launch. This does not
+  change the default direct-play behavior.
 - Experimental terminal playback can be enabled from Settings. It prefers
   mpv's Kitty/Ghostty graphics output when available, falls back to TCT text
   video elsewhere, uses Smooth/Balanced/Sharp terminal video profiles to trade
@@ -300,6 +305,8 @@ Playback mode and window sizing:
 - Playback mode defaults to Plex direct/default behavior.
 - Settings can force Plex transcoding with Original, 1080p 8 Mbps, 720p
   4 Mbps, or 480p 2 Mbps quality presets.
+- The `o` optimized playback shortcut uses the same Transcode Quality setting
+  for that one launch without changing the saved Playback Mode.
 - The default `mpv` launch uses `--autofit=80%` so videos open at a comfortable
   size on modern displays.
 - Settings can override the window size with values such as `90%`,
@@ -350,6 +357,7 @@ Plex playlists. Playlist browsing is available from the top-level sidebar
 | `enter` | Open selected item |
 | `p` | Play selected item from the beginning |
 | `r` | Resume selected item from the saved Plex position |
+| `o` | Play selected item as an optimized/transcoded stream |
 | `w` | Mark selected item watched / unwatched |
 | `P` | Add selected playable item to a playlist |
 | `u` | Toggle selected item for bulk playlist actions |
