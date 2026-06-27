@@ -1,8 +1,8 @@
 # User Guide
 
-plex-tui is a terminal Plex client for browsing and watching media through
-`mpv`. The README is the front door; this guide keeps the operational details in
-one place.
+Use this after the README when you want to configure plex-tui, understand the
+keyboard model, or collect diagnostics. It assumes you are comfortable with a
+terminal and package managers.
 
 ## Requirements
 
@@ -10,8 +10,7 @@ one place.
 - `mpv` available on `PATH`.
 - A Plex account and reachable Plex server.
 
-When installing with PyPI or from GitHub, install `mpv` with your platform
-package manager:
+PyPI and GitHub installs expect `mpv` to already be available:
 
 ```bash
 # macOS
@@ -59,10 +58,10 @@ export PLEX_TUI_TOKEN="your-plex-token"
 
 See [`config.example.toml`](../config.example.toml) for optional settings.
 
-## CLI Helpers
+## Command-Line Helpers
 
-Launch `plex-tui` with no command for the full interactive browser. Read-only
-helpers are available for quick checks and scripts:
+Launch `plex-tui` with no command for the interactive browser. Read-only helpers
+are available for quick checks and scripts:
 
 ```bash
 plex-tui --version

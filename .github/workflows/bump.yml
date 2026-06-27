@@ -15,10 +15,7 @@ jobs:
       (
         contains(github.event.pull_request.title, '#patch') ||
         contains(github.event.pull_request.title, '#minor') ||
-        contains(github.event.pull_request.title, '#major') ||
-        contains(github.event.pull_request.body, '#patch') ||
-        contains(github.event.pull_request.body, '#minor') ||
-        contains(github.event.pull_request.body, '#major')
+        contains(github.event.pull_request.title, '#major')
       )
     runs-on: ubuntu-latest
     permissions:

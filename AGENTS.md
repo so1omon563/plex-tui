@@ -197,13 +197,14 @@ pushes and branch deletion are blocked. `plex-tui` requires the Python 3.11 and
 Rulesets intentionally require zero approving reviews so automation PRs can
 merge after required checks pass without self-approval.
 
-By default, PR titles or bodies should include exactly one semver bump marker:
+By default, PR titles should include exactly one semver bump marker:
 `#patch`, `#minor`, or `#major`. Most changes should advance tags when merged,
 even when they do not publish a GitHub Release. Add `#release` only when the
 merge should create the GitHub Release and publish package channels. Exceptions
 are allowed for packaging-only follow-ups, automation repair, docs-only
 maintenance, or other changes that should not create a new version tag; call out
-the reason in the PR body when omitting a bump marker.
+the reason in the PR body when omitting a bump marker. The version workflow reads
+semver bump markers from PR titles only.
 When a change is judged release-worthy, do not only add `#release`: run the
 scripted release prep in the same branch and keep the release marker in the PR
 title. A release decision means both staged release files and a publishing

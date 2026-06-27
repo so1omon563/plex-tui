@@ -1,17 +1,22 @@
 # Documentation
 
-Start with the README for the public introduction. Use these notes when you
-need the next layer of detail.
+Start with the README. It explains the project quickly, shows the interface,
+and points here when you need more detail.
 
-## User
+## Reading Path
 
-- [`user-guide.md`](user-guide.md): configuration, playback, key bindings,
-  artwork, diagnostics, and CLI helpers.
+1. [`../README.md`](../README.md): what plex-tui is, what it feels like, and how
+   to install it.
+2. [`user-guide.md`](user-guide.md): first run, configuration, playback,
+   keyboard bindings, artwork, diagnostics, and CLI helpers.
+3. [`architecture.md`](architecture.md): runtime shape and source map.
+4. [`../CONTRIBUTING.md`](../CONTRIBUTING.md): local development and PR
+   expectations.
+
+## Reference
+
 - [`../config.example.toml`](../config.example.toml): complete commented config
   example.
-
-## Design
-
 - [`../DESIGN.md`](../DESIGN.md): product and visual principles.
 - [`app-design-philosophy.md`](app-design-philosophy.md): implementation-facing
   UI direction and review checklist.
@@ -19,19 +24,13 @@ need the next layer of detail.
   glyph card language for non-poster objects.
 - [`assets/`](assets/): README and showcase screenshots.
 
-## Architecture
-
-- [`architecture.md`](architecture.md): runtime shape and source map.
-- [`architecture-poster.drawio.png`](architecture-poster.drawio.png): visual
-  runtime poster.
-- [`codebase.drawio.png`](codebase.drawio.png): module import graph.
-
 ## Maintainers
 
-- [`../CONTRIBUTING.md`](../CONTRIBUTING.md): local development and PR
-  expectations.
 - [`../PACKAGING.md`](../PACKAGING.md): PyPI, Homebrew, AUR, and package
   automation.
 - [`../RELEASE.md`](../RELEASE.md): release prep, validation, and publishing.
 - [`../ROADMAP.md`](../ROADMAP.md): planned follow-up work.
 - [`../SECURITY.md`](../SECURITY.md): private vulnerability reporting.
+- [`architecture-poster.drawio.png`](architecture-poster.drawio.png): visual
+  runtime poster.
+- [`codebase.drawio.png`](codebase.drawio.png): module import graph.

@@ -25,7 +25,7 @@ Prepare a release PR:
 - Run `make stage-release BUMP=patch`, `BUMP=minor`, or `BUMP=major`.
 - Confirm `README.md`, `PACKAGING.md`, and `config.example.toml` match current behavior.
 - Confirm the Git remote points to `https://github.com/so1omon563/plex-tui`.
-- Make sure the PR title or body includes the right bump marker:
+- Make sure the PR title includes the right bump marker:
   `#patch`, `#minor`, or `#major`.
 - Add `#release`, `#publish`, or `#ship` when the merge should create the
   GitHub Release and publish to PyPI.
@@ -39,8 +39,8 @@ opened. Keep the staged files aligned with the tag the merge will create.
 
 Do not update Homebrew or AUR checksums in the release PR. Those checksums depend
 on the tag or published artifact that does not exist until after merge. Handle
-packaging repository updates in a follow-up PR that does not include `#patch`,
-`#minor`, or `#major`, so it cannot create another version tag.
+packaging repository updates in a follow-up PR whose title has no semver bump
+marker, so it cannot create another version tag.
 
 ## 3. Build Artifacts
 
@@ -81,8 +81,8 @@ python -m venv /tmp/plex-tui-testpypi
 Merge the release PR after CI passes. The `Version Bump and Release` workflow:
 
 1. Runs `so1omon563/custom-semver-bumper@v1` on the merged PR and creates the
-   next `vX.Y.Z` tag when the merged PR title or body includes `#patch`,
-   `#minor`, or `#major`.
+   next `vX.Y.Z` tag when the merged PR title includes `#patch`, `#minor`, or
+   `#major`.
 2. Runs `so1omon563/release-creator@v1` when the merged PR title includes
    `#release`, `#publish`, or `#ship`. Keep release markers out of ordinary PR
    bodies so examples and validation notes do not publish accidentally.

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refined the repository documentation path after the README refresh, including
+  calmer screenshot captions, a clearer docs index, and title-only semver bump
+  detection to prevent explanatory PR body text from creating tags.
 - Refreshed the public README presentation around the current three-pane visual
   language, moved detailed usage into a dedicated user guide, and added
   contributor, docs-index, and architecture guidance.

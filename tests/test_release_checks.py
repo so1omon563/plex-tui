@@ -102,6 +102,22 @@ def test_release_workflow_rejects_floating_major_minor_tags(tmp_path):
     assert "must not move floating major/minor tags" in result.message
 
 
+def test_release_workflow_rejects_body_bump_markers(tmp_path):
+    write_release_fixture(tmp_path)
+    source = Path(".github/workflows/bump.yml").read_text(encoding="utf-8")
+    workflow = source.replace(
+        "contains(github.event.pull_request.title, '#major')",
+        "contains(github.event.pull_request.title, '#major') ||\n"
+        "        contains(github.event.pull_request.body, '#patch')",
+    )
+    (tmp_path / ".github/workflows/bump.yml").write_text(workflow, encoding="utf-8")
+
+    result = check_release.check_release_workflow(tmp_path)
+
+    assert not result.ok
+    assert "PR titles only" in result.message
+
+
 def test_homebrew_workflow_requires_bottle_publish_wiring(tmp_path):
     write_release_fixture(tmp_path)
     (tmp_path / ".github/workflows/post-release-homebrew.yml").write_text(
