@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.13.3 - 2026-06-26
+
 - Fixed current-library search so submitted `/` searches query Plex when the
   loaded page is incomplete, instead of only matching items already scrolled
   into the view.
