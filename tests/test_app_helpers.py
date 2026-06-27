@@ -44,6 +44,7 @@ from plextui.app import (
     grid_card_title_lines,
     grid_card_width,
     grid_geometry_for_size,
+    grid_artwork_cache_key,
     grid_items_are_collection_cards,
     grid_page_key,
     grid_status,
@@ -1006,6 +1007,22 @@ def test_grid_density_cycles_and_changes_card_width():
     )
 
 
+def test_grid_artwork_cache_changes_with_render_size():
+    item = MediaItem("Movie", "", "movie", "1", True, object(), artwork_path="/thumb")
+    compact = AppConfig("http://plex", "token", "client", media_view="grid", grid_density="compact")
+    large = AppConfig("http://plex", "token", "client", media_view="grid", grid_density="large")
+    grid = MediaGrid()
+
+    grid.set_items([item], selected_index=0, config=compact, columns=1)
+    grid.set_artwork("1", "compact-art")
+
+    assert grid_artwork_cache_key(item, compact) != grid_artwork_cache_key(item, large)
+
+    grid.set_items([item], selected_index=0, config=large, columns=1)
+
+    assert grid.artwork == {}
+
+
 def test_grid_geometry_uses_density_at_common_terminal_sizes():
     compact = AppConfig("http://plex", "token", "client", grid_density="compact")
     comfortable = AppConfig("http://plex", "token", "client", grid_density="comfortable")
@@ -1096,9 +1113,9 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
     unselected_text = "\n".join(str(renderable) for renderable in unselected.renderables)
     assert "Movie" in selected_text
     assert "Movie · 2024" in selected_text
-    assert "▶ selected" in selected_text
+    assert "▶ play" in selected_text
     assert "┏" not in selected_text
-    assert "▶ selected" not in unselected_text
+    assert "▶ play" not in unselected_text
     assert "playable" not in unselected_text
     assert "Movie · 2024" not in unselected_text
 
@@ -1114,7 +1131,7 @@ def test_grid_card_footer_shows_watch_progress():
     unselected = render_media_grid_card(media, False, AppConfig("http://plex", "token", "client"))
 
     assert "[####----] 50%" in str(selected.renderables[3])
-    assert "▶ [####----] 50%" in str(selected.renderables[3])
+    assert "▶ resume [####----] 50%" in str(selected.renderables[3])
     assert "[####----] 50%" not in str(unselected.renderables[3])
 
 
@@ -1191,7 +1208,7 @@ def test_render_media_grid_text_snapshot_distinguishes_missing_and_collection_ar
     assert "Recently Added" in text
     assert "──┼──" in text
     assert "playable" not in text
-    assert "▶ selected" in text
+    assert "▶ open" in text
 
 
 def test_grid_rows_are_centered_in_media_pane():
@@ -1370,13 +1387,27 @@ def test_focus_css_styles_all_panes():
     css = PlexTuiApp.CSS
 
     assert "#sidebar.focused-pane" in css
+    assert "#sidebar.context-pane .context-row" in css
     assert "#main.focused-pane" in css
     assert "#details.focused-pane" in css
-    assert css.count("border: solid $panel;") == 3
+    assert css.count("border: solid $background;") == 3
     assert css.count("border: solid $primary;") == 3
+    assert ".focused-pane .active-row" in css
     assert "background: $panel;" in css
     assert "background: $accent;" in css
     assert "color: $text;" in css
+
+
+def test_set_status_skips_unchanged_text(monkeypatch):
+    app = PlexTuiApp()
+    updates = []
+    status = SimpleNamespace(content="Ready", update=updates.append)
+    monkeypatch.setattr(app, "query_one", lambda *args: status)
+
+    app.set_status("Ready")
+    app.set_status("Browsing")
+
+    assert updates == ["Browsing"]
 
 
 def test_performance_log_requires_perf_env(monkeypatch):

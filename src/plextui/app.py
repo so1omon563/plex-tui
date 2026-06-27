@@ -231,6 +231,7 @@ class MediaGrid(Static):
         self.rows = 1
         self.config: AppConfig | None = None
         self.artwork: dict[str, object] = {}
+        self.artwork_cache_context: tuple[str, str, int, int, int, int] | None = None
         self.bulk_selected_keys: set[str] = set()
 
     @property
@@ -252,7 +253,11 @@ class MediaGrid(Static):
         self.selected_index = min(max(0, selected_index), max(0, len(items) - 1))
         self.columns = max(1, columns)
         self.rows = max(1, rows)
+        next_artwork_context = grid_artwork_cache_context(config)
+        if next_artwork_context != self.artwork_cache_context:
+            self.artwork = {}
         self.config = config
+        self.artwork_cache_context = next_artwork_context
         self.bulk_selected_keys = set(bulk_selected_keys or set())
         self.artwork = {key: value for key, value in self.artwork.items() if key in {item.key for item in items}}
         self.refresh_grid()
@@ -444,7 +449,6 @@ class StatusChanged(Message):
         super().__init__()
 
 
-FOCUS_TITLE_PREFIX = "▶ "
 UI_SELECTED_ACCENT = "#e5a00d"
 UI_GRID_TITLE = "#d8dee9"
 UI_GRID_MUTED = "#9aa3b8"
@@ -463,16 +467,29 @@ class PlexTuiApp(App[None]):
 
     #sidebar {
         width: 30;
-        border: solid $panel;
+        border: solid $background;
     }
 
     #sidebar.focused-pane {
         border: solid $primary;
     }
 
+    #sidebar.context-pane .pane-title {
+        color: #778196;
+    }
+
+    #sidebar.context-pane ListItem {
+        color: #778196;
+    }
+
+    #sidebar.context-pane .context-row {
+        color: $text-muted;
+        text-style: none;
+    }
+
     #main {
         width: 1fr;
-        border: solid $panel;
+        border: solid $background;
     }
 
     #main.focused-pane {
@@ -481,7 +498,7 @@ class PlexTuiApp(App[None]):
 
     #details {
         width: 44;
-        border: solid $panel;
+        border: solid $background;
     }
 
     #details.focused-pane {
@@ -533,6 +550,11 @@ class PlexTuiApp(App[None]):
     }
 
     .active-row {
+        color: $text-muted;
+        text-style: bold;
+    }
+
+    .focused-pane .active-row {
         background: $accent;
         color: $text;
         text-style: bold;
@@ -619,7 +641,8 @@ class PlexTuiApp(App[None]):
     prefetched_grid_pages: set[tuple[str, ...]]
     active_grid_prefetch_pages: set[tuple[str, ...]]
     pending_grid_prefetches: list[tuple[list[MediaItem], tuple[str, ...], str, float]]
-    rendered_grid_artwork_cache: dict[tuple[str, str], object]
+    rendered_grid_artwork_cache: dict[tuple[str, str, str, int, int, int, int], object]
+    current_grid_artwork_context: tuple[str, str, int, int, int, int] | None
     last_grid_prefetch_page: tuple[str, ...]
     search_return_state: BrowseState | None
     search_token: int
@@ -675,6 +698,7 @@ class PlexTuiApp(App[None]):
         self.active_grid_prefetch_pages = set()
         self.pending_grid_prefetches = []
         self.rendered_grid_artwork_cache = {}
+        self.current_grid_artwork_context = None
         self.last_grid_prefetch_page = ()
         self.search_return_state = None
         self.search_token = 0
@@ -711,23 +735,31 @@ class PlexTuiApp(App[None]):
 
     def set_focus_pane(self, *, sidebar: bool = False, main: bool = False, details: bool = False) -> None:
         self.query_one("#sidebar").set_class(sidebar, "focused-pane")
+        self.query_one("#sidebar").set_class(not sidebar, "context-pane")
         self.query_one("#main").set_class(main, "focused-pane")
         self.query_one("#details").set_class(details, "focused-pane")
-        self.update_pane_title("#libraries-title", "Libraries", sidebar)
-        self.update_pane_title("#media-title", self.media_title_text(), main)
-        self.update_pane_title("#details-title", "Details", details)
+        self.update_library_focus_state(active=sidebar)
+        self.update_pane_title("#libraries-title", "Libraries")
+        self.update_pane_title("#media-title", self.media_title_text())
+        self.update_pane_title("#details-title", "Details")
 
-    def update_pane_title(self, selector: str, text: str, focused: bool) -> None:
-        title = f"{FOCUS_TITLE_PREFIX}{text}" if focused else text
-        self.query_one(selector, Static).update(title)
+    def update_library_focus_state(self, *, active: bool) -> None:
+        view = self.query_one("#libraries", ListView)
+        highlighted = view.highlighted_child
+        for child in view.children:
+            if isinstance(child, ListItem):
+                is_highlighted = child is highlighted
+                child.set_class(active and is_highlighted, "active-row")
+                child.set_class(not active and is_highlighted, "context-row")
+
+    def update_pane_title(self, selector: str, text: str) -> None:
+        self.query_one(selector, Static).update(text)
 
     def media_title_text(self) -> str:
-        title = str(self.query_one("#media-title", Static).content)
-        return title.removeprefix(FOCUS_TITLE_PREFIX)
+        return str(self.query_one("#media-title", Static).content)
 
     def set_media_title(self, text: str) -> None:
-        focused = self.query_one("#main").has_class("focused-pane")
-        self.update_pane_title("#media-title", text, focused)
+        self.update_pane_title("#media-title", text)
 
     def apply_config_theme(self) -> None:
         if self.config.theme not in self.available_themes:
@@ -1483,6 +1515,13 @@ class PlexTuiApp(App[None]):
             started = time.perf_counter()
             selected_index = selected_media_index(state.items, selected_key)
             if self.config.media_view == "grid":
+                grid_artwork_context = grid_artwork_cache_context(self.config)
+                if grid_artwork_context != self.current_grid_artwork_context:
+                    self.prefetched_grid_pages = set()
+                    self.active_grid_prefetch_pages = set()
+                    self.pending_grid_prefetches = []
+                    self.last_grid_prefetch_page = ()
+                    self.current_grid_artwork_context = grid_artwork_context
                 grid = self.show_media_grid()
                 columns, rows = self.media_grid_geometry(
                     collection_cards=grid_items_are_collection_cards(state.items),
@@ -3655,9 +3694,11 @@ class PlexTuiApp(App[None]):
 
     def set_status(self, text: str) -> None:
         try:
-            self.query_one("#status", Static).update(text)
+            status = self.query_one("#status", Static)
         except NoMatches:
             return
+        if str(status.content) != text:
+            status.update(text)
 
     def set_playback_footer(self, text: str) -> None:
         try:
@@ -4443,9 +4484,13 @@ def grid_card_footer(media: MediaItem, selected: bool, bulk_selected: bool = Fal
     bulk_prefix = "✓ " if bulk_selected else ""
     if progress:
         selected_prefix = "▶ " if selected else ""
-        return f"{bulk_prefix}{selected_prefix}{progress}".strip()
+        if selected:
+            action = "watched" if watched_state(media.raw) == "watched" else "resume"
+            return f"{bulk_prefix}{selected_prefix}{action} {progress}".strip()
+        return f"{bulk_prefix}{progress}".strip()
     if selected:
-        return f"{bulk_prefix}▶ selected".strip()
+        action = "play" if media.playable else "open"
+        return f"{bulk_prefix}▶ {action}".strip()
     if media.playable:
         return f"{bulk_prefix}playable".strip()
     return f"{bulk_prefix}open".strip()
@@ -4513,8 +4558,16 @@ def artwork_fetch_pixel_size(config: AppConfig, width: int, height: int) -> tupl
     return width, height * 2
 
 
-def grid_artwork_cache_key(item: MediaItem, config: AppConfig) -> tuple[str, str, str]:
-    return item.artwork_path, config.grid_density, config.artwork_renderer
+def grid_artwork_cache_context(config: AppConfig) -> tuple[str, str, int, int, int, int]:
+    spec = grid_density_spec(config)
+    width = int(spec["art_width"])
+    height = int(spec["art_height"])
+    fetch_width, fetch_height = artwork_fetch_pixel_size(config, width, height)
+    return config.grid_density, config.artwork_renderer, width, height, fetch_width, fetch_height
+
+
+def grid_artwork_cache_key(item: MediaItem, config: AppConfig) -> tuple[str, str, str, int, int, int, int]:
+    return item.artwork_path, *grid_artwork_cache_context(config)
 
 
 def grid_density_spec(config: AppConfig | None) -> dict[str, int]:
