@@ -9,6 +9,8 @@
   unselected grid cards recede behind the selected media card.
 - Softened the Libraries pane when focus is in the media grid so it reads more
   like orientation than the active browsing surface.
+- Refined focus ownership so the Libraries pane marks location without keeping
+  an active row when Media or Details owns focus.
 - Fixed slow Discover/search submissions so the hidden search input no longer
   traps normal shortcuts like Escape or resume.
 - Fixed external mpv playback so the video window opens immediately while

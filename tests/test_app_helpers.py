@@ -1387,7 +1387,7 @@ def test_focus_css_styles_all_panes():
     css = PlexTuiApp.CSS
 
     assert "#sidebar.focused-pane" in css
-    assert "#sidebar.context-pane .active-row" in css
+    assert "#sidebar.context-pane .context-row" in css
     assert "#main.focused-pane" in css
     assert "#details.focused-pane" in css
     assert css.count("border: solid $background;") == 3
@@ -1396,6 +1396,18 @@ def test_focus_css_styles_all_panes():
     assert "background: $panel;" in css
     assert "background: $accent;" in css
     assert "color: $text;" in css
+
+
+def test_set_status_skips_unchanged_text(monkeypatch):
+    app = PlexTuiApp()
+    updates = []
+    status = SimpleNamespace(content="Ready", update=updates.append)
+    monkeypatch.setattr(app, "query_one", lambda *args: status)
+
+    app.set_status("Ready")
+    app.set_status("Browsing")
+
+    assert updates == ["Browsing"]
 
 
 def test_performance_log_requires_perf_env(monkeypatch):

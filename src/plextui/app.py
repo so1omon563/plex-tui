@@ -482,7 +482,7 @@ class PlexTuiApp(App[None]):
         color: #778196;
     }
 
-    #sidebar.context-pane .active-row {
+    #sidebar.context-pane .context-row {
         color: $text-muted;
         text-style: none;
     }
@@ -738,9 +738,19 @@ class PlexTuiApp(App[None]):
         self.query_one("#sidebar").set_class(not sidebar, "context-pane")
         self.query_one("#main").set_class(main, "focused-pane")
         self.query_one("#details").set_class(details, "focused-pane")
+        self.update_library_focus_state(active=sidebar)
         self.update_pane_title("#libraries-title", "Libraries")
         self.update_pane_title("#media-title", self.media_title_text())
         self.update_pane_title("#details-title", "Details")
+
+    def update_library_focus_state(self, *, active: bool) -> None:
+        view = self.query_one("#libraries", ListView)
+        highlighted = view.highlighted_child
+        for child in view.children:
+            if isinstance(child, ListItem):
+                is_highlighted = child is highlighted
+                child.set_class(active and is_highlighted, "active-row")
+                child.set_class(not active and is_highlighted, "context-row")
 
     def update_pane_title(self, selector: str, text: str) -> None:
         self.query_one(selector, Static).update(text)
@@ -3684,9 +3694,11 @@ class PlexTuiApp(App[None]):
 
     def set_status(self, text: str) -> None:
         try:
-            self.query_one("#status", Static).update(text)
+            status = self.query_one("#status", Static)
         except NoMatches:
             return
+        if str(status.content) != text:
+            status.update(text)
 
     def set_playback_footer(self, text: str) -> None:
         try:
