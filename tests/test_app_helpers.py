@@ -732,8 +732,7 @@ def test_render_playback_status_includes_active_launch_context():
     )
 
     assert rendered == (
-        "Playing Movie / resume 1:05 / mode direct / 2 subtitles / audio Japanese; subtitles English / "
-        "controls c pause, z -10s, f +30s, x stop"
+        "Playing Movie / resume 1:05 / mode direct / 2 subtitles / audio Japanese; subtitles English"
     )
 
 
@@ -1379,13 +1378,14 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
     assert "subtitle_picker" in hidden
     assert hidden_keys_by_action["toggle_playback_pause"] == {"c"}
     assert hidden_keys_by_action["seek_playback_backward"] == {"z"}
-    assert hidden_keys_by_action["seek_playback_forward"] == {"f"}
+    assert hidden_keys_by_action["seek_playback_forward"] == {"period"}
     assert "a: choose and save audio preference" in rendered
     assert "s: choose and save subtitle preference" in rendered
     assert "o: play optimized transcode for slow streams" in rendered
     assert "c: pause / resume active mpv playback" in rendered
     assert "z: seek active playback back 10 seconds" in rendered
-    assert "f: seek active playback forward 30 seconds" in rendered
+    assert ".: seek active playback forward 30 seconds" in rendered
+    assert "Playback controls only work while plex-tui is focused" in rendered
     assert "ctrl+r: reconnect / reload libraries" in rendered
 
 
