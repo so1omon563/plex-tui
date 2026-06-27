@@ -1301,6 +1301,7 @@ def test_render_help_groups_key_bindings():
     assert "tab / shift+tab: switch libraries / media focus" in rendered
     assert "d: focus details directly" in rendered
     assert "v: toggle list/grid view" in rendered
+    assert "/: search current view or library" in rendered
     assert "left/right: move across grid cards" in rendered
     assert "p: play selected media from beginning" in rendered
     assert "r: resume selected media from saved progress" in rendered
