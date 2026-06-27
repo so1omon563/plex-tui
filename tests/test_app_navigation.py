@@ -24,6 +24,7 @@ from plextui.app import (
     PlaylistsRow,
     PlaylistCreateRow,
     PlaylistTargetRow,
+    ProfileRow,
     artwork_fetch_pixel_size,
     card_artwork_fetch_size,
     grid_artwork_cache_key,
@@ -32,6 +33,7 @@ from plextui.app import (
     should_auto_load_more,
 )
 from textual.widgets import ListView
+from plextui.auth import ProfileChoice
 from plextui.config import AppConfig
 from plextui.models import LibraryItem, MediaItem
 from plextui.player import PlayerError, StreamChoice
@@ -569,6 +571,10 @@ def test_cached_grid_prefetch_hydrates_visible_artwork():
     asyncio.run(run_cached_grid_prefetch_hydration_check())
 
 
+def test_stale_cached_grid_prefetch_refetches_missing_artwork():
+    asyncio.run(run_stale_cached_grid_prefetch_refetch_check())
+
+
 def test_cold_grid_prefetch_applies_visible_artwork():
     asyncio.run(run_cold_grid_prefetch_application_check())
 
@@ -829,6 +835,10 @@ def test_load_more_media_appends_search_page():
 
 def test_settings_actions_update_preferences():
     asyncio.run(run_settings_action_check())
+
+
+def test_stale_profile_load_does_not_reopen_profile_picker(monkeypatch):
+    asyncio.run(run_stale_profile_load_check(monkeypatch))
 
 
 def test_settings_toggle_library_visibility_updates_sidebar():
@@ -2124,6 +2134,8 @@ async def run_grid_prefetch_schedule_check():
 
         def capture_prefetch(items, page_key, page_label, delay=0.0):
             scheduled.append((tuple(item.key for item in items), page_key, page_label, delay))
+            for item in items:
+                app.rendered_grid_artwork_cache[grid_artwork_cache_key(item, app.config)] = f"art-{item.key}"
             app.prefetched_grid_pages.add(page_key)
             app.active_grid_prefetch_pages.discard(page_key)
 
@@ -2162,6 +2174,8 @@ async def run_grid_prefetch_pages_ahead_check():
 
         def capture_prefetch(items, page_key, page_label, delay=0.0):
             scheduled.append((tuple(item.key for item in items), page_label, delay))
+            for item in items:
+                app.rendered_grid_artwork_cache[grid_artwork_cache_key(item, app.config)] = f"art-{item.key}"
             app.prefetched_grid_pages.add(page_key)
             app.active_grid_prefetch_pages.discard(page_key)
 
@@ -2186,6 +2200,8 @@ async def run_grid_prefetch_disabled_lookahead_check():
 
         def capture_prefetch(items, page_key, page_label, delay=0.0):
             scheduled.append((tuple(item.key for item in items), page_label, delay))
+            for item in items:
+                app.rendered_grid_artwork_cache[grid_artwork_cache_key(item, app.config)] = f"art-{item.key}"
             app.prefetched_grid_pages.add(page_key)
             app.active_grid_prefetch_pages.discard(page_key)
 
@@ -2218,6 +2234,32 @@ async def run_cached_grid_prefetch_hydration_check():
         visible_items = grid.visible_page_items()
         for item in visible_items:
             assert grid.artwork[item.key] == f"art-{item.key}"
+
+
+async def run_stale_cached_grid_prefetch_refetch_check():
+    app = PlexTuiApp()
+    async with app.run_test(size=(110, 32)) as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        items = [
+            MediaItem(f"Movie {index}", "", "movie", str(index), True, Raw(), artwork_path=f"/thumb/{index}")
+            for index in range(2)
+        ]
+        page_key = tuple(item.key for item in items)
+        app.prefetched_grid_pages.add(page_key)
+        scheduled = []
+
+        def capture_prefetch(items, page_key, page_label, delay=0.0):
+            scheduled.append((tuple(item.key for item in items), page_key, page_label, delay))
+
+        app.prefetch_grid_items = capture_prefetch
+        app.show_browse_state(BrowseState("Movies", items))
+        await pilot.pause(0.2)
+
+        assert scheduled
+        assert scheduled[0][1] == page_key
+        assert scheduled[0][2] == "current"
+        assert page_key not in app.prefetched_grid_pages
 
 
 async def run_cold_grid_prefetch_application_check():
@@ -2634,6 +2676,26 @@ async def run_settings_action_check():
             assert app.config.confirm_start_over is False
 
         assert save_config.call_count == 17
+
+
+async def run_stale_profile_load_check(monkeypatch):
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.profile_request_token = 2
+        app.call_from_thread = lambda callback, *args: callback(*args)
+        monkeypatch.setattr(
+            app_module,
+            "profile_choices",
+            lambda config: [ProfileChoice("Old", "1", False, True)],
+        )
+
+        PlexTuiApp.load_profiles.__wrapped__(app, 1)
+        await pilot.pause(0.2)
+
+        assert app.query_one("#media-title").content != "Switch Profile"
+        assert not any(isinstance(row, ProfileRow) for row in app.query_one("#media").children)
 
 
 async def run_settings_library_visibility_check():

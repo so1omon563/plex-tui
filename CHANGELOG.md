@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Saved the active Plex Home profile name after profile switches and surfaced it
+  in Settings so startup restore state is visible without exposing tokens.
+- Fixed grid artwork after profile switching so stale cached-page markers do
+  not block posters from repainting, and ignored stale profile-list results
+  after a switch starts.
 - Clarified that active playback controls only work while plex-tui has focus,
   moved forward seek from `f` to `.` to avoid mpv's fullscreen key, and removed
   duplicate playback control hints from the footer.

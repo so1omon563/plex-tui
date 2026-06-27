@@ -647,6 +647,7 @@ class PlexTuiApp(App[None]):
     last_grid_prefetch_page: tuple[str, ...]
     search_return_state: BrowseState | None
     search_token: int
+    profile_request_token: int
     applying_config_theme: bool
     detail_refresh_token: int
     detail_refresh_timer: Timer | None
@@ -703,6 +704,7 @@ class PlexTuiApp(App[None]):
         self.last_grid_prefetch_page = ()
         self.search_return_state = None
         self.search_token = 0
+        self.profile_request_token = 0
         self.applying_config_theme = False
         self.detail_refresh_token = 0
         self.detail_refresh_timer = None
@@ -1026,7 +1028,7 @@ class PlexTuiApp(App[None]):
         self.load_server()
 
     @work(thread=True)
-    def load_profiles(self) -> None:
+    def load_profiles(self, token: int) -> None:
         self.post_message(StatusChanged("Loading Plex profiles..."))
         try:
             choices = profile_choices(self.config)
@@ -1035,6 +1037,8 @@ class PlexTuiApp(App[None]):
             return
 
         def show_choices() -> None:
+            if token != self.profile_request_token:
+                return
             self.settings_visible = False
             self.set_media_title("Switch Profile")
             view = self.show_media_list()
@@ -1051,6 +1055,7 @@ class PlexTuiApp(App[None]):
         if choice.current:
             self.set_status(f"{choice.title} is already active")
             return
+        self.profile_request_token += 1
         if choice.protected:
             self.prompt_profile_pin(choice)
             return
@@ -1986,9 +1991,10 @@ class PlexTuiApp(App[None]):
             write_artwork_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=in-flight items={len(items)}")
             return
         if page_key in self.prefetched_grid_pages:
-            self.apply_cached_grid_artwork(items)
-            write_artwork_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=cached items={len(items)}")
-            return
+            if self.apply_cached_grid_artwork(items):
+                write_artwork_performance_log("grid_prefetch_skipped", started, f"page={page_label} reason=cached items={len(items)}")
+                return
+            self.prefetched_grid_pages.discard(page_key)
         if self.active_grid_prefetch_pages and page_label != "current":
             if self.queue_grid_prefetch(items, page_key, page_label, delay):
                 write_artwork_performance_log("grid_prefetch_queued", started, f"page={page_label} items={len(items)}")
@@ -2023,9 +2029,10 @@ class PlexTuiApp(App[None]):
         while self.pending_grid_prefetches:
             items, page_key, page_label, delay = self.pending_grid_prefetches.pop(0)
             if page_key in self.prefetched_grid_pages:
-                self.apply_cached_grid_artwork(items)
-                write_artwork_performance_log("grid_prefetch_skipped", time.perf_counter(), f"page={page_label} reason=cached items={len(items)}")
-                continue
+                if self.apply_cached_grid_artwork(items):
+                    write_artwork_performance_log("grid_prefetch_skipped", time.perf_counter(), f"page={page_label} reason=cached items={len(items)}")
+                    continue
+                self.prefetched_grid_pages.discard(page_key)
             self.active_grid_prefetch_pages.add(page_key)
             self.prefetch_grid_items(items, page_key, page_label, delay)
             return
@@ -2119,16 +2126,16 @@ class PlexTuiApp(App[None]):
     def apply_grid_artwork(self, media_key: str, artwork: object) -> None:
         self.apply_grid_artworks({media_key: artwork})
 
-    def apply_cached_grid_artwork(self, items: list[MediaItem]) -> None:
+    def apply_cached_grid_artwork(self, items: list[MediaItem]) -> bool:
         try:
             grid = self.query_one("#media-grid", MediaGrid)
         except NoMatches:
-            return
-        self.hydrate_grid_artwork_from_cache(grid, items)
+            return False
+        return self.hydrate_grid_artwork_from_cache(grid, items)
 
-    def hydrate_grid_artwork_from_cache(self, grid: MediaGrid, items: list[MediaItem]) -> None:
+    def hydrate_grid_artwork_from_cache(self, grid: MediaGrid, items: list[MediaItem]) -> bool:
         if not artwork_enabled(self.config):
-            return
+            return False
         artwork_by_key = {}
         for item in items:
             if not item.artwork_path or item.key in grid.artwork:
@@ -2142,6 +2149,8 @@ class PlexTuiApp(App[None]):
             if visible_keys.intersection(artwork_by_key):
                 grid.refresh_grid()
             write_artwork_performance_log("grid_artwork_hydrated", time.perf_counter(), f"items={len(artwork_by_key)}")
+            return True
+        return not any(item.artwork_path and item.key not in grid.artwork for item in items)
 
     def apply_grid_artworks(self, artwork_by_key: dict[str, object]) -> None:
         try:
@@ -2225,7 +2234,8 @@ class PlexTuiApp(App[None]):
             self.begin_login()
             return
         if action == "switch_profile":
-            self.load_profiles()
+            self.profile_request_token += 1
+            self.load_profiles(self.profile_request_token)
             return
         if action == "clear_tracks":
             self.pending_confirmation_action = ""
@@ -4778,6 +4788,7 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsValueRow(f"Server Token: {'saved' if config.token else 'not set'}"),
         SettingsValueRow(f"Account Token: {'saved' if config.account_token else 'not set'}"),
         SettingsValueRow(f"Home Token: {'saved' if (config.home_account_token or config.account_token) else 'not set'}"),
+        SettingsValueRow(f"Active Profile: {config.active_profile_title or 'not set'}"),
         SettingsActionRow("Reconnect / reload libraries", "reload"),
         SettingsActionRow("Relogin with Plex", "relogin"),
         SettingsActionRow("Switch Plex profile", "switch_profile"),
@@ -4847,6 +4858,7 @@ def render_settings(config: AppConfig) -> str:
             ("Server Token", "saved" if config.token else "not set"),
             ("Account Token", "saved" if config.account_token else "not set"),
             ("Home Token", "saved" if (config.home_account_token or config.account_token) else "not set"),
+            ("Active Profile", config.active_profile_title or "not set"),
         ],
         ["Reconnect / reload libraries", "Relogin with Plex", "Switch Plex profile"],
     )
@@ -5324,7 +5336,9 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
     if action == "clear_audio":
         return f"Current audio preference: {preference_value(config.preferred_audio_language)}"
     if action == "switch_profile":
-        return f"Profile switching: {'available' if (config.home_account_token or config.account_token) else 'login required'}"
+        active = config.active_profile_title or "not set"
+        available = "available" if (config.home_account_token or config.account_token) else "login required"
+        return f"Active profile: {active}\nProfile switching: {available}"
     if action in {"subtitle_auto", "subtitle_none", "clear_subtitle"}:
         return (
             f"Current subtitle mode: {subtitle_mode_value(config)}\n"

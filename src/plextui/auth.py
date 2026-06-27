@@ -212,6 +212,7 @@ def switch_profile(config: AppConfig, choice: ProfileChoice, pin: str = "") -> A
             token=selected.resource.accessToken,
             account_token=account_token,
             home_account_token=home_token,
+            active_profile_title=profile_title(account),
         )
     elif config.base_url and plex_root_responds(config.base_url, account_token, timeout=5):
         saved = replace(
@@ -219,6 +220,7 @@ def switch_profile(config: AppConfig, choice: ProfileChoice, pin: str = "") -> A
             token=account_token,
             account_token=account_token,
             home_account_token=home_token,
+            active_profile_title=profile_title(account),
         )
     else:
         raise RuntimeError("No reachable Plex server connections found for this profile")

@@ -10,6 +10,8 @@ client_identifier = "plex-tui-your-stable-client-id"
 # account_token = "your-plex-account-token"
 # Optional original Plex Home token saved after profile switching.
 # home_account_token = "your-plex-home-account-token"
+# Optional display label for the last active Plex Home profile.
+# active_profile_title = "Owner"
 
 # Optional stream preferences. Use Plex language codes when possible.
 # preferred_audio_language = "jpn"

@@ -248,6 +248,7 @@ def test_switch_profile_saves_profile_and_home_tokens(monkeypatch):
     assert switched.token == "kid-server-token"
     assert switched.account_token == "Kid-token"
     assert switched.home_account_token == "home-token"
+    assert switched.active_profile_title == "Kid"
     assert root_checks == []
     assert saved["config"] == switched
 
@@ -287,6 +288,7 @@ def test_switch_profile_reuses_current_server_when_profile_has_no_resources(monk
     assert switched.token == "Kid-token"
     assert switched.account_token == "Kid-token"
     assert switched.home_account_token == "home-token"
+    assert switched.active_profile_title == "Kid"
     assert saved["config"] == switched
 
 

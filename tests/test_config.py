@@ -25,6 +25,7 @@ def test_config_example_parses_and_uses_known_fields():
         "client_identifier",
         "account_token",
         "home_account_token",
+        "active_profile_title",
         "preferred_audio_language",
         "preferred_subtitle_language",
         "subtitle_mode",
@@ -247,15 +248,24 @@ def test_home_account_token_only_saves_when_different_from_active_profile(tmp_pa
     config.save_config(config.AppConfig("http://plex", "server", "client", account_token="home", home_account_token="home"))
     assert "home_account_token" not in config_file.read_text(encoding="utf-8")
 
-    saved = config.AppConfig("http://plex", "server", "client", account_token="kid", home_account_token="home")
+    saved = config.AppConfig(
+        "http://plex",
+        "server",
+        "client",
+        account_token="kid",
+        home_account_token="home",
+        active_profile_title="Kid",
+    )
     config.save_config(saved)
     loaded = config.load_config()
 
     text = config_file.read_text(encoding="utf-8")
     assert 'account_token = "kid"' in text
     assert 'home_account_token = "home"' in text
+    assert 'active_profile_title = "Kid"' in text
     assert loaded.account_token == "kid"
     assert loaded.home_account_token == "home"
+    assert loaded.active_profile_title == "Kid"
 
 
 def test_hidden_library_keys_parse_unique_csv_values(tmp_path, monkeypatch):
