@@ -49,9 +49,6 @@
 
 ## Plex Integration Research
 
-- Research notes from
-  [`anthonycaccese/240-MP`](https://github.com/anthonycaccese/240-MP/tree/main)
-  live in `docs/plex-integration-research.md`.
 - Continue Watching now has a sidebar browse entrypoint backed by Plex on-deck
   data; selected items can be removed from Continue Watching. Watch for
   real-library edge cases around ordering and pagination.

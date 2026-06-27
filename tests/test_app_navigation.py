@@ -3426,7 +3426,8 @@ async def run_bulk_remove_from_playlist_check():
         app.action_toggle_bulk_selection()
         await pilot.pause(0.2)
         app.query_one("#media").index = 1
-        await pilot.pause(0.2)
+        selected = await wait_for_selected_title(app, pilot, "Second")
+        assert selected is not None
         app.action_toggle_bulk_selection()
         await pilot.pause(0.2)
         app.action_remove_continue_watching()
