@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Reworked the Details pane into a quieter media-case style layout that leads
+  with title, editorial facts, playback actions, and summary before catalog and
+  technical stream information.
+- Quieted the overall app composition by reducing pane-title chrome and letting
+  unselected grid cards recede behind the selected media card.
+- Fixed slow Discover/search submissions so the hidden search input no longer
+  traps normal shortcuts like Escape or resume.
+- Fixed external mpv playback so the video window opens immediately while
+  plex-tui stays running.
+- Fixed left/right arrow handling so focused panes keep ownership instead of
+  letting media-grid movement leak across the interface.
+- Changed Tab focus to switch between Libraries and Media only, with Details
+  available directly through `d`.
 - Fixed Plex Home profile switching to prefer profile-specific server resource
   tokens, falling back to the switched account token only when Plex does not
   advertise reachable server resources for that profile.

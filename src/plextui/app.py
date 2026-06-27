@@ -467,8 +467,7 @@ class PlexTuiApp(App[None]):
     }
 
     #sidebar.focused-pane {
-        border: heavy $primary;
-        background: $boost;
+        border: solid $primary;
     }
 
     #main {
@@ -477,22 +476,28 @@ class PlexTuiApp(App[None]):
     }
 
     #main.focused-pane {
-        border: heavy $primary;
-        background: $boost;
+        border: solid $primary;
     }
 
     #details {
-        width: 42;
+        width: 44;
         border: solid $panel;
     }
 
     #details.focused-pane {
-        border: heavy $primary;
-        background: $boost;
+        border: solid $primary;
     }
 
     #search {
         margin: 0 1;
+    }
+
+    #libraries {
+        padding: 1 1;
+    }
+
+    #media {
+        padding: 1 2;
     }
 
     #status {
@@ -509,18 +514,16 @@ class PlexTuiApp(App[None]):
     }
 
     .pane-title {
-        text-style: bold;
-        padding: 0 1;
-        background: $panel;
+        color: $text-muted;
+        padding: 1 2 0 2;
     }
 
     .focused-pane > .pane-title {
-        background: $primary;
-        color: $text;
+        color: $primary;
     }
 
     #detail-content {
-        padding: 0 1;
+        padding: 1 2;
         width: 1fr;
         height: auto;
     }
@@ -541,7 +544,7 @@ class PlexTuiApp(App[None]):
     }
 
     #media-grid {
-        padding: 0 1;
+        padding: 1 2;
     }
     """
     BINDINGS = [
@@ -618,6 +621,8 @@ class PlexTuiApp(App[None]):
     pending_grid_prefetches: list[tuple[list[MediaItem], tuple[str, ...], str, float]]
     rendered_grid_artwork_cache: dict[tuple[str, str], object]
     last_grid_prefetch_page: tuple[str, ...]
+    search_return_state: BrowseState | None
+    search_token: int
     applying_config_theme: bool
     detail_refresh_token: int
     detail_refresh_timer: Timer | None
@@ -671,6 +676,8 @@ class PlexTuiApp(App[None]):
         self.pending_grid_prefetches = []
         self.rendered_grid_artwork_cache = {}
         self.last_grid_prefetch_page = ()
+        self.search_return_state = None
+        self.search_token = 0
         self.applying_config_theme = False
         self.detail_refresh_token = 0
         self.detail_refresh_timer = None
@@ -904,6 +911,7 @@ class PlexTuiApp(App[None]):
             self.set_status(context_hint(row))
         elif isinstance(row, LibraryRow):
             mark_active_row(event.list_view, row)
+            self.show_detail_text(library_row_description(row.library, self.config))
             self.set_status(context_hint(row))
         elif isinstance(row, LibraryMenuRow):
             mark_active_row(event.list_view, row)
@@ -1789,19 +1797,15 @@ class PlexTuiApp(App[None]):
         focused_id = getattr(self.focused, "id", "")
         if focused_id == "libraries":
             self.action_focus_media()
-        elif focused_id in {"media", "media-grid", "search"}:
-            self.action_focus_details()
         else:
             self.action_focus_libraries()
 
     def action_focus_previous(self) -> None:
         focused_id = getattr(self.focused, "id", "")
-        if focused_id == "libraries":
-            self.action_focus_details()
-        elif focused_id == "detail-scroll":
-            self.action_focus_media()
-        else:
+        if focused_id in {"media", "media-grid", "search"}:
             self.action_focus_libraries()
+        else:
+            self.action_focus_media()
 
     def action_toggle_media_view(self) -> None:
         next_view = next_media_view(self.config.media_view)
@@ -1824,10 +1828,14 @@ class PlexTuiApp(App[None]):
     def action_grid_left(self) -> None:
         if self.adjust_highlighted_setting(-1):
             return
+        if not self.media_grid_has_focus():
+            return
         self.move_grid_selection(-1)
 
     def action_grid_right(self) -> None:
         if self.adjust_highlighted_setting(1):
+            return
+        if not self.media_grid_has_focus():
             return
         self.move_grid_selection(1)
 
@@ -1890,6 +1898,9 @@ class PlexTuiApp(App[None]):
         grid = self.query_one("#media-grid", MediaGrid)
         if self.media_grid_visible():
             grid.move_selection(direction)
+
+    def media_grid_has_focus(self) -> bool:
+        return self.media_grid_visible() and self.focused is self.query_one("#media-grid", MediaGrid)
 
     def schedule_grid_prefetch(self, grid: MediaGrid) -> None:
         if not artwork_enabled(self.config):
@@ -2990,13 +3001,17 @@ class PlexTuiApp(App[None]):
                 return
             if self.input_mode == "discover_search":
                 self.input_mode = ""
-                self.run_discover_search(query)
+                self.focus_media_browser()
+                token = self.start_search_return()
+                self.run_discover_search(query, token)
                 return
             search_global = self.search_global
             self.input_mode = ""
             if not search_global and self.apply_fuzzy_search(query, focus=True):
                 return
-            self.run_search(query, search_global)
+            self.focus_media_browser()
+            token = self.start_search_return()
+            self.run_search(query, search_global, token)
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id != "search":
@@ -3010,7 +3025,7 @@ class PlexTuiApp(App[None]):
             self.restore_fuzzy_search_source()
 
     @work(thread=True, exclusive=True, group="search")
-    def run_search(self, query: str, global_search: bool = False) -> None:
+    def run_search(self, query: str, global_search: bool = False, token: int = 0) -> None:
         if not query:
             return
         local_source = None if global_search else self.fuzzy_search_source()
@@ -3037,6 +3052,8 @@ class PlexTuiApp(App[None]):
             library = None if global_search else self.selected_library
             page = self.service.search_page(query, library, 0, self.config.page_size)
         except Exception as exc:
+            if self.search_was_cancelled(token):
+                return
             self.call_from_thread(self.show_error, str(exc))
             return
         write_performance_log(
@@ -3046,6 +3063,9 @@ class PlexTuiApp(App[None]):
         )
 
         def update() -> None:
+            if self.search_was_cancelled(token):
+                return
+            self.search_return_state = None
             if self.browsing_stack and self.browsing_stack[-1].search:
                 self.browsing_stack.pop()
             state = BrowseState(
@@ -3066,7 +3086,7 @@ class PlexTuiApp(App[None]):
         self.call_from_thread(update)
 
     @work(thread=True, exclusive=True, group="search")
-    def run_discover_search(self, query: str) -> None:
+    def run_discover_search(self, query: str, token: int = 0) -> None:
         if not query or self.service is None:
             return
         media_type = self.config.discover_media_type
@@ -3082,6 +3102,8 @@ class PlexTuiApp(App[None]):
         try:
             page = self.service.discover_page(query, 0, self.config.page_size, media_type)
         except Exception as exc:
+            if self.search_was_cancelled(token):
+                return
             self.call_from_thread(self.show_error, str(exc))
             return
         write_performance_log(
@@ -3091,6 +3113,9 @@ class PlexTuiApp(App[None]):
         )
 
         def update() -> None:
+            if self.search_was_cancelled(token):
+                return
+            self.search_return_state = None
             state = BrowseState(
                 title,
                 page.items,
@@ -3106,6 +3131,14 @@ class PlexTuiApp(App[None]):
             self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more, page.items))
 
         self.call_from_thread(update)
+
+    def start_search_return(self) -> int:
+        self.search_token += 1
+        self.search_return_state = self.browsing_stack[-1] if self.browsing_stack else None
+        return self.search_token
+
+    def search_was_cancelled(self, token: int) -> bool:
+        return bool(token and token != self.search_token)
 
     def fuzzy_search_source(self) -> BrowseState | None:
         for state in reversed(self.browsing_stack):
@@ -3162,6 +3195,8 @@ class PlexTuiApp(App[None]):
     def action_back_or_clear(self) -> None:
         search = self.query_one("#search", Input)
         if search.display:
+            self.search_token += 1
+            self.workers.cancel_group(self, "search")
             search.value = ""
             search.display = False
             input_mode = self.input_mode
@@ -3184,6 +3219,16 @@ class PlexTuiApp(App[None]):
                 state = self.browsing_stack[-1]
                 self.show_browse_state(state)
             self.focus_media_browser()
+            return
+
+        if self.search_return_state is not None:
+            self.search_token += 1
+            self.workers.cancel_group(self, "search")
+            state = self.search_return_state
+            self.search_return_state = None
+            self.show_browse_state(state)
+            self.focus_media_browser()
+            self.set_status(state.title)
             return
 
         if self.help_visible or self.settings_visible or self.picker_visible:
@@ -3677,10 +3722,9 @@ def render_details(
     raw: object | None = None,
     context_actions: tuple[str, ...] = (),
 ) -> str:
-    lines = render_detail_header(details, config, context_actions)
-
-    metadata_rows = list(getattr(details, "metadata"))
-    episode_context = episode_context_rows(details, metadata_rows)
+    header_metadata_rows = list(getattr(details, "metadata"))
+    metadata_rows = list(header_metadata_rows)
+    episode_context = episode_context_rows(details, header_metadata_rows)
     if episode_context:
         metadata_rows = [
             (label, value)
@@ -3688,108 +3732,166 @@ def render_details(
             if label not in EPISODE_CONTEXT_LABEL_SET
         ]
 
-    metadata = [*detail_key_value_rows(metadata_rows)]
-    append_detail_section(lines, "Metadata", metadata or ["No metadata reported"])
-
-    if config is not None:
-        append_detail_section(
-            lines,
-            "Preferences",
-            detail_key_value_rows([
-                ("Audio", preference_value(config.preferred_audio_language)),
-                ("Subtitles", f"{subtitle_mode_value(config)} / {subtitle_language_value(config)}"),
-                ("Playback Mode", playback_mode_value(config)),
-                ("Playback Display", playback_display_value(config)),
-                ("Transcode Quality", transcode_quality_value(config)),
-            ]),
-        )
-        if raw is not None and bool(getattr(details, "playable")):
-            effective = effective_stream_preference_rows(raw, config)
-            if effective:
-                append_detail_section(lines, "Effective Playback", detail_key_value_rows(effective))
-
-    audio = getattr(details, "audio", [])
-    if audio:
-        append_detail_section(lines, stream_section_heading("Audio Tracks", audio), detail_list_rows(audio))
-    else:
-        append_detail_section(lines, "Audio Tracks", ["No audio tracks reported"])
-
-    subtitles = getattr(details, "subtitles")
-    if subtitles:
-        append_detail_section(lines, stream_section_heading("Subtitle Tracks", subtitles), detail_list_rows(subtitles))
-    else:
-        append_detail_section(lines, "Subtitle Tracks", ["No subtitle tracks reported"])
+    lines = render_detail_header(details, header_metadata_rows, config, context_actions)
 
     summary = getattr(details, "summary")
     if summary:
         append_detail_section(lines, "Summary", wrapped_detail_text(summary))
 
+    for heading, rows in grouped_metadata_sections(metadata_rows):
+        append_detail_section(lines, heading, detail_key_value_rows(rows))
+    if not metadata_rows:
+        append_detail_section(lines, "Catalog", ["No metadata reported"])
+
+    technical_rows = technical_detail_rows(details, config, raw)
+    audio = getattr(details, "audio", [])
+    missing_stream_rows = []
+    if audio:
+        technical_rows.append("")
+        technical_rows.append(stream_section_heading("Audio Tracks", audio))
+        technical_rows.extend(detail_list_rows(audio))
+    else:
+        missing_stream_rows.append(("Audio", "none reported"))
+
+    subtitles = getattr(details, "subtitles")
+    if subtitles:
+        technical_rows.append("")
+        technical_rows.append(stream_section_heading("Subtitle Tracks", subtitles))
+        technical_rows.extend(detail_list_rows(subtitles))
+    else:
+        missing_stream_rows.append(("Subtitles", "none reported"))
+
+    if missing_stream_rows:
+        technical_rows.append("")
+        technical_rows.append("Streams")
+        technical_rows.extend(detail_key_value_rows(missing_stream_rows))
+
+    append_detail_section(lines, "Technical", technical_rows)
+
     return "\n".join(lines)
+
+
+def technical_detail_rows(details: object, config: AppConfig | None = None, raw: object | None = None) -> list[str]:
+    rows = detail_key_value_rows([("Artwork", artwork_status(details, config))])
+    if config is None:
+        return rows
+    rows.extend(detail_key_value_rows([
+        ("Playback Mode", playback_mode_value(config)),
+        ("Playback Display", playback_display_value(config)),
+        ("Transcode Quality", transcode_quality_value(config)),
+    ]))
+    if raw is not None and bool(getattr(details, "playable")):
+        effective = effective_stream_preference_rows(raw, config)
+        if effective:
+            rows.append("")
+            rows.append("Effective Playback")
+            rows.extend(detail_key_value_rows(effective))
+    return rows
 
 
 def render_detail_header(
     details: object,
+    metadata: list[tuple[str, str]],
     config: AppConfig | None = None,
     context_actions: tuple[str, ...] = (),
 ) -> list[str]:
     title = getattr(details, "title")
-    metadata = list(getattr(details, "metadata", []))
     title_lines = textwrap.wrap(title, width=DETAIL_SUMMARY_WIDTH) or [title]
     episode_context = episode_context_summary(details, metadata)
     context_lines = textwrap.wrap(episode_context, width=DETAIL_SUMMARY_WIDTH) if episode_context else []
-    facts = [str(fact) for fact in getattr(details, "facts", []) if fact]
-    artwork = artwork_status(details, config)
     progress = detail_metadata_value(metadata, "Progress")
-    title_width = max(len(line) for line in [*title_lines, *context_lines])
-    lines = [*title_lines, *context_lines, "-" * min(max(title_width, 8), DETAIL_SUMMARY_WIDTH)]
-    if facts:
-        lines.extend(textwrap.wrap(" / ".join(facts), width=DETAIL_SUMMARY_WIDTH) or [""])
-    lines.extend([
+    lines = [
+        *title_lines,
+        *context_lines,
+        "",
+        *primary_fact_lines(details, metadata),
         "",
         "Playback",
-        *playback_readiness_rows(bool(getattr(details, "playable")), progress, context_actions),
-        f"Artwork: {artwork}",
-    ])
+        *playback_readiness_rows(bool(getattr(details, "playable")), progress, config, context_actions),
+    ]
     return lines
 
 
-def playback_readiness_rows(playable: bool, progress: str = "", context_actions: tuple[str, ...] = ()) -> list[str]:
+def primary_fact_lines(details: object, metadata: list[tuple[str, str]]) -> list[str]:
+    kind = kind_label(str(getattr(details, "kind", "")))
+    compact = [
+        detail_metadata_value(metadata, "Year"),
+        detail_metadata_value(metadata, "Duration"),
+        detail_metadata_value(metadata, "Content Rating"),
+    ]
+    compact_line = " • ".join(value for value in compact if value)
+    progress = detail_metadata_value(metadata, "Progress")
+    rows = [kind]
+    if compact_line:
+        rows.append(compact_line)
+    if progress:
+        rows.append(progress)
+    return rows
+
+
+def playback_readiness_rows(
+    playable: bool,
+    progress: str = "",
+    config: AppConfig | None = None,
+    context_actions: tuple[str, ...] = (),
+) -> list[str]:
+    preference_rows = []
+    if config is not None:
+        preference_rows = [
+            f"Audio preference {preference_value(config.preferred_audio_language)}",
+            f"Subtitles {subtitle_mode_value(config)} / {subtitle_language_value(config)}",
+        ]
     if playable:
-        status = "Status: Ready to play"
+        status = "Ready to play"
         if any(action.startswith("Availability: Listed by Plex") for action in context_actions):
-            status = "Status: Listed by Plex; playable stream checked on play"
+            status = "Listed by Plex; stream checked on play"
         rows = [
             status,
         ]
         if progress:
-            rows.append(f"Progress: {progress}")
-        rows.extend([
-            "p: play from beginning",
-            "r: resume saved progress",
-            "Playlist: Press P",
-        ])
+            rows.append(f"Resume from {progress}")
+        rows.extend(preference_rows)
+        rows.extend(["Press p to play from beginning", "Press r to resume saved progress", "Press P to add to a playlist"])
         rows.extend(context_actions)
         return rows
     if "Availability: No provider links found" in context_actions:
         rows = [
-            "Status: No availability provider",
-            "Action: Choose another item",
+            "No availability provider",
+            "Choose another item",
         ]
         rows.extend(context_actions)
         return rows
     if any(action.startswith("Availability:") for action in context_actions):
         rows = [
-            "Status: Opens availability provider",
-            "Action: Press Enter to choose/open",
+            "Opens availability provider",
+            "Press Enter to choose or open",
         ]
         rows.extend(context_actions)
         return rows
     rows = [
-        "Status: Opens more items",
-        "Action: Press Enter to open",
+        "Opens more items",
+        "Press Enter to open",
     ]
     rows.extend(context_actions)
     return rows
+
+
+def grouped_metadata_sections(metadata: list[tuple[str, str]]) -> list[tuple[str, list[tuple[str, str]]]]:
+    section_labels = [
+        ("Production", {"Year", "Content Rating", "Rating", "Studio"}),
+        ("Catalog", {"Type", "Duration", "Items", "Playlist Type", "Smart Playlist", "Edition", "Status", "Progress", "Episode"}),
+    ]
+    used: set[str] = set()
+    sections: list[tuple[str, list[tuple[str, str]]]] = []
+    for heading, labels in section_labels:
+        rows = [(label, value) for label, value in metadata if label in labels]
+        if rows:
+            used.update(label for label, _value in rows)
+            sections.append((heading, rows))
+    remaining = [(label, value) for label, value in metadata if label not in used]
+    if remaining:
+        sections.append(("Metadata", remaining))
+    return sections
 
 
 def detail_metadata_value(metadata: list[tuple[str, str]], label: str) -> str:
@@ -4005,13 +4107,34 @@ def render_media_grid_card(
         )
     else:
         artwork = center_renderable_lines(artwork, card_width)
-    footer = grid_card_footer(media, selected, bulk_selected)
+    secondary_lines = grid_card_secondary_lines(media, selected, config, bulk_selected, collection_card)
     return Group(
         artwork,
         *(grid_card_line(title, card_width, title_style) for title in title_lines),
-        grid_card_line(subtitle, card_width, UI_GRID_MUTED),
-        grid_card_line(footer, card_width, f"bold {UI_SELECTED_ACCENT}" if selected else UI_GRID_DIM),
+        *secondary_lines,
     )
+
+
+def grid_card_secondary_lines(
+    media: MediaItem,
+    selected: bool,
+    config: AppConfig,
+    bulk_selected: bool,
+    collection_card: bool,
+) -> list[Text]:
+    card_width = grid_card_width(config, collection_card=collection_card)
+    subtitle = grid_card_text(grid_card_subtitle(media), config, collection_card=collection_card)
+    footer = grid_card_footer(media, selected, bulk_selected)
+    if selected or collection_card or bulk_selected:
+        footer_style = f"bold {UI_SELECTED_ACCENT}" if selected else UI_GRID_DIM
+        return [
+            grid_card_line(subtitle, card_width, UI_GRID_MUTED),
+            grid_card_line(footer, card_width, footer_style),
+        ]
+    return [
+        grid_card_line("", card_width, UI_GRID_MUTED),
+        grid_card_line("", card_width, UI_GRID_DIM),
+    ]
 
 
 def grid_items_are_collection_cards(items: list[MediaItem]) -> bool:
@@ -4740,10 +4863,10 @@ def render_help() -> str:
         "enter: open selected row",
         "space: alternate library action",
         "escape: go back / close current view",
-        "tab / shift+tab: move focus",
+        "tab / shift+tab: switch libraries / media focus",
         "l: focus libraries",
         "m: focus media list",
-        "d: focus details",
+        "d: focus details directly",
         "v: toggle list/grid view",
         "[: jump to previous alphabet section",
         "]: jump to next alphabet section",
@@ -4826,6 +4949,20 @@ def library_entry_label(entry: str) -> str:
 
 def library_entry_glyph(entry: str) -> str:
     return LIBRARY_ENTRY_GLYPHS.get(entry, "›")
+
+
+def library_row_description(library: LibraryItem, config: AppConfig) -> str:
+    enter_action = "Open Library view" if config.library_enter_action == "library" else "Choose browse view"
+    space_action = "Choose browse view" if config.library_enter_action == "library" else "Open Library view"
+    return "\n".join([
+        library.title,
+        "",
+        "Default view: Library",
+        f"Enter: {enter_action}",
+        f"Space: {space_action}",
+        "",
+        "Library view opens all items. Browse view lets you choose Recommended, Collections, Playlists, or Categories.",
+    ])
 
 
 def library_menu_description(library: LibraryItem) -> str:

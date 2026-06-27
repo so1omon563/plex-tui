@@ -121,6 +121,8 @@ def play_with_mpv(
     ]
     if playback_display == "terminal":
         args.extend(terminal_video_args(terminal_video_profile))
+    else:
+        args.extend(["--no-terminal", "--force-window=immediate", "--focus-on=all"])
     if start_offset and not monitor_base_offset:
         args.append(f"--start={start_offset / 1000:.3f}")
     if window_size and playback_display != "terminal":
@@ -148,6 +150,8 @@ def play_with_mpv(
             stdin = stdout = stderr = tty
         except OSError as exc:
             log_debug(f"terminal playback warning: could not open /dev/tty: {exc}")
+    elif playback_display != "terminal":
+        stdin = subprocess.DEVNULL
     try:
         process = subprocess.Popen(
             args,

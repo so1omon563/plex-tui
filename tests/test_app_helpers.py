@@ -147,23 +147,26 @@ def test_render_details_includes_subtitles_and_summary():
         ),
     )
 
-    assert "Title\n--------" in rendered
+    assert "Title\n\nMovie\n1m / 10m (11%)" in rendered
+    assert "====" not in rendered
     assert "Movie" in rendered
-    assert "Playback\nStatus: Ready to play" in rendered
-    assert "Progress: 1m / 10m (11%)" in rendered
-    assert "p: play from beginning" in rendered
-    assert "r: resume saved progress" in rendered
-    assert "Playlist: Press P" in rendered
-    assert "Metadata" in rendered
-    assert "Preferences" in rendered
-    assert "Audio:             jpn" in rendered
-    assert "Subtitles:         Preferred / eng" in rendered
+    assert "Playback\nReady to play" in rendered
+    assert "Resume from 1m / 10m (11%)" in rendered
+    assert "Press p to play from beginning" in rendered
+    assert "Press r to resume saved progress" in rendered
+    assert "Press P to add to a playlist" in rendered
+    assert "Catalog" in rendered
+    assert "Technical" in rendered
+    assert "Audio preference jpn" in rendered
+    assert "Subtitles Preferred / eng" in rendered
     assert "Artwork: available" in rendered
     assert "Audio Tracks (1)" in rendered
     assert "Subtitle Tracks (1)" in rendered
     assert "- Japanese (aac, 2ch, selected)" in rendered
     assert "- English (srt, selected)" in rendered
     assert "Summary text" in rendered
+    assert rendered.index("Summary") < rendered.index("Catalog")
+    assert rendered.index("Catalog") < rendered.index("Technical")
 
 
 def test_render_details_avoids_ready_to_play_for_online_provider_items():
@@ -184,8 +187,8 @@ def test_render_details_avoids_ready_to_play_for_online_provider_items():
         context_actions=("Availability: Listed by Plex; playable stream checked on play",),
     )
 
-    assert "Status: Listed by Plex; playable stream checked on play" in rendered
-    assert "Status: Ready to play" not in rendered
+    assert "Listed by Plex; stream checked on play" in rendered
+    assert "Ready to play" not in rendered
 
 
 def test_render_details_skips_effective_playback_for_playlist_container():
@@ -222,11 +225,13 @@ def test_render_details_skips_effective_playback_for_playlist_container():
         raw=RawPlaylist(),
     )
 
-    assert "Playback\nStatus: Opens more items" in rendered
-    assert "Action: Press Enter to open" in rendered
+    assert "Playback\nOpens more items" in rendered
+    assert "Press Enter to open" in rendered
     assert "Effective Playback" not in rendered
-    assert "Audio Tracks\nNo audio tracks reported" in rendered
-    assert "Subtitle Tracks\nNo subtitle tracks reported" in rendered
+    assert "Technical" in rendered
+    assert rendered.index("Technical") < rendered.index("Streams")
+    assert "Streams\nAudio:     none reported" in rendered
+    assert "Subtitles: none reported" in rendered
 
 
 def test_render_details_can_include_playlist_context_action():
@@ -247,7 +252,7 @@ def test_render_details_can_include_playlist_context_action():
         context_actions=("Playlist: Backspace/Delete removes from this playlist",),
     )
 
-    assert "Playlist: Press P" in rendered
+    assert "Press P to add to a playlist" in rendered
     assert "Playlist: Backspace/Delete removes from this playlist" in rendered
 
 
@@ -274,10 +279,10 @@ def test_render_details_can_show_discover_availability_action():
         context_actions=("Availability: Enter opens provider link",),
     )
 
-    assert "Status: Opens availability provider" in rendered
-    assert "Action: Press Enter to choose/open" in rendered
+    assert "Opens availability provider" in rendered
+    assert "Press Enter to choose or open" in rendered
     assert "Availability: Enter opens provider link" in rendered
-    assert "Status: Opens more items" not in rendered
+    assert "Opens more items" not in rendered
     assert current_detail_actions(state, item) == ("Availability: Enter opens provider link",)
 
 
@@ -304,9 +309,9 @@ def test_render_details_can_show_missing_discover_availability():
         context_actions=current_detail_actions(state, item),
     )
 
-    assert "Status: No availability provider" in rendered
+    assert "No availability provider" in rendered
     assert "Availability: No provider links found" in rendered
-    assert "Status: Opens more items" not in rendered
+    assert "Opens more items" not in rendered
     assert current_detail_actions(state, item) == ("Availability: No provider links found",)
 
 
@@ -334,14 +339,16 @@ def test_render_details_promotes_episode_context_under_title():
 
     rendered = render_details(details)
 
-    assert "Band of the Hawk\nBerserk - Season 1 - S01E02\n--------------------------" in rendered
-    assert rendered.index("Berserk - Season 1 - S01E02") < rendered.index("Episode / 1997")
+    assert "Band of the Hawk\nBerserk - Season 1 - S01E02\n\nEpisode" in rendered
+    assert "====" not in rendered
+    assert "1997 • 23m • TV-MA" in rendered
+    assert rendered.index("Berserk - Season 1 - S01E02") < rendered.index("Production")
     assert "in progress / S01E02" not in rendered
     assert "Episode Context" not in rendered
-    metadata = rendered.split("Metadata\n", 1)[1].split("\n\n", 1)[0]
-    assert "Show: Berserk" not in metadata
-    assert "Season: Season 1" not in metadata
-    assert "Episode: S01E02" not in metadata
+    assert "Show: Berserk" not in rendered
+    assert "Season: Season 1" not in rendered
+    catalog = rendered.split("Catalog\n", 1)[1].split("\n\n", 1)[0]
+    assert "Episode: S01E02" not in catalog
 
 
 def test_render_details_uses_clear_empty_states_and_wraps_summary():
@@ -358,11 +365,11 @@ def test_render_details_uses_clear_empty_states_and_wraps_summary():
 
     rendered = render_details(details)
 
-    assert "Status: Opens more items" in rendered
-    assert "Action: Press Enter to open" in rendered
+    assert "Opens more items" in rendered
+    assert "Press Enter to open" in rendered
     assert "No metadata reported" in rendered
-    assert "No audio tracks reported" in rendered
-    assert "No subtitle tracks reported" in rendered
+    assert "Audio:     none reported" in rendered
+    assert "Subtitles: none reported" in rendered
     assert all(len(line) <= 38 for line in rendered.splitlines())
     summary_lines = rendered.split("Summary\n", 1)[1].splitlines()
     assert len(summary_lines) > 1
@@ -1092,7 +1099,8 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
     assert "▶ selected" in selected_text
     assert "┏" not in selected_text
     assert "▶ selected" not in unselected_text
-    assert "playable" in unselected_text
+    assert "playable" not in unselected_text
+    assert "Movie · 2024" not in unselected_text
 
 
 def test_grid_card_footer_shows_watch_progress():
@@ -1107,7 +1115,7 @@ def test_grid_card_footer_shows_watch_progress():
 
     assert "[####----] 50%" in str(selected.renderables[3])
     assert "▶ [####----] 50%" in str(selected.renderables[3])
-    assert "[####----] 50%" in str(unselected.renderables[3])
+    assert "[####----] 50%" not in str(unselected.renderables[3])
 
 
 def test_grid_card_styles_follow_visual_state_tokens():
@@ -1182,7 +1190,7 @@ def test_render_media_grid_text_snapshot_distinguishes_missing_and_collection_ar
     assert "Blade Runner" in text
     assert "Recently Added" in text
     assert "──┼──" in text
-    assert "playable" in text
+    assert "playable" not in text
     assert "▶ selected" in text
 
 
@@ -1272,7 +1280,8 @@ def test_render_help_groups_key_bindings():
     assert "Settings" in rendered
     assert "Paths" in rendered
     assert "Debug log:" in rendered
-    assert "d: focus details" in rendered
+    assert "tab / shift+tab: switch libraries / media focus" in rendered
+    assert "d: focus details directly" in rendered
     assert "v: toggle list/grid view" in rendered
     assert "left/right: move across grid cards" in rendered
     assert "p: play selected media from beginning" in rendered
@@ -1364,8 +1373,7 @@ def test_focus_css_styles_all_panes():
     assert "#main.focused-pane" in css
     assert "#details.focused-pane" in css
     assert css.count("border: solid $panel;") == 3
-    assert css.count("border: heavy $primary;") == 3
-    assert css.count("background: $boost;") == 3
+    assert css.count("border: solid $primary;") == 3
     assert "background: $panel;" in css
     assert "background: $accent;" in css
     assert "color: $text;" in css

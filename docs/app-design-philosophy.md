@@ -64,12 +64,14 @@ titles without scanning a wall of identical rows. Spacing should be meaningful:
 roomier when cards represent navigation choices, tighter when browsing real
 media.
 
-### Details Are An Inspector
+### Details Are A Case Insert
 
-The details pane should behave like an inspector, not a dumping ground. The
-highest-value context belongs at the top in readable phrases. Secondary metadata,
-preferences, tracks, and diagnostics should be grouped below with predictable
-section names.
+The details pane should feel like the inside cover of a physical media case:
+title first, then a compact editorial identity block, then practical playback
+actions, summary, catalog metadata, and finally technical stream details.
+Technical information remains available, but it should not compete with the
+identity of the selected media. Use whitespace for grouping; avoid ASCII
+dividers that make the panel feel like console output.
 
 ### Visible Controls Stay Compact
 
@@ -88,6 +90,8 @@ normal libraries are hidden, because it is a primary watching workflow.
 
 Focus should be obvious but not loud. Border weight, pane title treatment, and
 row highlight should work together so the active pane is visible at a glance.
+Pane titles should orient the reader without behaving like filled title bars;
+the media and selected row should carry more visual energy than pane chrome.
 
 ### Main Browse Pane
 
@@ -97,6 +101,8 @@ compare adjacent items.
 - List view should prioritize title, year, edition, duration, progress, and
   resume/watched state in a predictable order.
 - Grid view should keep poster art dominant for playable media.
+- In grid view, unselected media cards should recede to poster and title while
+  the selected card earns richer metadata and progress.
 - Collection-only grid pages should use roomier spacing and left alignment so
   they read as browse choices.
 - Mixed pages should not let container cards visually overpower real media.
@@ -107,10 +113,9 @@ The details pane should follow this hierarchy:
 
 1. Title and immediate context.
 2. Playability and primary action.
-3. Media facts and progress.
-4. Preferences and effective playback choices.
-5. Track lists.
-6. Summary or diagnostics.
+3. Summary.
+4. Catalog and production metadata.
+5. Technical playback, artwork, and stream details.
 
 Episode context deserves special handling because a standalone episode title is
 often not enough. Show, season, and episode number should be visible near the
@@ -196,8 +201,9 @@ Already aligned:
   failed to load.
 - Library browse modes support watching-first defaults while keeping alternate
   modes available.
-- Details now elevate episode context and split playback, preferences, tracks,
-  and summaries.
+- Details now read like a media case insert: title and editorial facts lead,
+  playback stays action-oriented, metadata is grouped, and technical stream
+  details come last.
 - Empty, loading, and Plex error states use intentional rows and inspector
   details instead of blank lists or generic error blobs.
 - Library browse-mode rows reuse the collection glyph vocabulary as compact
@@ -222,8 +228,8 @@ Still uneven:
 
 1. Pane and focus polish: make active pane, active row, and pane title treatment
    feel like one system.
-2. Details-pane hierarchy: tighten section spacing, labels, and high-value
-   context for media, playlists, settings, and errors.
+2. Details-pane hierarchy: keep media identity and next actions above catalog
+   metadata and technical stream details.
 3. List/grid metadata rhythm: align title, subtitle, progress, edition, and
    action language across both browse modes.
 4. Settings scan pass: preserve compact rows while making current values easier

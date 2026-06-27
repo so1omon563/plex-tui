@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -17,6 +18,7 @@ from plextui.app import (
     LibraryRow,
     LibraryMenuRow,
     LoadMoreRow,
+    MediaGrid,
     OnPlexRow,
     PlexTuiApp,
     PlaylistsRow,
@@ -29,6 +31,7 @@ from plextui.app import (
     render_loaded_status,
     should_auto_load_more,
 )
+from textual.widgets import ListView
 from plextui.config import AppConfig
 from plextui.models import LibraryItem, MediaItem
 from plextui.player import PlayerError, StreamChoice
@@ -92,6 +95,16 @@ async def wait_for_status(app: PlexTuiApp, pilot: object, expected: str, attempt
         await pilot.pause(0.1)
         status = str(app.query_one("#status").content)
     return status
+
+
+async def wait_for_availability_rows(app: PlexTuiApp, pilot: object, attempts: int = 20) -> list[AvailabilityRow]:
+    rows = [row for row in app.query_one("#media").children if isinstance(row, AvailabilityRow)]
+    for _ in range(attempts):
+        if app.picker_visible and rows:
+            return rows
+        await pilot.pause(0.1)
+        rows = [row for row in app.query_one("#media").children if isinstance(row, AvailabilityRow)]
+    return rows
 
 
 async def wait_for_playlist_rows(app: PlexTuiApp, pilot: object, attempts: int = 20) -> list[object]:
@@ -202,6 +215,10 @@ def test_focus_actions_mark_active_pane():
     asyncio.run(run_focus_pane_check())
 
 
+def test_left_right_respect_focused_pane():
+    asyncio.run(run_left_right_focus_ownership_check())
+
+
 def test_tab_focus_updates_active_pane_marker():
     asyncio.run(run_tab_focus_pane_check())
 
@@ -232,6 +249,10 @@ def test_discover_result_with_multiple_providers_opens_provider_picker(monkeypat
 
 def test_discover_result_without_availability_does_not_fetch_children(monkeypatch):
     asyncio.run(run_discover_without_availability_check(monkeypatch))
+
+
+def test_escape_cancels_slow_discover_search():
+    asyncio.run(run_escape_cancels_slow_discover_search_check())
 
 
 def test_discover_alternate_action_opens_on_plex_vod():
@@ -762,6 +783,10 @@ def test_resume_action_uses_saved_position():
     asyncio.run(run_resume_action_check())
 
 
+def test_resume_key_uses_saved_position():
+    asyncio.run(run_resume_key_check())
+
+
 def test_resume_action_requires_saved_position():
     asyncio.run(run_resume_requires_position_check())
 
@@ -960,6 +985,43 @@ async def run_focus_pane_check():
         assert not app.query_one("#main").has_class("focused-pane")
 
 
+async def run_left_right_focus_ownership_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        app.populate_libraries([
+            LibraryItem("Movies", "1", "movie", object()),
+            LibraryItem("TV Shows", "2", "show", object()),
+        ])
+        app.show_media(
+            "Movies",
+            [
+                MediaItem("First", "", "movie", "1", True, Raw()),
+                MediaItem("Second", "", "movie", "2", True, Raw()),
+            ],
+        )
+        await pilot.pause(0.2)
+
+        libraries = app.query_one("#libraries", ListView)
+        grid = app.query_one("#media-grid", MediaGrid)
+        highlighted_library_row = libraries.highlighted_child
+        assert grid.selected_media.title == "First"
+
+        app.action_focus_details()
+        await pilot.press("right")
+        await pilot.pause(0.1)
+
+        assert libraries.highlighted_child is highlighted_library_row
+        assert grid.selected_media.title == "First"
+
+        app.action_focus_media()
+        await pilot.press("right")
+        await pilot.pause(0.1)
+
+        assert grid.selected_media.title == "Second"
+
+
 async def run_tab_focus_pane_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
@@ -981,10 +1043,9 @@ async def run_tab_focus_pane_check():
         await pilot.press("tab")
         await pilot.pause(0.2)
 
-        assert app.query_one("#details").has_class("focused-pane")
-        assert app.query_one("#details-title").content == "▶ Details"
+        assert app.query_one("#sidebar").has_class("focused-pane")
+        assert app.query_one("#libraries-title").content == "▶ Libraries"
         assert not app.query_one("#main").has_class("focused-pane")
-        assert not app.query_one("#media-title").content.startswith("▶ ")
 
         await pilot.press("shift+tab")
         await pilot.pause(0.2)
@@ -992,6 +1053,12 @@ async def run_tab_focus_pane_check():
         assert app.query_one("#main").has_class("focused-pane")
         assert app.query_one("#media-title").content.startswith("▶ ")
         assert not app.query_one("#details").has_class("focused-pane")
+
+        await pilot.press("d")
+        await pilot.pause(0.2)
+
+        assert app.query_one("#details").has_class("focused-pane")
+        assert app.query_one("#details-title").content == "▶ Details"
 
 
 async def run_library_highlight_check():
@@ -1004,6 +1071,7 @@ async def run_library_highlight_check():
         ]
 
         app.populate_libraries(libraries)
+        app.show_detail_text("Browse Plex-hosted Movies & Shows hubs.")
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
         await pilot.pause(0.2)
@@ -1017,6 +1085,12 @@ async def run_library_highlight_check():
         assert row is not None
         assert row.has_class("active-row")
         assert row.library.title == "Movies"
+        details = app.query_one("#detail-content").content
+        assert "Movies" in details
+        assert "Default view: Library" in details
+        assert "Enter: Open Library view" in details
+        assert "Space: Choose browse view" in details
+        assert "Browse Plex-hosted Movies & Shows hubs." not in details
 
 
 async def run_continue_watching_entrypoint_check():
@@ -1163,21 +1237,20 @@ async def run_discover_provider_picker_check(monkeypatch):
             await pilot.pause(0.1)
 
         await pilot.press("enter")
-        await pilot.pause(0.2)
 
-        rows = list(app.query_one("#media").children)
+        rows = await wait_for_availability_rows(app, pilot)
         assert app.picker_visible
         assert app.query_one("#media-title").content.removeprefix("▶ ") == "Availability: The Matrix"
-        assert [row.label for row in rows if isinstance(row, AvailabilityRow)] == ["Plex · Free", "Prime · Rent"]
+        assert [row.label for row in rows] == ["Plex · Free", "Prime · Rent"]
 
         await pilot.press("down")
         await pilot.press("enter")
-        await pilot.pause(0.5)
+        status = await wait_for_status(app, pilot, "Opened: The Matrix - Prime · Rent")
 
         assert opened_urls == ["https://example.com/prime"]
         assert not app.picker_visible
         assert app.query_one("#media").highlighted_child.media.title == "The Matrix"
-        assert app.query_one("#status").content == "Opened: The Matrix - Prime · Rent"
+        assert status == "Opened: The Matrix - Prime · Rent"
 
 
 async def run_discover_without_availability_check(monkeypatch):
@@ -1213,6 +1286,48 @@ async def run_discover_without_availability_check(monkeypatch):
         assert opened_urls == []
         assert service.children_calls == []
         assert app.browsing_stack[-1].source == "discover"
+
+
+class SlowDiscoverService:
+    def __init__(self, page: MediaPage) -> None:
+        self.page = page
+        self.discover_calls = []
+
+    def discover_page(self, query: str, start: int, size: int, media_type: str = "movies_shows") -> MediaPage:
+        self.discover_calls.append((query, start, size, media_type))
+        time.sleep(0.5)
+        return self.page
+
+
+async def run_escape_cancels_slow_discover_search_check():
+    original = MediaItem("Existing Movie", "2024", "movie", "movie-1", True, Raw())
+    discovered = MediaItem("Slow Result", "Movie", "movie", "discover-1", False, DiscoverRaw())
+    service = SlowDiscoverService(MediaPage([discovered], start=0, total=1))
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        state = BrowseState("Movies", [original], source="library", total=1)
+        app.browsing_stack = [state]
+        app.show_browse_state(state)
+        app.prompt_discover_search()
+
+        search = app.query_one("#search")
+        search.value = "slow"
+        await pilot.press("enter")
+        await pilot.pause(0.1)
+        assert app.focused is not search
+        await pilot.press("escape")
+        await pilot.pause(0.8)
+
+        assert service.discover_calls == [("slow", 0, 40, "movies_shows")]
+        assert app.browsing_stack == [state]
+        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Movies"
+        assert app.query_one("#media").highlighted_child.media.title == "Existing Movie"
+        assert "Slow Result" not in str(app.query_one("#media").render())
+        assert not app.query_one("#search").display
+        assert app.search_return_state is None
 
 
 async def run_discover_vod_entrypoint_check():
@@ -2700,6 +2815,32 @@ async def run_resume_action_check():
         with patch("plextui.app.play_with_mpv", return_value=player) as launch:
             app.action_resume_selected()
         await pilot.pause(0.2)
+
+        assert launch.call_args.kwargs["resume"] is True
+        assert "resume 1:05" in app.query_one("#playback-footer").content
+
+
+async def run_resume_key_check():
+    class ResumableRaw(Raw):
+        viewOffset = 65_000
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, ResumableRaw())])
+        await pilot.pause(0.2)
+
+        player = SimpleNamespace(
+            title="Movie",
+            start_offset_ms=65_000,
+            stream_mode="transcode",
+            subtitle_count=0,
+            process=SimpleNamespace(poll=lambda: None),
+        )
+        with patch("plextui.app.play_with_mpv", return_value=player) as launch:
+            await pilot.press("r")
+            await pilot.pause(0.2)
 
         assert launch.call_args.kwargs["resume"] is True
         assert "resume 1:05" in app.query_one("#playback-footer").content
