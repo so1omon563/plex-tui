@@ -125,6 +125,10 @@ def test_playback_applies_selected_streams_and_resume_offset(debug_log_path):
     assert "--no-terminal" in args
     assert "--force-window=immediate" in args
     assert "--focus-on=all" in args
+    assert "--cache=yes" in args
+    assert "--demuxer-max-bytes=128MiB" in args
+    assert "--demuxer-readahead-secs=20" in args
+    assert "--cache-pause=no" in args
     assert "--start=65.000" not in args
     assert "--sub-file=http://plex/library/streams/1" in args
     assert item.kwargs == {"audioStreamID": 42, "offset": 65}

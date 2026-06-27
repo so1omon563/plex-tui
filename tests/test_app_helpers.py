@@ -155,6 +155,7 @@ def test_render_details_includes_subtitles_and_summary():
     assert "Resume from 1m / 10m (11%)" in rendered
     assert "Press p to play from beginning" in rendered
     assert "Press r to resume saved progress" in rendered
+    assert "Press o to play optimized stream" in rendered
     assert "Press P to add to a playlist" in rendered
     assert "Catalog" in rendered
     assert "Technical" in rendered
@@ -1303,6 +1304,7 @@ def test_render_help_groups_key_bindings():
     assert "left/right: move across grid cards" in rendered
     assert "p: play selected media from beginning" in rendered
     assert "r: resume selected media from saved progress" in rendered
+    assert "o: play optimized transcode for slow streams" in rendered
     assert "w: mark selected media watched / unwatched" in rendered
     assert "Playlist Management" in rendered
     assert "enter on Playlists sidebar row: browse all playlists" in rendered
@@ -1360,6 +1362,7 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
     assert shown_labels["resume_selected"] == "Resume"
     assert "alternate_library_action" in hidden
     assert "add_to_playlist" in hidden
+    assert "play_optimized" in hidden
     assert "toggle_bulk_selection" in hidden
     assert "rename_playlist" in hidden
     assert "delete_playlist" in hidden
@@ -1367,6 +1370,7 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
     assert "remove_continue_watching" in hidden
     assert hidden_keys_by_action["remove_continue_watching"] == {"backspace", "delete"}
     assert hidden_keys_by_action["add_to_playlist"] == {"P"}
+    assert hidden_keys_by_action["play_optimized"] == {"o"}
     assert hidden_keys_by_action["toggle_bulk_selection"] == {"u"}
     assert hidden_keys_by_action["rename_playlist"] == {"e"}
     assert hidden_keys_by_action["delete_playlist"] == {"D"}
@@ -1377,6 +1381,7 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
     assert hidden_keys_by_action["seek_playback_forward"] == {"f"}
     assert "a: choose and save audio preference" in rendered
     assert "s: choose and save subtitle preference" in rendered
+    assert "o: play optimized transcode for slow streams" in rendered
     assert "c: pause / resume active mpv playback" in rendered
     assert "z: seek active playback back 10 seconds" in rendered
     assert "f: seek active playback forward 30 seconds" in rendered
@@ -1645,7 +1650,7 @@ def test_context_hints_for_media_and_load_more():
     setting_value = next(row for row in settings if getattr(row, "label_text", "").strip().startswith("Server:"))
 
     assert context_hint(MediaRow(playable)) == (
-        "Media: Enter selects / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
+        "Media: Enter selects / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
     )
     assert context_hint(MediaRow(container)) == "Media: Enter opens item"
     assert context_hint(MediaRow(MediaItem("Favorites", "", "playlist", "p1", False, object()))) == (
@@ -1653,7 +1658,7 @@ def test_context_hints_for_media_and_load_more():
     )
     assert context_hint(PlaylistsRow()) == "Libraries: Enter opens playlists"
     assert context_hint(grid) == (
-        "Grid: Arrows/page select card / p play from beginning / r resume / P playlist / w watched / a audio / s subtitles"
+        "Grid: Arrows/page select card / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
     )
     assert context_hint(LoadMoreRow(100, 200)) == "Media: Enter loads next page"
     assert context_hint(LibraryRow(LibraryItem("Movies", "1", "movie", object()))) == (

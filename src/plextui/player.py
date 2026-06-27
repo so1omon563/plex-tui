@@ -57,6 +57,12 @@ TERMINAL_VIDEO_FILTERS = {
     "balanced": "fps=24,scale=854:-2",
     "sharp": "fps=24,scale=960:-2",
 }
+MPV_NETWORK_CACHE_ARGS = [
+    "--cache=yes",
+    "--demuxer-max-bytes=128MiB",
+    "--demuxer-readahead-secs=20",
+    "--cache-pause=no",
+]
 
 
 def play_with_mpv(
@@ -119,6 +125,7 @@ def play_with_mpv(
         "--force-media-title=" + title,
         "--input-ipc-server=" + str(socket_path),
     ]
+    args.extend(MPV_NETWORK_CACHE_ARGS)
     if playback_display == "terminal":
         args.extend(terminal_video_args(terminal_video_profile))
     else:
