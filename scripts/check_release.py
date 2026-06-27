@@ -115,6 +115,14 @@ def check_release_workflow(root: Path) -> CheckResult:
     if "move-major-tag:" in workflow or "move-minor-tag:" in workflow:
         return CheckResult(False, "bump.yml must not move floating major/minor tags")
 
+    forbidden_body_markers = [
+        "contains(github.event.pull_request.body, '#patch')",
+        "contains(github.event.pull_request.body, '#minor')",
+        "contains(github.event.pull_request.body, '#major')",
+    ]
+    if any(snippet in workflow for snippet in forbidden_body_markers):
+        return CheckResult(False, "bump.yml must read semver bump markers from PR titles only")
+
     return CheckResult(True, "bump.yml contains PR merge tagging, release creation, and PyPI publish wiring")
 
 

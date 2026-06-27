@@ -35,13 +35,14 @@ or public documentation examples.
 - Include tests or a clear validation note.
 - Update `CHANGELOG.md` `Unreleased` for behavior changes users should know
   about.
-- Use exactly one semver bump marker in the PR title or body when the merge
+- Use exactly one semver bump marker in the PR title when the merge
   should create a version tag: `#patch`, `#minor`, or `#major`.
 - Add `#release` only when the merge should publish a GitHub Release and package
   channels.
 
 Docs-only maintenance may omit a bump marker when it should not create a new
-version tag. Call that out in the PR body.
+version tag. Say that plainly in the PR body; the workflow only reads semver
+bump markers from the PR title.
 
 ## Documentation
 

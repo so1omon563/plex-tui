@@ -34,6 +34,14 @@ brew install plex-tui
 plex-tui --smoke
 ```
 
+## What It Does
+
+1. Browse Plex libraries through a focused terminal interface.
+2. Navigate with explicit keyboard flows.
+3. Launch playback through `mpv` while Plex remains the source.
+4. Keep diagnostics near the running app.
+5. Fit macOS and Linux terminal habits.
+
 ## What It Feels Like
 
 plex-tui is not a server administration tool and it is not a retro terminal
@@ -44,40 +52,31 @@ Real media gets real artwork. Details unfold only when they help the decision.
 The footer keeps common actions close, while the full keyboard reference stays
 in Help.
 
-## What It Does
-
-| | |
-| --- | --- |
-| 01 | Browse Plex libraries from a focused terminal interface |
-| 02 | Navigate with explicit, predictable keyboard flows |
-| 03 | Launch playback through `mpv` while Plex remains the source |
-| 04 | Keep diagnostics and app state near the running interface |
-| 05 | Fit macOS and Linux terminal habits |
-
 ## Screenshots
 
-### Movies
+Three surfaces carry the shape of the app: the main movie grid, personalized
+Continue Watching state, and first-class TV browsing.
+
+### Movies: the primary browsing surface
 
 ![Movie library grid with poster artwork and details pane](docs/assets/grid-view.png)
 
-The movie grid is the primary browsing surface: poster artwork carries the
-page, the selected item gains metadata and action hints, and the details pane
-keeps summary, catalog, and playback state in one place.
+Poster artwork carries the page. The selected item gains just enough metadata
+and action context to make the next choice clear.
 
-### Continue Watching
+### Continue Watching: Plex state at the front
 
 ![Continue Watching grid with saved playback progress](docs/assets/continue-watching.png)
 
-Continue Watching opens directly from Plex playback state, so in-progress
-movies and episodes are immediately visible with resume progress and direct
-playback actions.
+In-progress media opens from Plex playback state, with resume progress and
+direct playback actions visible without changing modes.
 
-### TV Shows
+### TV Shows: shows, seasons, and episodes
 
 ![TV show library grid with show posters and selected show details](docs/assets/tv-shows.png)
 
-TV libraries use the same browsing model as movies, with first-class support for
-opening shows, seasons, and episodes while keeping show context readable.
+TV libraries use the same browsing rhythm as movies while keeping show context
+clear as you move into seasons and episodes.
 
 ## Install
 
@@ -142,7 +141,7 @@ plex-tui --config-path
 Read the [User Guide](docs/user-guide.md) for configuration, playback,
 keyboard shortcuts, artwork modes, diagnostics, and CLI helper commands.
 
-## Capabilities
+## Current Surface
 
 - Plex browser login, server selection, and Plex Home profile switching.
 - Continue Watching, Playlists, Discover, On Plex, and normal library browsing.
@@ -160,12 +159,9 @@ keyboard shortcuts, artwork modes, diagnostics, and CLI helper commands.
 
 - [User Guide](docs/user-guide.md): configuration, playback, key bindings,
   artwork, diagnostics, and CLI helpers.
-- [Documentation Index](docs/README.md): user, design, architecture, and
-  maintainer docs in one place.
-- [Architecture](docs/architecture.md): runtime shape and source map.
+- [Documentation Index](docs/README.md): the full user-to-maintainer path.
 - [Design](DESIGN.md): the product and visual principles behind the app.
-- [App Design Philosophy](docs/app-design-philosophy.md): implementation-facing
-  UI direction and review checklist.
+- [Architecture](docs/architecture.md): runtime shape and source map.
 - [Packaging](PACKAGING.md): PyPI, Homebrew, AUR, and packaging automation.
 - [Release Checklist](RELEASE.md): release prep, validation, and publishing.
 - [Roadmap](ROADMAP.md): planned follow-up work.
