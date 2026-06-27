@@ -444,7 +444,6 @@ class StatusChanged(Message):
         super().__init__()
 
 
-FOCUS_TITLE_PREFIX = "▶ "
 UI_SELECTED_ACCENT = "#e5a00d"
 UI_GRID_TITLE = "#d8dee9"
 UI_GRID_MUTED = "#9aa3b8"
@@ -718,21 +717,18 @@ class PlexTuiApp(App[None]):
         self.query_one("#sidebar").set_class(sidebar, "focused-pane")
         self.query_one("#main").set_class(main, "focused-pane")
         self.query_one("#details").set_class(details, "focused-pane")
-        self.update_pane_title("#libraries-title", "Libraries", sidebar)
-        self.update_pane_title("#media-title", self.media_title_text(), main)
-        self.update_pane_title("#details-title", "Details", details)
+        self.update_pane_title("#libraries-title", "Libraries")
+        self.update_pane_title("#media-title", self.media_title_text())
+        self.update_pane_title("#details-title", "Details")
 
-    def update_pane_title(self, selector: str, text: str, focused: bool) -> None:
-        title = f"{FOCUS_TITLE_PREFIX}{text}" if focused else text
-        self.query_one(selector, Static).update(title)
+    def update_pane_title(self, selector: str, text: str) -> None:
+        self.query_one(selector, Static).update(text)
 
     def media_title_text(self) -> str:
-        title = str(self.query_one("#media-title", Static).content)
-        return title.removeprefix(FOCUS_TITLE_PREFIX)
+        return str(self.query_one("#media-title", Static).content)
 
     def set_media_title(self, text: str) -> None:
-        focused = self.query_one("#main").has_class("focused-pane")
-        self.update_pane_title("#media-title", text, focused)
+        self.update_pane_title("#media-title", text)
 
     def apply_config_theme(self) -> None:
         if self.config.theme not in self.available_themes:

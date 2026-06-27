@@ -922,7 +922,7 @@ async def run_picker_return_check():
             app.choose_stream(StreamChoice(0, "None (disable subtitles)"), "subtitle")
         await pilot.pause(0.2)
 
-        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Movies"
+        assert app.query_one("#media-title").content == "Movies"
         assert app.query_one("#detail-content").content.splitlines()[0] == "Second"
 
 
@@ -960,28 +960,28 @@ async def run_focus_pane_check():
         await pilot.pause(0.1)
         assert app.query_one("#sidebar").has_class("focused-pane")
         assert not app.query_one("#main").has_class("focused-pane")
-        assert app.query_one("#libraries-title").content == "▶ Libraries"
-        assert not app.query_one("#media-title").content.startswith("▶ ")
+        assert app.query_one("#libraries-title").content == "Libraries"
+        assert app.query_one("#media-title").content == "Movies"
 
         app.action_focus_media()
         await pilot.pause(0.1)
         assert app.query_one("#main").has_class("focused-pane")
         assert not app.query_one("#sidebar").has_class("focused-pane")
         assert not app.query_one("#details").has_class("focused-pane")
-        assert app.query_one("#media-title").content.startswith("▶ ")
+        assert app.query_one("#media-title").content == "Movies"
         assert app.query_one("#libraries-title").content == "Libraries"
 
         app.action_focus_details()
         await pilot.pause(0.1)
         assert app.query_one("#details").has_class("focused-pane")
-        assert app.query_one("#details-title").content == "▶ Details"
+        assert app.query_one("#details-title").content == "Details"
         assert not app.query_one("#main").has_class("focused-pane")
 
         app.action_focus_media()
         await pilot.press("d")
         await pilot.pause(0.1)
         assert app.query_one("#details").has_class("focused-pane")
-        assert app.query_one("#details-title").content == "▶ Details"
+        assert app.query_one("#details-title").content == "Details"
         assert not app.query_one("#main").has_class("focused-pane")
 
 
@@ -1037,28 +1037,28 @@ async def run_tab_focus_pane_check():
         await pilot.pause(0.2)
 
         assert app.query_one("#main").has_class("focused-pane")
-        assert app.query_one("#media-title").content.startswith("▶ ")
-        assert not app.query_one("#libraries-title").content.startswith("▶ ")
+        assert app.query_one("#media-title").content == "Movies"
+        assert app.query_one("#libraries-title").content == "Libraries"
 
         await pilot.press("tab")
         await pilot.pause(0.2)
 
         assert app.query_one("#sidebar").has_class("focused-pane")
-        assert app.query_one("#libraries-title").content == "▶ Libraries"
+        assert app.query_one("#libraries-title").content == "Libraries"
         assert not app.query_one("#main").has_class("focused-pane")
 
         await pilot.press("shift+tab")
         await pilot.pause(0.2)
 
         assert app.query_one("#main").has_class("focused-pane")
-        assert app.query_one("#media-title").content.startswith("▶ ")
+        assert app.query_one("#media-title").content == "Movies"
         assert not app.query_one("#details").has_class("focused-pane")
 
         await pilot.press("d")
         await pilot.pause(0.2)
 
         assert app.query_one("#details").has_class("focused-pane")
-        assert app.query_one("#details-title").content == "▶ Details"
+        assert app.query_one("#details-title").content == "Details"
 
 
 async def run_library_highlight_check():
@@ -1158,7 +1158,7 @@ async def run_playlists_entrypoint_check():
 
         assert app.browsing_stack[-1].title == "Playlists"
         assert [item.title for item in app.browsing_stack[-1].items] == ["Favorites"]
-        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Playlists"
+        assert app.query_one("#media-title").content == "Playlists"
 
 
 async def run_discover_entrypoint_check(monkeypatch):
@@ -1240,7 +1240,7 @@ async def run_discover_provider_picker_check(monkeypatch):
 
         rows = await wait_for_availability_rows(app, pilot)
         assert app.picker_visible
-        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Availability: The Matrix"
+        assert app.query_one("#media-title").content == "Availability: The Matrix"
         assert [row.label for row in rows] == ["Plex · Free", "Prime · Rent"]
 
         await pilot.press("down")
@@ -1323,7 +1323,7 @@ async def run_escape_cancels_slow_discover_search_check():
 
         assert service.discover_calls == [("slow", 0, 40, "movies_shows")]
         assert app.browsing_stack == [state]
-        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Movies"
+        assert app.query_one("#media-title").content == "Movies"
         assert app.query_one("#media").highlighted_child.media.title == "Existing Movie"
         assert "Slow Result" not in str(app.query_one("#media").render())
         assert not app.query_one("#search").display
@@ -2635,7 +2635,7 @@ async def run_playback_error_check(tmp_path):
             app.action_play_selected()
         await pilot.pause(0.2)
 
-        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Playback Error"
+        assert app.query_one("#media-title").content == "Playback Error"
         details = app.query_one("#detail-content").content
         assert "mpv missing" in details
         assert f"Debug log: {log}" in details
@@ -2659,7 +2659,7 @@ async def run_unavailable_vod_stream_check():
             app.action_play_selected()
         await pilot.pause(0.2)
 
-        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Playback Unavailable"
+        assert app.query_one("#media-title").content == "Playback Unavailable"
         details = app.query_one("#detail-content").content
         assert "Special" in details
         assert "Plex lists this item, but does not provide a playable stream for external players" in details
@@ -2784,7 +2784,7 @@ async def run_playback_start_over_prompt_check():
 
             assert not launch.called
             assert app.picker_visible
-            assert app.query_one("#media-title").content.removeprefix("▶ ") == "Playback: Movie"
+            assert app.query_one("#media-title").content == "Playback: Movie"
             assert [row.label_text for row in app.query_one("#media").children] == ["Resume", "Start over"]
 
             await pilot.press("enter")
@@ -3413,7 +3413,7 @@ async def run_numeric_settings_left_right_check():
         await pilot.pause(0.2)
         assert save_config.call_count == 2
         assert app.settings_visible
-        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Settings"
+        assert app.query_one("#media-title").content == "Settings"
 
 
 async def run_option_settings_left_right_check():
@@ -3433,7 +3433,7 @@ async def run_option_settings_left_right_check():
         await pilot.pause(0.2)
         assert save_config.call_count == 2
         assert app.settings_visible
-        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Settings"
+        assert app.query_one("#media-title").content == "Settings"
 
 
 async def run_grid_density_settings_view_check():
@@ -3545,12 +3545,12 @@ async def run_help_back_check():
 
         app.action_show_help()
         await pilot.pause(0.2)
-        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Help"
+        assert app.query_one("#media-title").content == "Help"
         assert "Keyboard reference" in app.query_one("#detail-content").content
 
         app.action_back_or_clear()
         await pilot.pause(0.2)
-        assert app.query_one("#media-title").content.removeprefix("▶ ") == "Movies"
+        assert app.query_one("#media-title").content == "Movies"
         assert app.query_one("#detail-content").content.splitlines()[0] == "First"
 
 
