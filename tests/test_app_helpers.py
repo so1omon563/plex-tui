@@ -1094,10 +1094,16 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
 
     selected_text = "\n".join(str(renderable) for renderable in selected.renderables)
     unselected_text = "\n".join(str(renderable) for renderable in unselected.renderables)
+    selected_artwork_text = "\n".join(str(renderable) for renderable in selected.renderables[0].renderables)
+    unselected_artwork_text = "\n".join(str(renderable) for renderable in unselected.renderables[0].renderables)
     assert "Movie" in selected_text
     assert "Movie · 2024" in selected_text
+    assert "╭" in selected_artwork_text
+    assert "╰" in selected_artwork_text
     assert "▶ play" in selected_text
     assert "┏" not in selected_text
+    assert "╭" not in unselected_artwork_text
+    assert "╰" not in unselected_artwork_text
     assert "▶ play" not in unselected_text
     assert "playable" not in unselected_text
     assert "Movie · 2024" not in unselected_text
@@ -1374,6 +1380,7 @@ def test_focus_css_styles_all_panes():
     assert "#details.focused-pane" in css
     assert css.count("border: solid $background;") == 3
     assert css.count("border: solid $primary;") == 3
+    assert ".focused-pane .active-row" in css
     assert "background: $panel;" in css
     assert "background: $accent;" in css
     assert "color: $text;" in css

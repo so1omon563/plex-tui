@@ -533,6 +533,11 @@ class PlexTuiApp(App[None]):
     }
 
     .active-row {
+        color: $text-muted;
+        text-style: bold;
+    }
+
+    .focused-pane .active-row {
         background: $accent;
         color: $text;
         text-style: bold;
@@ -4107,6 +4112,8 @@ def render_media_grid_card(
         )
     else:
         artwork = center_renderable_lines(artwork, card_width)
+    if selected:
+        artwork = selected_artwork_frame(artwork, card_width)
     secondary_lines = grid_card_secondary_lines(media, selected, config, bulk_selected, collection_card)
     return Group(
         artwork,
@@ -4457,6 +4464,30 @@ def grid_card_footer(media: MediaItem, selected: bool, bulk_selected: bool = Fal
 
 def grid_card_line(value: str, width: int, style: str) -> Text:
     return Text(value.center(width), style=style)
+
+
+def selected_artwork_frame(renderable: object, width: int) -> Group:
+    width = max(4, width)
+    rule = "─" * (width - 2)
+    return Group(
+        Text(f"╭{rule}╮", style=UI_SELECTED_ACCENT),
+        *selected_artwork_lines(renderable, width),
+        Text(f"╰{rule}╯", style=UI_SELECTED_ACCENT),
+    )
+
+
+def selected_artwork_lines(renderable: object, width: int) -> list[object]:
+    if isinstance(renderable, Group):
+        return [
+            item
+            for child in renderable.renderables
+            for item in selected_artwork_lines(child, width)
+        ]
+    if isinstance(renderable, Text):
+        inner_width = max(1, width - 2)
+        line = truncate_text(renderable.plain, inner_width).center(inner_width)
+        return [Text(f"│{line}│", style=renderable.style)]
+    return [center_renderable_lines(renderable, width)]
 
 
 def center_renderable_lines(renderable: object, width: int) -> object:
