@@ -2984,12 +2984,13 @@ async def run_toggle_watched_continue_watching_refresh_check():
         app.action_toggle_watched()
 
         selected = await wait_for_selected_title(app, pilot, "Episode 2", attempts=80)
+        status = await wait_for_status(app, pilot, "Marked Episode 1 watched", attempts=80)
 
         assert raw.mark_watched_calls == 1
         assert service.continue_watching_calls[-1] == (0, 40)
         assert selected is not None
         assert selected.title == "Episode 2"
-        assert app.query_one("#status").content == "Marked Episode 1 watched"
+        assert status == "Marked Episode 1 watched"
 
 
 async def run_toggle_watched_marks_watched_check():
