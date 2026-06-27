@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.13.1 - 2026-06-26
+
+- Fixed release packaging so package metadata can be republished with a version
+  that matches the release tag, and gave Homebrew more time for PyPI indexing.
+
 ## 0.12.12 - 2026-06-26
 
 - Reworked the Details pane into a quieter media-case style layout that leads

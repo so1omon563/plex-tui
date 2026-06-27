@@ -127,6 +127,7 @@ def check_homebrew_workflow(root: Path) -> CheckResult:
 
     required_snippets = [
         "Wait for PyPI package availability",
+        "for attempt in {1..60}",
         "python scripts/update_homebrew_formula.py",
         "id: tap-update",
         'HOMEBREW_NO_REQUIRE_TAP_TRUST: "1"',
