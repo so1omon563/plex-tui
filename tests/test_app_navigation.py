@@ -456,6 +456,43 @@ def test_live_current_library_search_queries_plex_when_library_is_not_fully_load
     assert statuses[-1] == "TV Shows: 2 of 100 items loaded"
 
 
+def test_live_current_library_search_does_not_focus_media_browser():
+    app = PlexTuiApp()
+    library = LibraryItem("TV Shows", "2", "show", object())
+    gantz = MediaItem("Gantz", "TV Show", "gantz", "show-1", False, Raw())
+    service = FakePagedService(MediaPage([gantz], start=0, total=1))
+    shown_states = []
+    focus_calls = []
+    app.config = AppConfig("http://plex", "token", "client-id")
+    app.service = service
+    app.selected_library = library
+    app.search_token = 1
+    app.browsing_stack = [
+        BrowseState(
+            "TV Shows",
+            [
+                MediaItem("Attack on Titan", "", "show", "1", False, Raw()),
+                MediaItem("Berserk", "", "show", "2", False, Raw()),
+            ],
+            library,
+            next_start=2,
+            total=100,
+        )
+    ]
+    app.call_from_thread = lambda callback, *args: callback(*args)
+    app.post_message = lambda message: None
+    app.show_loading_state = lambda *args: None
+    app.show_browse_state = shown_states.append
+    app.focus_media_browser = lambda: focus_calls.append("media")
+    app.set_status = lambda *_args: None
+
+    PlexTuiApp.run_search.__wrapped__(app, "gantz", False, token=1, live=True)
+
+    assert service.search_calls == [("gantz", library, 0, 40)]
+    assert shown_states[-1].title == "Search: gantz"
+    assert focus_calls == []
+
+
 def test_current_view_search_updates_results_while_typing():
     app = PlexTuiApp()
     library = LibraryItem("Movies", "1", "movie", object())
@@ -491,7 +528,6 @@ def test_current_view_search_updates_results_while_typing():
     assert shown_states[-1].title == "Movies"
     assert statuses[0] == "Fuzzy search: inter: 1 matches from 3 loaded items"
     assert statuses[-1] == "Movies: 3 items"
-
 
 def test_load_more_media_can_preserve_selected_row():
     asyncio.run(run_load_more_media_preserve_selection_check())

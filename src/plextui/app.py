@@ -3126,7 +3126,8 @@ class PlexTuiApp(App[None]):
             )
             self.browsing_stack.append(state)
             self.show_browse_state(state)
-            self.focus_media_browser()
+            if not live:
+                self.focus_media_browser()
             self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more, page.items))
 
         self.call_from_thread(update)
