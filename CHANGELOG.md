@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.13.2 - 2026-06-26
+
 - Added built-in mpv network/cache options to reduce startup buffering for
   larger Plex streams.
 - Added an `o` optimized playback shortcut that requests a Plex transcode for
