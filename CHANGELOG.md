@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Quieted Details pane technical rows for non-playable containers and only show
+  the resume shortcut when selected media has saved progress.
 - Kept Plex Home protected-profile switch failures generic and actionable so
   rejected PIN attempts do not expose raw Plex auth details.
 - Refined the repository documentation path after the README refresh, including
