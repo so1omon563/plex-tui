@@ -206,6 +206,7 @@ def test_render_details_avoids_ready_to_play_for_online_provider_items():
 
     assert "Listed by Plex; stream checked on play" in rendered
     assert "Ready to play" not in rendered
+    assert "Press r to resume saved progress" not in rendered
 
 
 def test_render_details_skips_effective_playback_for_playlist_container():
@@ -246,9 +247,9 @@ def test_render_details_skips_effective_playback_for_playlist_container():
     assert "Press Enter to open" in rendered
     assert "Effective Playback" not in rendered
     assert "Technical" in rendered
-    assert rendered.index("Technical") < rendered.index("Streams")
-    assert "Streams\nAudio:     none reported" in rendered
-    assert "Subtitles: none reported" in rendered
+    assert "Streams" not in rendered
+    assert "Audio:     none reported" not in rendered
+    assert "Subtitles: none reported" not in rendered
 
 
 def test_render_details_can_include_playlist_context_action():
@@ -385,8 +386,8 @@ def test_render_details_uses_clear_empty_states_and_wraps_summary():
     assert "Opens more items" in rendered
     assert "Press Enter to open" in rendered
     assert "No metadata reported" in rendered
-    assert "Audio:     none reported" in rendered
-    assert "Subtitles: none reported" in rendered
+    assert "Audio:     none reported" not in rendered
+    assert "Subtitles: none reported" not in rendered
     assert all(len(line) <= 38 for line in rendered.splitlines())
     summary_lines = rendered.split("Summary\n", 1)[1].splitlines()
     assert len(summary_lines) > 1

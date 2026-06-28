@@ -3818,27 +3818,28 @@ def render_details(
         append_detail_section(lines, "Catalog", ["No metadata reported"])
 
     technical_rows = technical_detail_rows(details, config, raw)
-    audio = getattr(details, "audio", [])
-    missing_stream_rows = []
-    if audio:
-        technical_rows.append("")
-        technical_rows.append(stream_section_heading("Audio Tracks", audio))
-        technical_rows.extend(detail_list_rows(audio))
-    else:
-        missing_stream_rows.append(("Audio", "none reported"))
+    if bool(getattr(details, "playable")):
+        audio = getattr(details, "audio", [])
+        missing_stream_rows = []
+        if audio:
+            technical_rows.append("")
+            technical_rows.append(stream_section_heading("Audio Tracks", audio))
+            technical_rows.extend(detail_list_rows(audio))
+        else:
+            missing_stream_rows.append(("Audio", "none reported"))
 
-    subtitles = getattr(details, "subtitles")
-    if subtitles:
-        technical_rows.append("")
-        technical_rows.append(stream_section_heading("Subtitle Tracks", subtitles))
-        technical_rows.extend(detail_list_rows(subtitles))
-    else:
-        missing_stream_rows.append(("Subtitles", "none reported"))
+        subtitles = getattr(details, "subtitles")
+        if subtitles:
+            technical_rows.append("")
+            technical_rows.append(stream_section_heading("Subtitle Tracks", subtitles))
+            technical_rows.extend(detail_list_rows(subtitles))
+        else:
+            missing_stream_rows.append(("Subtitles", "none reported"))
 
-    if missing_stream_rows:
-        technical_rows.append("")
-        technical_rows.append("Streams")
-        technical_rows.extend(detail_key_value_rows(missing_stream_rows))
+        if missing_stream_rows:
+            technical_rows.append("")
+            technical_rows.append("Streams")
+            technical_rows.extend(detail_key_value_rows(missing_stream_rows))
 
     append_detail_section(lines, "Technical", technical_rows)
 
@@ -3925,9 +3926,10 @@ def playback_readiness_rows(
         if progress:
             rows.append(f"Resume from {progress}")
         rows.extend(preference_rows)
+        rows.append("Press p to play from beginning")
+        if progress:
+            rows.append("Press r to resume saved progress")
         rows.extend([
-            "Press p to play from beginning",
-            "Press r to resume saved progress",
             "Press o to play optimized stream",
             "Press P to add to a playlist",
         ])
