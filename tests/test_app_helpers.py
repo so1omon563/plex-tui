@@ -620,6 +620,21 @@ def test_sidebar_rows_can_show_on_plex_without_discover():
     assert [type(row) for row in rows] == [ContinueWatchingRow, PlaylistsRow, OnPlexRow, LibraryRow]
 
 
+def test_sidebar_rows_use_stable_entrypoint_markers():
+    config = AppConfig("http://plex", "token", "client-id")
+    libraries = [LibraryItem("Movies", "1", "movie", object())]
+
+    rows = sidebar_rows(config, libraries)
+
+    assert [row.label_text for row in rows] == [
+        "◷ Continue Watching",
+        "▤ Playlists",
+        "✦ Discover",
+        "▦ On Plex",
+        "› Movies",
+    ]
+
+
 def test_ordered_libraries_uses_saved_order_and_appends_new_libraries():
     config = AppConfig("http://plex", "token", "client-id", library_order_keys=("3", "1", "missing"))
     libraries = [

@@ -137,31 +137,32 @@ class BrowseState:
 
 class LibraryRow(ListItem):
     def __init__(self, library: LibraryItem) -> None:
-        super().__init__(Label(library.title))
+        self.label_text = f"› {library.title}"
+        super().__init__(Label(self.label_text))
         self.library = library
 
 
 class ContinueWatchingRow(ListItem):
     def __init__(self) -> None:
-        self.label_text = "Continue Watching"
+        self.label_text = "◷ Continue Watching"
         super().__init__(Label(self.label_text))
 
 
 class PlaylistsRow(ListItem):
     def __init__(self) -> None:
-        self.label_text = "Playlists"
+        self.label_text = "▤ Playlists"
         super().__init__(Label(self.label_text))
 
 
 class DiscoverRow(ListItem):
     def __init__(self) -> None:
-        self.label_text = "Discover"
+        self.label_text = "✦ Discover"
         super().__init__(Label(self.label_text))
 
 
 class OnPlexRow(ListItem):
     def __init__(self) -> None:
-        self.label_text = "On Plex"
+        self.label_text = "▦ On Plex"
         super().__init__(Label(self.label_text))
 
 
