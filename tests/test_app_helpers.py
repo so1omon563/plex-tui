@@ -63,6 +63,7 @@ from plextui.app import (
     next_transcode_quality,
     playback_failure_hints,
     playback_exit_status,
+    profile_switch_error_message,
     recent_debug_log_lines,
     render_audio_playback_preference,
     render_browse_status,
@@ -96,6 +97,7 @@ from plextui.app import (
     write_artwork_performance_log,
     write_performance_log,
 )
+from plextui.auth import ProfileChoice
 from plextui.config import AppConfig
 from plextui.models import LibraryItem, MediaDetails, MediaItem
 from plextui.player import StreamChoice
@@ -121,6 +123,19 @@ def test_playback_exit_status_describes_process_state():
     ) == (
         "Playback exited with code 2: Movie. Debug log: /tmp/debug.log"
     )
+
+
+def test_protected_profile_switch_error_hides_upstream_details():
+    message = profile_switch_error_message(
+        ProfileChoice("Kid", "2", True, False, object()),
+        RuntimeError("401 Unauthorized token=secret pin=1234"),
+    )
+
+    assert message == (
+        "Profile switch failed: Could not switch to Kid. Check the PIN and profile access, then try again."
+    )
+    assert "secret" not in message
+    assert "1234" not in message
 
 
 def test_render_details_includes_subtitles_and_summary():

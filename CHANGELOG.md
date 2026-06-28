@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Kept Plex Home protected-profile switch failures generic and actionable so
+  rejected PIN attempts do not expose raw Plex auth details.
 - Refined the repository documentation path after the README refresh, including
   calmer screenshot captions, a clearer docs index, and title-only semver bump
   detection to prevent explanatory PR body text from creating tags.
