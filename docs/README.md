@@ -22,6 +22,8 @@ and points here when you need more detail.
   UI direction and review checklist.
 - [`collection-artwork-design.md`](collection-artwork-design.md): geometric
   glyph card language for non-poster objects.
+- [`continue-watching-audit.md`](continue-watching-audit.md): sanitized
+  Continue Watching ordering and pagination audit.
 - [`assets/`](assets/): README and showcase screenshots.
 
 ## Maintainers
