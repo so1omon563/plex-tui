@@ -1079,7 +1079,7 @@ class PlexTuiApp(App[None]):
         try:
             self.config = switch_profile(self.config, choice, pin)
         except Exception as exc:
-            self.call_from_thread(self.show_error, f"Profile switch failed: {exc}")
+            self.call_from_thread(self.show_error, profile_switch_error_message(choice, exc))
             return
 
         def reconnect() -> None:
@@ -4846,6 +4846,15 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsActionRow("Show app diagnostics", "show_app_diagnostics"),
     ])
     return rows
+
+
+def profile_switch_error_message(choice: ProfileChoice, exc: Exception) -> str:
+    if choice.protected:
+        return (
+            f"Profile switch failed: Could not switch to {choice.title}. "
+            "Check the PIN and profile access, then try again."
+        )
+    return f"Profile switch failed: {exc}"
 
 
 def render_settings(config: AppConfig) -> str:
