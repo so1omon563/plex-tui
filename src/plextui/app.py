@@ -1314,50 +1314,84 @@ class PlexTuiApp(App[None]):
         if state is None:
             return
         source = state.source
+        if source == "fuzzy_search":
+            return
+        loaded_count = max(state.next_start, len(state.items), self.config.page_size)
         try:
             if source == "discover":
-                page = self.service.discover_page(
-                    state.search_query,
-                    0,
-                    self.config.page_size,
-                    state.discover_media_type,
-                )
-                next_start = page.next_start
-                total = page.total
-                items = page.items
+                items: list[MediaItem] = []
+                next_start = 0
+                total = 0
+                for start in range(0, loaded_count, self.config.page_size):
+                    page = self.service.discover_page(
+                        state.search_query,
+                        start,
+                        self.config.page_size,
+                        state.discover_media_type,
+                    )
+                    next_start = page.next_start
+                    total = page.total
+                    items.extend(page.items)
             elif source == "vod":
-                page = self.service.video_on_demand_page(0, self.config.page_size)
-                next_start = page.next_start
-                total = page.total
-                items = page.items
+                items = []
+                next_start = 0
+                total = 0
+                for start in range(0, loaded_count, self.config.page_size):
+                    page = self.service.video_on_demand_page(start, self.config.page_size)
+                    next_start = page.next_start
+                    total = page.total
+                    items.extend(page.items)
             elif source == "continue_watching":
-                page = self.service.continue_watching_page(0, self.config.page_size)
-                next_start = page.next_start
-                total = page.total
-                items = page.items
+                items = []
+                next_start = 0
+                total = 0
+                for start in range(0, loaded_count, self.config.page_size):
+                    page = self.service.continue_watching_page(start, self.config.page_size)
+                    next_start = page.next_start
+                    total = page.total
+                    items.extend(page.items)
             elif source.startswith("library:"):
                 if state.selected_library is None:
                     return
-                page = self.service.library_entry_page(
-                    state.selected_library,
-                    source.removeprefix("library:"),
-                    0,
-                    self.config.page_size,
-                )
-                next_start = page.next_start
-                total = page.total
-                items = page.items
+                items = []
+                next_start = 0
+                total = 0
+                for start in range(0, loaded_count, self.config.page_size):
+                    page = self.service.library_entry_page(
+                        state.selected_library,
+                        source.removeprefix("library:"),
+                        start,
+                        self.config.page_size,
+                    )
+                    next_start = page.next_start
+                    total = page.total
+                    items.extend(page.items)
             elif state.search:
-                page = self.service.search_page(
-                    state.search_query,
-                    None if state.global_search else state.selected_library,
-                    0,
-                    self.config.page_size,
-                )
-                next_start = page.next_start
-                total = page.total
-                items = page.items
-            elif source == "playlist" and state.context_media is not None:
+                if state.global_search:
+                    page = self.service.search_page(
+                        state.search_query,
+                        None,
+                        0,
+                        self.config.page_size,
+                    )
+                    next_start = page.next_start
+                    total = page.total
+                    items = page.items
+                else:
+                    items = []
+                    next_start = 0
+                    total = 0
+                    for start in range(0, loaded_count, self.config.page_size):
+                        page = self.service.search_page(
+                            state.search_query,
+                            state.selected_library,
+                            start,
+                            self.config.page_size,
+                        )
+                        next_start = page.next_start
+                        total = page.total
+                        items.extend(page.items)
+            elif source in {"playlist", "library"} and state.context_media is not None:
                 playlist_items = self.service.children(state.context_media, self.config.page_size)
                 items = playlist_items
                 next_start = len(items)
@@ -1552,7 +1586,7 @@ class PlexTuiApp(App[None]):
 
         def update() -> None:
             source = "playlist" if media.kind == "playlist" else "library"
-            context_media = media if media.kind == "playlist" else None
+            context_media = media
             state = BrowseState(media.title, children, self.selected_library, context_media=context_media, source=source)
             self.browsing_stack.append(state)
             self.show_browse_state(state)
