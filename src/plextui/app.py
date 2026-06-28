@@ -1306,6 +1306,80 @@ class PlexTuiApp(App[None]):
         state = self.current_browse_state()
         return state.source if state is not None else ""
 
+    @work(thread=True, exclusive=True)
+    def refresh_current_browse_state(self, selected_key: str | None = None) -> None:
+        if self.service is None:
+            return
+        state = self.current_browse_state()
+        if state is None:
+            return
+        source = state.source
+        try:
+            if source == "discover":
+                page = self.service.discover_page(
+                    state.search_query,
+                    0,
+                    self.config.page_size,
+                    state.discover_media_type,
+                )
+                next_start = page.next_start
+                total = page.total
+                items = page.items
+            elif source == "vod":
+                page = self.service.video_on_demand_page(0, self.config.page_size)
+                next_start = page.next_start
+                total = page.total
+                items = page.items
+            elif source == "continue_watching":
+                page = self.service.continue_watching_page(0, self.config.page_size)
+                next_start = page.next_start
+                total = page.total
+                items = page.items
+            elif source.startswith("library:"):
+                if state.selected_library is None:
+                    return
+                page = self.service.library_entry_page(
+                    state.selected_library,
+                    source.removeprefix("library:"),
+                    0,
+                    self.config.page_size,
+                )
+                next_start = page.next_start
+                total = page.total
+                items = page.items
+            elif state.search:
+                page = self.service.search_page(
+                    state.search_query,
+                    None if state.global_search else state.selected_library,
+                    0,
+                    self.config.page_size,
+                )
+                next_start = page.next_start
+                total = page.total
+                items = page.items
+            elif source == "playlist" and state.context_media is not None:
+                playlist_items = self.service.children(state.context_media, self.config.page_size)
+                items = playlist_items
+                next_start = len(items)
+                total = len(items)
+            else:
+                return
+        except Exception as exc:
+            self.call_from_thread(self.show_error, f"failed to refresh media browser: {exc}")
+            return
+
+        def apply() -> None:
+            current = self.current_browse_state()
+            if current is None or current.source != source:
+                return
+            current.items = items
+            current.next_start = next_start
+            current.total = total
+            self.show_browse_state(current, selected_key=selected_key)
+            self.focus_media_browser()
+
+        self.call_from_thread(apply)
+
     def selected_bulk_items(self) -> list[MediaItem]:
         state = self.current_browse_state()
         if state is None or not self.bulk_selected_keys:
@@ -3593,6 +3667,7 @@ class PlexTuiApp(App[None]):
             status = playback_exit_status(self.player, debug_log_path()) or f"Finished terminal playback for {media.title}"
             self.player = None
             self.clear_playback_footer()
+            self.refresh_current_browse_state(selected_key=media.key)
             self.show_media_details(media)
             self.set_status(status)
             return
@@ -3658,6 +3733,7 @@ class PlexTuiApp(App[None]):
         selected = self.selected_media()
         self.player = None
         self.clear_playback_footer()
+        self.refresh_current_browse_state(selected_key=selected.key if selected is not None else None)
         if selected is not None:
             self.show_media_details(selected)
         self.set_status(status)
@@ -3670,6 +3746,7 @@ class PlexTuiApp(App[None]):
             return
         if not self.player.active:
             self.set_status(playback_exit_status(self.player, debug_log_path()) or "Nothing is playing")
+            self.refresh_current_browse_state(selected_key=self.selected_media().key if self.selected_media() is not None else None)
             self.player = None
             self.clear_playback_footer()
             return
@@ -3677,6 +3754,7 @@ class PlexTuiApp(App[None]):
         stop_mpv(self.player)
         self.player = None
         self.clear_playback_footer()
+        self.refresh_current_browse_state(selected_key=self.selected_media().key if self.selected_media() is not None else None)
         self.set_status(f"Stopped {title}")
 
     def active_player_for_control(self) -> PlayerHandle | None:
@@ -3687,6 +3765,7 @@ class PlexTuiApp(App[None]):
         if not self.player.active:
             self.set_status(playback_exit_status(self.player, debug_log_path()) or "Nothing is playing")
             self.player = None
+            self.refresh_current_browse_state(selected_key=self.selected_media().key if self.selected_media() is not None else None)
             self.clear_playback_footer()
             return None
         return self.player
