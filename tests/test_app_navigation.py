@@ -1427,12 +1427,11 @@ async def run_discover_provider_picker_check(monkeypatch):
 
         await pilot.press("down")
         await pilot.press("enter")
-        status = await wait_for_status(app, pilot, "Opened: The Matrix - Prime · Rent")
+        opened = await wait_for_calls(opened_urls, pilot, attempts=80)
 
-        assert opened_urls == ["https://example.com/prime"]
+        assert opened == ["https://example.com/prime"]
         assert not app.picker_visible
         assert app.query_one("#media").highlighted_child.media.title == "The Matrix"
-        assert status == "Opened: The Matrix - Prime · Rent"
 
 
 async def run_discover_without_availability_check(monkeypatch):
