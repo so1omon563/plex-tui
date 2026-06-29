@@ -751,11 +751,11 @@ def stream_detail_label(stream: Any, include_location: bool = False) -> str:
 
 
 def watched_state(raw: Any) -> str:
+    if resume_offset(raw):
+        return "in progress"
     view_count = getattr(raw, "viewCount", None)
     if view_count:
         return "watched"
-    if resume_offset(raw):
-        return "in progress"
     if hasattr(raw, "isWatched"):
         try:
             value = raw.isWatched() if callable(raw.isWatched) else raw.isWatched

@@ -931,6 +931,11 @@ def test_progress_helpers_report_watched_resume_and_unwatched():
         def isWatched(self):
             return False
 
+    class ReplayedWatched(RawItem):
+        viewCount = 1
+        duration = 600000
+        viewOffset = 30000
+
     assert watched_state(Watched()) == "watched"
     assert progress_bar(Watched()) == "[########] 100%"
     assert row_progress_marker(Watched()) == "[########] 100%"
@@ -940,6 +945,9 @@ def test_progress_helpers_report_watched_resume_and_unwatched():
     assert row_progress_marker(Partial()) == "[#-------] 11%"
     assert watched_state(Unwatched()) == "unwatched"
     assert row_progress_marker(Unwatched()) == ""
+    assert watched_state(ReplayedWatched()) == "in progress"
+    assert progress_bar(ReplayedWatched()) == "[#-------] 5%"
+    assert row_progress_marker(ReplayedWatched()) == "[#-------] 5%"
 
 
 def test_online_metadata_row_progress_does_not_trigger_reload():
