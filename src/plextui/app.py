@@ -6538,6 +6538,8 @@ def continue_watching_playback_selection(
         return selected_key
     if any(item.key == played_media.key for item in items):
         return played_media.key
+    if selected_key != played_media.key:
+        return selected_key
     show_key = episode_show_key(played_media)
     if not show_key:
         return selected_key
