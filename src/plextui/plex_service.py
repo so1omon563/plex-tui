@@ -264,8 +264,9 @@ class PlexService:
         fetch_item = getattr(self.server, "fetchItem", None)
         if not callable(fetch_item):
             return None
+        fetch_key = int(key) if key.isdigit() else key
         try:
-            return fetch_item(key)
+            return fetch_item(fetch_key)
         except Exception:
             return None
 

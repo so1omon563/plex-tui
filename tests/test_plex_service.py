@@ -559,7 +559,7 @@ def test_continue_watching_page_fetches_non_playable_items_by_key():
     page = service.continue_watching_page(start=0, size=10)
 
     assert page.items[0].playable
-    assert service.server.fetched == ["10", "10"]
+    assert service.server.fetched == [10, 10]
 
 
 def test_continue_watching_page_falls_back_to_continue_watching_endpoint():
@@ -598,7 +598,7 @@ def test_media_from_key_uses_server_fetch_item():
     result = service.media_from_key("1")
 
     assert result is raw
-    assert service.server.fetched == ["1"]
+    assert service.server.fetched == [1]
 
 
 def test_continue_watching_page_falls_back_to_on_deck():
