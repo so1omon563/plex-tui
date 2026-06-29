@@ -930,6 +930,14 @@ def test_resume_action_requires_saved_position():
     asyncio.run(run_resume_requires_position_check())
 
 
+def test_start_over_picker_launches_without_reopening_picker():
+    asyncio.run(run_start_over_picker_launch_check())
+
+
+def test_terminal_playback_defaults_to_low_transcode():
+    asyncio.run(run_terminal_playback_low_transcode_check())
+
+
 def test_toggle_watched_marks_unwatched_media_watched():
     asyncio.run(run_toggle_watched_marks_unwatched_check())
 
@@ -3096,6 +3104,57 @@ async def run_resume_requires_position_check():
 
         assert not launch.called
         assert app.query_one("#status").content == "No resume position for selected media; press p to play from the beginning"
+
+
+async def run_start_over_picker_launch_check():
+    class ResumableRaw(Raw):
+        viewOffset = 65_000
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, ResumableRaw())])
+        await pilot.pause(0.2)
+
+        player = SimpleNamespace(
+            title="Movie",
+            start_offset_ms=0,
+            stream_mode="direct",
+            subtitle_count=0,
+            process=SimpleNamespace(poll=lambda: None),
+        )
+        with patch("plextui.app.play_with_mpv", return_value=player) as launch:
+            app.action_play_selected()
+            await pilot.pause(0.2)
+            start_over = next(row for row in app.query_one("#media").children if getattr(row, "resume", True) is False)
+            app.choose_resume_playback(start_over)
+        await pilot.pause(0.2)
+
+        assert launch.call_args.kwargs["resume"] is False
+        assert not app.picker_visible
+
+
+async def run_terminal_playback_low_transcode_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", playback_display="terminal")
+        app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, Raw())])
+        await pilot.pause(0.2)
+
+        player = SimpleNamespace(title="Movie", process=SimpleNamespace(poll=lambda: 0))
+        with (
+            patch.object(app, "play_terminal_media", return_value=player) as launch,
+            patch.object(app, "refresh_current_browse_state"),
+            patch.object(app, "show_media_details"),
+        ):
+            app.action_play_selected()
+        await pilot.pause(0.2)
+
+        playback_config = launch.call_args.args[4]
+        assert playback_config.playback_mode == "transcode"
+        assert playback_config.transcode_quality == "480p_2"
 
 
 class WatchStateRaw(Raw):

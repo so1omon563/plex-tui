@@ -4,7 +4,10 @@
 
 - Added explicit terminal playback output choices for Kitty graphics, Sixel,
   TCT text video, and DRM console playback while keeping Auto on Kitty/TCT,
-  and reduced the default terminal-video frame payload for smoother playback.
+  reduced the default terminal-video frame payload, and defaulted terminal
+  playback to a low Plex transcode for smoother playback.
+- Fixed Start Over from the resume picker so it launches playback instead of
+  reopening the picker for resumable media.
 - Auto-select the next TV episode when Continue Watching refreshes after
   playback completion.
 - Added compact sidebar row markers so Continue Watching, Playlists, Discover,

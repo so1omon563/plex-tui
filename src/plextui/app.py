@@ -3670,12 +3670,25 @@ class PlexTuiApp(App[None]):
             return
         self.play_media(media, resume)
 
-    def play_media(self, media: MediaItem, resume: bool, playback_mode: str | None = None) -> None:
+    def play_media(
+        self,
+        media: MediaItem,
+        resume: bool,
+        playback_mode: str | None = None,
+        confirm_start_over: bool = True,
+    ) -> None:
         if not media.playable:
             self.open_media(media)
             return
         playback_config = replace(self.config, playback_mode=playback_mode or self.config.playback_mode)
-        if not resume and self.config.confirm_start_over and resume_offset_ms(media.raw):
+        if self.config.playback_display == "terminal":
+            terminal_quality = self.config.transcode_quality if self.config.transcode_quality != "original" else "480p_2"
+            playback_config = replace(
+                playback_config,
+                playback_mode="transcode",
+                transcode_quality=terminal_quality,
+            )
+        if confirm_start_over and not resume and self.config.confirm_start_over and resume_offset_ms(media.raw):
             self.show_resume_picker(media)
             return
         if resume and not resume_offset_ms(media.raw):
@@ -3702,7 +3715,7 @@ class PlexTuiApp(App[None]):
                     playback_display=self.config.playback_display,
                     terminal_video_output=self.config.terminal_video_output,
                     terminal_video_profile=self.config.terminal_video_profile,
-                    transcode_quality=self.config.transcode_quality,
+                    transcode_quality=playback_config.transcode_quality,
                     resume=resume,
                 )
         except PlayerError as exc:
@@ -3748,7 +3761,7 @@ class PlexTuiApp(App[None]):
             self.show_browse_state(self.browsing_stack[-1], selected_key=self.picker_media_key)
         self.picker_media_key = None
         self.focus_media_browser()
-        self.play_media(row.media, row.resume)
+        self.play_media(row.media, row.resume, confirm_start_over=False)
 
     def play_terminal_media(
         self,
@@ -3769,7 +3782,7 @@ class PlexTuiApp(App[None]):
                     playback_display=self.config.playback_display,
                     terminal_video_output=self.config.terminal_video_output,
                     terminal_video_profile=self.config.terminal_video_profile,
-                    transcode_quality=self.config.transcode_quality,
+                    transcode_quality=playback_config.transcode_quality,
                     resume=resume,
                 )
                 player.process.wait()
