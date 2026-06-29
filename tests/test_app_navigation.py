@@ -99,6 +99,16 @@ async def wait_for_status(app: PlexTuiApp, pilot: object, expected: str, attempt
     return status
 
 
+async def wait_for_browse_titles(app: PlexTuiApp, pilot: object, expected: list[str], attempts: int = 20) -> list[str]:
+    titles = [item.title for item in app.browsing_stack[-1].items] if app.browsing_stack else []
+    for _ in range(attempts):
+        if titles == expected:
+            return titles
+        await pilot.pause(0.1)
+        titles = [item.title for item in app.browsing_stack[-1].items] if app.browsing_stack else []
+    return titles
+
+
 async def wait_for_availability_rows(app: PlexTuiApp, pilot: object, attempts: int = 20) -> list[AvailabilityRow]:
     rows = [row for row in app.query_one("#media").children if isinstance(row, AvailabilityRow)]
     for _ in range(attempts):
@@ -3326,10 +3336,10 @@ async def run_toggle_watched_continue_watching_refresh_check():
         app.action_toggle_watched()
 
         status = await wait_for_status(app, pilot, "Marked Episode 1 watched", attempts=80)
-        refreshed = app.browsing_stack[-1].items
+        titles = await wait_for_browse_titles(app, pilot, ["Episode 2"], attempts=80)
 
         assert service.continue_watching_calls[-1] == (0, 40)
-        assert [item.title for item in refreshed] == ["Episode 2"]
+        assert titles == ["Episode 2"]
         assert status == "Marked Episode 1 watched"
 
 
