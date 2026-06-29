@@ -36,8 +36,8 @@ client_identifier = "plex-tui-your-stable-client-id"
 # Auto prefers Kitty/Ghostty graphics when detected and falls back to TCT. DRM
 # is for console sessions where mpv supports --vo=drm.
 # terminal_video_output = "kitty"
-# terminal_video_profile can be "smooth", "balanced", or "sharp". Smooth is
-# the default because terminal graphics can become choppy with large frames.
+# terminal_video_profile can be "smooth", "balanced", or "sharp". Smooth keeps
+# the default frame payload small because terminal graphics can become choppy.
 # Terminal playback is experimental and will be worse than an external mpv
 # window; keep playback_display external for normal watching.
 # terminal_video_profile = "balanced"

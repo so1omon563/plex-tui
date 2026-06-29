@@ -388,7 +388,7 @@ def test_terminal_playback_uses_tct_and_terminal_output():
     assert "--vo-tct-buffering=frame" in args
     assert "--vo-tct-width=100" in args
     assert "--vo-tct-height=28" in args
-    assert "--vf=fps=15,scale=640:-2" in args
+    assert "--vf=fps=12,scale=480:-2" in args
     assert "--profile=sw-fast" in args
     assert "--really-quiet" in args
     assert "--autofit=1280x720" not in args
@@ -436,7 +436,7 @@ def test_terminal_playback_balanced_profile_scales_terminal_video():
 
     args = popen.call_args.args[0]
     assert "--vo=kitty" in args
-    assert "--vf=fps=24,scale=854:-2" in args
+    assert "--vf=fps=15,scale=640:-2" in args
 
 
 def test_terminal_playback_can_force_tct_when_kitty_is_supported():
@@ -490,7 +490,7 @@ def test_terminal_playback_can_force_sixel_output():
 
     args = popen.call_args.args[0]
     assert "--vo=sixel" in args
-    assert "--vf=fps=15,scale=640:-2" in args
+    assert "--vf=fps=12,scale=480:-2" in args
 
 
 def test_terminal_playback_can_force_drm_output():

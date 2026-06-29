@@ -53,8 +53,8 @@ TRANSCODE_QUALITY_OPTIONS: dict[str, tuple[str, int | None, str]] = {
     "480p_2": ("480p 2 Mbps", 2000, "720x480"),
 }
 TERMINAL_VIDEO_FILTERS = {
-    "smooth": "fps=15,scale=640:-2",
-    "balanced": "fps=24,scale=854:-2",
+    "smooth": "fps=12,scale=480:-2",
+    "balanced": "fps=15,scale=640:-2",
     "sharp": "fps=24,scale=960:-2",
 }
 MPV_NETWORK_CACHE_ARGS = [

@@ -21,8 +21,9 @@ testing showed TCT works but is inherently blocky, so the launch path should
 prefer mpv's Kitty graphics output in Kitty/Ghostty-compatible terminals and
 use TCT as a fallback. Live Ghostty playback also showed large Kitty frame
 payloads are choppy, so terminal playback needs Smooth/Balanced/Sharp profiles
-that downscale and, for Smooth, reduce frame rate before mpv emits terminal
-graphics. Even with those profiles, terminal playback should be treated as a
+that downscale and reduce frame rate before mpv emits terminal graphics. Smooth
+is intentionally small by default because fewer terminal bytes matter more than
+source detail for watchability. Even with those profiles, terminal playback should be treated as a
 novelty/experiment; external mpv remains the recommended playback experience.
 
 The SO1-54 follow-up keeps that automatic Kitty/TCT behavior but adds an
@@ -130,7 +131,7 @@ This is the only implementation path worth considering later.
 If this is revisited, the first manual experiment should be outside Textual:
 
 ```bash
-mpv --vo=tct --terminal=yes --vo-tct-buffering=frame --vf=fps=15,scale=640:-2 --profile=sw-fast --really-quiet "$URL"
+mpv --vo=tct --terminal=yes --vo-tct-buffering=frame --vf=fps=12,scale=480:-2 --profile=sw-fast --really-quiet "$URL"
 ```
 
 Kitty, Sixel, and DRM experiments should start with the corresponding native

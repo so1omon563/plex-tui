@@ -6116,8 +6116,8 @@ def next_playback_display(value: str) -> str:
 
 def terminal_video_profile_value(config: AppConfig) -> str:
     labels = {
-        "smooth": "Smooth (15 fps / 640px)",
-        "balanced": "Balanced (24 fps / 854px)",
+        "smooth": "Smooth (12 fps / 480px)",
+        "balanced": "Balanced (15 fps / 640px)",
         "sharp": "Sharp (24 fps / 960px)",
     }
     return labels.get(config.terminal_video_profile, labels["smooth"])
