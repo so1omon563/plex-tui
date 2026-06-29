@@ -21,9 +21,28 @@ testing showed TCT works but is inherently blocky, so the launch path should
 prefer mpv's Kitty graphics output in Kitty/Ghostty-compatible terminals and
 use TCT as a fallback. Live Ghostty playback also showed large Kitty frame
 payloads are choppy, so terminal playback needs Smooth/Balanced/Sharp profiles
-that downscale and, for Smooth, reduce frame rate before mpv emits terminal
-graphics. Even with those profiles, terminal playback should be treated as a
-novelty/experiment; external mpv remains the recommended playback experience.
+that downscale and reduce frame rate before mpv emits terminal graphics. Smooth
+is intentionally small by default because fewer terminal bytes matter more than
+source detail for watchability. Terminal playback also forces Plex transcoding
+and uses 480p 2 Mbps when the configured transcode quality is Original, so mpv
+has less source video to decode before emitting terminal frames. Even with
+those reductions, terminal playback should be treated as a novelty/experiment;
+external mpv remains the recommended playback experience.
+
+The SO1-54 follow-up keeps that automatic Kitty/TCT behavior but adds an
+explicit terminal video output selector for manual experiments:
+
+- `auto`: prefer Kitty/Ghostty detection, then fall back to TCT.
+- `kitty`: force `mpv --vo=kitty`.
+- `sixel`: force `mpv --vo=sixel` for mpv builds and terminals that support it.
+- `tct`: force the original TCT text-video path.
+- `drm`: force `mpv --vo=drm` for console sessions without a window manager.
+
+Local macOS mpv 0.41.0 reports `tct` and `kitty`, but not `drm` or `sixel`, so
+the latter two are wired as opt-in outputs for environments whose mpv builds
+provide those video drivers. DRM console playback may be smoother in no-window
+manager setups because it avoids terminal graphics protocols, but it still
+needs verification on hardware with `--vo=drm` support.
 
 ## Evidence
 
@@ -117,7 +136,16 @@ This is the only implementation path worth considering later.
 If this is revisited, the first manual experiment should be outside Textual:
 
 ```bash
-mpv --vo=tct --terminal=yes --vo-tct-buffering=frame --vf=fps=15,scale=640:-2 --profile=sw-fast --really-quiet "$URL"
+mpv --vo=tct --terminal=yes --vo-tct-buffering=frame --vf=fps=12,scale=480:-2 --profile=sw-fast --really-quiet "$URL"
+```
+
+Kitty, Sixel, and DRM experiments should start with the corresponding native
+mpv video output:
+
+```bash
+mpv --no-config --vo=kitty path/to/video.mp4
+mpv --no-config --vo=sixel path/to/video.mp4
+mpv --no-config --vo=drm path/to/video.mp4
 ```
 
 Sizing experiments should add explicit cell dimensions:
@@ -134,9 +162,10 @@ screen before launching mpv.
 
 Keep external mpv playback as the default path. Terminal playback should remain
 an explicit opt-in path that isolates mpv terminal output from Textual
-rendering, prefers Kitty/Ghostty graphics when available, and treats TCT as a
-portable but block-cell fallback. Do not position terminal playback as a
-replacement for the external mpv window.
+rendering, prefers Kitty/Ghostty graphics when available, treats TCT as a
+portable but block-cell fallback, and leaves Sixel/DRM as explicit overrides
+for supported terminals or console sessions. Do not position terminal playback
+as a replacement for the external mpv window.
 
 ## Future Acceptance Criteria
 
