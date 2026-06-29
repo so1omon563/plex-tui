@@ -3297,6 +3297,7 @@ async def run_toggle_watched_continue_watching_refresh_check():
     current = MediaItem("Episode 1", "", "episode", "episode-1", True, raw)
     next_episode = MediaItem("Episode 2", "", "episode", "episode-2", True, next_raw)
     service = FakePagedService(MediaPage([next_episode], start=0, total=1))
+    service.media_by_key = {"episode-1": raw}
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
@@ -3312,6 +3313,7 @@ async def run_toggle_watched_continue_watching_refresh_check():
         status = await wait_for_status(app, pilot, "Marked Episode 1 watched", attempts=80)
 
         assert raw.mark_watched_calls == 1
+        assert service.media_from_key_calls == ["episode-1"]
         assert service.continue_watching_calls[-1] == (0, 40)
         assert selected is not None
         assert selected.title == "Episode 2"
