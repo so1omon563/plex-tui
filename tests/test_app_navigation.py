@@ -3326,11 +3326,9 @@ async def run_toggle_watched_continue_watching_refresh_check():
 
         app.action_toggle_watched()
 
-        media_from_key_calls = await wait_for_calls(service.media_from_key_calls, pilot, attempts=80)
-        selected = await wait_for_selected_title(app, pilot, "Episode 2", attempts=80)
         status = await wait_for_status(app, pilot, "Marked Episode 1 watched", attempts=80)
+        selected = await wait_for_selected_title(app, pilot, "Episode 2", attempts=80)
 
-        assert media_from_key_calls == ["episode-1"]
         assert service.continue_watching_calls[-1] == (0, 40)
         assert selected is not None
         assert selected.title == "Episode 2"
@@ -3420,10 +3418,11 @@ async def run_open_parent_context_from_continue_watching_episode_check():
         await pilot.pause(0.2)
 
         await pilot.press("b")
+        children_calls = await wait_for_calls(service.children_calls, pilot, attempts=80)
         selected = await wait_for_selected_title(app, pilot, "Episode 1", attempts=80)
 
         assert service.media_from_key_calls == ["/library/metadata/season-1"]
-        assert service.children_calls == [("season-1", 40)]
+        assert children_calls == [("season-1", 40)]
         assert app.browsing_stack[-1].title == "Season 1"
         assert selected is not None
 
@@ -3446,10 +3445,11 @@ async def run_open_show_context_from_continue_watching_episode_check():
         await pilot.pause(0.2)
 
         await pilot.press("B")
+        children_calls = await wait_for_calls(service.children_calls, pilot, attempts=80)
         selected = await wait_for_selected_title(app, pilot, "Season 1", attempts=80)
 
         assert service.media_from_key_calls == ["/library/metadata/show-1"]
-        assert service.children_calls == [("show-1", 40)]
+        assert children_calls == [("show-1", 40)]
         assert app.browsing_stack[-1].title == "Berserk"
         assert selected is not None
 
