@@ -3690,7 +3690,7 @@ class PlexTuiApp(App[None]):
             self.open_media(media)
             return
         playback_config = replace(self.config, playback_mode=playback_mode or self.config.playback_mode)
-        if self.config.playback_display == "terminal":
+        if self.config.playback_display == "terminal" and not is_online_metadata(media.raw):
             terminal_quality = self.config.transcode_quality if self.config.transcode_quality != "original" else "480p_2"
             playback_config = replace(
                 playback_config,

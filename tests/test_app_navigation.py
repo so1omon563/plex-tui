@@ -938,6 +938,10 @@ def test_terminal_playback_defaults_to_low_transcode():
     asyncio.run(run_terminal_playback_low_transcode_check())
 
 
+def test_terminal_playback_keeps_online_metadata_direct():
+    asyncio.run(run_terminal_playback_online_metadata_direct_check())
+
+
 def test_terminal_playback_exit_invalidates_grid_artwork():
     asyncio.run(run_terminal_playback_exit_invalidates_grid_artwork_check())
 
@@ -3159,6 +3163,34 @@ async def run_terminal_playback_low_transcode_check():
         playback_config = launch.call_args.args[4]
         assert playback_config.playback_mode == "transcode"
         assert playback_config.transcode_quality == "480p_2"
+
+
+async def run_terminal_playback_online_metadata_direct_check():
+    class MetadataServer:
+        _baseurl = "https://metadata.provider.plex.tv"
+
+    class OnlineRaw(Raw):
+        _server = MetadataServer()
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", playback_display="terminal")
+        app.show_media("Movies", [MediaItem("Online Movie", "", "movie", "1", True, OnlineRaw())])
+        await pilot.pause(0.2)
+
+        player = SimpleNamespace(title="Online Movie", process=SimpleNamespace(poll=lambda: 0))
+        with (
+            patch.object(app, "play_terminal_media", return_value=player) as launch,
+            patch.object(app, "refresh_current_browse_state"),
+            patch.object(app, "show_media_details"),
+        ):
+            app.action_play_selected()
+        await pilot.pause(0.2)
+
+        playback_config = launch.call_args.args[4]
+        assert playback_config.playback_mode == "auto"
+        assert playback_config.transcode_quality == "original"
 
 
 async def run_terminal_playback_exit_invalidates_grid_artwork_check():
