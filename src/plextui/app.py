@@ -640,6 +640,7 @@ class PlexTuiApp(App[None]):
     loading_more: bool
     suppress_auto_load: bool
     player: PlayerHandle | None
+    active_playback_media: MediaItem | None
     prefetched_grid_pages: set[tuple[str, ...]]
     active_grid_prefetch_pages: set[tuple[str, ...]]
     pending_grid_prefetches: list[tuple[list[MediaItem], tuple[str, ...], str, float]]
@@ -697,6 +698,7 @@ class PlexTuiApp(App[None]):
         self.loading_more = False
         self.suppress_auto_load = False
         self.player = None
+        self.active_playback_media = None
         self.prefetched_grid_pages = set()
         self.active_grid_prefetch_pages = set()
         self.pending_grid_prefetches = []
@@ -1307,7 +1309,11 @@ class PlexTuiApp(App[None]):
         return state.source if state is not None else ""
 
     @work(thread=True, exclusive=True)
-    def refresh_current_browse_state(self, selected_key: str | None = None) -> None:
+    def refresh_current_browse_state(
+        self,
+        selected_key: str | None = None,
+        played_media: MediaItem | None = None,
+    ) -> None:
         if self.service is None:
             return
         state = self.current_browse_state()
@@ -1409,7 +1415,10 @@ class PlexTuiApp(App[None]):
             current.items = items
             current.next_start = next_start
             current.total = total
-            self.show_browse_state(current, selected_key=selected_key)
+            target_key = selected_key
+            if source == "continue_watching":
+                target_key = continue_watching_playback_selection(played_media, items, selected_key)
+            self.show_browse_state(current, selected_key=target_key)
             self.focus_media_browser()
 
         self.call_from_thread(apply)
@@ -3675,6 +3684,7 @@ class PlexTuiApp(App[None]):
         audio_choice = preferred_audio_choice(media.raw, self.config.preferred_audio_language)
         try:
             stop_mpv(self.player)
+            self.active_playback_media = media
             if self.config.playback_display == "terminal":
                 self.player = self.play_terminal_media(media, subtitle_choice, audio_choice, resume, playback_config)
             else:
@@ -3690,6 +3700,7 @@ class PlexTuiApp(App[None]):
                     resume=resume,
                 )
         except PlayerError as exc:
+            self.active_playback_media = None
             self.clear_playback_footer()
             error = str(exc)
             if is_unavailable_vod_stream_error(error):
@@ -3700,8 +3711,9 @@ class PlexTuiApp(App[None]):
         if self.player is not None and self.config.playback_display == "terminal":
             status = playback_exit_status(self.player, debug_log_path()) or f"Finished terminal playback for {media.title}"
             self.player = None
+            self.active_playback_media = None
             self.clear_playback_footer()
-            self.refresh_current_browse_state(selected_key=media.key)
+            self.refresh_current_browse_state(selected_key=media.key, played_media=media)
             self.show_media_details(media)
             self.set_status(status)
             return
@@ -3765,9 +3777,14 @@ class PlexTuiApp(App[None]):
         if status is None:
             return
         selected = self.selected_media()
+        played_media = self.active_playback_media
         self.player = None
+        self.active_playback_media = None
         self.clear_playback_footer()
-        self.refresh_current_browse_state(selected_key=selected.key if selected is not None else None)
+        self.refresh_current_browse_state(
+            selected_key=selected.key if selected is not None else None,
+            played_media=played_media,
+        )
         if selected is not None:
             self.show_media_details(selected)
         self.set_status(status)
@@ -3776,30 +3793,50 @@ class PlexTuiApp(App[None]):
         if self.player is None:
             self.set_status("Nothing is playing")
             self.player = None
+            self.active_playback_media = None
             self.clear_playback_footer()
             return
         if not self.player.active:
             self.set_status(playback_exit_status(self.player, debug_log_path()) or "Nothing is playing")
-            self.refresh_current_browse_state(selected_key=self.selected_media().key if self.selected_media() is not None else None)
+            played_media = self.active_playback_media
+            selected = self.selected_media()
+            self.refresh_current_browse_state(
+                selected_key=selected.key if selected is not None else None,
+                played_media=played_media,
+            )
             self.player = None
+            self.active_playback_media = None
             self.clear_playback_footer()
             return
         title = self.player.title
+        played_media = self.active_playback_media
+        selected = self.selected_media()
         stop_mpv(self.player)
         self.player = None
+        self.active_playback_media = None
         self.clear_playback_footer()
-        self.refresh_current_browse_state(selected_key=self.selected_media().key if self.selected_media() is not None else None)
+        self.refresh_current_browse_state(
+            selected_key=selected.key if selected is not None else None,
+            played_media=played_media,
+        )
         self.set_status(f"Stopped {title}")
 
     def active_player_for_control(self) -> PlayerHandle | None:
         if self.player is None:
             self.set_status("Nothing is playing")
+            self.active_playback_media = None
             self.clear_playback_footer()
             return None
         if not self.player.active:
             self.set_status(playback_exit_status(self.player, debug_log_path()) or "Nothing is playing")
+            played_media = self.active_playback_media
+            selected = self.selected_media()
             self.player = None
-            self.refresh_current_browse_state(selected_key=self.selected_media().key if self.selected_media() is not None else None)
+            self.active_playback_media = None
+            self.refresh_current_browse_state(
+                selected_key=selected.key if selected is not None else None,
+                played_media=played_media,
+            )
             self.clear_playback_footer()
             return None
         return self.player
@@ -6490,6 +6527,33 @@ def selected_media_index(items: list[MediaItem], selected_key: str | None) -> in
         if item.key == selected_key:
             return index
     return 0
+
+
+def continue_watching_playback_selection(
+    played_media: MediaItem | None,
+    items: list[MediaItem],
+    selected_key: str | None,
+) -> str | None:
+    if played_media is None or played_media.kind != "episode":
+        return selected_key
+    if any(item.key == played_media.key for item in items):
+        return played_media.key
+    show_key = episode_show_key(played_media)
+    if not show_key:
+        return selected_key
+    for item in items:
+        if item.kind == "episode" and item.key != played_media.key and episode_show_key(item) == show_key:
+            return item.key
+    return selected_key
+
+
+def episode_show_key(media: MediaItem) -> str:
+    raw = media.raw
+    for attr in ("grandparentKey", "grandparentRatingKey", "grandparentTitle"):
+        value = getattr(raw, attr, None)
+        if value:
+            return str(value)
+    return ""
 
 
 def write_performance_log(event: str, started: float, detail: str = "") -> None:

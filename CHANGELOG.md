@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Auto-select the next TV episode when Continue Watching refreshes after
+  playback completion.
 - Added compact sidebar row markers so Continue Watching, Playlists, Discover,
   On Plex, and library rows scan consistently with the rest of the TUI.
 - Quieted Details pane technical rows for non-playable containers and only show
