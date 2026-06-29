@@ -3261,7 +3261,9 @@ async def run_toggle_watched_marks_unwatched_check():
         app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, raw)])
         await pilot.pause(0.2)
 
-        app.action_toggle_watched()
+        worker = app.action_toggle_watched()
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
         row, selected, status = await wait_for_watched_update(
             app,
             pilot,
@@ -3321,7 +3323,9 @@ async def run_playback_refresh_selects_next_continue_watching_episode_check():
         app.show_browse_state(app.browsing_stack[-1])
         await pilot.pause(0.2)
 
-        app.refresh_current_browse_state(selected_key=current.key, played_media=current)
+        worker = app.refresh_current_browse_state(selected_key=current.key, played_media=current)
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
 
         selected = await wait_for_selected_title(app, pilot, "Episode 2", attempts=80)
 

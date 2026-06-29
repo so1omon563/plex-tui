@@ -3467,7 +3467,7 @@ class PlexTuiApp(App[None]):
             return
         self.play_media(media, bool(resume_offset_ms(media.raw)), playback_mode="transcode")
 
-    def action_toggle_watched(self) -> None:
+    def action_toggle_watched(self) -> object | None:
         media = self.selected_media()
         if media is None:
             self.set_status("No media selected")
@@ -3481,7 +3481,7 @@ class PlexTuiApp(App[None]):
             return
         target = "watched" if target_watched else "unwatched"
         self.set_status(f"Marking {media.title} {target}...")
-        self.toggle_watched_state(media)
+        return self.toggle_watched_state(media)
 
     def action_remove_continue_watching(self) -> None:
         media = self.selected_media()
