@@ -60,6 +60,7 @@ from plextui.app import (
     next_mpv_window_size,
     next_playback_display,
     next_playback_mode,
+    next_terminal_video_output,
     next_terminal_video_profile,
     next_transcode_quality,
     playback_failure_hints,
@@ -758,6 +759,12 @@ def test_playback_quality_helpers_cycle_values():
     assert next_playback_mode("transcode") == "auto"
     assert next_playback_display("external") == "terminal"
     assert next_playback_display("terminal") == "external"
+    assert next_terminal_video_output("auto") == "kitty"
+    assert next_terminal_video_output("kitty") == "sixel"
+    assert next_terminal_video_output("sixel") == "tct"
+    assert next_terminal_video_output("tct") == "drm"
+    assert next_terminal_video_output("drm") == "auto"
+    assert next_terminal_video_output("bad") == "auto"
     assert next_terminal_video_profile("smooth") == "balanced"
     assert next_terminal_video_profile("balanced") == "sharp"
     assert next_terminal_video_profile("sharp") == "smooth"

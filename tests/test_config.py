@@ -32,6 +32,7 @@ def test_config_example_parses_and_uses_known_fields():
         "mpv_window_size",
         "playback_mode",
         "playback_display",
+        "terminal_video_output",
         "terminal_video_profile",
         "transcode_quality",
         "page_size",
@@ -69,6 +70,7 @@ def test_invalid_subtitle_mode_logs_and_normalizes(tmp_path, monkeypatch):
             'mpv_window_size = "huge"',
             'playback_mode = "bad"',
             'playback_display = "bad"',
+            'terminal_video_output = "bad"',
             'terminal_video_profile = "bad"',
             'transcode_quality = "bad"',
             'page_size = "5"',
@@ -87,6 +89,7 @@ def test_invalid_subtitle_mode_logs_and_normalizes(tmp_path, monkeypatch):
     assert loaded.mpv_window_size == ""
     assert loaded.playback_mode == "auto"
     assert loaded.playback_display == "external"
+    assert loaded.terminal_video_output == "auto"
     assert loaded.terminal_video_profile == "smooth"
     assert loaded.transcode_quality == "original"
     assert loaded.page_size == config.DEFAULT_PAGE_SIZE
@@ -97,6 +100,7 @@ def test_invalid_subtitle_mode_logs_and_normalizes(tmp_path, monkeypatch):
     assert "invalid mpv_window_size" in log
     assert "invalid playback_mode" in log
     assert "invalid playback_display" in log
+    assert "invalid terminal_video_output" in log
     assert "invalid terminal_video_profile" in log
     assert "invalid transcode_quality" in log
     assert "invalid page_size" in log
@@ -176,6 +180,7 @@ def test_playback_quality_settings_round_trip(tmp_path, monkeypatch):
         "client",
         playback_mode="transcode",
         playback_display="terminal",
+        terminal_video_output="kitty",
         terminal_video_profile="balanced",
         transcode_quality="720p_4",
     )
@@ -184,11 +189,13 @@ def test_playback_quality_settings_round_trip(tmp_path, monkeypatch):
 
     assert loaded.playback_mode == "transcode"
     assert loaded.playback_display == "terminal"
+    assert loaded.terminal_video_output == "kitty"
     assert loaded.terminal_video_profile == "balanced"
     assert loaded.transcode_quality == "720p_4"
     text = config_file.read_text(encoding="utf-8")
     assert 'playback_mode = "transcode"' in text
     assert 'playback_display = "terminal"' in text
+    assert 'terminal_video_output = "kitty"' in text
     assert 'terminal_video_profile = "balanced"' in text
     assert 'transcode_quality = "720p_4"' in text
 

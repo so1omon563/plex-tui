@@ -72,6 +72,7 @@ def play_with_mpv(
     window_size: str = "",
     playback_mode: str = "auto",
     playback_display: str = "external",
+    terminal_video_output: str = "auto",
     terminal_video_profile: str = "smooth",
     transcode_quality: str = "original",
     resume: bool = True,
@@ -127,7 +128,7 @@ def play_with_mpv(
     ]
     args.extend(MPV_NETWORK_CACHE_ARGS)
     if playback_display == "terminal":
-        args.extend(terminal_video_args(terminal_video_profile))
+        args.extend(terminal_video_args(terminal_video_output, terminal_video_profile))
     else:
         args.extend(["--no-terminal", "--force-window=immediate", "--focus-on=all"])
     if start_offset and not monitor_base_offset:
@@ -710,13 +711,23 @@ def sanitize_command(args: list[str]) -> list[str]:
     return [sanitize_arg(arg) for arg in args]
 
 
-def terminal_video_args(profile: str = "smooth") -> list[str]:
+def terminal_video_args(output: str = "auto", profile: str = "smooth") -> list[str]:
     video_filter = TERMINAL_VIDEO_FILTERS.get(profile, TERMINAL_VIDEO_FILTERS["smooth"])
-    if terminal_kitty_graphics_supported():
+    selected_output = output if output in {"auto", "kitty", "sixel", "tct", "drm"} else "auto"
+    if selected_output == "auto":
+        selected_output = "kitty" if terminal_kitty_graphics_supported() else "tct"
+    if selected_output in {"kitty", "sixel"}:
         return [
-            "--vo=kitty",
+            f"--vo={selected_output}",
             "--terminal=yes",
             f"--vf={video_filter}",
+            "--profile=sw-fast",
+            "--really-quiet",
+        ]
+    if selected_output == "drm":
+        return [
+            "--vo=drm",
+            "--terminal=yes",
             "--profile=sw-fast",
             "--really-quiet",
         ]

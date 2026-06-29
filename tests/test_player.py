@@ -439,6 +439,78 @@ def test_terminal_playback_balanced_profile_scales_terminal_video():
     assert "--vf=fps=24,scale=854:-2" in args
 
 
+def test_terminal_playback_can_force_tct_when_kitty_is_supported():
+    item = Item()
+    tty = MagicMock()
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch.dict("plextui.player.os.environ", {"KITTY_WINDOW_ID": "1"}, clear=True),
+        patch("plextui.player.Path.open", return_value=tty),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        play_with_mpv(item, playback_display="terminal", terminal_video_output="tct")
+
+    args = popen.call_args.args[0]
+    assert "--vo=tct" in args
+    assert "--vo=kitty" not in args
+    assert "--vo-tct-buffering=frame" in args
+
+
+def test_terminal_playback_can_force_kitty_without_kitty_env():
+    item = Item()
+    tty = MagicMock()
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch.dict("plextui.player.os.environ", {}, clear=True),
+        patch("plextui.player.Path.open", return_value=tty),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        play_with_mpv(item, playback_display="terminal", terminal_video_output="kitty")
+
+    args = popen.call_args.args[0]
+    assert "--vo=kitty" in args
+    assert "--vo=tct" not in args
+
+
+def test_terminal_playback_can_force_sixel_output():
+    item = Item()
+    tty = MagicMock()
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.Path.open", return_value=tty),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        play_with_mpv(item, playback_display="terminal", terminal_video_output="sixel")
+
+    args = popen.call_args.args[0]
+    assert "--vo=sixel" in args
+    assert "--vf=fps=15,scale=640:-2" in args
+
+
+def test_terminal_playback_can_force_drm_output():
+    item = Item()
+    tty = MagicMock()
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.Path.open", return_value=tty),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        play_with_mpv(item, playback_display="terminal", terminal_video_output="drm")
+
+    args = popen.call_args.args[0]
+    assert "--vo=drm" in args
+    assert "--terminal=yes" in args
+    assert not any(arg.startswith("--vf=") for arg in args)
+
+
 def test_subtitle_none_disables_subtitle_selection():
     item = Item()
 

@@ -25,6 +25,19 @@ that downscale and, for Smooth, reduce frame rate before mpv emits terminal
 graphics. Even with those profiles, terminal playback should be treated as a
 novelty/experiment; external mpv remains the recommended playback experience.
 
+The SO1-54 follow-up keeps that automatic Kitty/TCT behavior but adds an
+explicit terminal video output selector for manual experiments:
+
+- `auto`: prefer Kitty/Ghostty detection, then fall back to TCT.
+- `kitty`: force `mpv --vo=kitty`.
+- `sixel`: force `mpv --vo=sixel` for mpv builds and terminals that support it.
+- `tct`: force the original TCT text-video path.
+- `drm`: force `mpv --vo=drm` for console sessions without a window manager.
+
+Local macOS mpv 0.41.0 reports `tct` and `kitty`, but not `drm` or `sixel`, so
+the latter two are wired as opt-in outputs for environments whose mpv builds
+provide those video drivers.
+
 ## Evidence
 
 The current mpv manual documents `tct` as a color Unicode art video output for
@@ -118,6 +131,15 @@ If this is revisited, the first manual experiment should be outside Textual:
 
 ```bash
 mpv --vo=tct --terminal=yes --vo-tct-buffering=frame --vf=fps=15,scale=640:-2 --profile=sw-fast --really-quiet "$URL"
+```
+
+Kitty, Sixel, and DRM experiments should start with the corresponding native
+mpv video output:
+
+```bash
+mpv --no-config --vo=kitty path/to/video.mp4
+mpv --no-config --vo=sixel path/to/video.mp4
+mpv --no-config --vo=drm path/to/video.mp4
 ```
 
 Sizing experiments should add explicit cell dimensions:

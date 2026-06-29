@@ -32,6 +32,10 @@ client_identifier = "plex-tui-your-stable-client-id"
 # falls back to TCT text video. Terminal playback takes over the terminal until
 # mpv exits.
 # playback_display = "terminal"
+# terminal_video_output can be "auto", "kitty", "sixel", "tct", or "drm".
+# Auto prefers Kitty/Ghostty graphics when detected and falls back to TCT. DRM
+# is for console sessions where mpv supports --vo=drm.
+# terminal_video_output = "kitty"
 # terminal_video_profile can be "smooth", "balanced", or "sharp". Smooth is
 # the default because terminal graphics can become choppy with large frames.
 # Terminal playback is experimental and will be worse than an external mpv

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added explicit terminal playback output choices for Kitty graphics, Sixel,
+  TCT text video, and DRM console playback while keeping Auto on Kitty/TCT.
 - Auto-select the next TV episode when Continue Watching refreshes after
   playback completion.
 - Added compact sidebar row markers so Continue Watching, Playlists, Discover,
