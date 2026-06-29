@@ -23,8 +23,11 @@ use TCT as a fallback. Live Ghostty playback also showed large Kitty frame
 payloads are choppy, so terminal playback needs Smooth/Balanced/Sharp profiles
 that downscale and reduce frame rate before mpv emits terminal graphics. Smooth
 is intentionally small by default because fewer terminal bytes matter more than
-source detail for watchability. Even with those profiles, terminal playback should be treated as a
-novelty/experiment; external mpv remains the recommended playback experience.
+source detail for watchability. Terminal playback also forces Plex transcoding
+and uses 480p 2 Mbps when the configured transcode quality is Original, so mpv
+has less source video to decode before emitting terminal frames. Even with
+those reductions, terminal playback should be treated as a novelty/experiment;
+external mpv remains the recommended playback experience.
 
 The SO1-54 follow-up keeps that automatic Kitty/TCT behavior but adds an
 explicit terminal video output selector for manual experiments:
@@ -37,7 +40,9 @@ explicit terminal video output selector for manual experiments:
 
 Local macOS mpv 0.41.0 reports `tct` and `kitty`, but not `drm` or `sixel`, so
 the latter two are wired as opt-in outputs for environments whose mpv builds
-provide those video drivers.
+provide those video drivers. DRM console playback may be smoother in no-window
+manager setups because it avoids terminal graphics protocols, but it still
+needs verification on hardware with `--vo=drm` support.
 
 ## Evidence
 
@@ -157,9 +162,10 @@ screen before launching mpv.
 
 Keep external mpv playback as the default path. Terminal playback should remain
 an explicit opt-in path that isolates mpv terminal output from Textual
-rendering, prefers Kitty/Ghostty graphics when available, and treats TCT as a
-portable but block-cell fallback. Do not position terminal playback as a
-replacement for the external mpv window.
+rendering, prefers Kitty/Ghostty graphics when available, treats TCT as a
+portable but block-cell fallback, and leaves Sixel/DRM as explicit overrides
+for supported terminals or console sessions. Do not position terminal playback
+as a replacement for the external mpv window.
 
 ## Future Acceptance Criteria
 

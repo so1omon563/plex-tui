@@ -118,7 +118,12 @@ Playback behavior:
   to switch the active track when the launched stream exposes a matching track.
 - Experimental terminal playback can be enabled from Settings. It is a novelty
   mode that suspends the TUI while mpv owns the terminal; external mpv remains
-  the recommended watch path.
+  the recommended watch path. Auto output prefers Kitty/Ghostty graphics and
+  falls back to TCT, while Kitty, Sixel, TCT, and DRM can be forced for
+  terminals and mpv builds that support them.
+- Terminal playback forces Plex transcoding and uses 480p 2 Mbps when the
+  configured transcode quality is Original. If you choose another transcode
+  quality in Settings, terminal playback uses that instead.
 
 Playback mode defaults to Plex direct/default behavior. Settings can force Plex
 transcoding with Original, 1080p 8 Mbps, 720p 4 Mbps, or 480p 2 Mbps quality

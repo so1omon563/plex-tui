@@ -38,6 +38,8 @@ client_identifier = "plex-tui-your-stable-client-id"
 # terminal_video_output = "kitty"
 # terminal_video_profile can be "smooth", "balanced", or "sharp". Smooth keeps
 # the default frame payload small because terminal graphics can become choppy.
+# Terminal playback forces Plex transcoding and uses 480p 2 Mbps when
+# transcode_quality is "original"; non-original quality choices are respected.
 # Terminal playback is experimental and will be worse than an external mpv
 # window; keep playback_display external for normal watching.
 # terminal_video_profile = "balanced"
