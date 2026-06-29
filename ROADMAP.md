@@ -78,6 +78,9 @@
   it is intentionally positioned as a novelty/experiment rather than a
   replacement for external mpv playback. Embedded video panes remain
   intentionally out of scope.
+- Investigate Live TV support before promising implementation. Start by
+  confirming PlexAPI guide/channel/tuner/DVR access and whether live channels
+  can produce a stable stream URL for the existing mpv playback path.
 - Playlist management can browse all playlists from a top-level sidebar row,
   create playlists from selected media, bulk-add selected playable media,
   remove single or bulk-selected items while browsing a playlist, and rename or
