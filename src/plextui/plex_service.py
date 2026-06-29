@@ -279,6 +279,15 @@ class PlexService:
         raw = self.media_from_key(key)
         return to_media_item(raw) if raw is not None else None
 
+    def episode_show(self, item: MediaItem) -> MediaItem | None:
+        if item.kind != "episode":
+            return None
+        key = episode_show_parent_key(item.raw)
+        if not key:
+            return None
+        raw = self.media_from_key(key)
+        return to_media_item(raw) if raw is not None else None
+
     def children(self, item: MediaItem, size: int = DEFAULT_PAGE_SIZE) -> list[MediaItem]:
         raw = item.raw
         if isinstance(raw, CategoryRef):
@@ -438,6 +447,16 @@ def episode_parent_key(raw: Any) -> str:
     if getattr(raw, "TYPE", "") != "episode":
         return ""
     for attr in ("parentKey", "parentRatingKey"):
+        value = getattr(raw, attr, None)
+        if value:
+            return str(value)
+    return ""
+
+
+def episode_show_parent_key(raw: Any) -> str:
+    if getattr(raw, "TYPE", "") != "episode":
+        return ""
+    for attr in ("grandparentKey", "grandparentRatingKey"):
         value = getattr(raw, attr, None)
         if value:
             return str(value)

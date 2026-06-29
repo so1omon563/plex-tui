@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Added a `b` shortcut to open the selected TV episode's season so Continue
-  Watching episodes can jump back to neighboring episode context.
+- Added `b` / `B` shortcuts to open the selected TV episode's season or show
+  so Continue Watching episodes can jump back to neighboring episode context.
 - Fixed Continue Watching so wrapped Plex hub items resolve to playable media,
   missing endpoint entries are retained, client ordering is preserved, and
   marking an episode watched refreshes to the next episode.

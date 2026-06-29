@@ -8,6 +8,7 @@ from plextui.plex_service import (
     category_items,
     episode_context_label,
     episode_parent_key,
+    episode_show_parent_key,
     kind_label,
     media_key,
     media_details,
@@ -843,6 +844,41 @@ def test_episode_parent_falls_back_to_parent_rating_key():
         parentRatingKey = "season-1"
 
     assert episode_parent_key(Episode()) == "season-1"
+
+
+def test_episode_show_uses_grandparent_key_to_fetch_show():
+    class Episode(TvEpisodeRawItem):
+        grandparentKey = "/library/metadata/show-1"
+
+    class Show(RawItem):
+        TYPE = "show"
+        title = "Berserk"
+        ratingKey = "show-1"
+
+    class Server:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def fetchItem(self, key):
+            self.calls.append(key)
+            return Show()
+
+    service = object.__new__(PlexService)
+    service.server = Server()
+
+    show = service.episode_show(to_media_item(Episode()))
+
+    assert episode_show_parent_key(Episode()) == "/library/metadata/show-1"
+    assert service.server.calls == ["/library/metadata/show-1"]
+    assert show is not None
+    assert (show.title, show.kind) == ("Berserk", "show")
+
+
+def test_episode_show_falls_back_to_grandparent_rating_key():
+    class Episode(TvEpisodeRawItem):
+        grandparentRatingKey = "show-1"
+
+    assert episode_show_parent_key(Episode()) == "show-1"
 
 
 def test_tv_episode_artwork_prefers_episode_still():

@@ -966,6 +966,10 @@ def test_open_parent_context_from_continue_watching_episode():
     asyncio.run(run_open_parent_context_from_continue_watching_episode_check())
 
 
+def test_open_show_context_from_continue_watching_episode():
+    asyncio.run(run_open_show_context_from_continue_watching_episode_check())
+
+
 def test_toggle_watched_marks_watched_media_unwatched():
     asyncio.run(run_toggle_watched_marks_watched_check())
 
@@ -1645,6 +1649,10 @@ class FakePagedService:
 
     def episode_parent(self, item: MediaItem) -> MediaItem | None:
         raw = self.media_from_key(getattr(item.raw, "parentKey", ""))
+        return raw if isinstance(raw, MediaItem) else None
+
+    def episode_show(self, item: MediaItem) -> MediaItem | None:
+        raw = self.media_from_key(getattr(item.raw, "grandparentKey", ""))
         return raw if isinstance(raw, MediaItem) else None
 
 
@@ -3393,7 +3401,7 @@ async def run_playback_refresh_selects_next_continue_watching_episode_check():
 
 
 async def run_open_parent_context_from_continue_watching_episode_check():
-    episode_raw = SimpleNamespace(TYPE="episode", parentKey="/library/metadata/season-1")
+    episode_raw = SimpleNamespace(TYPE="episode", parentKey="/library/metadata/season-1", grandparentKey="/library/metadata/show-1")
     episode = MediaItem("Episode 2", "", "episode", "episode-2", True, episode_raw)
     season = MediaItem("Season 1", "10 episodes", "season", "season-1", False, SimpleNamespace(TYPE="season"))
     previous = MediaItem("Episode 1", "", "episode", "episode-1", True, SimpleNamespace(TYPE="episode"))
@@ -3415,6 +3423,32 @@ async def run_open_parent_context_from_continue_watching_episode_check():
         assert service.media_from_key_calls == ["/library/metadata/season-1"]
         assert service.children_calls == [("season-1", 40)]
         assert app.browsing_stack[-1].title == "Season 1"
+        assert selected is not None
+
+
+async def run_open_show_context_from_continue_watching_episode_check():
+    episode_raw = SimpleNamespace(TYPE="episode", parentKey="/library/metadata/season-1", grandparentKey="/library/metadata/show-1")
+    episode = MediaItem("Episode 2", "", "episode", "episode-2", True, episode_raw)
+    show = MediaItem("Berserk", "TV Show", "show", "show-1", False, SimpleNamespace(TYPE="show"))
+    season = MediaItem("Season 1", "10 episodes", "season", "season-1", False, SimpleNamespace(TYPE="season"))
+    service = FakePagedService(MediaPage([episode], start=0, total=1))
+    service.media_by_key = {"/library/metadata/show-1": show}
+    service.children_by_key = {"show-1": [season]}
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.browsing_stack = [BrowseState("Continue Watching", [episode], source="continue_watching", total=1)]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        await pilot.press("B")
+        selected = await wait_for_selected_title(app, pilot, "Season 1", attempts=80)
+
+        assert service.media_from_key_calls == ["/library/metadata/show-1"]
+        assert service.children_calls == [("show-1", 40)]
+        assert app.browsing_stack[-1].title == "Berserk"
         assert selected is not None
 
 

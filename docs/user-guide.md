@@ -170,6 +170,7 @@ selection, then use the same add/remove actions on the selected set.
 | `p` | Play selected item from the beginning |
 | `r` | Resume selected item from the saved Plex position |
 | `b` | Open the selected TV episode's season |
+| `B` | Open the selected TV episode's show |
 | `o` | Play selected item as an optimized/transcoded stream |
 | `c` | Pause or resume active playback |
 | `z` / `.` | Seek active playback back / forward |
@@ -181,6 +182,9 @@ selection, then use the same add/remove actions on the selected set.
 | `e` / `D` | Rename / delete selected or open playlist |
 | `a` / `s` | Choose audio / subtitle preference |
 | `A` / `S` | Clear audio preference / cycle subtitle mode |
+
+Episode Details show the `b` and `B` TV context shortcuts when Plex reports
+season or show parent keys.
 
 ## Artwork
 

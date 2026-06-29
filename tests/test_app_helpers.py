@@ -298,6 +298,28 @@ def test_render_details_can_include_playlist_context_action():
     assert "Playlist: Backspace/Delete removes from this playlist" in rendered
 
 
+def test_episode_detail_actions_show_tv_context_shortcuts():
+    raw = SimpleNamespace(TYPE="episode", parentKey="/library/metadata/season-1", grandparentKey="/library/metadata/show-1")
+    item = MediaItem("Episode", "", "episode", "episode-1", True, raw)
+    details = MediaDetails(
+        title="Episode",
+        kind="episode",
+        facts=["Episode"],
+        metadata=[("Type", "episode"), ("Show", "Berserk"), ("Season", "Season 1")],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=True,
+    )
+
+    actions = current_detail_actions(BrowseState("Continue Watching", [item], source="continue_watching"), item)
+    rendered = render_details(details, context_actions=actions)
+
+    assert actions == ("TV Context: b opens season", "TV Context: B opens show")
+    assert "TV Context: b opens season" in rendered
+    assert "TV Context: B opens show" in rendered
+
+
 def test_render_details_can_show_discover_availability_action():
     class Raw:
         def streamingServices(self):

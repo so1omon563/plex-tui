@@ -84,6 +84,7 @@ from .plex_service import (
     PlexService,
     availability_urls,
     episode_parent_key,
+    episode_show_parent_key,
     is_online_metadata,
     kind_label,
     media_details,
@@ -607,6 +608,7 @@ class PlexTuiApp(App[None]):
         Binding("e", "rename_playlist", "Rename playlist", show=False),
         Binding("D", "delete_playlist", "Delete playlist", show=False),
         Binding("b", "open_parent_context", "TV context", show=False),
+        Binding("B", "open_show_context", "Show context", show=False),
         Binding("r", "resume_selected", "Resume"),
         Binding("w", "toggle_watched", "Watched", show=False),
         Binding("backspace", "remove_continue_watching", "Remove continue", show=False),
@@ -3464,31 +3466,39 @@ class PlexTuiApp(App[None]):
 
     @work(thread=True)
     def action_open_parent_context(self) -> None:
+        self.open_episode_context("season")
+
+    @work(thread=True)
+    def action_open_show_context(self) -> None:
+        self.open_episode_context("show")
+
+    def open_episode_context(self, target: str) -> None:
         if self.service is None:
             return
         media = self.selected_media()
         if media is None or media.kind != "episode":
             self.call_from_thread(self.set_status, "Select a TV episode first")
             return
-        if not episode_parent_key(media.raw):
-            self.call_from_thread(self.set_status, f"No TV context reported for {media.title}")
+        key = episode_parent_key(media.raw) if target == "season" else episode_show_parent_key(media.raw)
+        if not key:
+            self.call_from_thread(self.set_status, f"No {target} context reported for {media.title}")
             return
-        self.post_message(StatusChanged(f"Opening TV context for {media.title}..."))
-        parent = self.service.episode_parent(media)
-        if parent is None:
-            self.call_from_thread(self.set_status, f"Could not open TV context for {media.title}")
+        self.post_message(StatusChanged(f"Opening {target} context for {media.title}..."))
+        context = self.service.episode_parent(media) if target == "season" else self.service.episode_show(media)
+        if context is None:
+            self.call_from_thread(self.set_status, f"Could not open {target} context for {media.title}")
             return
         try:
-            children = self.service.children(parent, self.config.page_size)
+            children = self.service.children(context, self.config.page_size)
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return
         if not children:
-            self.call_from_thread(self.show_empty_state, parent.title, "No child items", "Go back and choose another item.")
+            self.call_from_thread(self.show_empty_state, context.title, "No child items", "Go back and choose another item.")
             return
 
         def update() -> None:
-            state = BrowseState(parent.title, children, self.selected_library, context_media=parent, source="library")
+            state = BrowseState(context.title, children, self.selected_library, context_media=context, source="library")
             self.browsing_stack.append(state)
             self.show_browse_state(state)
             self.focus_media_browser()
@@ -5215,6 +5225,7 @@ def render_help() -> str:
         "p: play selected media from beginning",
         "r: resume selected media from saved progress",
         "b: open selected episode's season",
+        "B: open selected episode's show",
         "o: play optimized transcode for slow streams",
         "c: pause / resume active mpv playback",
         "z: seek active playback back 10 seconds",
@@ -5401,6 +5412,13 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
             "Playlist: Enter opens contents",
             "Playlist: e renames / D deletes",
         )
+    if item is not None and item.kind == "episode":
+        actions = []
+        if episode_parent_key(item.raw):
+            actions.append("TV Context: b opens season")
+        if episode_show_parent_key(item.raw):
+            actions.append("TV Context: B opens show")
+        return tuple(actions)
     if is_playlist_browse_state(state):
         return (PLAYLIST_REMOVE_HINT,)
     return ()
