@@ -3326,10 +3326,11 @@ async def run_toggle_watched_continue_watching_refresh_check():
 
         app.action_toggle_watched()
 
+        media_from_key_calls = await wait_for_calls(service.media_from_key_calls, pilot, attempts=80)
         selected = await wait_for_selected_title(app, pilot, "Episode 2", attempts=80)
         status = await wait_for_status(app, pilot, "Marked Episode 1 watched", attempts=80)
 
-        assert service.media_from_key_calls == ["episode-1"]
+        assert media_from_key_calls == ["episode-1"]
         assert service.continue_watching_calls[-1] == (0, 40)
         assert selected is not None
         assert selected.title == "Episode 2"
@@ -3363,10 +3364,11 @@ async def run_toggle_watched_continue_watching_refresh_resolves_hub_wrapper_chec
 
         app.action_toggle_watched()
 
+        media_from_key_calls = await wait_for_calls(service.media_from_key_calls, pilot, attempts=80)
         selected = await wait_for_selected_title(app, pilot, "Episode 2", attempts=80)
         status = await wait_for_status(app, pilot, "Marked Episode 1 watched", attempts=80)
 
-        assert service.media_from_key_calls == ["episode-1"]
+        assert media_from_key_calls == ["episode-1"]
         assert resolved_current.mark_watched_calls == 1
         assert service.continue_watching_calls[-1] == (0, 40)
         assert selected is not None
