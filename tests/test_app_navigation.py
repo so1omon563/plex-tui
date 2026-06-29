@@ -938,6 +938,10 @@ def test_toggle_watched_refreshes_continue_watching_next_episode():
     asyncio.run(run_toggle_watched_continue_watching_refresh_check())
 
 
+def test_playback_refresh_selects_next_continue_watching_episode():
+    asyncio.run(run_playback_refresh_selects_next_continue_watching_episode_check())
+
+
 def test_toggle_watched_marks_watched_media_unwatched():
     asyncio.run(run_toggle_watched_marks_watched_check())
 
@@ -3179,6 +3183,30 @@ async def run_toggle_watched_continue_watching_refresh_check():
         assert selected is not None
         assert selected.title == "Episode 2"
         assert status == "Marked Episode 1 watched"
+
+
+async def run_playback_refresh_selects_next_continue_watching_episode_check():
+    current_raw = SimpleNamespace(TYPE="episode", grandparentKey="/library/metadata/show-1")
+    next_raw = SimpleNamespace(TYPE="episode", grandparentKey="/library/metadata/show-1")
+    current = MediaItem("Episode 1", "", "episode", "episode-1", True, current_raw)
+    next_episode = MediaItem("Episode 2", "", "episode", "episode-2", True, next_raw)
+    service = FakePagedService(MediaPage([next_episode], start=0, total=1))
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.browsing_stack = [BrowseState("Continue Watching", [current], source="continue_watching", total=1)]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.refresh_current_browse_state(selected_key=current.key, played_media=current)
+
+        selected = await wait_for_selected_title(app, pilot, "Episode 2", attempts=80)
+
+        assert service.continue_watching_calls[-1] == (0, 40)
+        assert selected is not None
+        assert selected.title == "Episode 2"
 
 
 async def run_toggle_watched_marks_watched_check():

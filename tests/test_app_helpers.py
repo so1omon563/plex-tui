@@ -32,6 +32,7 @@ from plextui.app import (
     UI_GRID_TITLE,
     UI_SELECTED_ACCENT,
     card_artwork_fetch_size,
+    continue_watching_playback_selection,
     context_hint,
     current_detail_actions,
     detect_mpv,
@@ -123,6 +124,28 @@ def test_playback_exit_status_describes_process_state():
     ) == (
         "Playback exited with code 2: Movie. Debug log: /tmp/debug.log"
     )
+
+
+def test_continue_watching_playback_selection_preserves_user_selection():
+    played = MediaItem(
+        "Episode 1",
+        "",
+        "episode",
+        "episode-1",
+        True,
+        SimpleNamespace(grandparentKey="/library/metadata/show-1"),
+    )
+    next_episode = MediaItem(
+        "Episode 2",
+        "",
+        "episode",
+        "episode-2",
+        True,
+        SimpleNamespace(grandparentKey="/library/metadata/show-1"),
+    )
+
+    assert continue_watching_playback_selection(played, [next_episode], "episode-1") == "episode-2"
+    assert continue_watching_playback_selection(played, [next_episode], "other-show") == "other-show"
 
 
 def test_protected_profile_switch_error_hides_upstream_details():
