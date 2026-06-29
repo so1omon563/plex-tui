@@ -211,16 +211,64 @@ class PlexService:
 
     def continue_watching_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
         hubs = getattr(self.server.library, "hubs", None)
+        hub_items: list[Any] = []
         if callable(hubs):
             try:
-                raw_items = [item for hub in hubs(identifier="home.continue") for item in hub.items()]
-                return sliced_media_page(raw_items, start, size)
+                hub_items = [
+                    to_continue_watching_media(item)
+                    for hub in hubs(identifier="home.continue")
+                    for item in hub.items()
+                ]
+            except Exception:
+                hub_items = []
+        continue_watching = getattr(self.server, "continueWatching", None)
+        raw_items: list[Any] = []
+        if callable(continue_watching):
+            try:
+                raw_items = [
+                    to_continue_watching_media(item)
+                    for item in continue_watching()
+                ]
             except Exception:
                 pass
-        continue_watching = getattr(self.server, "continueWatching", None)
-        raw_items = list(continue_watching() if callable(continue_watching) else self.server.library.onDeck())
-        items = [to_media_item(item) for item in raw_items[start:start + size]]
+        raw_items.extend(hub_items)
+        if not raw_items:
+            raw_items = [to_continue_watching_media(item) for item in self.server.library.onDeck()]
+        raw_items = [self.resolve_continue_watching_media(item) for item in raw_items]
+        raw_items = dedupe_media_items(raw_items)
+        items = [to_media_item(item) for item in raw_items[start : start + size]]
         return MediaPage(items=items, start=start, total=len(raw_items))
+
+    def resolve_continue_watching_media(self, raw: Any) -> Any:
+        media = to_continue_watching_media(raw)
+        if callable(getattr(media, "getStreamURL", None)):
+            return media
+        media = self._fetch_continue_watching_media(media)
+        if callable(getattr(media, "getStreamURL", None)):
+            return media
+        return to_continue_watching_media(media)
+
+    def _fetch_continue_watching_media(self, raw: Any) -> Any:
+        for key in (getattr(raw, "ratingKey", None), getattr(raw, "key", None), getattr(raw, "guid", None)):
+            if not key:
+                continue
+            try:
+                resolved = self.media_from_key(str(key))
+            except Exception:
+                resolved = None
+            if resolved is not None:
+                return to_continue_watching_media(resolved)
+        return raw
+
+    def media_from_key(self, key: str) -> Any | None:
+        fetch_item = getattr(self.server, "fetchItem", None)
+        if not callable(fetch_item):
+            return None
+        fetch_key = int(key) if key.isdigit() else key
+        try:
+            return fetch_item(fetch_key)
+        except Exception:
+            return None
 
     def children(self, item: MediaItem, size: int = DEFAULT_PAGE_SIZE) -> list[MediaItem]:
         raw = item.raw
@@ -293,6 +341,44 @@ def hub_items(raw: Any, size: int = DEFAULT_PAGE_SIZE) -> list[Any]:
     return list(raw.items())
 
 
+def to_continue_watching_media(raw: Any) -> Any:
+    current = raw
+    seen: set[int] = {id(current)}
+    while True:
+        if getattr(current, "TYPE", None) is not None or callable(getattr(current, "getStreamURL", None)):
+            return current
+        next_raw = (
+            getattr(current, "metadata", None)
+            or getattr(current, "item", None)
+            or getattr(current, "metadataItem", None)
+            or getattr(current, "child", None)
+            or getattr(current, "mediaItem", None)
+            or getattr(current, "media", None)
+        )
+        if next_raw is None or next_raw is current:
+            return current
+        if isinstance(next_raw, list):
+            if len(next_raw) != 1:
+                return current
+            next_raw = next_raw[0]
+        next_id = id(next_raw)
+        if next_id in seen:
+            return current
+        seen.add(next_id)
+        current = next_raw
+
+
+def dedupe_media_items(raw_items: list[Any]) -> list[Any]:
+    unique: list[Any] = []
+    seen = set[str]()
+    for raw in raw_items:
+        key = media_key(raw)
+        if key not in seen:
+            seen.add(key)
+            unique.append(raw)
+    return unique
+
+
 def to_media_item(raw: Any) -> MediaItem:
     if isinstance(raw, CategoryRef):
         return MediaItem(
@@ -311,8 +397,9 @@ def to_media_item(raw: Any) -> MediaItem:
     bits = [context, str(year) if year else "", edition, duration]
     subtitle = "  ".join(bit for bit in bits if bit)
     key = media_key(raw)
+    title = getattr(raw, "title", "Untitled") or "Untitled"
     return MediaItem(
-        title=getattr(raw, "title", "Untitled"),
+        title=str(title),
         subtitle=subtitle,
         kind=kind,
         key=key,
@@ -335,7 +422,7 @@ def media_key(raw: Any) -> str:
         if value is None or value == "" or value != value:
             continue
         return str(value)
-    return str(getattr(raw, "title", ""))
+    return f"unkeyed:{id(raw)}"
 
 
 def to_discover_media_item(raw: Any) -> MediaItem:

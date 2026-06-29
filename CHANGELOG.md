@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed Continue Watching so wrapped Plex hub items resolve to playable media,
+  missing endpoint entries are retained, client ordering is preserved, and
+  marking an episode watched refreshes to the next episode.
 - Added explicit terminal playback output choices for Kitty graphics, Sixel,
   TCT text video, and DRM console playback while keeping Auto on Kitty/TCT,
   reduced the default terminal-video frame payload, and defaulted terminal

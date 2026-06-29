@@ -954,6 +954,10 @@ def test_toggle_watched_refreshes_continue_watching_next_episode():
     asyncio.run(run_toggle_watched_continue_watching_refresh_check())
 
 
+def test_toggle_watched_refreshes_continue_watching_next_episode_when_raw_item_is_hub_wrapper():
+    asyncio.run(run_toggle_watched_continue_watching_refresh_resolves_hub_wrapper_check())
+
+
 def test_playback_refresh_selects_next_continue_watching_episode():
     asyncio.run(run_playback_refresh_selects_next_continue_watching_episode_check())
 
@@ -1592,6 +1596,7 @@ async def run_empty_browse_state_check():
 class FakePagedService:
     def __init__(self, page: MediaPage) -> None:
         self.page = page
+        self.media_by_key: dict[str, object] = {}
         self.calls = []
         self.entry_calls = []
         self.search_calls = []
@@ -1599,6 +1604,7 @@ class FakePagedService:
         self.discover_calls = []
         self.video_on_demand_calls = []
         self.children_calls = []
+        self.media_from_key_calls = []
 
     def library_page(self, library: LibraryItem, start: int, size: int) -> MediaPage:
         self.calls.append((library, start, size))
@@ -1615,6 +1621,10 @@ class FakePagedService:
     def continue_watching_page(self, start: int, size: int) -> MediaPage:
         self.continue_watching_calls.append((start, size))
         return self.page
+
+    def media_from_key(self, key: str) -> object | None:
+        self.media_from_key_calls.append(key)
+        return self.media_by_key.get(key)
 
     def discover_page(self, query: str, start: int, size: int, media_type: str = "movies_shows") -> MediaPage:
         self.discover_calls.append((query, start, size, media_type))
@@ -3287,6 +3297,7 @@ async def run_toggle_watched_continue_watching_refresh_check():
     current = MediaItem("Episode 1", "", "episode", "episode-1", True, raw)
     next_episode = MediaItem("Episode 2", "", "episode", "episode-2", True, next_raw)
     service = FakePagedService(MediaPage([next_episode], start=0, total=1))
+    service.media_by_key = {"episode-1": raw}
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
@@ -3301,7 +3312,45 @@ async def run_toggle_watched_continue_watching_refresh_check():
         selected = await wait_for_selected_title(app, pilot, "Episode 2", attempts=80)
         status = await wait_for_status(app, pilot, "Marked Episode 1 watched", attempts=80)
 
-        assert raw.mark_watched_calls == 1
+        assert service.media_from_key_calls == ["episode-1"]
+        assert service.continue_watching_calls[-1] == (0, 40)
+        assert selected is not None
+        assert selected.title == "Episode 2"
+        assert status == "Marked Episode 1 watched"
+
+
+async def run_toggle_watched_continue_watching_refresh_resolves_hub_wrapper_check():
+    class WrappedEpisodeRaw:
+        TYPE = "episode"
+        title = "Episode 1"
+        ratingKey = "episode-1"
+
+    class ResolvedEpisodeRaw(WatchStateRaw):
+        TYPE = "episode"
+
+    current_raw = WrappedEpisodeRaw()
+    current = MediaItem("Episode 1", "", "episode", "episode-1", True, current_raw)
+    next_raw = WatchStateRaw(view_offset=1)
+    next_episode = MediaItem("Episode 2", "", "episode", "episode-2", True, next_raw)
+    resolved_current = ResolvedEpisodeRaw(view_offset=65_000)
+    service = FakePagedService(MediaPage([next_episode], start=0, total=1))
+    service.media_by_key = {"episode-1": resolved_current}
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.browsing_stack = [BrowseState("Continue Watching", [current], source="continue_watching", total=1)]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        app.action_toggle_watched()
+
+        selected = await wait_for_selected_title(app, pilot, "Episode 2", attempts=80)
+        status = await wait_for_status(app, pilot, "Marked Episode 1 watched", attempts=80)
+
+        assert service.media_from_key_calls == ["episode-1"]
+        assert resolved_current.mark_watched_calls == 1
         assert service.continue_watching_calls[-1] == (0, 40)
         assert selected is not None
         assert selected.title == "Episode 2"

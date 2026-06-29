@@ -3475,10 +3475,7 @@ class PlexTuiApp(App[None]):
         if not media.playable:
             self.set_status("Selected item cannot be marked watched")
             return
-        target_watched, method = watched_state_action(media.raw)
-        if method is None:
-            self.set_status("Selected item does not support watched state changes")
-            return
+        target_watched, _ = watched_state_action(media.raw)
         target = "watched" if target_watched else "unwatched"
         self.set_status(f"Marking {media.title} {target}...")
         return self.toggle_watched_state(media)
@@ -3586,6 +3583,8 @@ class PlexTuiApp(App[None]):
 
     @work(thread=True, exclusive=True)
     def toggle_watched_state(self, media: MediaItem) -> None:
+        if self.current_browse_state_source() == "continue_watching":
+            media = self.resolve_continue_watching_watched_media(media)
         target_watched, method = watched_state_action(media.raw)
         if not callable(method):
             self.call_from_thread(self.set_status, "Selected item does not support watched state changes")
@@ -3604,6 +3603,18 @@ class PlexTuiApp(App[None]):
                 pass
         updated_media = replace(media, raw=updated_raw)
         self.call_from_thread(self.apply_watched_state, updated_media, target_watched)
+
+    def resolve_continue_watching_watched_media(self, media: MediaItem) -> MediaItem:
+        resolve_media = getattr(self.service, "media_from_key", None)
+        if not callable(resolve_media):
+            return media
+        try:
+            resolved = resolve_media(media.key)
+        except Exception:
+            return media
+        if resolved is None:
+            return media
+        return replace(media, raw=resolved)
 
     def apply_watched_state(self, media: MediaItem, watched: bool) -> None:
         self.detail_cache.pop(media.key, None)

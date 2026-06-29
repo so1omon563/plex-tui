@@ -143,6 +143,11 @@ class TvEpisodeRawItem(DetailedRawItem):
     index = 2
 
 
+class NoneTitleRawItem:
+    TYPE = "movie"
+    title = None
+
+
 class TvSeasonRawItem(DetailedRawItem):
     TYPE = "season"
     title = "Season 1"
@@ -267,6 +272,20 @@ class RawServer:
         playlist = RawPlaylist()
         playlist.title = title
         return playlist
+
+
+class ContinueWatchHubWrapper:
+    title = "Wrapped Episode"
+    ratingKey = "hub-wrapper-1"
+
+    def __init__(self, metadata: RawItem) -> None:
+        self.metadata = metadata
+
+
+class BareContinueWatchRawItem:
+    TYPE = "movie"
+    title = "Wrapped Movie"
+    ratingKey = "10"
 
 
 def test_library_page_fetches_single_plex_page():
@@ -402,13 +421,145 @@ def test_continue_watching_page_fetches_home_continue_hub():
 
     page = service.continue_watching_page(start=1, size=1)
 
-    assert service.server.calls == []
+    assert service.server.calls == [("continueWatching",)]
     assert raw_library.calls == [("hubs", {"identifier": "home.continue"})]
     assert len(page.items) == 1
     assert page.items[0].title == "Second Movie"
     assert page.start == 1
     assert page.total == 2
     assert not page.has_more
+
+
+def test_continue_watching_page_uses_metadata_payload_for_playable_items():
+    raw_episode = TvEpisodeRawItem()
+    hub_item = ContinueWatchHubWrapper(metadata=raw_episode)
+    class WrappedContinueLibrary:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def hubs(self, **kwargs):
+            self.calls.append(("hubs", kwargs))
+            return [RawHub([hub_item])]
+
+        def onDeck(self):
+            self.calls.append(("onDeck",))
+            return []
+
+    class WrappedContinueServer:
+        def __init__(self) -> None:
+            self.library = WrappedContinueLibrary()
+
+    service = object.__new__(PlexService)
+    service.server = WrappedContinueServer()
+
+    page = service.continue_watching_page(start=0, size=1)
+
+    assert [item.kind for item in page.items] == ["episode"]
+    assert page.items[0].playable
+    assert page.items[0].raw is raw_episode
+    assert service.server.library.calls == [("hubs", {"identifier": "home.continue"})]
+
+
+def test_continue_watching_page_keeps_playable_items_with_media_children():
+    class MediaChild:
+        duration = 654321
+
+    class MovieWithMediaChildren(RawItem):
+        media = [MediaChild()]
+
+    raw_movie = MovieWithMediaChildren()
+    raw_library = type(
+        "Library",
+        (),
+        {
+            "calls": [],
+            "hubs": lambda self, **kwargs: self.calls.append(("hubs", kwargs))
+            or [RawHub([raw_movie])],
+            "onDeck": lambda self: self.calls.append(("onDeck",))
+            or [],
+        },
+    )()
+    service = object.__new__(PlexService)
+    service.server = type("Server", (), {"library": raw_library})()
+
+    page = service.continue_watching_page(start=0, size=1)
+
+    assert page.items[0].title == "Movie"
+    assert page.items[0].kind == "movie"
+    assert page.items[0].playable
+    assert page.items[0].raw is raw_movie
+
+
+def test_continue_watching_page_includes_items_from_all_sources():
+    endpoint_second = SecondRawItem()
+    endpoint_first = RawItem()
+    raw_library = type(
+        "Library",
+        (),
+        {
+            "calls": [],
+            "hubs": lambda self, **kwargs: self.calls.append(("hubs", kwargs))
+            or [RawHub([endpoint_first])],
+            "onDeck": lambda self: self.calls.append(("onDeck",))
+            or [],
+        },
+    )()
+    service = object.__new__(PlexService)
+    service.server = type(
+        "Server",
+        (),
+        {
+            "library": raw_library,
+            "calls": [],
+            "continueWatching": lambda self: self.calls.append(("continueWatching",))
+            or [endpoint_second, endpoint_first],
+        },
+    )()
+
+    page = service.continue_watching_page(start=0, size=10)
+
+    assert raw_library.calls == [("hubs", {"identifier": "home.continue"})]
+    assert service.server.calls == [("continueWatching",)]
+    assert [item.title for item in page.items] == ["Second Movie", "Movie"]
+    assert page.total == 2
+
+
+def test_continue_watching_page_fetches_non_playable_items_by_key():
+    raw_library = type(
+        "Library",
+        (),
+        {
+            "calls": [],
+            "hubs": lambda self, **kwargs: self.calls.append(("hubs", kwargs))
+            or [RawHub([BareContinueWatchRawItem()])],
+            "onDeck": lambda self: self.calls.append(("onDeck",))
+            or [],
+        },
+    )()
+
+    class ContinueServer:
+        def __init__(self) -> None:
+            self.library = raw_library
+            self.calls = []
+            self.fetched = []
+
+        def continueWatching(self):
+            self.calls.append(("continueWatching",))
+            return [BareContinueWatchRawItem()]
+
+        def fetchItem(self, key: str):
+            self.fetched.append(key)
+            resolved = TvEpisodeRawItem()
+            resolved.ratingKey = key
+            return resolved
+
+    service = object.__new__(PlexService)
+    service.server = ContinueServer()
+
+    page = service.continue_watching_page(start=0, size=10)
+
+    assert page.items[0].playable
+    assert service.server.fetched == [10, 10]
 
 
 def test_continue_watching_page_falls_back_to_continue_watching_endpoint():
@@ -428,6 +579,26 @@ def test_continue_watching_page_falls_back_to_continue_watching_endpoint():
     assert raw_library.calls == [("hubs", {"identifier": "home.continue"})]
     assert service.server.calls == [("continueWatching",)]
     assert page.items[0].title == "Second Movie"
+
+
+def test_media_from_key_uses_server_fetch_item():
+    raw = RawItem()
+    class FetchServer(RawServer):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fetched = []
+
+        def fetchItem(self, key: str):
+            self.fetched.append(key)
+            return raw
+
+    service = object.__new__(PlexService)
+    service.server = FetchServer()
+
+    result = service.media_from_key("1")
+
+    assert result is raw
+    assert service.server.fetched == [1]
 
 
 def test_continue_watching_page_falls_back_to_on_deck():
@@ -586,6 +757,12 @@ def test_discover_media_key_falls_back_when_rating_key_is_nan():
 
     assert media_key(DiscoverResult()) == "/library/metadata/discover-1"
     assert to_media_item(DiscoverResult()).key == "/library/metadata/discover-1"
+
+
+def test_to_media_item_falls_back_when_title_is_missing():
+    item = to_media_item(NoneTitleRawItem())
+
+    assert item.title == "Untitled"
 
 
 def test_availability_urls_include_provider_labels():
