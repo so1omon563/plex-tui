@@ -24,6 +24,8 @@ and points here when you need more detail.
   glyph card language for non-poster objects.
 - [`continue-watching-audit.md`](continue-watching-audit.md): sanitized
   Continue Watching ordering and pagination audit.
+- [`parent-navigation-audit.md`](parent-navigation-audit.md): fake-backed
+  parent navigation audit for Continue Watching TV episodes.
 - [`grid-performance-audit.md`](grid-performance-audit.md): sanitized grid
   rendering and prefetch default audit.
 - [`assets/`](assets/): README and showcase screenshots.

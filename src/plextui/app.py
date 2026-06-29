@@ -83,6 +83,7 @@ from .player import (
 from .plex_service import (
     PlexService,
     availability_urls,
+    episode_parent_key,
     is_online_metadata,
     kind_label,
     media_details,
@@ -605,6 +606,7 @@ class PlexTuiApp(App[None]):
         Binding("u", "toggle_bulk_selection", "Select", show=False),
         Binding("e", "rename_playlist", "Rename playlist", show=False),
         Binding("D", "delete_playlist", "Delete playlist", show=False),
+        Binding("b", "open_parent_context", "TV context", show=False),
         Binding("r", "resume_selected", "Resume"),
         Binding("w", "toggle_watched", "Watched", show=False),
         Binding("backspace", "remove_continue_watching", "Remove continue", show=False),
@@ -3460,6 +3462,40 @@ class PlexTuiApp(App[None]):
     def action_resume_selected(self) -> None:
         self.play_selected_media(resume=True)
 
+    @work(thread=True)
+    def action_open_parent_context(self) -> None:
+        if self.service is None:
+            return
+        media = self.selected_media()
+        if media is None or media.kind != "episode":
+            self.call_from_thread(self.set_status, "Select a TV episode first")
+            return
+        if not episode_parent_key(media.raw):
+            self.call_from_thread(self.set_status, f"No TV context reported for {media.title}")
+            return
+        self.post_message(StatusChanged(f"Opening TV context for {media.title}..."))
+        parent = self.service.episode_parent(media)
+        if parent is None:
+            self.call_from_thread(self.set_status, f"Could not open TV context for {media.title}")
+            return
+        try:
+            children = self.service.children(parent, self.config.page_size)
+        except Exception as exc:
+            self.call_from_thread(self.show_error, str(exc))
+            return
+        if not children:
+            self.call_from_thread(self.show_empty_state, parent.title, "No child items", "Go back and choose another item.")
+            return
+
+        def update() -> None:
+            state = BrowseState(parent.title, children, self.selected_library, context_media=parent, source="library")
+            self.browsing_stack.append(state)
+            self.show_browse_state(state)
+            self.focus_media_browser()
+            self.set_status(render_browse_status(state))
+
+        self.call_from_thread(update)
+
     def action_play_optimized(self) -> None:
         media = self.selected_media()
         if media is None:
@@ -5178,6 +5214,7 @@ def render_help() -> str:
         "Playback",
         "p: play selected media from beginning",
         "r: resume selected media from saved progress",
+        "b: open selected episode's season",
         "o: play optimized transcode for slow streams",
         "c: pause / resume active mpv playback",
         "z: seek active playback back 10 seconds",

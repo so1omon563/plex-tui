@@ -962,6 +962,10 @@ def test_playback_refresh_selects_next_continue_watching_episode():
     asyncio.run(run_playback_refresh_selects_next_continue_watching_episode_check())
 
 
+def test_open_parent_context_from_continue_watching_episode():
+    asyncio.run(run_open_parent_context_from_continue_watching_episode_check())
+
+
 def test_toggle_watched_marks_watched_media_unwatched():
     asyncio.run(run_toggle_watched_marks_watched_check())
 
@@ -1605,6 +1609,7 @@ class FakePagedService:
         self.video_on_demand_calls = []
         self.children_calls = []
         self.media_from_key_calls = []
+        self.children_by_key: dict[str, list[MediaItem]] = {}
 
     def library_page(self, library: LibraryItem, start: int, size: int) -> MediaPage:
         self.calls.append((library, start, size))
@@ -1636,7 +1641,11 @@ class FakePagedService:
 
     def children(self, item: MediaItem, size: int = 40) -> list[MediaItem]:
         self.children_calls.append((item.key, size))
-        return []
+        return self.children_by_key.get(item.key, [])
+
+    def episode_parent(self, item: MediaItem) -> MediaItem | None:
+        raw = self.media_from_key(getattr(item.raw, "parentKey", ""))
+        return raw if isinstance(raw, MediaItem) else None
 
 
 class StartupService(FakePagedService):
@@ -3381,6 +3390,32 @@ async def run_playback_refresh_selects_next_continue_watching_episode_check():
         assert service.continue_watching_calls[-1] == (0, 40)
         assert selected is not None
         assert selected.title == "Episode 2"
+
+
+async def run_open_parent_context_from_continue_watching_episode_check():
+    episode_raw = SimpleNamespace(TYPE="episode", parentKey="/library/metadata/season-1")
+    episode = MediaItem("Episode 2", "", "episode", "episode-2", True, episode_raw)
+    season = MediaItem("Season 1", "10 episodes", "season", "season-1", False, SimpleNamespace(TYPE="season"))
+    previous = MediaItem("Episode 1", "", "episode", "episode-1", True, SimpleNamespace(TYPE="episode"))
+    service = FakePagedService(MediaPage([episode], start=0, total=1))
+    service.media_by_key = {"/library/metadata/season-1": season}
+    service.children_by_key = {"season-1": [previous, episode]}
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.browsing_stack = [BrowseState("Continue Watching", [episode], source="continue_watching", total=1)]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        await pilot.press("b")
+        selected = await wait_for_selected_title(app, pilot, "Episode 1", attempts=80)
+
+        assert service.media_from_key_calls == ["/library/metadata/season-1"]
+        assert service.children_calls == [("season-1", 40)]
+        assert app.browsing_stack[-1].title == "Season 1"
+        assert selected is not None
 
 
 async def run_toggle_watched_marks_watched_check():

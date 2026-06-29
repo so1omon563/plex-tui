@@ -169,6 +169,7 @@ selection, then use the same add/remove actions on the selected set.
 | `enter` | Open selected item |
 | `p` | Play selected item from the beginning |
 | `r` | Resume selected item from the saved Plex position |
+| `b` | Open the selected TV episode's season |
 | `o` | Play selected item as an optimized/transcoded stream |
 | `c` | Pause or resume active playback |
 | `z` / `.` | Seek active playback back / forward |

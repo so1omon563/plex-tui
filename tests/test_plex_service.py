@@ -7,6 +7,7 @@ from plextui.plex_service import (
     artwork_path,
     category_items,
     episode_context_label,
+    episode_parent_key,
     kind_label,
     media_key,
     media_details,
@@ -808,6 +809,40 @@ def test_episode_items_include_show_and_season_context():
     assert ("Show", "Berserk") in details.metadata
     assert ("Season", "Season 1") in details.metadata
     assert ("Episode", "S01E02") in details.metadata
+
+
+def test_episode_parent_uses_parent_key_to_fetch_season():
+    class Episode(TvEpisodeRawItem):
+        parentKey = "/library/metadata/season-1"
+
+    class Season(TvSeasonRawItem):
+        title = "Season 1"
+        ratingKey = "season-1"
+
+    class Server:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def fetchItem(self, key):
+            self.calls.append(key)
+            return Season()
+
+    service = object.__new__(PlexService)
+    service.server = Server()
+
+    parent = service.episode_parent(to_media_item(Episode()))
+
+    assert episode_parent_key(Episode()) == "/library/metadata/season-1"
+    assert service.server.calls == ["/library/metadata/season-1"]
+    assert parent is not None
+    assert (parent.title, parent.kind) == ("Season 1", "season")
+
+
+def test_episode_parent_falls_back_to_parent_rating_key():
+    class Episode(TvEpisodeRawItem):
+        parentRatingKey = "season-1"
+
+    assert episode_parent_key(Episode()) == "season-1"
 
 
 def test_tv_episode_artwork_prefers_episode_still():
