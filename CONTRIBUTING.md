@@ -39,6 +39,9 @@ or public documentation examples.
   should create a version tag: `#patch`, `#minor`, or `#major`.
 - Add `#release` only when the merge should publish a GitHub Release and package
   channels.
+- When converting an issue-linked PR into a release PR, keep the issue key in
+  the title, for example `SO1-57 Prepare release 0.14.2 #patch #release`, so
+  Linear keeps the PR attached.
 
 Docs-only maintenance may omit a bump marker when it should not create a new
 version tag. Say that plainly in the PR body; the workflow only reads semver

@@ -7,6 +7,8 @@ from plextui.plex_service import (
     artwork_path,
     category_items,
     episode_context_label,
+    episode_parent_key,
+    episode_show_parent_key,
     kind_label,
     media_key,
     media_details,
@@ -810,6 +812,75 @@ def test_episode_items_include_show_and_season_context():
     assert ("Episode", "S01E02") in details.metadata
 
 
+def test_episode_parent_uses_parent_key_to_fetch_season():
+    class Episode(TvEpisodeRawItem):
+        parentKey = "/library/metadata/season-1"
+
+    class Season(TvSeasonRawItem):
+        title = "Season 1"
+        ratingKey = "season-1"
+
+    class Server:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def fetchItem(self, key):
+            self.calls.append(key)
+            return Season()
+
+    service = object.__new__(PlexService)
+    service.server = Server()
+
+    parent = service.episode_parent(to_media_item(Episode()))
+
+    assert episode_parent_key(Episode()) == "/library/metadata/season-1"
+    assert service.server.calls == ["/library/metadata/season-1"]
+    assert parent is not None
+    assert (parent.title, parent.kind) == ("Season 1", "season")
+
+
+def test_episode_parent_falls_back_to_parent_rating_key():
+    class Episode(TvEpisodeRawItem):
+        parentRatingKey = "season-1"
+
+    assert episode_parent_key(Episode()) == "season-1"
+
+
+def test_episode_show_uses_grandparent_key_to_fetch_show():
+    class Episode(TvEpisodeRawItem):
+        grandparentKey = "/library/metadata/show-1"
+
+    class Show(RawItem):
+        TYPE = "show"
+        title = "Berserk"
+        ratingKey = "show-1"
+
+    class Server:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def fetchItem(self, key):
+            self.calls.append(key)
+            return Show()
+
+    service = object.__new__(PlexService)
+    service.server = Server()
+
+    show = service.episode_show(to_media_item(Episode()))
+
+    assert episode_show_parent_key(Episode()) == "/library/metadata/show-1"
+    assert service.server.calls == ["/library/metadata/show-1"]
+    assert show is not None
+    assert (show.title, show.kind) == ("Berserk", "show")
+
+
+def test_episode_show_falls_back_to_grandparent_rating_key():
+    class Episode(TvEpisodeRawItem):
+        grandparentRatingKey = "show-1"
+
+    assert episode_show_parent_key(Episode()) == "show-1"
+
+
 def test_tv_episode_artwork_prefers_episode_still():
     assert artwork_path(TvEpisodeRawItem()) == "/library/metadata/episode/thumb"
     assert to_media_item(TvEpisodeRawItem()).artwork_path == "/library/metadata/episode/thumb"
@@ -860,6 +931,11 @@ def test_progress_helpers_report_watched_resume_and_unwatched():
         def isWatched(self):
             return False
 
+    class ReplayedWatched(RawItem):
+        viewCount = 1
+        duration = 600000
+        viewOffset = 30000
+
     assert watched_state(Watched()) == "watched"
     assert progress_bar(Watched()) == "[########] 100%"
     assert row_progress_marker(Watched()) == "[########] 100%"
@@ -869,6 +945,9 @@ def test_progress_helpers_report_watched_resume_and_unwatched():
     assert row_progress_marker(Partial()) == "[#-------] 11%"
     assert watched_state(Unwatched()) == "unwatched"
     assert row_progress_marker(Unwatched()) == ""
+    assert watched_state(ReplayedWatched()) == "in progress"
+    assert progress_bar(ReplayedWatched()) == "[#-------] 5%"
+    assert row_progress_marker(ReplayedWatched()) == "[#-------] 5%"
 
 
 def test_online_metadata_row_progress_does_not_trigger_reload():

@@ -209,6 +209,10 @@ When a change is judged release-worthy, do not only add `#release`: run the
 scripted release prep in the same branch and keep the release marker in the PR
 title. A release decision means both staged release files and a publishing
 marker are required unless the release is explicitly canceled.
+When converting an issue-linked feature or fix PR into a release PR, preserve
+the issue key in the PR title, for example
+`SO1-57 Prepare release 0.14.2 #patch #release`, so Linear keeps the PR linked
+to the ticket while the release workflow still sees the title markers.
 
 When preparing or estimating a release version, fetch remote tags first with
 `git fetch --tags origin` and base the decision on the latest origin tag, not

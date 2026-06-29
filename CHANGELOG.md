@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.14.2 - 2026-06-29
+
+- Added `b` / `B` shortcuts to open the selected TV episode's season or show
+  so Continue Watching episodes can jump back to neighboring episode context.
+- Fixed replayed watched items so new Plex progress offsets show partial
+  progress instead of staying at 100%.
 - Fixed Continue Watching so wrapped Plex hub items resolve to playable media,
   missing endpoint entries are retained, client ordering is preserved, and
   marking an episode watched refreshes to the next episode.
