@@ -8,6 +8,8 @@
   playback to a low Plex transcode for smoother playback.
 - Fixed Start Over from the resume picker so it launches playback instead of
   reopening the picker for resumable media.
+- Invalidated grid artwork after terminal playback exits so the media browser
+  retransmits poster art instead of returning to a mostly blank grid.
 - Auto-select the next TV episode when Continue Watching refreshes after
   playback completion.
 - Added compact sidebar row markers so Continue Watching, Playlists, Discover,

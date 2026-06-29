@@ -938,6 +938,10 @@ def test_terminal_playback_defaults_to_low_transcode():
     asyncio.run(run_terminal_playback_low_transcode_check())
 
 
+def test_terminal_playback_exit_invalidates_grid_artwork():
+    asyncio.run(run_terminal_playback_exit_invalidates_grid_artwork_check())
+
+
 def test_toggle_watched_marks_unwatched_media_watched():
     asyncio.run(run_toggle_watched_marks_unwatched_check())
 
@@ -3155,6 +3159,32 @@ async def run_terminal_playback_low_transcode_check():
         playback_config = launch.call_args.args[4]
         assert playback_config.playback_mode == "transcode"
         assert playback_config.transcode_quality == "480p_2"
+
+
+async def run_terminal_playback_exit_invalidates_grid_artwork_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        item = MediaItem("Movie", "", "movie", "1", True, Raw(), artwork_path="/thumb")
+        app.config = AppConfig("http://plex", "token", "client-id", playback_display="terminal", media_view="grid")
+        app.browsing_stack = [BrowseState("Movies", [item], source="continue_watching", total=1)]
+        app.rendered_grid_artwork_cache = {"cached": object()}
+        app.show_browse_state(app.browsing_stack[-1])
+        grid = app.query_one("#media-grid", MediaGrid)
+        grid.artwork = {item.key: object()}
+        await pilot.pause(0.2)
+
+        player = SimpleNamespace(title="Movie", process=SimpleNamespace(poll=lambda: 0))
+        with (
+            patch.object(app, "play_terminal_media", return_value=player),
+            patch.object(app, "refresh_current_browse_state"),
+            patch.object(app, "show_media_details"),
+        ):
+            app.action_play_selected()
+        await pilot.pause(0.2)
+
+        assert app.rendered_grid_artwork_cache == {}
+        assert grid.artwork == {}
 
 
 class WatchStateRaw(Raw):

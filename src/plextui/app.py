@@ -2288,6 +2288,15 @@ class PlexTuiApp(App[None]):
         if visible_applied:
             grid.refresh_grid()
 
+    def invalidate_grid_artwork(self) -> None:
+        self.rendered_grid_artwork_cache = {}
+        try:
+            grid = self.query_one("#media-grid", MediaGrid)
+        except NoMatches:
+            return
+        grid.artwork = {}
+        grid.refresh_grid()
+
     def action_show_settings(self, selected_action: str | None = None) -> None:
         self.help_visible = False
         self.picker_visible = False
@@ -3732,6 +3741,7 @@ class PlexTuiApp(App[None]):
             self.player = None
             self.active_playback_media = None
             self.clear_playback_footer()
+            self.invalidate_grid_artwork()
             self.refresh_current_browse_state(selected_key=media.key, played_media=media)
             self.show_media_details(media)
             self.set_status(status)
