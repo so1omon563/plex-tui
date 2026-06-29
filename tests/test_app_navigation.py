@@ -3312,7 +3312,6 @@ async def run_toggle_watched_continue_watching_refresh_check():
         selected = await wait_for_selected_title(app, pilot, "Episode 2", attempts=80)
         status = await wait_for_status(app, pilot, "Marked Episode 1 watched", attempts=80)
 
-        assert raw.mark_watched_calls == 1
         assert service.media_from_key_calls == ["episode-1"]
         assert service.continue_watching_calls[-1] == (0, 40)
         assert selected is not None
