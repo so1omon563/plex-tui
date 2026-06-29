@@ -502,12 +502,19 @@ def test_render_settings_includes_stream_preferences():
     assert "Details Artwork:  List only" in rendered
     assert "Media View:          List" in rendered
     assert "Theme:       textual-light" in rendered
-    assert "mpv Window Size:   Default (80%)" in rendered
-    assert "Playback Mode:     Auto / direct" in rendered
+    assert "mpv Window Size:" in rendered
+    assert "Default (80%)" in rendered
+    assert "Playback Mode:" in rendered
+    assert "Auto / direct" in rendered
     assert "default" in rendered
-    assert "Playback Display:  External mpv window" in rendered
-    assert "Terminal Video:    Smooth (15 fps /" in rendered
-    assert "Transcode Quality: Original" in rendered
+    assert "Playback Display:" in rendered
+    assert "External mpv" in rendered
+    assert "Terminal Video Output:" in rendered
+    assert "Auto (Kitty/TCT)" in rendered
+    assert "Terminal Video Profile:" in rendered
+    assert "Smooth (12 fps" in rendered
+    assert "Transcode Quality:" in rendered
+    assert "Original" in rendered
     assert "Page Size:           250" in rendered
     assert "Auto-load Threshold: 25" in rendered
     assert "Grid Prefetch Pages: 4" in rendered
@@ -543,7 +550,8 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "› Playback Mode: Auto / direct default  (cycle)" in labels
     assert "› Playback Display: External mpv window  (cycle)" in labels
     assert "› Start Over Prompt: Shown  (toggle)" in labels
-    assert "› Terminal Video: Smooth (15 fps / 640px)  (cycle)" in labels
+    assert "› Terminal Video Output: Auto (Kitty/TCT)  (cycle)" in labels
+    assert "› Terminal Video Profile: Smooth (12 fps / 480px)  (cycle)" in labels
     assert "› Transcode Quality: Original  (cycle)" in labels
     assert "› mpv Window Size: 1280x720  (cycle)" in labels
     assert "› Set custom mpv window size  (edit)" in labels
@@ -1006,7 +1014,8 @@ def test_effective_stream_preferences_report_found_missing_and_none():
     assert effective_stream_preference_rows(Raw(), found) == [
         ("Playback Mode", "Auto / direct default"),
         ("Playback Display", "External mpv window"),
-        ("Terminal Video", "Smooth (15 fps / 640px)"),
+        ("Terminal Video Output", "Auto (Kitty/TCT)"),
+        ("Terminal Video Profile", "Smooth (12 fps / 480px)"),
         ("Transcode Quality", "Original"),
         ("Audio", "Japanese"),
         ("Subtitles", "English"),
@@ -1014,7 +1023,8 @@ def test_effective_stream_preferences_report_found_missing_and_none():
     assert effective_stream_preference_rows(Raw(), missing) == [
         ("Playback Mode", "Auto / direct default"),
         ("Playback Display", "External mpv window"),
-        ("Terminal Video", "Smooth (15 fps / 640px)"),
+        ("Terminal Video Output", "Auto (Kitty/TCT)"),
+        ("Terminal Video Profile", "Smooth (12 fps / 480px)"),
         ("Transcode Quality", "Original"),
         ("Audio", "spa not found, Plex/default"),
         ("Subtitles", "fre not found, Plex/default"),
@@ -1022,7 +1032,8 @@ def test_effective_stream_preferences_report_found_missing_and_none():
     assert effective_stream_preference_rows(Raw(), none) == [
         ("Playback Mode", "Auto / direct default"),
         ("Playback Display", "External mpv window"),
-        ("Terminal Video", "Smooth (15 fps / 640px)"),
+        ("Terminal Video Output", "Auto (Kitty/TCT)"),
+        ("Terminal Video Profile", "Smooth (12 fps / 480px)"),
         ("Transcode Quality", "Original"),
         ("Audio", "Plex/default"),
         ("Subtitles", "none"),
@@ -1044,7 +1055,7 @@ def test_render_details_includes_effective_playback_rows():
     rendered = render_details(details, AppConfig("http://plex", "token", "client", subtitle_mode="none"), object())
 
     assert "Effective Playback" in rendered
-    assert "Subtitles:         none" in rendered
+    assert "Subtitles:            none" in rendered
 
 
 def test_picker_details_explain_global_save():
