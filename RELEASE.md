@@ -29,6 +29,10 @@ Prepare a release PR:
   `#patch`, `#minor`, or `#major`.
 - Add `#release`, `#publish`, or `#ship` when the merge should create the
   GitHub Release and publish to PyPI.
+- If the release PR started as a Linear-linked feature or fix PR, keep the
+  issue key in the title, for example
+  `SO1-57 Prepare release 0.14.2 #patch #release`, so Linear keeps the PR
+  attached while release automation still reads the markers.
 
 The semver bumper creates tags from merge metadata, but it does not edit project
 files. `make stage-release` fetches tags, chooses the next version from the
