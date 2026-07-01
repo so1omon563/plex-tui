@@ -3489,16 +3489,32 @@ async def run_toggle_watched_continue_watching_refresh_resolves_hub_wrapper_chec
 
         app.action_toggle_watched()
 
-        media_from_key_calls = await wait_for_calls(service.media_from_key_calls, pilot, attempts=80)
-        selected = await wait_for_selected_title(app, pilot, "Episode 2", attempts=80)
-        status = await wait_for_status(app, pilot, "Marked Episode 1 watched", attempts=80)
-
-        assert media_from_key_calls == ["episode-1"]
-        assert resolved_current.mark_watched_calls == 1
-        assert service.continue_watching_calls[-1] == (0, 40)
-        assert selected is not None
-        assert selected.title == "Episode 2"
-        assert status == "Marked Episode 1 watched"
+        status = str(app.query_one("#status").content)
+        selected = app.selected_media()
+        titles = [item.title for item in app.browsing_stack[-1].items]
+        for _ in range(180):
+            status = str(app.query_one("#status").content)
+            selected = app.selected_media()
+            titles = [item.title for item in app.browsing_stack[-1].items]
+            if (
+                service.media_from_key_calls == ["episode-1"]
+                and resolved_current.mark_watched_calls == 1
+                and service.continue_watching_calls[-1:] == [(0, 40)]
+                and titles == ["Episode 2"]
+                and selected is not None
+                and selected.title == "Episode 2"
+                and status == "Marked Episode 1 watched"
+            ):
+                break
+            await pilot.pause(0.1)
+        else:
+            raise AssertionError(
+                "Timed out waiting for Continue Watching hub-wrapper refresh: "
+                f"media_from_key_calls={service.media_from_key_calls!r}, "
+                f"mark_watched_calls={resolved_current.mark_watched_calls!r}, "
+                f"continue_watching_calls={service.continue_watching_calls!r}, "
+                f"titles={titles!r}, selected={selected!r}, status={status!r}"
+            )
 
 
 async def run_playback_refresh_selects_next_continue_watching_episode_check():

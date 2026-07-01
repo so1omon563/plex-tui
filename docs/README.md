@@ -28,6 +28,8 @@ and points here when you need more detail.
   parent navigation audit for Continue Watching TV episodes.
 - [`live-tv-audit.md`](live-tv-audit.md): sanitized Live TV and DVR API
   reachability audit.
+- [`hosted-live-tv-guide-feasibility.md`](hosted-live-tv-guide-feasibility.md):
+  sanitized feasibility notes for Plex-hosted guide data.
 - [`grid-performance-audit.md`](grid-performance-audit.md): sanitized grid
   rendering and prefetch default audit.
 - [`assets/`](assets/): README and showcase screenshots.
