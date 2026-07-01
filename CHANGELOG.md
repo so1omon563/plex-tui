@@ -5,6 +5,8 @@
 - Added the internal Plex-hosted Live TV channel service model for listing
   account-region EPG channels, signing HLS part URLs, and rejecting DRM-marked
   channels before future playback UI work.
+- Added an On Plex Live sidebar row for browsing hosted Live TV channels and
+  launching non-DRM channel streams through the existing mpv playback flow.
 
 ## 0.14.2 - 2026-06-29
 

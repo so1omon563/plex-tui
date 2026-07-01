@@ -128,7 +128,7 @@ class BrowseState:
     def has_more(self) -> bool:
         if self.total is None or self.next_start >= self.total:
             return False
-        if self.source in {"continue_watching", "vod"}:
+        if self.source in {"continue_watching", "vod", "livetv"}:
             return True
         if self.source == "discover":
             return bool(self.search_query)
@@ -165,6 +165,12 @@ class DiscoverRow(ListItem):
 class OnPlexRow(ListItem):
     def __init__(self) -> None:
         self.label_text = "▦ On Plex"
+        super().__init__(Label(self.label_text))
+
+
+class OnPlexLiveRow(ListItem):
+    def __init__(self) -> None:
+        self.label_text = "◉ On Plex Live"
         super().__init__(Label(self.label_text))
 
 
@@ -894,6 +900,8 @@ class PlexTuiApp(App[None]):
             self.prompt_discover_search()
         elif isinstance(row, OnPlexRow):
             self.open_video_on_demand()
+        elif isinstance(row, OnPlexLiveRow):
+            self.open_hosted_live_tv()
         elif isinstance(row, AvailabilityRow):
             self.open_availability_url(row)
         elif isinstance(row, ResumeChoiceRow):
@@ -942,6 +950,10 @@ class PlexTuiApp(App[None]):
         elif isinstance(row, OnPlexRow):
             mark_active_row(event.list_view, row)
             self.show_detail_text("Browse Plex-hosted Movies & Shows hubs.")
+            self.set_status(context_hint(row))
+        elif isinstance(row, OnPlexLiveRow):
+            mark_active_row(event.list_view, row)
+            self.show_detail_text("Browse Plex-hosted Live TV channels. Playable non-DRM channels use the normal mpv controls.")
             self.set_status(context_hint(row))
         elif isinstance(row, AvailabilityRow):
             mark_active_row(event.list_view, row)
@@ -1136,6 +1148,9 @@ class PlexTuiApp(App[None]):
         if isinstance(row, DiscoverRow):
             self.open_video_on_demand()
             return
+        if isinstance(row, OnPlexLiveRow):
+            self.open_hosted_live_tv()
+            return
         self.set_status("Select a library first")
 
     @work(thread=True)
@@ -1161,6 +1176,41 @@ class PlexTuiApp(App[None]):
                 "Movies & Shows on Plex",
                 page.items,
                 source="vod",
+                next_start=page.next_start,
+                total=page.total,
+            )
+            self.browsing_stack = [state]
+            self.show_browse_state(state)
+            self.focus_media_browser()
+            self.set_status(render_browse_status(state))
+
+        self.call_from_thread(update)
+
+    @work(thread=True)
+    def open_hosted_live_tv(self) -> None:
+        if self.service is None:
+            self.call_from_thread(self.set_status, "Connect to Plex before browsing On Plex Live")
+            return
+        title = "Live TV on Plex"
+        self.post_message(StatusChanged(f"Loading {title}..."))
+        self.call_from_thread(self.show_loading_state, title, "Loading Plex-hosted Live TV channels.")
+        started = time.perf_counter()
+        try:
+            page = self.service.hosted_live_tv_page(0, self.config.page_size)
+        except Exception as exc:
+            self.call_from_thread(self.show_error, str(exc))
+            return
+        write_performance_log(
+            "hosted_live_tv_page",
+            started,
+            f"items={len(page.items)} total={page.total}",
+        )
+
+        def update() -> None:
+            state = BrowseState(
+                title,
+                page.items,
+                source="livetv",
                 next_start=page.next_start,
                 total=page.total,
             )
@@ -1351,6 +1401,15 @@ class PlexTuiApp(App[None]):
                     next_start = page.next_start
                     total = page.total
                     items.extend(page.items)
+            elif source == "livetv":
+                items = []
+                next_start = 0
+                total = 0
+                for start in range(0, loaded_count, self.config.page_size):
+                    page = self.service.hosted_live_tv_page(start, self.config.page_size)
+                    next_start = page.next_start
+                    total = page.total
+                    items.extend(page.items)
             elif source == "continue_watching":
                 items = []
                 next_start = 0
@@ -1514,6 +1573,8 @@ class PlexTuiApp(App[None]):
                 )
             elif state.source == "vod":
                 page = self.service.video_on_demand_page(state.next_start, self.config.page_size)
+            elif state.source == "livetv":
+                page = self.service.hosted_live_tv_page(state.next_start, self.config.page_size)
             elif state.search:
                 page = self.service.search_page(state.search_query, state.selected_library, state.next_start, self.config.page_size)
             elif state.source == "continue_watching":
@@ -1581,6 +1642,13 @@ class PlexTuiApp(App[None]):
             return
         if media.playable:
             self.call_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
+            return
+        if media.kind == "livetv":
+            self.call_from_thread(
+                self.show_playback_unavailable,
+                media.title,
+                "This Plex Live TV channel is unavailable for external playback.",
+            )
             return
         else:
             self.post_message(StatusChanged(f"Opening {media.title}..."))
@@ -4190,6 +4258,8 @@ def playback_readiness_rows(
         ]
         rows.extend(context_actions)
         return rows
+    if "Live TV: unavailable for external playback" in context_actions:
+        return ["Unavailable for external playback", *context_actions]
     rows = [
         "Opens more items",
         "Press Enter to open",
@@ -4962,6 +5032,7 @@ def sidebar_rows(config: AppConfig, libraries: list[LibraryItem]) -> list[ListIt
         rows.append(DiscoverRow())
     if config.show_on_plex:
         rows.append(OnPlexRow())
+        rows.append(OnPlexLiveRow())
     rows.extend(LibraryRow(library) for library in libraries)
     return rows
 
@@ -5239,6 +5310,7 @@ def render_help() -> str:
         "",
         "Playlist Management",
         "enter on Playlists sidebar row: browse all playlists",
+        "enter on On Plex Live: browse hosted Live TV channels",
         "P: add selected media to an existing or new playlist",
         "u: toggle selected item for bulk playlist actions",
         "backspace/delete: remove selected item from the open playlist",
@@ -5343,6 +5415,8 @@ def context_hint(row: object) -> str:
         return "Libraries: Enter searches Plex Discover"
     if isinstance(row, OnPlexRow):
         return "Libraries: Enter browses Movies & Shows on Plex"
+    if isinstance(row, OnPlexLiveRow):
+        return "Libraries: Enter browses Live TV on Plex"
     if isinstance(row, AvailabilityRow):
         return "Availability: Enter opens provider link"
     if isinstance(row, ResumeChoiceRow):
@@ -5358,6 +5432,8 @@ def context_hint(row: object) -> str:
     if isinstance(row, MediaRow):
         if row.media.kind == "playlist":
             return "Media: Enter opens playlist / e rename / D delete"
+        if row.media.kind == "livetv" and not row.media.playable:
+            return "Media: Live TV channel is unavailable for external playback"
         if row.media.playable:
             return "Media: Enter selects / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
@@ -5410,6 +5486,10 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
         return ("Availability: No provider links found",)
     if item is not None and item.playable and is_online_metadata(item.raw):
         return ("Availability: Listed by Plex; playable stream checked on play",)
+    if item is not None and item.kind == "livetv":
+        if item.playable:
+            return ("Live TV: p starts this channel",)
+        return ("Live TV: unavailable for external playback",)
     if item is not None and item.kind == "playlist":
         return (
             "Playlist: Enter opens contents",
@@ -5872,6 +5952,8 @@ def empty_state_message(state: BrowseState) -> str:
         return "No matching media"
     if state.source == "continue_watching":
         return "Nothing in progress"
+    if state.source == "livetv":
+        return "No Live TV channels found"
     if state.context_media is not None and state.context_media.kind == "playlist":
         return "Playlist is empty"
     return "No items found"
@@ -5882,6 +5964,8 @@ def empty_state_action(state: BrowseState) -> str:
         return "Try a broader search or switch scope."
     if state.source == "continue_watching":
         return "Start playback from a library item to populate this view."
+    if state.source == "livetv":
+        return "Try On Plex again later or check the signed-in account."
     if state.context_media is not None and state.context_media.kind == "playlist":
         return "Use P on playable media to add items."
     return "Go back or choose another library view."

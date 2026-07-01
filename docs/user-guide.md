@@ -81,12 +81,13 @@ plex-tui discover-open "matrix" --index 3 --service-index 1
 
 `discover-open` opens a selected Plex Discover availability URL in your
 browser. In the TUI, press Space on the Discover sidebar row or select On Plex
-to browse Plex Movies & Shows VOD hubs.
+to browse Plex Movies & Shows VOD hubs. Select On Plex Live to browse
+Plex-hosted Live TV channels.
 
-Some On Plex titles are listed by Plex but cannot be played through external
-players such as `mpv`. plex-tui marks those items unavailable when Plex does not
-provide a playable stream, including protected streams that Plex's own clients
-may handle differently.
+Some On Plex titles and Live TV channels are listed by Plex but cannot be
+played through external players such as `mpv`. plex-tui marks those items
+unavailable when Plex does not provide a playable stream, including protected
+streams that Plex's own clients may handle differently.
 
 ## Playback
 
