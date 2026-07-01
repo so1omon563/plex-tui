@@ -26,6 +26,8 @@ and points here when you need more detail.
   Continue Watching ordering and pagination audit.
 - [`parent-navigation-audit.md`](parent-navigation-audit.md): fake-backed
   parent navigation audit for Continue Watching TV episodes.
+- [`live-tv-audit.md`](live-tv-audit.md): sanitized Live TV and DVR API
+  reachability audit.
 - [`grid-performance-audit.md`](grid-performance-audit.md): sanitized grid
   rendering and prefetch default audit.
 - [`assets/`](assets/): README and showcase screenshots.

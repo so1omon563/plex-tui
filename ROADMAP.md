@@ -78,9 +78,11 @@
   it is intentionally positioned as a novelty/experiment rather than a
   replacement for external mpv playback. Embedded video panes remain
   intentionally out of scope.
-- Investigate Live TV support before promising implementation. Start by
-  confirming PlexAPI guide/channel/tuner/DVR access and whether live channels
-  can produce a stable stream URL for the existing mpv playback path.
+- Live TV is split into Plex-hosted and local-DVR paths. The latest
+  saved-config audit found no local DVR, but Plex-hosted EPG channels are
+  reachable through `epg.provider.plex.tv` and sampled non-DRM channels expose
+  HLS playlists. Start with a small hosted-channel service model and DRM guard
+  before adding a sidebar row or guide browser.
 - Playlist management can browse all playlists from a top-level sidebar row,
   create playlists from selected media, bulk-add selected playable media,
   remove single or bulk-selected items while browsing a playlist, and rename or
