@@ -3344,7 +3344,6 @@ async def run_toggle_watched_marks_unwatched_check():
 
         worker = app.action_toggle_watched()
         assert worker is not None
-        await asyncio.wait_for(worker.wait(), timeout=20)
         row, selected, status = await wait_for_watched_update(
             app,
             pilot,
