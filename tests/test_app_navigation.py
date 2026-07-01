@@ -321,6 +321,10 @@ def test_show_browse_state_adds_load_more_row():
     asyncio.run(run_load_more_row_check())
 
 
+def test_show_live_tv_guide_adds_load_more_row():
+    asyncio.run(run_live_tv_guide_load_more_row_check())
+
+
 def test_show_browse_state_uses_empty_state_row():
     asyncio.run(run_empty_browse_state_check())
 
@@ -1707,6 +1711,33 @@ async def run_load_more_row_check():
             MediaItem("Second", "", "movie", "2", True, Raw()),
         ]
         state = BrowseState("Movies", items, library, next_start=2, total=5)
+
+        app.show_browse_state(state)
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert len(rows) == 3
+        assert isinstance(rows[-1], LoadMoreRow)
+
+
+async def run_live_tv_guide_load_more_row_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        channel = MediaItem("Ion Mystery", "", "livetv", "channel", True, Raw())
+        items = [
+            MediaItem("First", "10:00 AM-11:00 AM", "livetv_program", "1", False, Raw()),
+            MediaItem("Second", "11:00 AM-12:00 PM", "livetv_program", "2", False, Raw()),
+        ]
+        state = BrowseState(
+            "Guide: Ion Mystery",
+            items,
+            source="livetv_guide",
+            next_start=2,
+            total=5,
+            context_media=channel,
+        )
 
         app.show_browse_state(state)
         await pilot.pause(0.2)

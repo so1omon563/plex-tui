@@ -128,7 +128,7 @@ class BrowseState:
     def has_more(self) -> bool:
         if self.total is None or self.next_start >= self.total:
             return False
-        if self.source in {"continue_watching", "vod", "livetv"}:
+        if self.source in {"continue_watching", "vod", "livetv", "livetv_guide"}:
             return True
         if self.source == "discover":
             return bool(self.search_query)
