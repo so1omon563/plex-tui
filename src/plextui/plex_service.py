@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
+import json
 import re
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.request import Request, urlopen
 from typing import Any
 
 from plexapi.myplex import MyPlexAccount
@@ -12,9 +15,10 @@ from .config import AppConfig, config_path
 from .models import LibraryItem, MediaDetails, MediaItem
 
 
-PLAYABLE_TYPES = {"movie", "episode", "track", "clip"}
+PLAYABLE_TYPES = {"movie", "episode", "track", "clip", "livetv"}
 DEFAULT_PAGE_SIZE = 100
 DISCOVER_PROVIDERS = "discover,PLEXAVOD"
+EPG_PROVIDER_BASE = "https://epg.provider.plex.tv"
 
 KIND_LABELS: dict[str, str] = {
     "movie": "Movie",
@@ -27,6 +31,7 @@ KIND_LABELS: dict[str, str] = {
     "collection": "Collection",
     "playlist": "Playlist",
     "clip": "Clip",
+    "livetv": "Live TV Channel",
     "photoalbum": "Photo Album",
 }
 
@@ -68,6 +73,46 @@ class CategoryRef:
     raw: Any
     filter_name: str = "genre"
     filter_value: str = ""
+
+
+@dataclass(frozen=True)
+class HostedLiveTVChannel:
+    title: str
+    key: str
+    stream_url: str
+    drm: bool = False
+    call_sign: str = ""
+    language: str = ""
+    is_hd: bool = False
+    protocol: str = ""
+    container: str = ""
+    thumb: str = ""
+    art: str = ""
+
+    TYPE = "livetv"
+
+    @property
+    def playable(self) -> bool:
+        return bool(self.stream_url and not self.drm)
+
+    @property
+    def subtitle(self) -> str:
+        return "  ".join(
+            bit
+            for bit in (
+                self.call_sign,
+                "HD" if self.is_hd else "",
+                self.protocol.upper() if self.protocol else "",
+            )
+            if bit
+        )
+
+    def getStreamURL(self, **kwargs: Any) -> str:
+        if self.drm:
+            raise RuntimeError("Plex Live TV channel is DRM-protected")
+        if not self.stream_url:
+            raise RuntimeError("Plex Live TV channel does not provide a stream URL")
+        return self.stream_url
 
 
 class PlexService:
@@ -208,6 +253,21 @@ class PlexService:
         account = MyPlexAccount(token=self.config.account_token)
         hubs = [to_hub_media_item(raw) for raw in account.videoOnDemand()]
         return sliced_media_page(hubs, start, size)
+
+    def hosted_live_tv_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
+        if not self.config.account_token:
+            raise ValueError("missing Plex account token; start plex-tui and sign in first")
+        data = epg_provider_json("/lineups/plex/channels", self.config.account_token)
+        container = data.get("MediaContainer", {})
+        channels = [
+            channel
+            for channel in (
+                hosted_live_tv_channel_from_raw(raw, self.config.account_token)
+                for raw in container.get("Channel", [])
+            )
+            if channel is not None
+        ]
+        return sliced_media_page([to_media_item(channel) for channel in channels], start, size)
 
     def continue_watching_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
         hubs = getattr(self.server.library, "hubs", None)
@@ -398,6 +458,16 @@ def dedupe_media_items(raw_items: list[Any]) -> list[Any]:
 
 
 def to_media_item(raw: Any) -> MediaItem:
+    if isinstance(raw, HostedLiveTVChannel):
+        return MediaItem(
+            title=raw.title or "Untitled Channel",
+            subtitle=raw.subtitle,
+            kind=raw.TYPE,
+            key=raw.key,
+            playable=raw.playable,
+            raw=raw,
+            artwork_path=raw.thumb or raw.art,
+        )
     if isinstance(raw, CategoryRef):
         return MediaItem(
             title=raw.title,
@@ -432,6 +502,59 @@ def to_hub_media_item(raw: Any) -> MediaItem:
     if item.kind == "hub":
         return item
     return replace(item, kind="hub", playable=False)
+
+
+def epg_provider_json(path: str, account_token: str) -> dict[str, Any]:
+    request = Request(
+        f"{EPG_PROVIDER_BASE}{path}",
+        headers={
+            "Accept": "application/json",
+            "X-Plex-Token": account_token,
+        },
+    )
+    with urlopen(request, timeout=10) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def hosted_live_tv_channel_from_raw(raw: dict[str, Any], account_token: str) -> HostedLiveTVChannel | None:
+    media = first_mapping(raw.get("Media"))
+    part = first_mapping(media.get("Part") if media else None)
+    stream_url = signed_epg_url(str(part.get("key", "") or part.get("url", "") or ""), account_token) if part else ""
+    key = str(raw.get("id") or raw.get("key") or raw.get("gridKey") or stream_url)
+    if not key:
+        return None
+    drm = bool(raw.get("drm") or (media and media.get("drm")) or (part and part.get("drm")))
+    return HostedLiveTVChannel(
+        title=str(raw.get("title") or raw.get("callSign") or "Untitled Channel"),
+        key=key,
+        stream_url=stream_url,
+        drm=drm,
+        call_sign=str(raw.get("callSign") or ""),
+        language=str(raw.get("language") or ""),
+        is_hd=bool(raw.get("isHd")),
+        protocol=str((media.get("protocol") if media else "") or ""),
+        container=str((media.get("container") if media else "") or (part.get("container") if part else "") or ""),
+        thumb=str(raw.get("thumb") or raw.get("coverPoster") or ""),
+        art=str(raw.get("art") or ""),
+    )
+
+
+def first_mapping(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, list) and value and isinstance(value[0], dict):
+        return value[0]
+    if isinstance(value, dict):
+        return value
+    return None
+
+
+def signed_epg_url(value: str, account_token: str) -> str:
+    if not value:
+        return ""
+    url = value if value.startswith(("http://", "https://")) else f"{EPG_PROVIDER_BASE}{value}"
+    parts = urlsplit(url)
+    query = [(key, val) for key, val in parse_qsl(parts.query, keep_blank_values=True) if key.lower() != "x-plex-token"]
+    query.append(("X-Plex-Token", account_token))
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
 def media_key(raw: Any) -> str:

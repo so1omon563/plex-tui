@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from dataclasses import replace
 from types import SimpleNamespace
@@ -326,6 +327,10 @@ def test_load_more_media_appends_next_page():
 
 def test_load_more_media_appends_continue_watching_page():
     asyncio.run(run_load_more_continue_watching_check())
+
+
+def test_load_more_media_ignores_replaced_browse_state():
+    asyncio.run(run_load_more_ignores_replaced_browse_state_check())
 
 
 def test_load_more_media_appends_library_submenu_page():
@@ -1979,6 +1984,46 @@ async def run_load_more_continue_watching_check():
         assert state.has_more
 
 
+async def run_load_more_ignores_replaced_browse_state_check():
+    app = PlexTuiApp()
+    started = threading.Event()
+    release = threading.Event()
+
+    class BlockingService(FakePagedService):
+        def continue_watching_page(self, start: int, size: int) -> MediaPage:
+            self.continue_watching_calls.append((start, size))
+            started.set()
+            release.wait(timeout=5)
+            return self.page
+
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=25)
+        first = MediaItem("Episode 1", "", "episode", "episode-1", True, Raw())
+        second = MediaItem("Episode 2", "", "episode", "episode-2", True, Raw())
+        stale_state = BrowseState("Continue Watching", [first], source="continue_watching", next_start=1, total=2)
+        service = BlockingService(MediaPage([second], start=1, total=2))
+        app.service = service
+        app.browsing_stack = [stale_state]
+
+        app.load_more_media()
+        for _ in range(50):
+            if started.is_set():
+                break
+            await pilot.pause(0.1)
+        app.browsing_stack = [BrowseState("Continue Watching", [second], source="continue_watching", total=1)]
+        release.set()
+        for _ in range(50):
+            if not app.loading_more:
+                break
+            await pilot.pause(0.1)
+
+        assert service.continue_watching_calls == [(1, 25)]
+        assert [item.title for item in app.browsing_stack[-1].items] == ["Episode 2"]
+        assert [item.title for item in stale_state.items] == ["Episode 1"]
+        assert not app.loading_more
+
+
 async def run_load_more_library_submenu_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
@@ -3299,7 +3344,6 @@ async def run_toggle_watched_marks_unwatched_check():
 
         worker = app.action_toggle_watched()
         assert worker is not None
-        await asyncio.wait_for(worker.wait(), timeout=20)
         row, selected, status = await wait_for_watched_update(
             app,
             pilot,

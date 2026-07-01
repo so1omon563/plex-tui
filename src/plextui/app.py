@@ -1538,6 +1538,9 @@ class PlexTuiApp(App[None]):
         )
 
         def update() -> None:
+            if not self.browsing_stack or self.browsing_stack[-1] is not state:
+                self.loading_more = False
+                return
             first_new_key = page.items[0].key if page.items else None
             state.items.extend(page.items)
             state.next_start = page.next_start
