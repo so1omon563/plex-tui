@@ -20,6 +20,7 @@ from plextui.app import (
     LibraryMenuRow,
     LoadMoreRow,
     MediaGrid,
+    OnPlexLiveRow,
     OnPlexRow,
     PlexTuiApp,
     PlaylistsRow,
@@ -270,6 +271,14 @@ def test_escape_cancels_slow_discover_search():
 
 def test_discover_alternate_action_opens_on_plex_vod():
     asyncio.run(run_discover_vod_entrypoint_check())
+
+
+def test_on_plex_live_entrypoint_opens_hosted_channels():
+    asyncio.run(run_on_plex_live_entrypoint_check())
+
+
+def test_unavailable_on_plex_live_channel_shows_clean_error():
+    asyncio.run(run_unavailable_on_plex_live_channel_check())
 
 
 def test_populate_libraries_can_highlight_selected_library():
@@ -1276,6 +1285,7 @@ async def run_library_highlight_check():
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("down")
+        await pilot.press("down")
         await pilot.pause(0.2)
 
         row = libraries_view.highlighted_child
@@ -1309,7 +1319,8 @@ async def run_continue_watching_entrypoint_check():
         assert isinstance(rows[1], PlaylistsRow)
         assert isinstance(rows[2], DiscoverRow)
         assert isinstance(rows[3], OnPlexRow)
-        assert [row.library.title for row in rows[4:]] == ["Movies", "TV"]
+        assert isinstance(rows[4], OnPlexLiveRow)
+        assert [row.library.title for row in rows[5:]] == ["Movies", "TV"]
         assert libraries_view.highlighted_child is rows[0]
 
 
@@ -1552,6 +1563,59 @@ async def run_discover_vod_entrypoint_check():
         assert app.query_one("#media").highlighted_child.media.title == "Because You Watched Macross Plus"
 
 
+async def run_on_plex_live_entrypoint_check():
+    channel = MediaItem("Live One", "ONE  HD  HLS", "livetv", "channel-1", True, Raw())
+    service = FakePagedService(MediaPage([channel], start=0, total=1))
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
+        libraries_view = app.query_one("#libraries")
+        libraries_view.focus()
+        await pilot.pause(0.2)
+        await pilot.press("down")
+        await pilot.press("down")
+        await pilot.press("down")
+        await pilot.press("down")
+        await pilot.press("enter")
+        for _ in range(80):
+            if app.browsing_stack and app.browsing_stack[-1].source == "livetv":
+                break
+            await pilot.pause(0.1)
+
+        assert service.hosted_live_tv_calls == [(0, 40)]
+        assert app.browsing_stack[-1].title == "Live TV on Plex"
+        assert app.query_one("#media").highlighted_child.media.title == "Live One"
+
+
+async def run_unavailable_on_plex_live_channel_check():
+    channel = MediaItem("Locked", "HLS", "livetv", "channel-2", False, Raw())
+    service = FakePagedService(MediaPage([channel], start=0, total=1))
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        state = BrowseState("Live TV on Plex", [channel], source="livetv", next_start=1, total=1)
+        app.browsing_stack = [state]
+        app.show_browse_state(state)
+        await pilot.pause(0.2)
+
+        app.open_media(channel)
+        status = await wait_for_status(
+            app,
+            pilot,
+            "Playback unavailable: This Plex Live TV channel is unavailable for external playback.",
+        )
+
+        details = app.query_one("#detail-content").content
+        assert status == "Playback unavailable: This Plex Live TV channel is unavailable for external playback."
+        assert "This Plex Live TV channel is unavailable for external playback." in details
+        assert service.children_calls == []
+
+
 async def run_selected_library_highlight_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
@@ -1571,8 +1635,9 @@ async def run_selected_library_highlight_check():
         assert isinstance(rows[1], PlaylistsRow)
         assert isinstance(rows[2], DiscoverRow)
         assert isinstance(rows[3], OnPlexRow)
-        assert libraries_view.highlighted_child is rows[4]
-        assert rows[4].library.title == "Movies"
+        assert isinstance(rows[4], OnPlexLiveRow)
+        assert libraries_view.highlighted_child is rows[5]
+        assert rows[5].library.title == "Movies"
 
 
 async def run_load_more_row_check():
@@ -1625,6 +1690,7 @@ class FakePagedService:
         self.continue_watching_calls = []
         self.discover_calls = []
         self.video_on_demand_calls = []
+        self.hosted_live_tv_calls = []
         self.children_calls = []
         self.media_from_key_calls = []
         self.children_by_key: dict[str, list[MediaItem]] = {}
@@ -1655,6 +1721,10 @@ class FakePagedService:
 
     def video_on_demand_page(self, start: int, size: int) -> MediaPage:
         self.video_on_demand_calls.append((start, size))
+        return self.page
+
+    def hosted_live_tv_page(self, start: int, size: int) -> MediaPage:
+        self.hosted_live_tv_calls.append((start, size))
         return self.page
 
     def children(self, item: MediaItem, size: int = 40) -> list[MediaItem]:
@@ -1756,6 +1826,7 @@ async def run_sidebar_library_selection_opens_default_library_check():
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("down")
+        await pilot.press("down")
         await pilot.press("enter")
         await pilot.pause(0.5)
 
@@ -1774,6 +1845,7 @@ async def run_sidebar_library_space_menu_check():
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
         await pilot.pause(0.2)
+        await pilot.press("down")
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("down")
@@ -1803,6 +1875,7 @@ async def run_sidebar_library_selection_menu_default_check():
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
         await pilot.pause(0.2)
+        await pilot.press("down")
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("down")
@@ -1873,8 +1946,8 @@ async def run_library_submenu_keyboard_flow_check():
 
         libraries_view = app.query_one("#libraries")
         rows = list(libraries_view.children)
-        assert libraries_view.highlighted_child is rows[4]
-        assert rows[4].library.title == "Movies"
+        assert libraries_view.highlighted_child is rows[5]
+        assert rows[5].library.title == "Movies"
         assert app.query_one("#media-grid").selected_media.title == "Blade Runner"
 
         libraries_view.focus()
@@ -2821,7 +2894,8 @@ async def run_settings_library_visibility_check():
         assert isinstance(rows[1], PlaylistsRow)
         assert isinstance(rows[2], DiscoverRow)
         assert isinstance(rows[3], OnPlexRow)
-        assert [row.library.title for row in rows[4:]] == ["Movies"]
+        assert isinstance(rows[4], OnPlexLiveRow)
+        assert [row.library.title for row in rows[5:]] == ["Movies"]
 
 
 async def run_settings_sidebar_entrypoint_visibility_check():
@@ -2850,7 +2924,7 @@ async def run_settings_sidebar_entrypoint_visibility_check():
         assert isinstance(rows[0], ContinueWatchingRow)
         assert isinstance(rows[1], LibraryRow)
         assert rows[1].library.title == "Movies"
-        assert not any(isinstance(row, PlaylistsRow | DiscoverRow | OnPlexRow) for row in rows)
+        assert not any(isinstance(row, PlaylistsRow | DiscoverRow | OnPlexRow | OnPlexLiveRow) for row in rows)
 
 
 async def run_settings_library_order_check():
@@ -2876,7 +2950,8 @@ async def run_settings_library_order_check():
         assert isinstance(rows[1], PlaylistsRow)
         assert isinstance(rows[2], DiscoverRow)
         assert isinstance(rows[3], OnPlexRow)
-        assert [row.library.title for row in rows[4:]] == ["TV", "Movies", "Music"]
+        assert isinstance(rows[4], OnPlexLiveRow)
+        assert [row.library.title for row in rows[5:]] == ["TV", "Movies", "Music"]
 
         media_rows = list(app.query_one("#media").children)
         selected = app.query_one("#media").highlighted_child

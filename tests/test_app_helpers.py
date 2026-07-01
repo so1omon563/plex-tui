@@ -22,6 +22,7 @@ from plextui.app import (
     LibraryMenuRow,
     MediaGrid,
     MediaRow,
+    OnPlexLiveRow,
     OnPlexRow,
     PlaylistsRow,
     PlaylistCreateRow,
@@ -231,6 +232,30 @@ def test_render_details_avoids_ready_to_play_for_online_provider_items():
     assert "Listed by Plex; stream checked on play" in rendered
     assert "Ready to play" not in rendered
     assert "Press r to resume saved progress" not in rendered
+
+
+def test_render_details_marks_unavailable_live_tv_without_container_copy():
+    details = MediaDetails(
+        title="Locked Channel",
+        kind="livetv",
+        facts=["Live TV Channel"],
+        metadata=[("Type", "livetv")],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=False,
+    )
+
+    rendered = render_details(
+        details,
+        AppConfig("http://plex", "token", "client-id"),
+        context_actions=("Live TV: unavailable for external playback",),
+    )
+
+    assert "Unavailable for external playback" in rendered
+    assert "Live TV: unavailable for external playback" in rendered
+    assert "Opens more items" not in rendered
+    assert "Press Enter to open" not in rendered
 
 
 def test_render_details_skips_effective_playback_for_playlist_container():
@@ -671,7 +696,7 @@ def test_sidebar_rows_can_show_on_plex_without_discover():
 
     rows = sidebar_rows(config, libraries)
 
-    assert [type(row) for row in rows] == [ContinueWatchingRow, PlaylistsRow, OnPlexRow, LibraryRow]
+    assert [type(row) for row in rows] == [ContinueWatchingRow, PlaylistsRow, OnPlexRow, OnPlexLiveRow, LibraryRow]
 
 
 def test_sidebar_rows_use_stable_entrypoint_markers():
@@ -685,6 +710,7 @@ def test_sidebar_rows_use_stable_entrypoint_markers():
         "▤ Playlists",
         "✦ Discover",
         "▦ On Plex",
+        "◉ On Plex Live",
         "› Movies",
     ]
 
