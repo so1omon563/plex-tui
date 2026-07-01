@@ -190,6 +190,8 @@ work in the local `main` working tree.
 Repo work is not complete when a branch is merely pushed. Treat the workflow as
 open until there is a draft PR for the branch or the work is explicitly
 canceled.
+For Linear-linked work, keep the ticket In Review while its PR is open and move
+it to Done only after the PR is merged.
 
 `main` is protected by repository rulesets. Changes must flow through PRs; force
 pushes and branch deletion are blocked. `plex-tui` requires the Python 3.11 and
