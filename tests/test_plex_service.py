@@ -775,6 +775,22 @@ def test_hosted_live_tv_channel_mapping_signs_absolute_and_relative_urls():
     )
 
 
+def test_hosted_live_tv_channel_without_part_is_unplayable():
+    channel = hosted_live_tv_channel_from_raw(
+        {
+            "id": "metadata-only",
+            "title": "Metadata Only",
+            "Media": [{"protocol": "hls"}],
+        },
+        "token",
+    )
+
+    assert channel is not None
+    assert channel.key == "metadata-only"
+    assert channel.stream_url == ""
+    assert not to_media_item(channel).playable
+
+
 def test_hosted_live_tv_drm_channel_rejects_stream_url():
     channel = HostedLiveTVChannel(
         title="Locked",

@@ -532,8 +532,8 @@ def hosted_live_tv_channel_from_raw(raw: dict[str, Any], account_token: str) -> 
         call_sign=str(raw.get("callSign") or ""),
         language=str(raw.get("language") or ""),
         is_hd=bool(raw.get("isHd")),
-        protocol=str(media.get("protocol") or ""),
-        container=str(media.get("container") or part.get("container") or ""),
+        protocol=str((media.get("protocol") if media else "") or ""),
+        container=str((media.get("container") if media else "") or (part.get("container") if part else "") or ""),
         thumb=str(raw.get("thumb") or raw.get("coverPoster") or ""),
         art=str(raw.get("art") or ""),
     )
