@@ -277,6 +277,14 @@ def test_on_plex_live_entrypoint_opens_hosted_channels():
     asyncio.run(run_on_plex_live_entrypoint_check())
 
 
+def test_on_plex_live_channel_enter_opens_guide():
+    asyncio.run(run_on_plex_live_channel_guide_check())
+
+
+def test_on_plex_live_guide_uses_schedule_list_view():
+    asyncio.run(run_on_plex_live_guide_list_view_check())
+
+
 def test_unavailable_on_plex_live_channel_shows_clean_error():
     asyncio.run(run_unavailable_on_plex_live_channel_check())
 
@@ -1569,7 +1577,7 @@ async def run_on_plex_live_entrypoint_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
-        app.config = AppConfig("http://plex", "token", "client-id")
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
         app.service = service
         app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
         libraries_view = app.query_one("#libraries")
@@ -1588,6 +1596,54 @@ async def run_on_plex_live_entrypoint_check():
         assert service.hosted_live_tv_calls == [(0, 40)]
         assert app.browsing_stack[-1].title == "Live TV on Plex"
         assert app.query_one("#media").highlighted_child.media.title == "Live One"
+        assert app.query_one("#media").display
+        assert not app.query_one("#media-grid-scroll").display
+
+
+async def run_on_plex_live_channel_guide_check():
+    channel_raw = SimpleNamespace(TYPE="livetv", title="Live One", grid_key="grid-1")
+    channel = MediaItem("Live One", "ONE  HD  HLS", "livetv", "channel-1", True, channel_raw)
+    service = FakePagedService(MediaPage([channel], start=0, total=1))
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        state = BrowseState("Live TV on Plex", [channel], source="livetv", next_start=1, total=1)
+        app.browsing_stack = [state]
+        app.show_browse_state(state)
+        await pilot.pause(0.2)
+
+        opened = []
+        app.open_hosted_live_tv_guide = opened.append
+        app.open_media(channel)
+        for _ in range(20):
+            if opened:
+                break
+            await asyncio.sleep(0.05)
+
+        assert opened == [channel]
+        assert service.children_calls == []
+
+
+async def run_on_plex_live_guide_list_view_check():
+    program = MediaItem("Coda", "2:00 PM-3:00 PM  480", "livetv_program", "program-1", False, Raw(), artwork_path="/thumb")
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        state = BrowseState("Guide: Ion Mystery", [program], source="livetv_guide", next_start=1, total=1)
+        app.browsing_stack = [state]
+
+        app.show_browse_state(state)
+        await pilot.pause(0.2)
+
+        assert app.query_one("#media").display
+        assert not app.query_one("#media-grid-scroll").display
+        row = app.query_one("#media").highlighted_child
+        assert row is not None
+        assert "Coda" in row.label_text
+        assert "2:00 PM-3:00 PM" in row.label_text
 
 
 async def run_unavailable_on_plex_live_channel_check():
@@ -1691,6 +1747,8 @@ class FakePagedService:
         self.discover_calls = []
         self.video_on_demand_calls = []
         self.hosted_live_tv_calls = []
+        self.hosted_live_tv_guide_calls = []
+        self.guide_page = MediaPage([], start=0, total=0)
         self.children_calls = []
         self.media_from_key_calls = []
         self.children_by_key: dict[str, list[MediaItem]] = {}
@@ -1726,6 +1784,10 @@ class FakePagedService:
     def hosted_live_tv_page(self, start: int, size: int) -> MediaPage:
         self.hosted_live_tv_calls.append((start, size))
         return self.page
+
+    def hosted_live_tv_guide_page(self, channel: MediaItem, size: int = 40) -> MediaPage:
+        self.hosted_live_tv_guide_calls.append((channel.key, size))
+        return self.guide_page
 
     def children(self, item: MediaItem, size: int = 40) -> list[MediaItem]:
         self.children_calls.append((item.key, size))
@@ -2915,12 +2977,15 @@ async def run_settings_sidebar_entrypoint_visibility_check():
             await pilot.pause(0.2)
             app.run_settings_action("toggle_show_on_plex")
             await pilot.pause(0.2)
+            app.run_settings_action("toggle_show_on_plex_live")
+            await pilot.pause(0.2)
 
         rows = list(app.query_one("#libraries").children)
         assert app.config.show_playlists is False
         assert app.config.show_discover is False
         assert app.config.show_on_plex is False
-        assert save_config.call_count == 3
+        assert app.config.show_on_plex_live is False
+        assert save_config.call_count == 4
         assert isinstance(rows[0], ContinueWatchingRow)
         assert isinstance(rows[1], LibraryRow)
         assert rows[1].library.title == "Movies"

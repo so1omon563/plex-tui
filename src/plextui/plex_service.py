@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
+from datetime import date, datetime
 import json
 import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -32,6 +33,7 @@ KIND_LABELS: dict[str, str] = {
     "playlist": "Playlist",
     "clip": "Clip",
     "livetv": "Live TV Channel",
+    "livetv_program": "Live TV Program",
     "photoalbum": "Photo Album",
 }
 
@@ -80,6 +82,7 @@ class HostedLiveTVChannel:
     title: str
     key: str
     stream_url: str
+    grid_key: str = ""
     drm: bool = False
     call_sign: str = ""
     language: str = ""
@@ -113,6 +116,23 @@ class HostedLiveTVChannel:
         if not self.stream_url:
             raise RuntimeError("Plex Live TV channel does not provide a stream URL")
         return self.stream_url
+
+
+@dataclass(frozen=True)
+class HostedLiveTVGuideProgram:
+    title: str
+    key: str
+    begins_at: int = 0
+    ends_at: int = 0
+    duration: int = 0
+    on_air: bool = False
+    video_resolution: str = ""
+    summary: str = ""
+    thumb: str = ""
+    art: str = ""
+    year: int | None = None
+
+    TYPE = "livetv_program"
 
 
 class PlexService:
@@ -268,6 +288,30 @@ class PlexService:
             if channel is not None
         ]
         return sliced_media_page([to_media_item(channel) for channel in channels], start, size)
+
+    def hosted_live_tv_guide_page(
+        self,
+        channel: MediaItem,
+        guide_date: date | None = None,
+        start: int = 0,
+        size: int = DEFAULT_PAGE_SIZE,
+    ) -> MediaPage:
+        if not self.config.account_token:
+            raise ValueError("missing Plex account token; start plex-tui and sign in first")
+        raw = channel.raw
+        grid_key = getattr(raw, "grid_key", "") if isinstance(raw, HostedLiveTVChannel) else ""
+        if not grid_key:
+            raise ValueError("Live TV channel does not include a guide key")
+        query = urlencode({"channelGridKey": grid_key, "date": (guide_date or date.today()).isoformat()})
+        data = epg_provider_json(f"/grid?{query}", self.config.account_token)
+        container = data.get("MediaContainer", {})
+        programs = [
+            program
+            for program in (hosted_live_tv_program_from_raw(raw) for raw in container.get("Metadata", []))
+            if program is not None
+        ]
+        programs.sort(key=lambda program: program.begins_at or program.ends_at or program.key)
+        return sliced_media_page([to_media_item(program) for program in programs], start, size)
 
     def continue_watching_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
         hubs = getattr(self.server.library, "hubs", None)
@@ -468,6 +512,16 @@ def to_media_item(raw: Any) -> MediaItem:
             raw=raw,
             artwork_path=raw.thumb or raw.art,
         )
+    if isinstance(raw, HostedLiveTVGuideProgram):
+        return MediaItem(
+            title=raw.title or "Untitled Program",
+            subtitle=hosted_live_tv_program_subtitle(raw),
+            kind=raw.TYPE,
+            key=raw.key,
+            playable=False,
+            raw=raw,
+            artwork_path=raw.thumb or raw.art,
+        )
     if isinstance(raw, CategoryRef):
         return MediaItem(
             title=raw.title,
@@ -527,6 +581,7 @@ def hosted_live_tv_channel_from_raw(raw: dict[str, Any], account_token: str) -> 
     return HostedLiveTVChannel(
         title=str(raw.get("title") or raw.get("callSign") or "Untitled Channel"),
         key=key,
+        grid_key=str(raw.get("gridKey") or key),
         stream_url=stream_url,
         drm=drm,
         call_sign=str(raw.get("callSign") or ""),
@@ -537,6 +592,50 @@ def hosted_live_tv_channel_from_raw(raw: dict[str, Any], account_token: str) -> 
         thumb=str(raw.get("thumb") or raw.get("coverPoster") or ""),
         art=str(raw.get("art") or ""),
     )
+
+
+def hosted_live_tv_program_from_raw(raw: dict[str, Any]) -> HostedLiveTVGuideProgram | None:
+    media = first_mapping(raw.get("Media")) or {}
+    key = str(raw.get("ratingKey") or raw.get("key") or raw.get("guid") or "")
+    if not key:
+        return None
+    return HostedLiveTVGuideProgram(
+        title=str(raw.get("title") or "Untitled Program"),
+        key=key,
+        begins_at=parse_timestamp_ms(media.get("beginsAt")),
+        ends_at=parse_timestamp_ms(media.get("endsAt")),
+        duration=parse_int(media.get("duration")),
+        on_air=bool(media.get("onAir")),
+        video_resolution=str(media.get("videoResolution") or ""),
+        summary=str(raw.get("summary") or ""),
+        thumb=hosted_live_tv_program_image(raw),
+        art=str(raw.get("art") or ""),
+        year=parse_optional_int(raw.get("year")),
+    )
+
+
+def hosted_live_tv_program_image(raw: dict[str, Any]) -> str:
+    for image in raw.get("Image", []):
+        if isinstance(image, dict) and image.get("url"):
+            return str(image["url"])
+    return str(raw.get("thumb") or "")
+
+
+def hosted_live_tv_program_subtitle(program: HostedLiveTVGuideProgram) -> str:
+    bits = [hosted_live_tv_time_range(program), "On now" if program.on_air else "", program.video_resolution.upper()]
+    return "  ".join(bit for bit in bits if bit)
+
+
+def hosted_live_tv_time_range(program: HostedLiveTVGuideProgram) -> str:
+    if program.begins_at and program.ends_at:
+        return f"{format_timestamp_time(program.begins_at)}-{format_timestamp_time(program.ends_at)}"
+    if program.begins_at:
+        return format_timestamp_time(program.begins_at)
+    return format_duration(program.duration)
+
+
+def format_timestamp_time(milliseconds: int) -> str:
+    return datetime.fromtimestamp(milliseconds / 1000).strftime("%-I:%M %p")
 
 
 def first_mapping(value: Any) -> dict[str, Any] | None:
@@ -715,7 +814,11 @@ def metadata_fields(raw: Any) -> list[tuple[str, str]]:
     for label, value in (
         ("Type", getattr(raw, "TYPE", "")),
         ("Year", getattr(raw, "year", None)),
+        ("Begins", format_optional_timestamp_time(getattr(raw, "begins_at", 0))),
+        ("Ends", format_optional_timestamp_time(getattr(raw, "ends_at", 0))),
         ("Duration", format_duration(getattr(raw, "duration", None))),
+        ("On Air", bool_label(getattr(raw, "on_air", None))),
+        ("Resolution", getattr(raw, "video_resolution", None)),
         ("Items", playlist_count_label(raw)),
         ("Playlist Type", getattr(raw, "playlistType", None)),
         ("Smart Playlist", bool_label(getattr(raw, "smart", None))),
@@ -732,6 +835,31 @@ def metadata_fields(raw: Any) -> list[tuple[str, str]]:
         if value:
             fields.append((label, str(value)))
     return fields
+
+
+def parse_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def parse_optional_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_timestamp_ms(value: Any) -> int:
+    parsed = parse_int(value)
+    if parsed and parsed < 10_000_000_000:
+        return parsed * 1000
+    return parsed
+
+
+def format_optional_timestamp_time(milliseconds: int) -> str:
+    return format_timestamp_time(milliseconds) if milliseconds else ""
 
 
 def playlist_count_label(raw: Any) -> str:

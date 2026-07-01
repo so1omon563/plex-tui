@@ -547,7 +547,7 @@ def test_render_settings_includes_stream_preferences():
     assert "Artwork:          On" in rendered
     assert "Artwork Renderer: Block" in rendered
     assert "Details Artwork:  List only" in rendered
-    assert "Media View:          List" in rendered
+    assert "Media View:           List" in rendered
     assert "Theme:       textual-light" in rendered
     assert "mpv Window Size:" in rendered
     assert "Default (80%)" in rendered
@@ -562,9 +562,9 @@ def test_render_settings_includes_stream_preferences():
     assert "Smooth (12 fps" in rendered
     assert "Transcode Quality:" in rendered
     assert "Original" in rendered
-    assert "Page Size:           250" in rendered
-    assert "Auto-load Threshold: 25" in rendered
-    assert "Grid Prefetch Pages: 4" in rendered
+    assert "Page Size:            250" in rendered
+    assert "Auto-load Threshold:  25" in rendered
+    assert "Grid Prefetch Pages:  4" in rendered
     assert "Show recent debug log" in rendered
     assert "Show app diagnostics" in rendered
     assert subtitle_preference_value(config) == "eng"
@@ -606,6 +606,7 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "› Playlists Sidebar: Shown  (toggle)" in labels
     assert "› Discover Sidebar: Shown  (toggle)" in labels
     assert "› On Plex Sidebar: Shown  (toggle)" in labels
+    assert "› On Plex Live Sidebar: Shown  (toggle)" in labels
     assert "› Discover Type: Movies & Shows  (cycle)" in labels
     assert "› Grid Density: Comfortable  (cycle)" in labels
     assert "› Artwork Renderer: Block  (cycle)" in labels
@@ -681,6 +682,7 @@ def test_sidebar_rows_can_hide_optional_entrypoints():
         show_playlists=False,
         show_discover=False,
         show_on_plex=False,
+        show_on_plex_live=False,
     )
     libraries = [LibraryItem("Movies", "1", "movie", object())]
 
@@ -697,6 +699,15 @@ def test_sidebar_rows_can_show_on_plex_without_discover():
     rows = sidebar_rows(config, libraries)
 
     assert [type(row) for row in rows] == [ContinueWatchingRow, PlaylistsRow, OnPlexRow, OnPlexLiveRow, LibraryRow]
+
+
+def test_sidebar_rows_can_hide_on_plex_live_only():
+    config = AppConfig("http://plex", "token", "client-id", show_on_plex_live=False)
+    libraries = [LibraryItem("Movies", "1", "movie", object())]
+
+    rows = sidebar_rows(config, libraries)
+
+    assert [type(row) for row in rows] == [ContinueWatchingRow, PlaylistsRow, DiscoverRow, OnPlexRow, LibraryRow]
 
 
 def test_sidebar_rows_use_stable_entrypoint_markers():
@@ -1243,6 +1254,24 @@ def test_grid_card_selected_style_uses_marker_without_heavy_border():
     assert "Movie · 2024" not in unselected_text
 
 
+def test_grid_card_live_tv_items_do_not_repeat_generic_kind_label():
+    config = AppConfig("http://plex", "token", "client")
+    channel = MediaItem("Stories by AMC", "AMCP  HD  HLS", "livetv", "1", True, object())
+    program = MediaItem("Coda", "2:00 PM-3:00 PM  480", "livetv_program", "2", False, object(), artwork_path="/program.jpg")
+
+    channel_card = render_media_grid_card(channel, True, config)
+    program_card = render_media_grid_card(program, True, config)
+
+    channel_text = "\n".join(str(renderable) for renderable in channel_card.renderables)
+    program_text = "\n".join(str(renderable) for renderable in program_card.renderables)
+    assert "Stories by AMC" in channel_text
+    assert "AMCP" in channel_text
+    assert "Live TV Channel" not in channel_text
+    assert "Coda" in program_text
+    assert "2:00 PM-3:00 PM" in program_text
+    assert "Live TV Program" not in program_text
+
+
 def test_grid_card_footer_shows_watch_progress():
     class PartialRaw:
         viewOffset = 300000
@@ -1256,6 +1285,12 @@ def test_grid_card_footer_shows_watch_progress():
     assert "[####----] 50%" in str(selected.renderables[3])
     assert "▶ resume [####----] 50%" in str(selected.renderables[3])
     assert "[####----] 50%" not in str(unselected.renderables[3])
+
+
+def test_live_tv_program_rows_are_details_only():
+    program = MediaItem("Coda", "2:00 PM-3:00 PM  480", "livetv_program", "2", False, object())
+
+    assert current_detail_actions(None, program) == ("Guide: program details only",)
 
 
 def test_grid_card_styles_follow_visual_state_tokens():
