@@ -128,7 +128,7 @@ class BrowseState:
     def has_more(self) -> bool:
         if self.total is None or self.next_start >= self.total:
             return False
-        if self.source in {"continue_watching", "vod", "livetv"}:
+        if self.source in {"continue_watching", "vod", "livetv", "livetv_guide"}:
             return True
         if self.source == "discover":
             return bool(self.search_query)
@@ -1221,6 +1221,42 @@ class PlexTuiApp(App[None]):
 
         self.call_from_thread(update)
 
+    @work(thread=True)
+    def open_hosted_live_tv_guide(self, channel: MediaItem) -> None:
+        if self.service is None:
+            self.call_from_thread(self.set_status, "Connect to Plex before browsing On Plex Live")
+            return
+        title = f"Guide: {channel.title}"
+        self.post_message(StatusChanged(f"Loading {title}..."))
+        self.call_from_thread(self.show_loading_state, title, "Loading hosted Live TV guide.")
+        started = time.perf_counter()
+        try:
+            page = self.service.hosted_live_tv_guide_page(channel, size=self.config.page_size)
+        except Exception as exc:
+            self.call_from_thread(self.show_error, str(exc))
+            return
+        write_performance_log(
+            "hosted_live_tv_guide_page",
+            started,
+            f"channel={channel.title!r} items={len(page.items)} total={page.total}",
+        )
+
+        def update() -> None:
+            state = BrowseState(
+                title,
+                page.items,
+                source="livetv_guide",
+                next_start=page.next_start,
+                total=page.total,
+                context_media=channel,
+            )
+            self.browsing_stack.append(state)
+            self.show_browse_state(state)
+            self.focus_media_browser()
+            self.set_status(render_browse_status(state))
+
+        self.call_from_thread(update)
+
     def prompt_discover_search(self) -> None:
         if self.service is None:
             self.set_status("Connect to Plex before searching Discover")
@@ -1410,6 +1446,11 @@ class PlexTuiApp(App[None]):
                     next_start = page.next_start
                     total = page.total
                     items.extend(page.items)
+            elif source == "livetv_guide" and state.context_media is not None:
+                page = self.service.hosted_live_tv_guide_page(state.context_media, size=loaded_count)
+                items = page.items
+                next_start = page.next_start
+                total = page.total
             elif source == "continue_watching":
                 items = []
                 next_start = 0
@@ -1640,15 +1681,21 @@ class PlexTuiApp(App[None]):
             webbrowser.open(url)
             self.call_from_thread(self.set_status, f"Opened: {media.title} - {label}")
             return
-        if media.playable:
-            self.call_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
-            return
         if media.kind == "livetv":
+            if media.playable:
+                self.open_hosted_live_tv_guide(media)
+                return
             self.call_from_thread(
                 self.show_playback_unavailable,
                 media.title,
                 "This Plex Live TV channel is unavailable for external playback.",
             )
+            return
+        if media.kind == "livetv_program":
+            self.call_from_thread(self.set_status, f"Selected guide program: {media.title}.")
+            return
+        if media.playable:
+            self.call_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
             return
         else:
             self.post_message(StatusChanged(f"Opening {media.title}..."))
@@ -1713,7 +1760,8 @@ class PlexTuiApp(App[None]):
         if state.items:
             started = time.perf_counter()
             selected_index = selected_media_index(state.items, selected_key)
-            if self.config.media_view == "grid":
+            media_view = browse_state_media_view(state, self.config)
+            if media_view == "grid":
                 grid_artwork_context = grid_artwork_cache_context(self.config)
                 if grid_artwork_context != self.current_grid_artwork_context:
                     self.prefetched_grid_pages = set()
@@ -1737,7 +1785,7 @@ class PlexTuiApp(App[None]):
             write_performance_log(
                 "browse_render",
                 started,
-                f"title={state.title!r} view={self.config.media_view} items={len(state.items)} selected={selected_index}",
+                f"title={state.title!r} view={media_view} items={len(state.items)} selected={selected_index}",
             )
         else:
             self.show_empty_state(
@@ -2501,6 +2549,11 @@ class PlexTuiApp(App[None]):
             if self.update_preferences(show_on_plex=not self.config.show_on_plex):
                 self.populate_libraries(visible_libraries(self.libraries, self.config))
                 self.refresh_settings_after_change(action, "On Plex Sidebar", show_setting_value(self.config.show_on_plex))
+            return
+        if action == "toggle_show_on_plex_live":
+            if self.update_preferences(show_on_plex_live=not self.config.show_on_plex_live):
+                self.populate_libraries(visible_libraries(self.libraries, self.config))
+                self.refresh_settings_after_change(action, "On Plex Live Sidebar", show_setting_value(self.config.show_on_plex_live))
             return
         if action == "cycle_discover_media_type":
             next_media_type = next_discover_media_type(self.config.discover_media_type)
@@ -4260,6 +4313,8 @@ def playback_readiness_rows(
         return rows
     if "Live TV: unavailable for external playback" in context_actions:
         return ["Unavailable for external playback", *context_actions]
+    if "Guide: program details only" in context_actions:
+        return ["Guide program", "Details only", *context_actions]
     rows = [
         "Opens more items",
         "Press Enter to open",
@@ -4773,7 +4828,10 @@ def grid_card_title_lines(value: str, config: AppConfig, collection_card: bool =
 
 
 def grid_card_subtitle(media: MediaItem) -> str:
-    return media_metadata_label(media, include_kind=not is_collection_card(media))
+    return media_metadata_label(
+        media,
+        include_kind=not is_collection_card(media) and media.kind not in {"livetv", "livetv_program"},
+    )
 
 
 def media_metadata_label(media: MediaItem, include_kind: bool = True) -> str:
@@ -5032,6 +5090,7 @@ def sidebar_rows(config: AppConfig, libraries: list[LibraryItem]) -> list[ListIt
         rows.append(DiscoverRow())
     if config.show_on_plex:
         rows.append(OnPlexRow())
+    if config.show_on_plex_live:
         rows.append(OnPlexLiveRow())
     rows.extend(LibraryRow(library) for library in libraries)
     return rows
@@ -5132,6 +5191,7 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsActionRow(f"Playlists Sidebar: {show_setting_value(config.show_playlists)}", "toggle_show_playlists"),
         SettingsActionRow(f"Discover Sidebar: {show_setting_value(config.show_discover)}", "toggle_show_discover"),
         SettingsActionRow(f"On Plex Sidebar: {show_setting_value(config.show_on_plex)}", "toggle_show_on_plex"),
+        SettingsActionRow(f"On Plex Live Sidebar: {show_setting_value(config.show_on_plex_live)}", "toggle_show_on_plex_live"),
         SettingsActionRow(f"Discover Type: {discover_media_type_value(config)}", "cycle_discover_media_type"),
         SettingsActionRow(f"Library Enter: {library_enter_action_value(config)}", "cycle_library_enter_action"),
         SettingsActionRow(f"Media View: {media_view_value(config)}", "toggle_media_view"),
@@ -5237,6 +5297,7 @@ def render_settings(config: AppConfig) -> str:
             ("Playlists Sidebar", show_setting_value(config.show_playlists)),
             ("Discover Sidebar", show_setting_value(config.show_discover)),
             ("On Plex Sidebar", show_setting_value(config.show_on_plex)),
+            ("On Plex Live Sidebar", show_setting_value(config.show_on_plex_live)),
             ("Discover Type", discover_media_type_value(config)),
             ("Media View", media_view_value(config)),
             ("Grid Density", grid_density_value(config)),
@@ -5434,6 +5495,8 @@ def context_hint(row: object) -> str:
             return "Media: Enter opens playlist / e rename / D delete"
         if row.media.kind == "livetv" and not row.media.playable:
             return "Media: Live TV channel is unavailable for external playback"
+        if row.media.kind == "livetv":
+            return "Media: Enter opens guide / p starts this channel"
         if row.media.playable:
             return "Media: Enter selects / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
@@ -5488,8 +5551,10 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
         return ("Availability: Listed by Plex; playable stream checked on play",)
     if item is not None and item.kind == "livetv":
         if item.playable:
-            return ("Live TV: p starts this channel",)
+            return ("Live TV: Enter opens guide", "Live TV: p starts this channel")
         return ("Live TV: unavailable for external playback",)
+    if item is not None and item.kind == "livetv_program":
+        return ("Guide: program details only",)
     if item is not None and item.kind == "playlist":
         return (
             "Playlist: Enter opens contents",
@@ -5521,6 +5586,12 @@ def render_browse_status(state: BrowseState) -> str:
     if is_playlist_browse_state(state):
         status = f"{status} / Backspace/Delete removes selected item"
     return status
+
+
+def browse_state_media_view(state: BrowseState, config: AppConfig) -> str:
+    if state.source in {"livetv", "livetv_guide"}:
+        return "list"
+    return config.media_view
 
 
 def is_playlist_browse_state(state: BrowseState | None) -> bool:
@@ -5720,6 +5791,8 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         return f"Current Discover sidebar: {show_setting_value(config.show_discover)}"
     if action == "toggle_show_on_plex":
         return f"Current On Plex sidebar: {show_setting_value(config.show_on_plex)}"
+    if action == "toggle_show_on_plex_live":
+        return f"Current On Plex Live sidebar: {show_setting_value(config.show_on_plex_live)}"
     if action == "cycle_discover_media_type":
         return f"Current Discover type: {discover_media_type_value(config)}"
     if action == "cycle_library_enter_action":
@@ -5790,6 +5863,8 @@ def settings_action_help(action: str) -> str:
         return "Press Enter to show or hide Discover in the sidebar."
     if action == "toggle_show_on_plex":
         return "Press Enter to show or hide On Plex in the sidebar."
+    if action == "toggle_show_on_plex_live":
+        return "Press Enter to show or hide On Plex Live in the sidebar."
     if action == "cycle_discover_media_type":
         return "Press Enter to filter Discover searches by movies, shows, or all results."
     if action == "cycle_library_enter_action":
@@ -5848,6 +5923,8 @@ def settings_action_label(action: str) -> str:
         "toggle_media_view": "Media View",
         "toggle_show_playlists": "Playlists Sidebar",
         "toggle_show_discover": "Discover Sidebar",
+        "toggle_show_on_plex": "On Plex Sidebar",
+        "toggle_show_on_plex_live": "On Plex Live Sidebar",
         "cycle_discover_media_type": "Discover Type",
         "cycle_library_enter_action": "Library Enter",
         "cycle_grid_density": "Grid Density",
@@ -5954,6 +6031,8 @@ def empty_state_message(state: BrowseState) -> str:
         return "Nothing in progress"
     if state.source == "livetv":
         return "No Live TV channels found"
+    if state.source == "livetv_guide":
+        return "No guide programs found"
     if state.context_media is not None and state.context_media.kind == "playlist":
         return "Playlist is empty"
     return "No items found"
@@ -5966,6 +6045,8 @@ def empty_state_action(state: BrowseState) -> str:
         return "Start playback from a library item to populate this view."
     if state.source == "livetv":
         return "Try On Plex again later or check the signed-in account."
+    if state.source == "livetv_guide":
+        return "Try this channel again later; Plex may not have guide data for it."
     if state.context_media is not None and state.context_media.kind == "playlist":
         return "Use P on playable media to add items."
     return "Go back or choose another library view."

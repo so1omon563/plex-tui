@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from plextui.models import LibraryItem, MediaItem
 from plextui.plex_service import (
     EPG_PROVIDER_BASE,
@@ -20,6 +22,7 @@ from plextui.plex_service import (
     row_progress_marker,
     to_media_item,
     availability_urls,
+    hosted_live_tv_program_from_raw,
     signed_epg_url,
     watched_state,
 )
@@ -746,6 +749,84 @@ def test_hosted_live_tv_page_fetches_channels_with_account_token(monkeypatch):
     assert page.items[0].artwork_path == "https://images.example/one.png"
     assert page.items[0].raw.getStreamURL() == f"{EPG_PROVIDER_BASE}/hls/one.m3u8?X-Plex-Token=account-token"
     assert page.total == 2
+
+
+def test_hosted_live_tv_guide_page_fetches_selected_channel_programs(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append((request.full_url, dict(request.header_items()), timeout))
+        return JsonResponse(
+            b"""
+            {
+              "MediaContainer": {
+                "Metadata": [
+                  {
+                    "ratingKey": "program-1",
+                    "title": "Morning News",
+                    "summary": "Headlines",
+                    "year": 2026,
+                    "Image": [{"type": "coverPoster", "url": "https://images.example/news.png"}],
+                    "Media": [{"beginsAt": 1782925200000, "endsAt": 1782928800000, "duration": 3600000, "onAir": true, "videoResolution": "1080"}]
+                  },
+                  {
+                    "ratingKey": "program-2",
+                    "title": "Next Show",
+                    "Media": [{"beginsAt": 1782921600000, "endsAt": 1782925200000, "duration": 3600000}]
+                  }
+                ]
+              }
+            }
+            """
+        )
+
+    monkeypatch.setattr("plextui.plex_service.urlopen", fake_urlopen)
+    service = object.__new__(PlexService)
+    service.config = type("Config", (), {"account_token": "account-token"})()
+    channel = to_media_item(
+        HostedLiveTVChannel(
+            title="Live One",
+            key="channel-1",
+            stream_url="https://stream.example/one.m3u8",
+            grid_key="grid-1",
+        )
+    )
+
+    page = service.hosted_live_tv_guide_page(channel, guide_date=date(2026, 7, 1), start=0, size=10)
+
+    assert calls == [
+        (
+            f"{EPG_PROVIDER_BASE}/grid?channelGridKey=grid-1&date=2026-07-01",
+            {"Accept": "application/json", "X-plex-token": "account-token"},
+            10,
+        )
+    ]
+    assert [(item.title, item.kind, item.playable) for item in page.items] == [
+        ("Next Show", "livetv_program", False),
+        ("Morning News", "livetv_program", False),
+    ]
+    assert "On now" in page.items[1].subtitle
+    assert page.items[1].artwork_path == "https://images.example/news.png"
+    details = media_details(page.items[1])
+    metadata = dict(details.metadata)
+    assert metadata["Begins"]
+    assert metadata["Ends"]
+    assert ("Resolution", "1080") in details.metadata
+    assert details.summary == "Headlines"
+
+
+def test_hosted_live_tv_program_mapping_accepts_second_epoch_timestamps():
+    program = hosted_live_tv_program_from_raw(
+        {
+            "ratingKey": "program-1",
+            "title": "Late Show",
+            "Media": [{"beginsAt": 1782921600, "endsAt": 1782925200}],
+        }
+    )
+
+    assert program is not None
+    assert program.begins_at == 1782921600000
+    assert program.ends_at == 1782925200000
 
 
 def test_hosted_live_tv_channel_mapping_signs_absolute_and_relative_urls():

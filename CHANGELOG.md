@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a hosted-only Live TV guide view from On Plex Live channels, showing
+  selected-channel program rows from Plex's hosted EPG provider.
+- Added a separate On Plex Live sidebar toggle so hosted Live TV can be hidden
+  without hiding On Plex Movies & Shows.
 - Added the internal Plex-hosted Live TV channel service model for listing
   account-region EPG channels, signing HLS part URLs, and rejecting DRM-marked
   channels before future playback UI work.
