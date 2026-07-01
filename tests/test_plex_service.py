@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from plextui.models import LibraryItem, MediaItem
 from plextui.plex_service import (
+    EPG_PROVIDER_BASE,
+    HostedLiveTVChannel,
     MediaPage,
     PlexService,
     artwork_path,
@@ -10,6 +12,7 @@ from plextui.plex_service import (
     episode_parent_key,
     episode_show_parent_key,
     kind_label,
+    hosted_live_tv_channel_from_raw,
     media_key,
     media_details,
     progress_bar,
@@ -17,6 +20,7 @@ from plextui.plex_service import (
     row_progress_marker,
     to_media_item,
     availability_urls,
+    signed_epg_url,
     watched_state,
 )
 
@@ -274,6 +278,20 @@ class RawServer:
         playlist = RawPlaylist()
         playlist.title = title
         return playlist
+
+
+class JsonResponse:
+    def __init__(self, payload: bytes) -> None:
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self):
+        return self.payload
 
 
 class ContinueWatchHubWrapper:
@@ -676,6 +694,103 @@ def test_video_on_demand_page_uses_account_token_and_returns_hubs(monkeypatch):
     assert calls == [("token", "account-token"), ("videoOnDemand", None)]
     assert isinstance(page, MediaPage)
     assert [(item.title, item.kind, item.playable) for item in page.items] == [("Plex Picks", "hub", False)]
+
+
+def test_hosted_live_tv_page_fetches_channels_with_account_token(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append((request.full_url, dict(request.header_items()), timeout))
+        return JsonResponse(
+            b"""
+            {
+              "MediaContainer": {
+                "Channel": [
+                  {
+                    "id": "channel-1",
+                    "title": "Live One",
+                    "callSign": "ONE",
+                    "isHd": true,
+                    "thumb": "https://images.example/one.png",
+                    "Media": [{"protocol": "hls", "container": "mpegts", "Part": [{"key": "/hls/one.m3u8"}]}]
+                  },
+                  {
+                    "id": "channel-2",
+                    "title": "Locked",
+                    "drm": true,
+                    "Media": [{"protocol": "hls", "Part": [{"key": "/hls/locked.m3u8"}]}]
+                  }
+                ]
+              }
+            }
+            """
+        )
+
+    monkeypatch.setattr("plextui.plex_service.urlopen", fake_urlopen)
+    service = object.__new__(PlexService)
+    service.config = type("Config", (), {"account_token": "account-token"})()
+
+    page = service.hosted_live_tv_page(start=0, size=10)
+
+    assert calls == [
+        (
+            f"{EPG_PROVIDER_BASE}/lineups/plex/channels",
+            {"Accept": "application/json", "X-plex-token": "account-token"},
+            10,
+        )
+    ]
+    assert [(item.title, item.subtitle, item.kind, item.playable) for item in page.items] == [
+        ("Live One", "ONE  HD  HLS", "livetv", True),
+        ("Locked", "HLS", "livetv", False),
+    ]
+    assert page.items[0].artwork_path == "https://images.example/one.png"
+    assert page.items[0].raw.getStreamURL() == f"{EPG_PROVIDER_BASE}/hls/one.m3u8?X-Plex-Token=account-token"
+    assert page.total == 2
+
+
+def test_hosted_live_tv_channel_mapping_signs_absolute_and_relative_urls():
+    relative = hosted_live_tv_channel_from_raw(
+        {
+            "id": "relative",
+            "title": "Relative",
+            "Media": [{"protocol": "hls", "Part": [{"key": "/hls/channel.m3u8?foo=1"}]}],
+        },
+        "token",
+    )
+    absolute = hosted_live_tv_channel_from_raw(
+        {
+            "id": "absolute",
+            "title": "Absolute",
+            "Media": [{"protocol": "hls", "Part": [{"url": "https://cdn.example/live.m3u8"}]}],
+        },
+        "token",
+    )
+
+    assert relative is not None
+    assert relative.stream_url == f"{EPG_PROVIDER_BASE}/hls/channel.m3u8?foo=1&X-Plex-Token=token"
+    assert absolute is not None
+    assert absolute.stream_url == "https://cdn.example/live.m3u8?X-Plex-Token=token"
+    assert signed_epg_url(f"{EPG_PROVIDER_BASE}/hls/channel.m3u8?X-Plex-Token=old", "new") == (
+        f"{EPG_PROVIDER_BASE}/hls/channel.m3u8?X-Plex-Token=new"
+    )
+
+
+def test_hosted_live_tv_drm_channel_rejects_stream_url():
+    channel = HostedLiveTVChannel(
+        title="Locked",
+        key="locked",
+        stream_url=f"{EPG_PROVIDER_BASE}/hls/locked.m3u8?X-Plex-Token=token",
+        drm=True,
+    )
+    item = to_media_item(channel)
+
+    assert not item.playable
+    try:
+        channel.getStreamURL()
+    except RuntimeError as exc:
+        assert "DRM-protected" in str(exc)
+    else:
+        raise AssertionError("expected DRM channel to reject stream URL")
 
 
 def test_vod_hub_children_resolve_relative_hub_key():

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added the internal Plex-hosted Live TV channel service model for listing
+  account-region EPG channels, signing HLS part URLs, and rejecting DRM-marked
+  channels before future playback UI work.
+
 ## 0.14.2 - 2026-06-29
 
 - Added `b` / `B` shortcuts to open the selected TV episode's season or show
