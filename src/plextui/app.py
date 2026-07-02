@@ -2872,7 +2872,7 @@ class PlexTuiApp(App[None]):
         self.set_status(status)
         self.set_timer(0.05, lambda: self.set_status(status), name="stream-choice-status")
 
-    def action_add_to_playlist(self) -> None:
+    def action_add_to_playlist(self) -> object | None:
         items = self.playlist_action_items()
         if not items:
             self.set_status("No media selected")
@@ -2884,7 +2884,7 @@ class PlexTuiApp(App[None]):
         if self.service is None:
             self.set_status("Connect to Plex before managing playlists")
             return
-        self.open_playlist_picker(items)
+        return self.open_playlist_picker(items)
 
     @work(thread=True)
     def open_playlist_picker(self, items: list[MediaItem]) -> None:
