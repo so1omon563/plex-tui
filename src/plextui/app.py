@@ -943,7 +943,6 @@ class PlexTuiApp(App[None]):
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         if event.list_view.id not in {"libraries", "media"}:
             return
-        self.refresh_footer_bindings()
         row = event.item
         if row is not None and row not in list(event.list_view.children):
             return
@@ -996,6 +995,7 @@ class PlexTuiApp(App[None]):
             self.show_media_details(row.media)
             self.set_status(media_row_status(row, self.browsing_stack[-1] if self.browsing_stack else None))
             self.maybe_auto_load_more(row.media)
+            self.refresh_footer_bindings()
         elif isinstance(row, LoadMoreRow):
             mark_active_row(event.list_view, row)
             self.show_detail_text("Load the next page of items.")
@@ -1039,12 +1039,12 @@ class PlexTuiApp(App[None]):
             self.show_detail_text("Select an item")
 
     def on_media_grid_highlighted(self, event: MediaGrid.Highlighted) -> None:
-        self.refresh_footer_bindings()
         self.show_media_details(event.media)
         if isinstance(event.control, MediaGrid):
             self.schedule_grid_prefetch(event.control)
             self.set_status(grid_status(event.control, self.browsing_stack[-1] if self.browsing_stack else None))
         self.maybe_auto_load_more(event.media)
+        self.refresh_footer_bindings()
 
     def on_media_grid_needs_artwork(self, event: MediaGrid.NeedsArtwork) -> None:
         grid = event.control if isinstance(event.control, MediaGrid) else None
