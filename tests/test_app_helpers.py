@@ -1345,7 +1345,7 @@ def test_live_tv_program_rows_are_details_only():
     program = MediaItem("Coda", "2:00 PM-3:00 PM  480", "livetv_program", "2", False, object())
 
     assert current_detail_actions(None, program) == (
-        "Guide: Enter selects program details",
+        "Guide: Enter opens details",
         "Guide: Escape returns to channels",
     )
 
@@ -1363,10 +1363,10 @@ def test_live_tv_context_actions_match_channel_and_guide_behavior():
     )
     assert media_row_status(MediaRow(channel), channel_state) == "Media: Enter guide / p play channel / o optimized"
     assert current_detail_actions(guide_state, program) == (
-        "Guide: Enter selects program details",
+        "Guide: Enter opens details",
         "Guide: Escape returns to channels",
     )
-    assert media_row_status(MediaRow(program), guide_state) == "Media: Enter selects guide program / Escape back"
+    assert media_row_status(MediaRow(program), guide_state) == "Media: Enter opens details / Escape back"
 
 
 def test_grid_card_styles_follow_visual_state_tokens():
@@ -1544,7 +1544,7 @@ def test_render_help_groups_key_bindings():
     assert "enter on Live TV sidebar row: browse hosted Live TV channels" in rendered
     assert "enter on Live TV channel: open channel guide" in rendered
     assert "p on Live TV channel: start channel playback" in rendered
-    assert "enter on guide program: select program details" in rendered
+    assert "enter on guide program: open details" in rendered
     assert "escape from guide: return to channel list" in rendered
     assert "Playlist Management" in rendered
     assert "enter on Playlists sidebar row: browse all playlists" in rendered
@@ -1557,6 +1557,24 @@ def test_render_help_groups_key_bindings():
     assert "ctrl+r: reconnect / reload libraries" in rendered
     assert "PLEX_TUI_ARTWORK_LOG=1" in rendered
     assert "?: show help" in rendered
+
+
+def test_footer_hides_irrelevant_live_tv_playback_actions():
+    app = PlexTuiApp()
+    channel = MediaItem("Live One", "", "livetv", "channel-1", True, object())
+    guide_program = MediaItem("Coda", "", "livetv_program", "program-1", False, object())
+    playable_program = MediaItem("Event", "", "livetv_program", "program-2", True, object())
+
+    app.selected_media = lambda: channel
+    assert app.check_action("play_selected", ()) is True
+    assert app.check_action("resume_selected", ()) is False
+
+    app.selected_media = lambda: guide_program
+    assert app.check_action("play_selected", ()) is False
+    assert app.check_action("resume_selected", ()) is False
+
+    app.selected_media = lambda: playable_program
+    assert app.check_action("play_selected", ()) is True
 
 
 def test_playlist_picker_rows_and_details():
@@ -1598,7 +1616,7 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
         "play_selected",
         "resume_selected",
     }
-    assert shown_labels["play_selected"] == "Play from start"
+    assert shown_labels["play_selected"] == "Play"
     assert shown_labels["resume_selected"] == "Resume"
     assert "alternate_library_action" in hidden
     assert "add_to_playlist" in hidden
@@ -1934,7 +1952,7 @@ def test_context_hints_for_media_and_load_more():
         "Media: Enter opens playlist / e rename / D delete"
     )
     assert context_hint(MediaRow(live_channel)) == "Media: Enter guide / p play channel / o optimized"
-    assert context_hint(MediaRow(live_program)) == "Media: Enter selects guide program / Escape back"
+    assert context_hint(MediaRow(live_program)) == "Media: Enter opens details / Escape back"
     assert context_hint(PlaylistsRow()) == "Libraries: Enter opens playlists"
     assert context_hint(grid) == (
         "Grid: Arrows/page select card / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"

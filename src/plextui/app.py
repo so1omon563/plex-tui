@@ -618,7 +618,7 @@ class PlexTuiApp(App[None]):
         Binding("right", "grid_right", "Right", show=False),
         Binding("comma", "show_settings", "Settings"),
         Binding("escape", "back_or_clear", "Back"),
-        Binding("p", "play_selected", "Play from start"),
+        Binding("p", "play_selected", "Play"),
         Binding("o", "play_optimized", "Optimized", show=False),
         Binding("P", "add_to_playlist", "Playlist", show=False),
         Binding("u", "toggle_bulk_selection", "Select", show=False),
@@ -943,6 +943,7 @@ class PlexTuiApp(App[None]):
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         if event.list_view.id not in {"libraries", "media"}:
             return
+        self.refresh_footer_bindings()
         row = event.item
         if row is not None and row not in list(event.list_view.children):
             return
@@ -1038,6 +1039,7 @@ class PlexTuiApp(App[None]):
             self.show_detail_text("Select an item")
 
     def on_media_grid_highlighted(self, event: MediaGrid.Highlighted) -> None:
+        self.refresh_footer_bindings()
         self.show_media_details(event.media)
         if isinstance(event.control, MediaGrid):
             self.schedule_grid_prefetch(event.control)
@@ -1412,6 +1414,27 @@ class PlexTuiApp(App[None]):
         if self.media_grid_visible():
             return self.query_one("#media-grid", MediaGrid).selected_media
         return selected_media_from_row(self.query_one("#media", ListView).highlighted_child)
+
+    def refresh_footer_bindings(self) -> None:
+        try:
+            self.refresh_bindings()
+        except ScreenStackError:
+            pass
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action not in {"play_selected", "resume_selected"}:
+            return True
+        try:
+            media = self.selected_media()
+        except NoMatches:
+            return True
+        if media is None:
+            return True
+        if action == "resume_selected" and media.kind in {"livetv", "livetv_program"}:
+            return False
+        if action == "play_selected" and media.kind == "livetv_program" and not media.playable:
+            return False
+        return True
 
     def current_browse_state(self) -> BrowseState | None:
         return self.browsing_stack[-1] if self.browsing_stack else None
@@ -5527,7 +5550,7 @@ def render_help() -> str:
         "enter on Live TV sidebar row: browse hosted Live TV channels",
         "enter on Live TV channel: open channel guide",
         "p on Live TV channel: start channel playback",
-        "enter on guide program: select program details",
+        "enter on guide program: open details",
         "escape from guide: return to channel list",
         "",
         "Playlist Management",
@@ -5661,8 +5684,8 @@ def context_hint(row: object) -> str:
             return "Media: Enter guide / p play channel / o optimized"
         if row.media.kind == "livetv_program":
             if row.media.playable:
-                return "Media: Enter selects guide program / p play program / Escape back"
-            return "Media: Enter selects guide program / Escape back"
+                return "Media: Enter opens details / p play program / Escape back"
+            return "Media: Enter opens details / Escape back"
         if row.media.playable:
             return "Media: Enter selects / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
@@ -5720,7 +5743,7 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
             return ("Live TV: Enter opens guide", "Live TV: p starts this channel", "Live TV: o starts optimized")
         return ("Live TV: unavailable for external playback",)
     if item is not None and item.kind == "livetv_program":
-        actions = ["Guide: Enter selects program details", "Guide: Escape returns to channels"]
+        actions = ["Guide: Enter opens details", "Guide: Escape returns to channels"]
         if item.playable:
             actions.append("Guide: p starts this program")
         return tuple(actions)
