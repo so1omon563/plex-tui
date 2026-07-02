@@ -3562,7 +3562,8 @@ async def run_toggle_watched_continue_watching_refresh_check():
         app.service = service
         app.browsing_stack = [BrowseState("Continue Watching", [current], source="continue_watching", total=1)]
         app.show_browse_state(app.browsing_stack[-1])
-        await pilot.pause(0.2)
+        selected = await wait_for_selected_title(app, pilot, "Episode 1", attempts=80)
+        assert selected is not None
 
         app.action_toggle_watched()
 
@@ -3597,7 +3598,8 @@ async def run_toggle_watched_continue_watching_refresh_resolves_hub_wrapper_chec
         app.service = service
         app.browsing_stack = [BrowseState("Continue Watching", [current], source="continue_watching", total=1)]
         app.show_browse_state(app.browsing_stack[-1])
-        await pilot.pause(0.2)
+        selected = await wait_for_selected_title(app, pilot, "Episode 1", attempts=80)
+        assert selected is not None
 
         app.action_toggle_watched()
 
