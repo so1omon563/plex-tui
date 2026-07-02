@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Allowed playback from the current Live TV guide program by routing it through
+  the selected channel stream.
 - Fixed hosted Live TV guides so the currently airing program appears before
   upcoming programs.
 - Reordered Live TV channel and guide-program details so schedule, summary, and

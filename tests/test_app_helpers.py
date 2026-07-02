@@ -1459,8 +1459,10 @@ def test_live_tv_program_rows_are_details_only():
 def test_live_tv_context_actions_match_channel_and_guide_behavior():
     channel = MediaItem("Live One", "", "livetv", "channel-1", True, object())
     program = MediaItem("Coda", "", "livetv_program", "program-1", False, object())
+    on_air_program = MediaItem("Live Show", "", "livetv_program", "program-2", False, SimpleNamespace(on_air=True))
     channel_state = BrowseState("Live TV on Plex", [channel], source="livetv")
     guide_state = BrowseState("Guide: Live One", [program], source="livetv_guide", context_media=channel)
+    on_air_guide_state = BrowseState("Guide: Live One", [on_air_program], source="livetv_guide", context_media=channel)
 
     assert current_detail_actions(channel_state, channel) == (
         "Live TV: Enter opens guide",
@@ -1472,6 +1474,31 @@ def test_live_tv_context_actions_match_channel_and_guide_behavior():
         "Guide: Escape returns to channels",
     )
     assert media_row_status(MediaRow(program), guide_state) == "Media: Escape back"
+    assert current_detail_actions(on_air_guide_state, on_air_program) == (
+        "Guide: Escape returns to channels",
+        "Guide: p starts channel",
+        "Guide: o starts optimized",
+    )
+    assert media_row_status(MediaRow(on_air_program), on_air_guide_state) == (
+        "Media: p play channel / o optimized / Escape back"
+    )
+
+
+def test_live_tv_guide_on_air_program_playback_routes_to_channel():
+    channel = MediaItem("Live One", "", "livetv", "channel-1", True, object())
+    program = MediaItem("Live Show", "", "livetv_program", "program-1", False, SimpleNamespace(on_air=True))
+    app = PlexTuiApp()
+    app.browsing_stack = [BrowseState("Guide: Live One", [program], source="livetv_guide", context_media=channel)]
+    app.selected_media = lambda: program
+    played = []
+    app.play_media = lambda media, resume, playback_mode=None: played.append((media, resume, playback_mode))
+
+    assert app.check_action("play_selected", ()) is True
+    assert app.check_action("resume_selected", ()) is False
+    app.action_play_selected()
+    app.action_play_optimized()
+
+    assert played == [(channel, False, None), (channel, False, "transcode")]
 
 
 def test_grid_card_styles_follow_visual_state_tokens():
@@ -1668,6 +1695,7 @@ def test_footer_hides_irrelevant_live_tv_playback_actions():
     app = PlexTuiApp()
     channel = MediaItem("Live One", "", "livetv", "channel-1", True, object())
     guide_program = MediaItem("Coda", "", "livetv_program", "program-1", False, object())
+    on_air_program = MediaItem("Live Show", "", "livetv_program", "program-3", False, SimpleNamespace(on_air=True))
     playable_program = MediaItem("Event", "", "livetv_program", "program-2", True, object())
 
     app.selected_media = lambda: channel
@@ -1676,6 +1704,11 @@ def test_footer_hides_irrelevant_live_tv_playback_actions():
 
     app.selected_media = lambda: guide_program
     assert app.check_action("play_selected", ()) is False
+    assert app.check_action("resume_selected", ()) is False
+
+    app.browsing_stack = [BrowseState("Guide: Live One", [on_air_program], source="livetv_guide", context_media=channel)]
+    app.selected_media = lambda: on_air_program
+    assert app.check_action("play_selected", ()) is True
     assert app.check_action("resume_selected", ()) is False
 
     app.selected_media = lambda: playable_program

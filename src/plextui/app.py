@@ -1433,11 +1433,12 @@ class PlexTuiApp(App[None]):
         if action == "resume_selected" and media.kind in {"livetv", "livetv_program"}:
             return False
         if action == "play_selected" and media.kind == "livetv_program" and not media.playable:
-            return False
+            return live_tv_guide_playback_channel(self.current_browse_state(), media) is not None
         return True
 
     def current_browse_state(self) -> BrowseState | None:
-        return self.browsing_stack[-1] if self.browsing_stack else None
+        stack = getattr(self, "browsing_stack", [])
+        return stack[-1] if stack else None
 
     def current_browse_state_source(self) -> str:
         state = self.current_browse_state()
@@ -3680,6 +3681,7 @@ class PlexTuiApp(App[None]):
         if media is None:
             self.set_status("No media selected")
             return
+        media = live_tv_guide_playback_channel(self.current_browse_state(), media) or media
         self.play_media(media, bool(resume_offset_ms(media.raw)), playback_mode="transcode")
 
     def action_toggle_watched(self) -> object | None:
@@ -3903,6 +3905,7 @@ class PlexTuiApp(App[None]):
         if media is None:
             self.set_status("No media selected")
             return
+        media = live_tv_guide_playback_channel(self.current_browse_state(), media) or media
         self.play_media(media, resume)
 
     def play_media(
@@ -4378,6 +4381,15 @@ def live_tv_action_rows(details: object, context_actions: tuple[str, ...]) -> li
             return ["Enter opens guide", "p starts channel", "o starts optimized"]
         return ["Unavailable for external playback"]
     return ["Escape returns to channels"]
+
+
+def live_tv_guide_playback_channel(state: BrowseState | None, item: MediaItem | None) -> MediaItem | None:
+    if state is None or state.source != "livetv_guide" or item is None or item.kind != "livetv_program":
+        return None
+    channel = state.context_media
+    if channel is not None and channel.playable and bool(getattr(item.raw, "on_air", False)):
+        return channel
+    return None
 
 
 def live_tv_action_label(action: str) -> str:
@@ -5900,6 +5912,8 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
         return ("Live TV: unavailable for external playback",)
     if item is not None and item.kind == "livetv_program":
         actions = ["Guide: Escape returns to channels"]
+        if live_tv_guide_playback_channel(state, item) is not None:
+            actions.extend(["Guide: p starts channel", "Guide: o starts optimized"])
         if item.playable:
             actions.append("Guide: p starts this program")
         return tuple(actions)
@@ -5923,6 +5937,8 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
 def media_row_status(row: MediaRow, state: BrowseState | None) -> str:
     if state is not None and state.source == "discover" and availability_urls(row.media.raw):
         return "Media: Enter opens availability link or provider picker"
+    if live_tv_guide_playback_channel(state, row.media) is not None:
+        return "Media: p play channel / o optimized / Escape back"
     status = context_hint(row)
     if is_playlist_browse_state(state):
         status = f"{status} / Backspace/Delete remove from playlist"
