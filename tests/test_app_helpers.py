@@ -619,6 +619,30 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "› Show app diagnostics  (show)" in labels
 
 
+def test_optional_plex_feature_copy_uses_sidebar_visibility_language():
+    config = AppConfig("http://plex", "token", "client-id")
+    rendered = render_settings(config)
+    discover_row = next(
+        row for row in settings_rows(config) if getattr(row, "action", "") == "toggle_show_discover"
+    )
+    live_tv_row = next(
+        row for row in settings_rows(config) if getattr(row, "action", "") == "toggle_show_on_plex_live"
+    )
+
+    assert "Discover:      Hidden" in rendered
+    assert "On Plex:       Hidden" in rendered
+    assert "Live TV:       Hidden" in rendered
+    assert "Hidden from the sidebar" in rendered
+    assert "Disabled by default" not in rendered
+    assert "Browse Plex Discover content. Hidden from the sidebar by default." in render_settings_row_details(
+        discover_row, config
+    )
+    assert "Browse Plex Live TV channels. Hidden from the sidebar by default." in render_settings_row_details(
+        live_tv_row, config
+    )
+    assert context_hint(PlexServicesRow()) == "Libraries: Enter opens Optional Plex Features settings"
+
+
 def test_settings_rows_include_library_visibility_toggles():
     config = AppConfig(
         "http://plex",

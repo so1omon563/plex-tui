@@ -1288,6 +1288,7 @@ async def run_library_highlight_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
         libraries = [
             LibraryItem("Movies", "1", "movie", object()),
             LibraryItem("TV", "2", "show", object()),
@@ -1319,6 +1320,7 @@ async def run_continue_watching_entrypoint_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
         libraries = [
             LibraryItem("Movies", "1", "movie", object()),
             LibraryItem("TV", "2", "show", object()),
@@ -1690,6 +1692,7 @@ async def run_selected_library_highlight_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
         libraries = [
             LibraryItem("Movies", "1", "movie", object()),
             LibraryItem("TV", "2", "show", object()),
@@ -3022,6 +3025,25 @@ async def run_settings_sidebar_entrypoint_visibility_check():
         assert isinstance(rows[4], LibraryRow)
         assert rows[4].library.title == "Movies"
         assert not any(isinstance(row, PlaylistsRow | PlexServicesRow) for row in rows)
+
+        with patch("plextui.app.save_config") as save_config:
+            app.run_settings_action("toggle_show_discover")
+            await pilot.pause(0.2)
+            app.run_settings_action("toggle_show_on_plex")
+            await pilot.pause(0.2)
+            app.run_settings_action("toggle_show_on_plex_live")
+            await pilot.pause(0.2)
+
+        rows = list(app.query_one("#libraries").children)
+        assert app.config.show_discover is False
+        assert app.config.show_on_plex is False
+        assert app.config.show_on_plex_live is False
+        assert save_config.call_count == 3
+        assert isinstance(rows[0], ContinueWatchingRow)
+        assert isinstance(rows[1], LibraryRow)
+        assert rows[1].library.title == "Movies"
+        assert isinstance(rows[2], PlexServicesRow)
+        assert not any(isinstance(row, DiscoverRow | OnPlexRow | OnPlexLiveRow) for row in rows)
 
 
 async def run_plex_services_sidebar_opens_settings_check():

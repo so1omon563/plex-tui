@@ -971,7 +971,7 @@ class PlexTuiApp(App[None]):
         elif isinstance(row, PlexServicesRow):
             mark_active_row(event.list_view, row)
             self.show_detail_text(
-                "Optional Plex Features\n\nDiscover, On Plex, and Live TV are off by default. Press Enter to enable them in Settings."
+                "Optional Plex Features\n\nDiscover, On Plex, and Live TV are hidden from the sidebar by default. Press Enter to choose which services appear."
             )
             self.set_status(context_hint(row))
         elif isinstance(row, AvailabilityRow):
@@ -5480,9 +5480,9 @@ def render_settings(config: AppConfig) -> str:
             ("Discover Type", discover_media_type_value(config)),
         ],
         [
-            "Discover: browse Plex Discover content. Disabled by default.",
-            "On Plex: browse Plex-provided movies and shows. Disabled by default.",
-            "Live TV: browse Plex Live TV channels and guide data. Disabled by default.",
+            "Discover: browse Plex Discover content. Hidden from the sidebar by default.",
+            "On Plex: browse Plex-provided movies and shows. Hidden from the sidebar by default.",
+            "Live TV: browse Plex Live TV channels. Hidden from the sidebar by default.",
         ],
     )
     append_settings_section(
@@ -5662,7 +5662,7 @@ def context_hint(row: object) -> str:
     if isinstance(row, OnPlexLiveRow):
         return "Libraries: Enter browses Live TV on Plex"
     if isinstance(row, PlexServicesRow):
-        return "Libraries: Enter opens optional Plex feature settings"
+        return "Libraries: Enter opens Optional Plex Features settings"
     if isinstance(row, AvailabilityRow):
         return "Availability: Enter opens provider link"
     if isinstance(row, ResumeChoiceRow):
@@ -5982,17 +5982,17 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
     if action == "toggle_show_discover":
         return (
             f"Current Discover: {show_setting_value(config.show_discover)}\n"
-            "Browse Plex Discover content. Disabled by default."
+            "Browse Plex Discover content. Hidden from the sidebar by default."
         )
     if action == "toggle_show_on_plex":
         return (
             f"Current On Plex: {show_setting_value(config.show_on_plex)}\n"
-            "Browse Plex-provided movies and shows. Disabled by default."
+            "Browse Plex-provided movies and shows. Hidden from the sidebar by default."
         )
     if action == "toggle_show_on_plex_live":
         return (
             f"Current Live TV: {show_setting_value(config.show_on_plex_live)}\n"
-            "Browse Plex Live TV channels and guide data. Disabled by default."
+            "Browse Plex Live TV channels. Hidden from the sidebar by default."
         )
     if action == "cycle_discover_media_type":
         return f"Current Discover type: {discover_media_type_value(config)}"
