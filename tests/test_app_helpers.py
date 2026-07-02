@@ -325,7 +325,6 @@ def test_render_details_prioritizes_live_tv_guide_program_schedule():
     rendered = render_details(
         details,
         context_actions=(
-            "Guide: Enter opens details",
             "Guide: Escape returns to channels",
         ),
     )
@@ -334,7 +333,7 @@ def test_render_details_prioritizes_live_tv_guide_program_schedule():
     assert "Schedule\nTime:       2:00 PM-3:00 PM" in rendered
     assert "On Air:     On now" in rendered
     assert "Summary\nA quiet hour of music." in rendered
-    assert "Actions\nEnter opens details\nEscape returns to channels" in rendered
+    assert "Actions\nEscape returns to channels" in rendered
     assert "Guide program\nDetails only" not in rendered
     assert rendered.index("Schedule") < rendered.index("Summary")
     assert rendered.index("Summary") < rendered.index("Actions")
@@ -1453,7 +1452,6 @@ def test_live_tv_program_rows_are_details_only():
     program = MediaItem("Coda", "2:00 PM-3:00 PM  480", "livetv_program", "2", False, object())
 
     assert current_detail_actions(None, program) == (
-        "Guide: Enter opens details",
         "Guide: Escape returns to channels",
     )
 
@@ -1471,10 +1469,9 @@ def test_live_tv_context_actions_match_channel_and_guide_behavior():
     )
     assert media_row_status(MediaRow(channel), channel_state) == "Media: Enter guide / p play channel / o optimized"
     assert current_detail_actions(guide_state, program) == (
-        "Guide: Enter opens details",
         "Guide: Escape returns to channels",
     )
-    assert media_row_status(MediaRow(program), guide_state) == "Media: Enter opens details / Escape back"
+    assert media_row_status(MediaRow(program), guide_state) == "Media: Escape back"
 
 
 def test_grid_card_styles_follow_visual_state_tokens():
@@ -2060,7 +2057,7 @@ def test_context_hints_for_media_and_load_more():
         "Media: Enter opens playlist / e rename / D delete"
     )
     assert context_hint(MediaRow(live_channel)) == "Media: Enter guide / p play channel / o optimized"
-    assert context_hint(MediaRow(live_program)) == "Media: Enter opens details / Escape back"
+    assert context_hint(MediaRow(live_program)) == "Media: Escape back"
     assert context_hint(PlaylistsRow()) == "Libraries: Enter opens playlists"
     assert context_hint(grid) == (
         "Grid: Arrows/page select card / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"

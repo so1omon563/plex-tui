@@ -310,7 +310,7 @@ class PlexService:
             for program in (hosted_live_tv_program_from_raw(raw) for raw in container.get("Metadata", []))
             if program is not None
         ]
-        programs.sort(key=lambda program: program.begins_at or program.ends_at or program.key)
+        programs.sort(key=hosted_live_tv_program_sort_key)
         return sliced_media_page([to_media_item(program) for program in programs], start, size)
 
     def continue_watching_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
@@ -624,6 +624,10 @@ def hosted_live_tv_program_image(raw: dict[str, Any]) -> str:
 def hosted_live_tv_program_subtitle(program: HostedLiveTVGuideProgram) -> str:
     bits = [hosted_live_tv_time_range(program), "On now" if program.on_air else "", program.video_resolution.upper()]
     return "  ".join(bit for bit in bits if bit)
+
+
+def hosted_live_tv_program_sort_key(program: HostedLiveTVGuideProgram) -> tuple[bool, int, str]:
+    return (not program.on_air, program.begins_at or program.ends_at, program.key)
 
 
 def hosted_live_tv_time_range(program: HostedLiveTVGuideProgram) -> str:

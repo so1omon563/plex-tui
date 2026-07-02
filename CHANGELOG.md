@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed hosted Live TV guides so the currently airing program appears before
+  upcoming programs.
 - Reordered Live TV channel and guide-program details so schedule, summary, and
   actions appear before compact technical metadata.
 - Aligned Live TV channel and guide help/status hints with the actions each

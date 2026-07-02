@@ -1737,7 +1737,7 @@ class PlexTuiApp(App[None]):
             )
             return
         if media.kind == "livetv_program":
-            self.call_from_thread(self.set_status, f"Selected guide program: {media.title}.")
+            self.call_from_thread(self.set_status, f"Guide program: {media.title}. Escape returns to channels.")
             return
         if media.playable:
             self.call_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
@@ -4377,7 +4377,7 @@ def live_tv_action_rows(details: object, context_actions: tuple[str, ...]) -> li
         if bool(getattr(details, "playable")):
             return ["Enter opens guide", "p starts channel", "o starts optimized"]
         return ["Unavailable for external playback"]
-    return ["Enter opens details", "Escape returns to channels"]
+    return ["Escape returns to channels"]
 
 
 def live_tv_action_label(action: str) -> str:
@@ -5840,8 +5840,8 @@ def context_hint(row: object) -> str:
             return "Media: Enter guide / p play channel / o optimized"
         if row.media.kind == "livetv_program":
             if row.media.playable:
-                return "Media: Enter opens details / p play program / Escape back"
-            return "Media: Enter opens details / Escape back"
+                return "Media: p play program / Escape back"
+            return "Media: Escape back"
         if row.media.playable:
             return "Media: Enter selects / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
@@ -5899,7 +5899,7 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
             return ("Live TV: Enter opens guide", "Live TV: p starts this channel", "Live TV: o starts optimized")
         return ("Live TV: unavailable for external playback",)
     if item is not None and item.kind == "livetv_program":
-        actions = ["Guide: Enter opens details", "Guide: Escape returns to channels"]
+        actions = ["Guide: Escape returns to channels"]
         if item.playable:
             actions.append("Guide: p starts this program")
         return tuple(actions)
