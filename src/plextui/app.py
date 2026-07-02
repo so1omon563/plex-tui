@@ -2903,7 +2903,7 @@ class PlexTuiApp(App[None]):
             return
         return self.open_playlist_picker(items)
 
-    @work(thread=True)
+    @work(thread=True, exclusive=True, group="playlist-picker")
     def open_playlist_picker(self, items: list[MediaItem]) -> None:
         if self.service is None:
             return
