@@ -1737,22 +1737,16 @@ def test_media_row_marks_container_items():
     assert "Show · TV Show · 2 seasons" in row.label_text
 
 
-def test_media_row_formats_live_tv_channel_as_status_row(monkeypatch):
+def test_media_row_formats_live_tv_channel_as_status_row():
     raw = SimpleNamespace(
-        current_program_title="Ordinary Witches",
-        begins_at=1782921600000,
-        ends_at=1782925200000,
         call_sign="CWFOREVER",
         is_hd=True,
         protocol="hls",
     )
-    monkeypatch.setattr("plextui.app.time.time", lambda: 1782923400)
 
     row = MediaRow(MediaItem("CW Forever", "CWFOREVER  HD  HLS", "livetv", "1", True, raw))
 
-    assert row.label_text.startswith("▶ CW Forever")
-    assert "Ordinary Witches" in row.label_text
-    assert "[###---] 50%" in row.label_text
+    assert row.label_text == "▶ CW Forever  CWFOREVER · HD"
     assert "CWFOREVER · HD" in row.label_text
     assert "Live TV Channel" not in row.label_text
     assert "HLS" not in row.label_text

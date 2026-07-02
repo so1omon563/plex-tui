@@ -4516,14 +4516,8 @@ def live_tv_row_marker(media: MediaItem, bulk_selected: bool = False) -> str:
 
 def live_tv_channel_row_label(media: MediaItem, bulk_selected: bool = False) -> str:
     marker = live_tv_row_marker(media, bulk_selected)
-    raw = media.raw
-    program = live_tv_current_program_title(raw)
-    time_range = live_tv_time_range(raw)
-    progress = live_tv_airing_progress(raw)
     quality = live_tv_quality_label(media)
-    details = [program, time_range, progress, quality]
-    detail_text = "  ".join(bit for bit in details if bit)
-    return f"{marker} {media.title}{('  ' + detail_text) if detail_text else ''}"
+    return f"{marker} {media.title}{('  ' + quality) if quality else ''}"
 
 
 def live_tv_program_row_label(media: MediaItem, bulk_selected: bool = False) -> str:
@@ -4541,22 +4535,6 @@ def live_tv_program_row_label(media: MediaItem, bulk_selected: bool = False) -> 
     return f"{marker} {title}{('  ' + detail_text) if detail_text else ''}"
 
 
-def live_tv_current_program_title(raw: object) -> str:
-    for attr in ("current_program_title", "program_title", "current_title", "now_title"):
-        value = getattr(raw, attr, None)
-        if value:
-            return str(value)
-    return ""
-
-
-def live_tv_time_range(raw: object) -> str:
-    start = live_tv_timestamp(getattr(raw, "begins_at", 0) or getattr(raw, "current_begins_at", 0))
-    end = live_tv_timestamp(getattr(raw, "ends_at", 0) or getattr(raw, "current_ends_at", 0))
-    if start and end:
-        return f"{start}-{end}"
-    return start or end
-
-
 def live_tv_timestamp(milliseconds: object) -> str:
     if not milliseconds:
         return ""
@@ -4564,19 +4542,6 @@ def live_tv_timestamp(milliseconds: object) -> str:
         return time.strftime("%-I:%M %p", time.localtime(int(milliseconds) / 1000))
     except (TypeError, ValueError, OSError):
         return ""
-
-
-def live_tv_airing_progress(raw: object) -> str:
-    begins_at = live_tv_int(getattr(raw, "begins_at", 0) or getattr(raw, "current_begins_at", 0))
-    ends_at = live_tv_int(getattr(raw, "ends_at", 0) or getattr(raw, "current_ends_at", 0))
-    now = int(time.time() * 1000)
-    if not begins_at or not ends_at or not (begins_at < now < ends_at):
-        return ""
-    duration = ends_at - begins_at
-    elapsed = now - begins_at
-    percent = min(99, max(1, round(elapsed / duration * 100)))
-    filled = max(1, round(6 * percent / 100))
-    return f"[{'#' * filled}{'-' * (6 - filled)}] {percent}%"
 
 
 def live_tv_duration_label(raw: object) -> str:
