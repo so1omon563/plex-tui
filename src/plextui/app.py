@@ -4335,7 +4335,7 @@ def playback_readiness_rows(
         return rows
     if "Live TV: unavailable for external playback" in context_actions:
         return ["Unavailable for external playback", *context_actions]
-    if "Guide: program details only" in context_actions:
+    if any(action.startswith("Guide:") for action in context_actions):
         return ["Guide program", "Details only", *context_actions]
     rows = [
         "Opens more items",
@@ -5523,9 +5523,15 @@ def render_help() -> str:
         "w: mark selected media watched / unwatched",
         "x: stop launched mpv",
         "",
+        "Live TV",
+        "enter on Live TV sidebar row: browse hosted Live TV channels",
+        "enter on Live TV channel: open channel guide",
+        "p on Live TV channel: start channel playback",
+        "enter on guide program: select program details",
+        "escape from guide: return to channel list",
+        "",
         "Playlist Management",
         "enter on Playlists sidebar row: browse all playlists",
-        "enter on Live TV: browse hosted Live TV channels",
         "P: add selected media to an existing or new playlist",
         "u: toggle selected item for bulk playlist actions",
         "backspace/delete: remove selected item from the open playlist",
@@ -5652,7 +5658,11 @@ def context_hint(row: object) -> str:
         if row.media.kind == "livetv" and not row.media.playable:
             return "Media: Live TV channel is unavailable for external playback"
         if row.media.kind == "livetv":
-            return "Media: Enter opens guide / p starts this channel"
+            return "Media: Enter guide / p play channel / o optimized"
+        if row.media.kind == "livetv_program":
+            if row.media.playable:
+                return "Media: Enter selects guide program / p play program / Escape back"
+            return "Media: Enter selects guide program / Escape back"
         if row.media.playable:
             return "Media: Enter selects / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
@@ -5707,10 +5717,13 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
         return ("Availability: Listed by Plex; playable stream checked on play",)
     if item is not None and item.kind == "livetv":
         if item.playable:
-            return ("Live TV: Enter opens guide", "Live TV: p starts this channel")
+            return ("Live TV: Enter opens guide", "Live TV: p starts this channel", "Live TV: o starts optimized")
         return ("Live TV: unavailable for external playback",)
     if item is not None and item.kind == "livetv_program":
-        return ("Guide: program details only",)
+        actions = ["Guide: Enter selects program details", "Guide: Escape returns to channels"]
+        if item.playable:
+            actions.append("Guide: p starts this program")
+        return tuple(actions)
     if item is not None and item.kind == "playlist":
         return (
             "Playlist: Enter opens contents",

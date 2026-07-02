@@ -1344,7 +1344,29 @@ def test_grid_card_footer_shows_watch_progress():
 def test_live_tv_program_rows_are_details_only():
     program = MediaItem("Coda", "2:00 PM-3:00 PM  480", "livetv_program", "2", False, object())
 
-    assert current_detail_actions(None, program) == ("Guide: program details only",)
+    assert current_detail_actions(None, program) == (
+        "Guide: Enter selects program details",
+        "Guide: Escape returns to channels",
+    )
+
+
+def test_live_tv_context_actions_match_channel_and_guide_behavior():
+    channel = MediaItem("Live One", "", "livetv", "channel-1", True, object())
+    program = MediaItem("Coda", "", "livetv_program", "program-1", False, object())
+    channel_state = BrowseState("Live TV on Plex", [channel], source="livetv")
+    guide_state = BrowseState("Guide: Live One", [program], source="livetv_guide", context_media=channel)
+
+    assert current_detail_actions(channel_state, channel) == (
+        "Live TV: Enter opens guide",
+        "Live TV: p starts this channel",
+        "Live TV: o starts optimized",
+    )
+    assert media_row_status(MediaRow(channel), channel_state) == "Media: Enter guide / p play channel / o optimized"
+    assert current_detail_actions(guide_state, program) == (
+        "Guide: Enter selects program details",
+        "Guide: Escape returns to channels",
+    )
+    assert media_row_status(MediaRow(program), guide_state) == "Media: Enter selects guide program / Escape back"
 
 
 def test_grid_card_styles_follow_visual_state_tokens():
@@ -1518,6 +1540,12 @@ def test_render_help_groups_key_bindings():
     assert "r: resume selected media from saved progress" in rendered
     assert "o: play optimized transcode for slow streams" in rendered
     assert "w: mark selected media watched / unwatched" in rendered
+    assert "Live TV" in rendered
+    assert "enter on Live TV sidebar row: browse hosted Live TV channels" in rendered
+    assert "enter on Live TV channel: open channel guide" in rendered
+    assert "p on Live TV channel: start channel playback" in rendered
+    assert "enter on guide program: select program details" in rendered
+    assert "escape from guide: return to channel list" in rendered
     assert "Playlist Management" in rendered
     assert "enter on Playlists sidebar row: browse all playlists" in rendered
     assert "P: add selected media to an existing or new playlist" in rendered
@@ -1890,6 +1918,8 @@ def test_playlist_context_hints_status_and_details_action():
 def test_context_hints_for_media_and_load_more():
     playable = MediaItem("Movie", "", "movie", "1", True, object())
     container = MediaItem("Show", "", "show", "2", False, object())
+    live_channel = MediaItem("Live One", "", "livetv", "live-1", True, object())
+    live_program = MediaItem("Coda", "", "livetv_program", "program-1", False, object())
     grid = MediaGrid()
     grid.set_items([playable], selected_index=0, config=AppConfig("http://plex", "token", "client"), columns=1)
     settings = settings_rows(AppConfig("http://plex", "token", "client"))
@@ -1903,6 +1933,8 @@ def test_context_hints_for_media_and_load_more():
     assert context_hint(MediaRow(MediaItem("Favorites", "", "playlist", "p1", False, object()))) == (
         "Media: Enter opens playlist / e rename / D delete"
     )
+    assert context_hint(MediaRow(live_channel)) == "Media: Enter guide / p play channel / o optimized"
+    assert context_hint(MediaRow(live_program)) == "Media: Enter selects guide program / Escape back"
     assert context_hint(PlaylistsRow()) == "Libraries: Enter opens playlists"
     assert context_hint(grid) == (
         "Grid: Arrows/page select card / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
