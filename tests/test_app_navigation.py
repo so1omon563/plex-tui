@@ -2753,9 +2753,9 @@ async def run_list_detail_refresh_idle_check():
         def capture_refresh(item, token):
             refreshed.append(item.title)
 
-        app.refresh_media_details = capture_refresh
         app.show_browse_state(BrowseState("Movies", items))
-        await pilot.pause(0.1)
+        await pilot.pause(0.5)
+        app.refresh_media_details = capture_refresh
 
         app.show_media_details(items[1])
         await pilot.pause(0.2)
