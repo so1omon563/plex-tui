@@ -80,8 +80,8 @@ plex-tui discover-open "matrix" --index 3 --service-index 1
 ```
 
 `discover-open` opens a selected Plex Discover availability URL in your
-browser. In the TUI, press Space on the Discover sidebar row or select On Plex
-to browse Plex Movies & Shows VOD hubs. Select On Plex Live to browse
+browser. In the TUI, enable Discover or On Plex in Settings to browse
+Plex Discover and Plex Movies & Shows VOD hubs. Enable Live TV to browse
 Plex-hosted Live TV channels. Press Enter on a hosted Live TV channel to inspect
 that channel's hosted guide programs; press `p` to start playback when the
 channel is playable.

@@ -25,6 +25,7 @@ from plextui.app import (
     OnPlexLiveRow,
     OnPlexRow,
     PlaylistsRow,
+    PlexServicesRow,
     PlaylistCreateRow,
     PlaylistTargetRow,
     PlexTuiApp,
@@ -547,7 +548,7 @@ def test_render_settings_includes_stream_preferences():
     assert "Artwork:          On" in rendered
     assert "Artwork Renderer: Block" in rendered
     assert "Details Artwork:  List only" in rendered
-    assert "Media View:           List" in rendered
+    assert "Media View:          List" in rendered
     assert "Theme:       textual-light" in rendered
     assert "mpv Window Size:" in rendered
     assert "Default (80%)" in rendered
@@ -562,9 +563,9 @@ def test_render_settings_includes_stream_preferences():
     assert "Smooth (12 fps" in rendered
     assert "Transcode Quality:" in rendered
     assert "Original" in rendered
-    assert "Page Size:            250" in rendered
-    assert "Auto-load Threshold:  25" in rendered
-    assert "Grid Prefetch Pages:  4" in rendered
+    assert "Page Size:           250" in rendered
+    assert "Auto-load Threshold: 25" in rendered
+    assert "Grid Prefetch Pages: 4" in rendered
     assert "Show recent debug log" in rendered
     assert "Show app diagnostics" in rendered
     assert subtitle_preference_value(config) == "eng"
@@ -588,6 +589,7 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "Playback" in labels
     assert "Artwork" in labels
     assert "Browsing" in labels
+    assert "Optional Plex Features" in labels
     assert "Diagnostics" in labels
     assert "  Server: http://plex" in labels
     assert "  Home Token: not set" in labels
@@ -604,9 +606,9 @@ def test_settings_rows_are_grouped_with_action_values():
     assert "› Set custom mpv window size  (edit)" in labels
     assert "› Library Enter: Library  (cycle)" in labels
     assert "› Playlists Sidebar: Shown  (toggle)" in labels
-    assert "› Discover Sidebar: Shown  (toggle)" in labels
-    assert "› On Plex Sidebar: Shown  (toggle)" in labels
-    assert "› On Plex Live Sidebar: Shown  (toggle)" in labels
+    assert "› Discover: Hidden  (toggle)" in labels
+    assert "› On Plex: Hidden  (toggle)" in labels
+    assert "› Live TV: Hidden  (toggle)" in labels
     assert "› Discover Type: Movies & Shows  (cycle)" in labels
     assert "› Grid Density: Comfortable  (cycle)" in labels
     assert "› Artwork Renderer: Block  (cycle)" in labels
@@ -688,30 +690,82 @@ def test_sidebar_rows_can_hide_optional_entrypoints():
 
     rows = sidebar_rows(config, libraries)
 
-    assert [type(row) for row in rows] == [ContinueWatchingRow, LibraryRow]
+    assert [type(row) for row in rows] == [ContinueWatchingRow, LibraryRow, PlexServicesRow]
     assert rows[1].library.title == "Movies"
 
 
 def test_sidebar_rows_can_show_on_plex_without_discover():
-    config = AppConfig("http://plex", "token", "client-id", show_discover=False)
+    config = AppConfig(
+        "http://plex",
+        "token",
+        "client-id",
+        show_on_plex=True,
+        show_on_plex_live=True,
+    )
     libraries = [LibraryItem("Movies", "1", "movie", object())]
 
     rows = sidebar_rows(config, libraries)
 
-    assert [type(row) for row in rows] == [ContinueWatchingRow, PlaylistsRow, OnPlexRow, OnPlexLiveRow, LibraryRow]
+    assert [type(row) for row in rows] == [
+        ContinueWatchingRow,
+        PlaylistsRow,
+        OnPlexRow,
+        OnPlexLiveRow,
+        LibraryRow,
+        PlexServicesRow,
+    ]
 
 
-def test_sidebar_rows_can_hide_on_plex_live_only():
-    config = AppConfig("http://plex", "token", "client-id", show_on_plex_live=False)
+def test_sidebar_rows_can_hide_live_tv_only():
+    config = AppConfig("http://plex", "token", "client-id", show_discover=True, show_on_plex=True)
     libraries = [LibraryItem("Movies", "1", "movie", object())]
 
     rows = sidebar_rows(config, libraries)
 
-    assert [type(row) for row in rows] == [ContinueWatchingRow, PlaylistsRow, DiscoverRow, OnPlexRow, LibraryRow]
+    assert [type(row) for row in rows] == [
+        ContinueWatchingRow,
+        PlaylistsRow,
+        DiscoverRow,
+        OnPlexRow,
+        LibraryRow,
+        PlexServicesRow,
+    ]
+
+
+def test_sidebar_rows_default_to_library_first_with_services_entrypoint():
+    config = AppConfig("http://plex", "token", "client-id")
+    libraries = [
+        LibraryItem("Movies", "1", "movie", object()),
+        LibraryItem("TV", "2", "show", object()),
+    ]
+
+    rows = sidebar_rows(config, libraries)
+
+    assert [type(row) for row in rows] == [
+        ContinueWatchingRow,
+        PlaylistsRow,
+        LibraryRow,
+        LibraryRow,
+        PlexServicesRow,
+    ]
+    assert [row.label_text for row in rows] == [
+        "◷ Continue Watching",
+        "▤ Playlists",
+        "› Movies",
+        "› TV",
+        "▸ Plex Services",
+    ]
 
 
 def test_sidebar_rows_use_stable_entrypoint_markers():
-    config = AppConfig("http://plex", "token", "client-id")
+    config = AppConfig(
+        "http://plex",
+        "token",
+        "client-id",
+        show_discover=True,
+        show_on_plex=True,
+        show_on_plex_live=True,
+    )
     libraries = [LibraryItem("Movies", "1", "movie", object())]
 
     rows = sidebar_rows(config, libraries)
@@ -721,7 +775,7 @@ def test_sidebar_rows_use_stable_entrypoint_markers():
         "▤ Playlists",
         "✦ Discover",
         "▦ On Plex",
-        "◉ On Plex Live",
+        "◉ Live TV",
         "› Movies",
     ]
 

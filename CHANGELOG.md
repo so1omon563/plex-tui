@@ -2,16 +2,18 @@
 
 ## Unreleased
 
+- Made the default sidebar library-first while keeping Discover, On Plex, and
+  Live TV discoverable through a Plex Services entry point and Settings toggles.
 - Polished hosted Live TV channel and guide rows so they read as compact
   channel/status and schedule rows instead of repeating generic media labels.
-- Added a hosted-only Live TV guide view from On Plex Live channels, showing
+- Added a hosted-only Live TV guide view from Live TV channels, showing
   selected-channel program rows from Plex's hosted EPG provider.
-- Added a separate On Plex Live sidebar toggle so hosted Live TV can be hidden
+- Added a separate Live TV sidebar toggle so hosted Live TV can be hidden
   without hiding On Plex Movies & Shows.
 - Added the internal Plex-hosted Live TV channel service model for listing
   account-region EPG channels, signing HLS part URLs, and rejecting DRM-marked
   channels before future playback UI work.
-- Added an On Plex Live sidebar row for browsing hosted Live TV channels and
+- Added a Live TV sidebar row for browsing hosted Live TV channels and
   launching non-DRM channel streams through the existing mpv playback flow.
 
 ## 0.14.2 - 2026-06-29

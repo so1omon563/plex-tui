@@ -158,6 +158,51 @@ def test_theme_round_trips_through_config(tmp_path, monkeypatch):
     assert 'theme = "textual-light"' in config_file.read_text(encoding="utf-8")
 
 
+def test_optional_plex_features_default_hidden(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        '\n'.join([
+            'base_url = "http://plex"',
+            'token = "token"',
+            'client_identifier = "client"',
+            "",
+        ]),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "config_path", lambda: config_file)
+
+    loaded = config.load_config()
+
+    assert loaded.show_playlists is True
+    assert loaded.show_discover is False
+    assert loaded.show_on_plex is False
+    assert loaded.show_on_plex_live is False
+
+
+def test_enabled_optional_plex_features_round_trip(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    monkeypatch.setattr(config, "config_path", lambda: config_file)
+
+    saved = config.AppConfig(
+        "http://plex",
+        "token",
+        "client",
+        show_discover=True,
+        show_on_plex=True,
+        show_on_plex_live=True,
+    )
+    config.save_config(saved)
+    loaded = config.load_config()
+    text = config_file.read_text(encoding="utf-8")
+
+    assert loaded.show_discover is True
+    assert loaded.show_on_plex is True
+    assert loaded.show_on_plex_live is True
+    assert "show_discover = true" in text
+    assert "show_on_plex = true" in text
+    assert "show_on_plex_live = true" in text
+
+
 def test_mpv_window_size_round_trips_through_config(tmp_path, monkeypatch):
     config_file = tmp_path / "config.toml"
     monkeypatch.setattr(config, "config_path", lambda: config_file)
@@ -244,9 +289,9 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     assert 'library_order_keys = "7,2"' in text
     assert 'grid_density = "large"' in text
     assert "show_playlists = false" in text
-    assert "show_discover = false" in text
-    assert "show_on_plex = false" in text
-    assert "show_on_plex_live = false" in text
+    assert "show_discover" not in text
+    assert "show_on_plex" not in text
+    assert "show_on_plex_live" not in text
     assert 'discover_media_type = "show"' in text
     assert "confirm_start_over = false" in text
 

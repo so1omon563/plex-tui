@@ -65,11 +65,13 @@ client_identifier = "plex-tui-your-stable-client-id"
 # library_order_keys pins the sidebar order. Use Settings to move libraries
 # after connecting, or list keys manually as comma-separated values.
 # library_order_keys = "2,1,4"
-# show_playlists, show_discover, show_on_plex, and show_on_plex_live control optional sidebar entrypoints.
+# show_playlists controls the playlists entrypoint. Discover, On Plex, and
+# Live TV are optional Plex features: disabled by default, discoverable from
+# the Plex Services sidebar row, and easy to enable in Settings.
 # show_playlists = true
-# show_discover = true
-# show_on_plex = true
-# show_on_plex_live = true
+# show_discover = false
+# show_on_plex = false
+# show_on_plex_live = false
 # discover_media_type controls Plex Discover filtering: movies_shows, movie,
 # show, or all. The default avoids noisy non-movie/show results.
 # discover_media_type = "movies_shows"

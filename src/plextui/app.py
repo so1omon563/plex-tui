@@ -170,7 +170,13 @@ class OnPlexRow(ListItem):
 
 class OnPlexLiveRow(ListItem):
     def __init__(self) -> None:
-        self.label_text = "◉ On Plex Live"
+        self.label_text = "◉ Live TV"
+        super().__init__(Label(self.label_text))
+
+
+class PlexServicesRow(ListItem):
+    def __init__(self) -> None:
+        self.label_text = "▸ Plex Services"
         super().__init__(Label(self.label_text))
 
 
@@ -907,6 +913,8 @@ class PlexTuiApp(App[None]):
             self.open_video_on_demand()
         elif isinstance(row, OnPlexLiveRow):
             self.open_hosted_live_tv()
+        elif isinstance(row, PlexServicesRow):
+            self.action_show_settings(selected_action=optional_services_settings_action(self.config))
         elif isinstance(row, AvailabilityRow):
             self.open_availability_url(row)
         elif isinstance(row, ResumeChoiceRow):
@@ -959,6 +967,12 @@ class PlexTuiApp(App[None]):
         elif isinstance(row, OnPlexLiveRow):
             mark_active_row(event.list_view, row)
             self.show_detail_text("Browse Plex-hosted Live TV channels. Playable non-DRM channels use the normal mpv controls.")
+            self.set_status(context_hint(row))
+        elif isinstance(row, PlexServicesRow):
+            mark_active_row(event.list_view, row)
+            self.show_detail_text(
+                "Optional Plex Features\n\nDiscover, On Plex, and Live TV are off by default. Press Enter to enable them in Settings."
+            )
             self.set_status(context_hint(row))
         elif isinstance(row, AvailabilityRow):
             mark_active_row(event.list_view, row)
@@ -1156,6 +1170,9 @@ class PlexTuiApp(App[None]):
         if isinstance(row, OnPlexLiveRow):
             self.open_hosted_live_tv()
             return
+        if isinstance(row, PlexServicesRow):
+            self.action_show_settings(selected_action=optional_services_settings_action(self.config))
+            return
         self.set_status("Select a library first")
 
     @work(thread=True)
@@ -1194,7 +1211,7 @@ class PlexTuiApp(App[None]):
     @work(thread=True)
     def open_hosted_live_tv(self) -> None:
         if self.service is None:
-            self.call_from_thread(self.set_status, "Connect to Plex before browsing On Plex Live")
+            self.call_from_thread(self.set_status, "Connect to Plex before browsing Live TV")
             return
         title = "Live TV on Plex"
         self.post_message(StatusChanged(f"Loading {title}..."))
@@ -1229,7 +1246,7 @@ class PlexTuiApp(App[None]):
     @work(thread=True)
     def open_hosted_live_tv_guide(self, channel: MediaItem) -> None:
         if self.service is None:
-            self.call_from_thread(self.set_status, "Connect to Plex before browsing On Plex Live")
+            self.call_from_thread(self.set_status, "Connect to Plex before browsing Live TV")
             return
         title = f"Guide: {channel.title}"
         self.post_message(StatusChanged(f"Loading {title}..."))
@@ -2548,17 +2565,17 @@ class PlexTuiApp(App[None]):
         if action == "toggle_show_discover":
             if self.update_preferences(show_discover=not self.config.show_discover):
                 self.populate_libraries(visible_libraries(self.libraries, self.config))
-                self.refresh_settings_after_change(action, "Discover Sidebar", show_setting_value(self.config.show_discover))
+                self.refresh_settings_after_change(action, "Discover", show_setting_value(self.config.show_discover))
             return
         if action == "toggle_show_on_plex":
             if self.update_preferences(show_on_plex=not self.config.show_on_plex):
                 self.populate_libraries(visible_libraries(self.libraries, self.config))
-                self.refresh_settings_after_change(action, "On Plex Sidebar", show_setting_value(self.config.show_on_plex))
+                self.refresh_settings_after_change(action, "On Plex", show_setting_value(self.config.show_on_plex))
             return
         if action == "toggle_show_on_plex_live":
             if self.update_preferences(show_on_plex_live=not self.config.show_on_plex_live):
                 self.populate_libraries(visible_libraries(self.libraries, self.config))
-                self.refresh_settings_after_change(action, "On Plex Live Sidebar", show_setting_value(self.config.show_on_plex_live))
+                self.refresh_settings_after_change(action, "Live TV", show_setting_value(self.config.show_on_plex_live))
             return
         if action == "cycle_discover_media_type":
             next_media_type = next_discover_media_type(self.config.discover_media_type)
@@ -5202,7 +5219,23 @@ def sidebar_rows(config: AppConfig, libraries: list[LibraryItem]) -> list[ListIt
     if config.show_on_plex_live:
         rows.append(OnPlexLiveRow())
     rows.extend(LibraryRow(library) for library in libraries)
+    if optional_services_hidden(config):
+        rows.append(PlexServicesRow())
     return rows
+
+
+def optional_services_hidden(config: AppConfig) -> bool:
+    return not (config.show_discover and config.show_on_plex and config.show_on_plex_live)
+
+
+def optional_services_settings_action(config: AppConfig) -> str:
+    if not config.show_discover:
+        return "toggle_show_discover"
+    if not config.show_on_plex:
+        return "toggle_show_on_plex"
+    if not config.show_on_plex_live:
+        return "toggle_show_on_plex_live"
+    return "toggle_show_discover"
 
 
 def library_by_key(libraries: list[LibraryItem], key: str) -> LibraryItem | None:
@@ -5298,16 +5331,17 @@ def settings_rows(config: AppConfig, libraries: list[LibraryItem] | None = None)
         SettingsActionRow(f"Artwork Renderer: {artwork_renderer_value(config)}", "cycle_artwork_renderer"),
         SettingsHeaderRow("Browsing"),
         SettingsActionRow(f"Playlists Sidebar: {show_setting_value(config.show_playlists)}", "toggle_show_playlists"),
-        SettingsActionRow(f"Discover Sidebar: {show_setting_value(config.show_discover)}", "toggle_show_discover"),
-        SettingsActionRow(f"On Plex Sidebar: {show_setting_value(config.show_on_plex)}", "toggle_show_on_plex"),
-        SettingsActionRow(f"On Plex Live Sidebar: {show_setting_value(config.show_on_plex_live)}", "toggle_show_on_plex_live"),
-        SettingsActionRow(f"Discover Type: {discover_media_type_value(config)}", "cycle_discover_media_type"),
         SettingsActionRow(f"Library Enter: {library_enter_action_value(config)}", "cycle_library_enter_action"),
         SettingsActionRow(f"Media View: {media_view_value(config)}", "toggle_media_view"),
         SettingsActionRow(f"Grid Density: {grid_density_value(config)}", "cycle_grid_density"),
         numeric_settings_row(config, "page_size"),
         numeric_settings_row(config, "auto_load_threshold"),
         numeric_settings_row(config, "grid_prefetch_pages"),
+        SettingsHeaderRow("Optional Plex Features"),
+        SettingsActionRow(f"Discover: {show_setting_value(config.show_discover)}", "toggle_show_discover"),
+        SettingsActionRow(f"On Plex: {show_setting_value(config.show_on_plex)}", "toggle_show_on_plex"),
+        SettingsActionRow(f"Live TV: {show_setting_value(config.show_on_plex_live)}", "toggle_show_on_plex_live"),
+        SettingsActionRow(f"Discover Type: {discover_media_type_value(config)}", "cycle_discover_media_type"),
     ]
     if libraries:
         rows.append(SettingsHeaderRow("Libraries"))
@@ -5404,10 +5438,6 @@ def render_settings(config: AppConfig) -> str:
         [
             ("Library Enter", library_enter_action_value(config)),
             ("Playlists Sidebar", show_setting_value(config.show_playlists)),
-            ("Discover Sidebar", show_setting_value(config.show_discover)),
-            ("On Plex Sidebar", show_setting_value(config.show_on_plex)),
-            ("On Plex Live Sidebar", show_setting_value(config.show_on_plex_live)),
-            ("Discover Type", discover_media_type_value(config)),
             ("Media View", media_view_value(config)),
             ("Grid Density", grid_density_value(config)),
             ("Page Size", str(config.page_size)),
@@ -5416,6 +5446,21 @@ def render_settings(config: AppConfig) -> str:
             ("Hidden Libraries", hidden_library_count_value(config)),
         ],
         ["Custom browsing values use whole numbers inside the allowed range."],
+    )
+    append_settings_section(
+        lines,
+        "Optional Plex Features",
+        [
+            ("Discover", show_setting_value(config.show_discover)),
+            ("On Plex", show_setting_value(config.show_on_plex)),
+            ("Live TV", show_setting_value(config.show_on_plex_live)),
+            ("Discover Type", discover_media_type_value(config)),
+        ],
+        [
+            "Discover: browse Plex Discover content. Disabled by default.",
+            "On Plex: browse Plex-provided movies and shows. Disabled by default.",
+            "Live TV: browse Plex Live TV channels and guide data. Disabled by default.",
+        ],
     )
     append_settings_section(
         lines,
@@ -5480,7 +5525,7 @@ def render_help() -> str:
         "",
         "Playlist Management",
         "enter on Playlists sidebar row: browse all playlists",
-        "enter on On Plex Live: browse hosted Live TV channels",
+        "enter on Live TV: browse hosted Live TV channels",
         "P: add selected media to an existing or new playlist",
         "u: toggle selected item for bulk playlist actions",
         "backspace/delete: remove selected item from the open playlist",
@@ -5587,6 +5632,8 @@ def context_hint(row: object) -> str:
         return "Libraries: Enter browses Movies & Shows on Plex"
     if isinstance(row, OnPlexLiveRow):
         return "Libraries: Enter browses Live TV on Plex"
+    if isinstance(row, PlexServicesRow):
+        return "Libraries: Enter opens optional Plex feature settings"
     if isinstance(row, AvailabilityRow):
         return "Availability: Enter opens provider link"
     if isinstance(row, ResumeChoiceRow):
@@ -5897,11 +5944,20 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
     if action == "toggle_show_playlists":
         return f"Current Playlists sidebar: {show_setting_value(config.show_playlists)}"
     if action == "toggle_show_discover":
-        return f"Current Discover sidebar: {show_setting_value(config.show_discover)}"
+        return (
+            f"Current Discover: {show_setting_value(config.show_discover)}\n"
+            "Browse Plex Discover content. Disabled by default."
+        )
     if action == "toggle_show_on_plex":
-        return f"Current On Plex sidebar: {show_setting_value(config.show_on_plex)}"
+        return (
+            f"Current On Plex: {show_setting_value(config.show_on_plex)}\n"
+            "Browse Plex-provided movies and shows. Disabled by default."
+        )
     if action == "toggle_show_on_plex_live":
-        return f"Current On Plex Live sidebar: {show_setting_value(config.show_on_plex_live)}"
+        return (
+            f"Current Live TV: {show_setting_value(config.show_on_plex_live)}\n"
+            "Browse Plex Live TV channels and guide data. Disabled by default."
+        )
     if action == "cycle_discover_media_type":
         return f"Current Discover type: {discover_media_type_value(config)}"
     if action == "cycle_library_enter_action":
@@ -5973,7 +6029,7 @@ def settings_action_help(action: str) -> str:
     if action == "toggle_show_on_plex":
         return "Press Enter to show or hide On Plex in the sidebar."
     if action == "toggle_show_on_plex_live":
-        return "Press Enter to show or hide On Plex Live in the sidebar."
+        return "Press Enter to show or hide Live TV in the sidebar."
     if action == "cycle_discover_media_type":
         return "Press Enter to filter Discover searches by movies, shows, or all results."
     if action == "cycle_library_enter_action":
@@ -6031,9 +6087,9 @@ def settings_action_label(action: str) -> str:
         "cycle_artwork_renderer": "Artwork Renderer",
         "toggle_media_view": "Media View",
         "toggle_show_playlists": "Playlists Sidebar",
-        "toggle_show_discover": "Discover Sidebar",
-        "toggle_show_on_plex": "On Plex Sidebar",
-        "toggle_show_on_plex_live": "On Plex Live Sidebar",
+        "toggle_show_discover": "Discover",
+        "toggle_show_on_plex": "On Plex",
+        "toggle_show_on_plex_live": "Live TV",
         "cycle_discover_media_type": "Discover Type",
         "cycle_library_enter_action": "Library Enter",
         "cycle_grid_density": "Grid Density",
