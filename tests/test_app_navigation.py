@@ -22,6 +22,7 @@ from plextui.app import (
     MediaGrid,
     OnPlexLiveRow,
     OnPlexRow,
+    PlexServicesRow,
     PlexTuiApp,
     PlaylistsRow,
     PlaylistCreateRow,
@@ -885,6 +886,10 @@ def test_settings_toggle_sidebar_entrypoints_updates_sidebar():
     asyncio.run(run_settings_sidebar_entrypoint_visibility_check())
 
 
+def test_plex_services_sidebar_opens_optional_feature_settings():
+    asyncio.run(run_plex_services_sidebar_opens_settings_check())
+
+
 def test_settings_move_library_updates_sidebar_order():
     asyncio.run(run_settings_library_order_check())
 
@@ -1295,9 +1300,6 @@ async def run_library_highlight_check():
         await pilot.pause(0.2)
         await pilot.press("down")
         await pilot.press("down")
-        await pilot.press("down")
-        await pilot.press("down")
-        await pilot.press("down")
         await pilot.pause(0.2)
 
         row = libraries_view.highlighted_child
@@ -1329,10 +1331,8 @@ async def run_continue_watching_entrypoint_check():
         rows = list(libraries_view.children)
         assert isinstance(rows[0], ContinueWatchingRow)
         assert isinstance(rows[1], PlaylistsRow)
-        assert isinstance(rows[2], DiscoverRow)
-        assert isinstance(rows[3], OnPlexRow)
-        assert isinstance(rows[4], OnPlexLiveRow)
-        assert [row.library.title for row in rows[5:]] == ["Movies", "TV"]
+        assert [row.library.title for row in rows[2:4]] == ["Movies", "TV"]
+        assert isinstance(rows[4], PlexServicesRow)
         assert libraries_view.highlighted_child is rows[0]
 
 
@@ -1365,7 +1365,7 @@ async def run_playlists_entrypoint_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
-        app.config = AppConfig("http://plex", "token", "client-id")
+        app.config = AppConfig("http://plex", "token", "client-id", show_discover=True)
         app.service = service
         app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
         await pilot.pause(0.2)
@@ -1389,7 +1389,7 @@ async def run_discover_entrypoint_check(monkeypatch):
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
-        app.config = AppConfig("http://plex", "token", "client-id")
+        app.config = AppConfig("http://plex", "token", "client-id", show_discover=True)
         app.service = service
         app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
         libraries_view = app.query_one("#libraries")
@@ -1438,7 +1438,7 @@ async def run_discover_provider_picker_check(monkeypatch):
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
-        app.config = AppConfig("http://plex", "token", "client-id")
+        app.config = AppConfig("http://plex", "token", "client-id", show_discover=True)
         app.service = service
         app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
         libraries_view = app.query_one("#libraries")
@@ -1480,7 +1480,7 @@ async def run_discover_without_availability_check(monkeypatch):
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
-        app.config = AppConfig("http://plex", "token", "client-id")
+        app.config = AppConfig("http://plex", "token", "client-id", show_discover=True, show_on_plex=True)
         app.service = service
         app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
         libraries_view = app.query_one("#libraries")
@@ -1555,7 +1555,7 @@ async def run_discover_vod_entrypoint_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
-        app.config = AppConfig("http://plex", "token", "client-id")
+        app.config = AppConfig("http://plex", "token", "client-id", show_discover=True, show_on_plex=True)
         app.service = service
         app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
         libraries_view = app.query_one("#libraries")
@@ -1581,7 +1581,15 @@ async def run_on_plex_live_entrypoint_check():
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
-        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        app.config = AppConfig(
+            "http://plex",
+            "token",
+            "client-id",
+            media_view="grid",
+            show_discover=True,
+            show_on_plex=True,
+            show_on_plex_live=True,
+        )
         app.service = service
         app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
         libraries_view = app.query_one("#libraries")
@@ -1693,11 +1701,8 @@ async def run_selected_library_highlight_check():
         rows = list(libraries_view.children)
         assert isinstance(rows[0], ContinueWatchingRow)
         assert isinstance(rows[1], PlaylistsRow)
-        assert isinstance(rows[2], DiscoverRow)
-        assert isinstance(rows[3], OnPlexRow)
-        assert isinstance(rows[4], OnPlexLiveRow)
-        assert libraries_view.highlighted_child is rows[5]
-        assert rows[5].library.title == "Movies"
+        assert libraries_view.highlighted_child is rows[2]
+        assert rows[2].library.title == "Movies"
 
 
 async def run_load_more_row_check():
@@ -1917,9 +1922,6 @@ async def run_sidebar_library_selection_opens_default_library_check():
         await pilot.pause(0.2)
         await pilot.press("down")
         await pilot.press("down")
-        await pilot.press("down")
-        await pilot.press("down")
-        await pilot.press("down")
         await pilot.press("enter")
         await pilot.pause(0.5)
 
@@ -1938,9 +1940,6 @@ async def run_sidebar_library_space_menu_check():
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
         await pilot.pause(0.2)
-        await pilot.press("down")
-        await pilot.press("down")
-        await pilot.press("down")
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("space")
@@ -1968,9 +1967,6 @@ async def run_sidebar_library_selection_menu_default_check():
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
         await pilot.pause(0.2)
-        await pilot.press("down")
-        await pilot.press("down")
-        await pilot.press("down")
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("enter")
@@ -2039,8 +2035,8 @@ async def run_library_submenu_keyboard_flow_check():
 
         libraries_view = app.query_one("#libraries")
         rows = list(libraries_view.children)
-        assert libraries_view.highlighted_child is rows[5]
-        assert rows[5].library.title == "Movies"
+        assert libraries_view.highlighted_child is rows[2]
+        assert rows[2].library.title == "Movies"
         assert app.query_one("#media-grid").selected_media.title == "Blade Runner"
 
         libraries_view.focus()
@@ -2985,10 +2981,9 @@ async def run_settings_library_visibility_check():
         assert save_config.call_count == 1
         assert isinstance(rows[0], ContinueWatchingRow)
         assert isinstance(rows[1], PlaylistsRow)
-        assert isinstance(rows[2], DiscoverRow)
-        assert isinstance(rows[3], OnPlexRow)
-        assert isinstance(rows[4], OnPlexLiveRow)
-        assert [row.library.title for row in rows[5:]] == ["Movies"]
+        assert isinstance(rows[2], LibraryRow)
+        assert rows[2].library.title == "Movies"
+        assert isinstance(rows[3], PlexServicesRow)
 
 
 async def run_settings_sidebar_entrypoint_visibility_check():
@@ -3013,14 +3008,37 @@ async def run_settings_sidebar_entrypoint_visibility_check():
 
         rows = list(app.query_one("#libraries").children)
         assert app.config.show_playlists is False
-        assert app.config.show_discover is False
-        assert app.config.show_on_plex is False
-        assert app.config.show_on_plex_live is False
+        assert app.config.show_discover is True
+        assert app.config.show_on_plex is True
+        assert app.config.show_on_plex_live is True
         assert save_config.call_count == 4
         assert isinstance(rows[0], ContinueWatchingRow)
-        assert isinstance(rows[1], LibraryRow)
-        assert rows[1].library.title == "Movies"
-        assert not any(isinstance(row, PlaylistsRow | DiscoverRow | OnPlexRow | OnPlexLiveRow) for row in rows)
+        assert isinstance(rows[1], DiscoverRow)
+        assert isinstance(rows[2], OnPlexRow)
+        assert isinstance(rows[3], OnPlexLiveRow)
+        assert isinstance(rows[4], LibraryRow)
+        assert rows[4].library.title == "Movies"
+        assert not any(isinstance(row, PlaylistsRow | PlexServicesRow) for row in rows)
+
+
+async def run_plex_services_sidebar_opens_settings_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.libraries = [LibraryItem("Movies", "1", "movie", object())]
+        app.populate_libraries(app.libraries)
+        await pilot.pause(0.2)
+
+        services_row = next(row for row in app.query_one("#libraries").children if isinstance(row, PlexServicesRow))
+        app.query_one("#libraries").index = list(app.query_one("#libraries").children).index(services_row)
+        app.on_list_view_selected(SimpleNamespace(item=services_row))
+        await pilot.pause(0.2)
+
+        assert app.settings_visible
+        assert app.query_one("#media").highlighted_child is not None
+        assert getattr(app.query_one("#media").highlighted_child, "action", "") == "toggle_show_discover"
+        assert "Browse Plex Discover content" in app.query_one("#detail-content").content
 
 
 async def run_settings_library_order_check():
@@ -3044,10 +3062,8 @@ async def run_settings_library_order_check():
         assert save_config.call_count == 1
         assert isinstance(rows[0], ContinueWatchingRow)
         assert isinstance(rows[1], PlaylistsRow)
-        assert isinstance(rows[2], DiscoverRow)
-        assert isinstance(rows[3], OnPlexRow)
-        assert isinstance(rows[4], OnPlexLiveRow)
-        assert [row.library.title for row in rows[5:]] == ["TV", "Movies", "Music"]
+        assert [row.library.title for row in rows[2:5]] == ["TV", "Movies", "Music"]
+        assert isinstance(rows[5], PlexServicesRow)
 
         media_rows = list(app.query_one("#media").children)
         selected = app.query_one("#media").highlighted_child
@@ -3546,7 +3562,8 @@ async def run_toggle_watched_continue_watching_refresh_check():
         app.service = service
         app.browsing_stack = [BrowseState("Continue Watching", [current], source="continue_watching", total=1)]
         app.show_browse_state(app.browsing_stack[-1])
-        await pilot.pause(0.2)
+        selected = await wait_for_selected_title(app, pilot, "Episode 1", attempts=80)
+        assert selected is not None
 
         app.action_toggle_watched()
 
@@ -3581,7 +3598,8 @@ async def run_toggle_watched_continue_watching_refresh_resolves_hub_wrapper_chec
         app.service = service
         app.browsing_stack = [BrowseState("Continue Watching", [current], source="continue_watching", total=1)]
         app.show_browse_state(app.browsing_stack[-1])
-        await pilot.pause(0.2)
+        selected = await wait_for_selected_title(app, pilot, "Episode 1", attempts=80)
+        assert selected is not None
 
         app.action_toggle_watched()
 
