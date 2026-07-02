@@ -203,6 +203,11 @@ class LibraryMenuRow(ListItem):
 
 class MediaRow(ListItem):
     def __init__(self, media: MediaItem, bulk_selected: bool = False) -> None:
+        if media.kind in {"livetv", "livetv_program"}:
+            self.label_text = live_tv_row_label(media, bulk_selected)
+            super().__init__(Label(self.label_text))
+            self.media = media
+            return
         marker = "▶" if media.playable else "›"
         if bulk_selected:
             marker = "✓"
@@ -4495,6 +4500,145 @@ def media_rows(
 
 def media_row(item: MediaItem, config: AppConfig, bulk_selected: bool = False) -> MediaRow:
     return MediaRow(item, bulk_selected=bulk_selected)
+
+
+def live_tv_row_label(media: MediaItem, bulk_selected: bool = False) -> str:
+    if media.kind == "livetv_program":
+        return live_tv_program_row_label(media, bulk_selected)
+    return live_tv_channel_row_label(media, bulk_selected)
+
+
+def live_tv_row_marker(media: MediaItem, bulk_selected: bool = False) -> str:
+    if bulk_selected:
+        return "✓"
+    return "▶" if media.playable else "›"
+
+
+def live_tv_channel_row_label(media: MediaItem, bulk_selected: bool = False) -> str:
+    marker = live_tv_row_marker(media, bulk_selected)
+    raw = media.raw
+    program = live_tv_current_program_title(raw)
+    time_range = live_tv_time_range(raw)
+    progress = live_tv_airing_progress(raw)
+    quality = live_tv_quality_label(media)
+    details = [program, time_range, progress, quality]
+    detail_text = "  ".join(bit for bit in details if bit)
+    return f"{marker} {media.title}{('  ' + detail_text) if detail_text else ''}"
+
+
+def live_tv_program_row_label(media: MediaItem, bulk_selected: bool = False) -> str:
+    marker = live_tv_row_marker(media, bulk_selected)
+    raw = media.raw
+    subtitle_bits = live_tv_subtitle_bits(media)
+    start = live_tv_timestamp(getattr(raw, "begins_at", 0))
+    time_label = start or live_tv_subtitle_time(subtitle_bits)
+    duration = live_tv_duration_label(raw)
+    resolution = str(getattr(raw, "video_resolution", "") or live_tv_subtitle_resolution(subtitle_bits)).upper()
+    on_air = "On now" if bool(getattr(raw, "on_air", False)) else ""
+    details = [duration, resolution, on_air]
+    detail_text = "  ".join(bit for bit in details if bit)
+    title = media.title if not time_label else f"{time_label:<8}  {media.title}"
+    return f"{marker} {title}{('  ' + detail_text) if detail_text else ''}"
+
+
+def live_tv_current_program_title(raw: object) -> str:
+    for attr in ("current_program_title", "program_title", "current_title", "now_title"):
+        value = getattr(raw, attr, None)
+        if value:
+            return str(value)
+    return ""
+
+
+def live_tv_time_range(raw: object) -> str:
+    start = live_tv_timestamp(getattr(raw, "begins_at", 0) or getattr(raw, "current_begins_at", 0))
+    end = live_tv_timestamp(getattr(raw, "ends_at", 0) or getattr(raw, "current_ends_at", 0))
+    if start and end:
+        return f"{start}-{end}"
+    return start or end
+
+
+def live_tv_timestamp(milliseconds: object) -> str:
+    if not milliseconds:
+        return ""
+    try:
+        return time.strftime("%-I:%M %p", time.localtime(int(milliseconds) / 1000))
+    except (TypeError, ValueError, OSError):
+        return ""
+
+
+def live_tv_airing_progress(raw: object) -> str:
+    begins_at = live_tv_int(getattr(raw, "begins_at", 0) or getattr(raw, "current_begins_at", 0))
+    ends_at = live_tv_int(getattr(raw, "ends_at", 0) or getattr(raw, "current_ends_at", 0))
+    now = int(time.time() * 1000)
+    if not begins_at or not ends_at or not (begins_at < now < ends_at):
+        return ""
+    duration = ends_at - begins_at
+    elapsed = now - begins_at
+    percent = min(99, max(1, round(elapsed / duration * 100)))
+    filled = max(1, round(6 * percent / 100))
+    return f"[{'#' * filled}{'-' * (6 - filled)}] {percent}%"
+
+
+def live_tv_duration_label(raw: object) -> str:
+    duration = live_tv_int(getattr(raw, "duration", 0))
+    if not duration:
+        begins_at = live_tv_int(getattr(raw, "begins_at", 0))
+        ends_at = live_tv_int(getattr(raw, "ends_at", 0))
+        duration = max(0, ends_at - begins_at) if begins_at and ends_at else 0
+    if not duration:
+        return ""
+    minutes = duration // 60_000
+    hours, mins = divmod(minutes, 60)
+    return f"{hours}h {mins}m" if hours else f"{mins}m"
+
+
+def live_tv_quality_label(media: MediaItem) -> str:
+    raw = media.raw
+    bits = []
+    for value in (
+        getattr(raw, "call_sign", ""),
+        getattr(raw, "video_resolution", ""),
+        "HD" if bool(getattr(raw, "is_hd", False)) else "",
+        "DRM" if bool(getattr(raw, "drm", False)) else "",
+        "Unavailable" if not media.playable else "",
+    ):
+        text = str(value).strip().upper()
+        if text and text not in bits and text != media.title.upper():
+            bits.append(text)
+    if bits:
+        return " · ".join(bits)
+    subtitle_bits = live_tv_subtitle_bits(media)
+    quiet = {"HLS", "LIVE TV CHANNEL", "LIVE TV PROGRAM"}
+    return " · ".join(bit for bit in subtitle_bits if bit.upper() not in quiet and bit != media.title)
+
+
+def live_tv_subtitle_bits(media: MediaItem) -> list[str]:
+    return [
+        bit.strip()
+        for bit in media.subtitle.replace(" · ", "  ").split("  ")
+        if bit.strip()
+    ]
+
+
+def live_tv_subtitle_time(bits: list[str]) -> str:
+    for bit in bits:
+        if ":" in bit:
+            return bit
+    return ""
+
+
+def live_tv_subtitle_resolution(bits: list[str]) -> str:
+    for bit in reversed(bits):
+        if bit.isdigit():
+            return bit
+    return ""
+
+
+def live_tv_int(value: object) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
 
 
 def render_media_grid(

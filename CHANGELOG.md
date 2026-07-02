@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Polished hosted Live TV channel and guide rows so they read as compact
+  channel/status and schedule rows instead of repeating generic media labels.
 - Added a hosted-only Live TV guide view from On Plex Live channels, showing
   selected-channel program rows from Plex's hosted EPG provider.
 - Added a separate On Plex Live sidebar toggle so hosted Live TV can be hidden
