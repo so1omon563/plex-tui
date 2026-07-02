@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Aligned Live TV channel and guide help/status hints with the actions each
+  context actually supports.
 - Made the default sidebar library-first while keeping Discover, On Plex, and
   Live TV discoverable through a Plex Services entry point and Settings toggles.
 - Polished hosted Live TV channel and guide rows so they read as compact

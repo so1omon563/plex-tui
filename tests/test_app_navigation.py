@@ -1293,6 +1293,7 @@ async def run_library_highlight_check():
             LibraryItem("TV", "2", "show", object()),
         ]
 
+        app.config = AppConfig("http://plex", "token", "client-id")
         app.populate_libraries(libraries)
         app.show_detail_text("Browse Plex-hosted Movies & Shows hubs.")
         libraries_view = app.query_one("#libraries")
@@ -1323,6 +1324,7 @@ async def run_continue_watching_entrypoint_check():
             LibraryItem("TV", "2", "show", object()),
         ]
 
+        app.config = AppConfig("http://plex", "token", "client-id")
         app.populate_libraries(libraries)
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
@@ -1693,6 +1695,7 @@ async def run_selected_library_highlight_check():
             LibraryItem("TV", "2", "show", object()),
         ]
 
+        app.config = AppConfig("http://plex", "token", "client-id")
         app.populate_libraries(libraries, selected_library_key="1")
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()

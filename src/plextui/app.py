@@ -618,7 +618,7 @@ class PlexTuiApp(App[None]):
         Binding("right", "grid_right", "Right", show=False),
         Binding("comma", "show_settings", "Settings"),
         Binding("escape", "back_or_clear", "Back"),
-        Binding("p", "play_selected", "Play from start"),
+        Binding("p", "play_selected", "Play"),
         Binding("o", "play_optimized", "Optimized", show=False),
         Binding("P", "add_to_playlist", "Playlist", show=False),
         Binding("u", "toggle_bulk_selection", "Select", show=False),
@@ -995,6 +995,7 @@ class PlexTuiApp(App[None]):
             self.show_media_details(row.media)
             self.set_status(media_row_status(row, self.browsing_stack[-1] if self.browsing_stack else None))
             self.maybe_auto_load_more(row.media)
+            self.refresh_footer_bindings()
         elif isinstance(row, LoadMoreRow):
             mark_active_row(event.list_view, row)
             self.show_detail_text("Load the next page of items.")
@@ -1043,6 +1044,7 @@ class PlexTuiApp(App[None]):
             self.schedule_grid_prefetch(event.control)
             self.set_status(grid_status(event.control, self.browsing_stack[-1] if self.browsing_stack else None))
         self.maybe_auto_load_more(event.media)
+        self.refresh_footer_bindings()
 
     def on_media_grid_needs_artwork(self, event: MediaGrid.NeedsArtwork) -> None:
         grid = event.control if isinstance(event.control, MediaGrid) else None
@@ -1412,6 +1414,27 @@ class PlexTuiApp(App[None]):
         if self.media_grid_visible():
             return self.query_one("#media-grid", MediaGrid).selected_media
         return selected_media_from_row(self.query_one("#media", ListView).highlighted_child)
+
+    def refresh_footer_bindings(self) -> None:
+        try:
+            self.refresh_bindings()
+        except ScreenStackError:
+            pass
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action not in {"play_selected", "resume_selected"}:
+            return True
+        try:
+            media = self.selected_media()
+        except NoMatches:
+            return True
+        if media is None:
+            return True
+        if action == "resume_selected" and media.kind in {"livetv", "livetv_program"}:
+            return False
+        if action == "play_selected" and media.kind == "livetv_program" and not media.playable:
+            return False
+        return True
 
     def current_browse_state(self) -> BrowseState | None:
         return self.browsing_stack[-1] if self.browsing_stack else None
@@ -4335,7 +4358,7 @@ def playback_readiness_rows(
         return rows
     if "Live TV: unavailable for external playback" in context_actions:
         return ["Unavailable for external playback", *context_actions]
-    if "Guide: program details only" in context_actions:
+    if any(action.startswith("Guide:") for action in context_actions):
         return ["Guide program", "Details only", *context_actions]
     rows = [
         "Opens more items",
@@ -5523,9 +5546,15 @@ def render_help() -> str:
         "w: mark selected media watched / unwatched",
         "x: stop launched mpv",
         "",
+        "Live TV",
+        "enter on Live TV sidebar row: browse hosted Live TV channels",
+        "enter on Live TV channel: open channel guide",
+        "p on Live TV channel: start channel playback",
+        "enter on guide program: open details",
+        "escape from guide: return to channel list",
+        "",
         "Playlist Management",
         "enter on Playlists sidebar row: browse all playlists",
-        "enter on Live TV: browse hosted Live TV channels",
         "P: add selected media to an existing or new playlist",
         "u: toggle selected item for bulk playlist actions",
         "backspace/delete: remove selected item from the open playlist",
@@ -5652,7 +5681,11 @@ def context_hint(row: object) -> str:
         if row.media.kind == "livetv" and not row.media.playable:
             return "Media: Live TV channel is unavailable for external playback"
         if row.media.kind == "livetv":
-            return "Media: Enter opens guide / p starts this channel"
+            return "Media: Enter guide / p play channel / o optimized"
+        if row.media.kind == "livetv_program":
+            if row.media.playable:
+                return "Media: Enter opens details / p play program / Escape back"
+            return "Media: Enter opens details / Escape back"
         if row.media.playable:
             return "Media: Enter selects / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
@@ -5707,10 +5740,13 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
         return ("Availability: Listed by Plex; playable stream checked on play",)
     if item is not None and item.kind == "livetv":
         if item.playable:
-            return ("Live TV: Enter opens guide", "Live TV: p starts this channel")
+            return ("Live TV: Enter opens guide", "Live TV: p starts this channel", "Live TV: o starts optimized")
         return ("Live TV: unavailable for external playback",)
     if item is not None and item.kind == "livetv_program":
-        return ("Guide: program details only",)
+        actions = ["Guide: Enter opens details", "Guide: Escape returns to channels"]
+        if item.playable:
+            actions.append("Guide: p starts this program")
+        return tuple(actions)
     if item is not None and item.kind == "playlist":
         return (
             "Playlist: Enter opens contents",
