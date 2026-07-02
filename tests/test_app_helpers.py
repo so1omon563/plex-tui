@@ -254,9 +254,93 @@ def test_render_details_marks_unavailable_live_tv_without_container_copy():
     )
 
     assert "Unavailable for external playback" in rendered
-    assert "Live TV: unavailable for external playback" in rendered
+    assert "Live TV: unavailable for external playback" not in rendered
     assert "Opens more items" not in rendered
     assert "Press Enter to open" not in rendered
+
+
+def test_render_details_prioritizes_live_tv_channel_context():
+    raw = SimpleNamespace(
+        call_sign="AMCP",
+        language="English",
+        is_hd=True,
+        protocol="hls",
+        container="mpegts",
+    )
+    details = MediaDetails(
+        title="Stories by AMC",
+        kind="livetv",
+        facts=["Live TV Channel"],
+        metadata=[("Type", "livetv")],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=True,
+    )
+
+    rendered = render_details(
+        details,
+        AppConfig("http://plex", "token", "client-id"),
+        raw=raw,
+        context_actions=(
+            "Live TV: Enter opens guide",
+            "Live TV: p starts this channel",
+            "Live TV: o starts optimized",
+        ),
+    )
+
+    assert "Stories by AMC\n\nLive TV Channel\nAMCP • HD • HLS" in rendered
+    assert "Channel\nCall Sign:" in rendered
+    assert "Summary\nNo channel summary reported" in rendered
+    assert "Actions\nEnter opens guide\np starts channel\no starts optimized" in rendered
+    assert "Press p to play from beginning" not in rendered
+    assert "Press r to resume saved progress" not in rendered
+    assert rendered.index("Channel") < rendered.index("Summary")
+    assert rendered.index("Summary") < rendered.index("Actions")
+    assert rendered.index("Actions") < rendered.index("Technical")
+    assert "Protocol:  HLS" in rendered
+    assert "Container: mpegts" in rendered
+
+
+def test_render_details_prioritizes_live_tv_guide_program_schedule():
+    details = MediaDetails(
+        title="Coda",
+        kind="livetv_program",
+        facts=["Live TV Program"],
+        metadata=[
+            ("Type", "livetv_program"),
+            ("Year", "2026"),
+            ("Begins", "2:00 PM"),
+            ("Ends", "3:00 PM"),
+            ("Duration", "1h 0m"),
+            ("On Air", "yes"),
+            ("Resolution", "720"),
+        ],
+        audio=[],
+        subtitles=[],
+        summary="A quiet hour of music.",
+        playable=False,
+    )
+
+    rendered = render_details(
+        details,
+        context_actions=(
+            "Guide: Enter opens details",
+            "Guide: Escape returns to channels",
+        ),
+    )
+
+    assert "Coda\n\nLive TV Program\n2026 • 1h 0m • On now • 720" in rendered
+    assert "Schedule\nTime:       2:00 PM-3:00 PM" in rendered
+    assert "On Air:     On now" in rendered
+    assert "Summary\nA quiet hour of music." in rendered
+    assert "Actions\nEnter opens details\nEscape returns to channels" in rendered
+    assert "Guide program\nDetails only" not in rendered
+    assert rendered.index("Schedule") < rendered.index("Summary")
+    assert rendered.index("Summary") < rendered.index("Actions")
+    assert rendered.index("Actions") < rendered.index("Technical")
+    assert "Type: Live TV Program" in rendered
+    assert "Year: 2026" in rendered
 
 
 def test_render_details_skips_effective_playback_for_playlist_container():

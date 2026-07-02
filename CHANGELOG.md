@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reordered Live TV channel and guide-program details so schedule, summary, and
+  actions appear before compact technical metadata.
 - Aligned Live TV channel and guide help/status hints with the actions each
   context actually supports.
 - Made the default sidebar library-first while keeping Discover, On Plex, and

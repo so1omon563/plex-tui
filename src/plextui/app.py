@@ -4203,6 +4203,9 @@ def render_details(
     raw: object | None = None,
     context_actions: tuple[str, ...] = (),
 ) -> str:
+    if is_live_tv_detail(details):
+        return render_live_tv_details(details, config, raw, context_actions)
+
     header_metadata_rows = list(getattr(details, "metadata"))
     metadata_rows = list(header_metadata_rows)
     episode_context = episode_context_rows(details, header_metadata_rows)
@@ -4251,6 +4254,159 @@ def render_details(
     append_detail_section(lines, "Technical", technical_rows)
 
     return "\n".join(lines)
+
+
+def is_live_tv_detail(details: object) -> bool:
+    return getattr(details, "kind", "") in {"livetv", "livetv_program"}
+
+
+def render_live_tv_details(
+    details: object,
+    config: AppConfig | None = None,
+    raw: object | None = None,
+    context_actions: tuple[str, ...] = (),
+) -> str:
+    metadata = list(getattr(details, "metadata"))
+    lines = render_live_tv_header(details, metadata, raw)
+
+    if getattr(details, "kind", "") == "livetv_program":
+        schedule_rows = live_tv_program_schedule_rows(metadata)
+        if schedule_rows:
+            append_detail_section(lines, "Schedule", detail_key_value_rows(schedule_rows))
+    else:
+        channel_rows = live_tv_channel_rows(raw)
+        if channel_rows:
+            append_detail_section(lines, "Channel", detail_key_value_rows(channel_rows))
+
+    summary = getattr(details, "summary")
+    summary_fallback = (
+        "No program summary reported"
+        if getattr(details, "kind", "") == "livetv_program"
+        else "No channel summary reported"
+    )
+    append_detail_section(lines, "Summary", wrapped_detail_text(summary or summary_fallback))
+
+    append_detail_section(lines, "Actions", live_tv_action_rows(details, context_actions))
+
+    technical_rows = live_tv_technical_rows(details, metadata, config, raw)
+    append_detail_section(lines, "Technical", technical_rows)
+
+    return "\n".join(lines)
+
+
+def render_live_tv_header(
+    details: object,
+    metadata: list[tuple[str, str]],
+    raw: object | None = None,
+) -> list[str]:
+    title = getattr(details, "title")
+    title_lines = textwrap.wrap(title, width=DETAIL_SUMMARY_WIDTH) or [title]
+    kind = kind_label(str(getattr(details, "kind", "")))
+    facts = [kind]
+    if getattr(details, "kind", "") == "livetv_program":
+        compact = [
+            detail_metadata_value(metadata, "Year"),
+            detail_metadata_value(metadata, "Duration"),
+            live_tv_on_air_label(detail_metadata_value(metadata, "On Air")),
+            detail_metadata_value(metadata, "Resolution").upper(),
+        ]
+        fact_line = " • ".join(value for value in compact if value)
+        if fact_line:
+            facts.append(fact_line)
+    else:
+        quality = " • ".join(value for value in live_tv_channel_quality_values(raw) if value)
+        if quality:
+            facts.append(quality)
+    return [*title_lines, "", *facts]
+
+
+def live_tv_channel_rows(raw: object | None) -> list[tuple[str, str]]:
+    if raw is None:
+        return []
+    return [
+        (label, value)
+        for label, value in (
+            ("Call Sign", str(getattr(raw, "call_sign", "") or "")),
+            ("Language", str(getattr(raw, "language", "") or "")),
+            ("Quality", "HD" if bool(getattr(raw, "is_hd", False)) else ""),
+        )
+        if value
+    ]
+
+
+def live_tv_channel_quality_values(raw: object | None) -> list[str]:
+    if raw is None:
+        return []
+    return [
+        str(getattr(raw, "call_sign", "") or ""),
+        "HD" if bool(getattr(raw, "is_hd", False)) else "",
+        str(getattr(raw, "protocol", "") or "").upper(),
+    ]
+
+
+def live_tv_program_schedule_rows(metadata: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    rows = []
+    begins = detail_metadata_value(metadata, "Begins")
+    ends = detail_metadata_value(metadata, "Ends")
+    if begins or ends:
+        rows.append(("Time", "-".join(value for value in (begins, ends) if value)))
+    for label in ("Duration", "On Air", "Resolution"):
+        value = detail_metadata_value(metadata, label)
+        if not value:
+            continue
+        if label == "On Air":
+            value = live_tv_on_air_label(value)
+        elif label == "Resolution":
+            value = value.upper()
+        rows.append((label, value))
+    return rows
+
+
+def live_tv_on_air_label(value: str) -> str:
+    if value == "yes":
+        return "On now"
+    if value == "no":
+        return "Not on now"
+    return value
+
+
+def live_tv_action_rows(details: object, context_actions: tuple[str, ...]) -> list[str]:
+    if context_actions:
+        return [live_tv_action_label(action) for action in context_actions]
+    if getattr(details, "kind", "") == "livetv":
+        if bool(getattr(details, "playable")):
+            return ["Enter opens guide", "p starts channel", "o starts optimized"]
+        return ["Unavailable for external playback"]
+    return ["Enter opens details", "Escape returns to channels"]
+
+
+def live_tv_action_label(action: str) -> str:
+    label = action.removeprefix("Live TV: ").removeprefix("Guide: ")
+    if label == "unavailable for external playback":
+        return "Unavailable for external playback"
+    return label.replace("this channel", "channel")
+
+
+def live_tv_technical_rows(
+    details: object,
+    metadata: list[tuple[str, str]],
+    config: AppConfig | None = None,
+    raw: object | None = None,
+) -> list[str]:
+    rows = detail_key_value_rows([("Type", kind_label(str(getattr(details, "kind", ""))))])
+    extra_rows = []
+    if getattr(details, "kind", "") == "livetv":
+        extra_rows = [
+            ("Protocol", str(getattr(raw, "protocol", "") or "").upper()),
+            ("Container", str(getattr(raw, "container", "") or "")),
+        ]
+    else:
+        extra_rows = [
+            ("Year", detail_metadata_value(metadata, "Year")),
+        ]
+    rows.extend(detail_key_value_rows([(label, value) for label, value in extra_rows if value]))
+    rows.extend(technical_detail_rows(details, config))
+    return rows
 
 
 def technical_detail_rows(details: object, config: AppConfig | None = None, raw: object | None = None) -> list[str]:
