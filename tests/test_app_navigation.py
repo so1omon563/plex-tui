@@ -3793,7 +3793,9 @@ async def run_add_to_playlist_existing_check():
         selected = await wait_for_selected_title(app, pilot, "Movie")
         assert selected is item
 
-        app.action_add_to_playlist()
+        worker = app.action_add_to_playlist()
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
         rows = await wait_for_playlist_target_rows(app, pilot)
         target = next(row for row in rows if isinstance(row, PlaylistTargetRow))
         worker = app.choose_playlist_target(target.playlist)
@@ -3823,7 +3825,9 @@ async def run_add_to_playlist_create_check():
         app.show_media("Movies", [item])
         await pilot.pause(0.2)
 
-        app.action_add_to_playlist()
+        worker = app.action_add_to_playlist()
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
         rows = await wait_for_playlist_rows(app, pilot)
         assert any(isinstance(row, PlaylistCreateRow) for row in rows)
         worker = app.save_playlist_name_input("Weekend")
@@ -3901,7 +3905,9 @@ async def run_bulk_add_to_playlist_check():
         assert selected is not None
         app.action_toggle_bulk_selection()
         await pilot.pause(0.2)
-        app.action_add_to_playlist()
+        worker = app.action_add_to_playlist()
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
         rows = await wait_for_playlist_target_rows(app, pilot)
         target = next(row for row in rows if isinstance(row, PlaylistTargetRow))
         worker = app.choose_playlist_target(target.playlist)

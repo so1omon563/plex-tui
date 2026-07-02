@@ -1737,6 +1737,40 @@ def test_media_row_marks_container_items():
     assert "Show · TV Show · 2 seasons" in row.label_text
 
 
+def test_media_row_formats_live_tv_channel_as_status_row():
+    raw = SimpleNamespace(
+        call_sign="CWFOREVER",
+        is_hd=True,
+        protocol="hls",
+    )
+
+    row = MediaRow(MediaItem("CW Forever", "CWFOREVER  HD  HLS", "livetv", "1", True, raw))
+
+    assert row.label_text == "▶ CW Forever  CWFOREVER · HD"
+    assert "CWFOREVER · HD" in row.label_text
+    assert "Live TV Channel" not in row.label_text
+    assert "HLS" not in row.label_text
+
+
+def test_media_row_formats_live_tv_guide_program_as_schedule_row():
+    raw = SimpleNamespace(
+        begins_at=1782921600000,
+        ends_at=1782924540000,
+        duration=2940000,
+        video_resolution="720",
+        on_air=True,
+    )
+
+    row = MediaRow(MediaItem("Ordinary Witches", "Live TV Program  720", "livetv_program", "2", False, raw))
+
+    assert row.label_text.startswith("› ")
+    assert "Ordinary Witches" in row.label_text
+    assert "49m" in row.label_text
+    assert "720" in row.label_text
+    assert "On now" in row.label_text
+    assert "Live TV Program" not in row.label_text
+
+
 def test_media_grid_tracks_selection_and_visible_page():
     items = [
         MediaItem(f"Movie {index}", "2024", "movie", str(index), True, object(), artwork_path="/thumb")
