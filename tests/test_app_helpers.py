@@ -338,9 +338,10 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
     config = AppConfig("http://plex", "token", "client-id")
 
     row_label = media_row(media, config).label_text
-    assert "Now:" in row_label
+    assert row_label.startswith("▶ Stories by AMC  AMCP · HD")
+    assert "\n  Now " in row_label
     assert "Now Showing" in row_label
-    assert "Next:" in row_label
+    assert "  ·  Next " in row_label
     assert "Up Next" in row_label
     assert "Guide\nNow:" in rendered
     assert "Now Showing" in rendered
@@ -349,6 +350,7 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
     plain = media_row(replace(media, raw=SimpleNamespace(call_sign="AMCP", is_hd=True, protocol="hls")), config).label_text
     assert "Now:" not in plain
     assert "Next:" not in plain
+    assert "\n" not in plain
 
 
 def test_render_details_prioritizes_live_tv_guide_program_schedule():

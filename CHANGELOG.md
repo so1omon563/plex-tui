@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Made hosted Live TV channel rows more scannable by showing enriched Now/Next
+  guide context on a second row when available.
 - Fixed Plex Discover provider 502 failures so they show a concise retry
   message instead of raw provider HTML or misleading relogin guidance.
 - Added per-library Recently Added browsing from the library browse-mode menu.

@@ -4793,14 +4793,20 @@ def live_tv_row_marker(media: MediaItem, bulk_selected: bool = False) -> str:
 def live_tv_channel_row_label(media: MediaItem, bulk_selected: bool = False) -> str:
     marker = live_tv_row_marker(media, bulk_selected)
     quality = live_tv_quality_label(media)
-    guide = live_tv_channel_now_next_label(media.raw)
-    details = "  ".join(value for value in (quality, guide) if value)
-    return f"{marker} {media.title}{('  ' + details) if details else ''}"
+    guide = live_tv_channel_now_next_row(media.raw)
+    quality_text = f"  {quality}" if quality else ""
+    guide_text = f"\n  {guide}" if guide else ""
+    return f"{marker} {media.title}{quality_text}{guide_text}"
 
 
 def live_tv_channel_now_next_label(raw: object | None) -> str:
     rows = live_tv_channel_guide_rows(raw)
     return "  ".join(f"{label}: {value}" for label, value in rows)
+
+
+def live_tv_channel_now_next_row(raw: object | None) -> str:
+    rows = live_tv_channel_guide_rows(raw)
+    return "  ·  ".join(f"{label} {value}" for label, value in rows)
 
 
 def live_tv_program_row_label(media: MediaItem, bulk_selected: bool = False) -> str:
