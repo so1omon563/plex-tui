@@ -40,6 +40,7 @@ from plextui.app import (
     current_detail_actions,
     detect_mpv,
     detail_artwork_enabled,
+    discover_error_copy,
     DiscoverRow,
     effective_stream_preference_rows,
     format_offset,
@@ -611,6 +612,30 @@ def test_empty_loading_and_error_state_details_are_actionable():
     assert "Cause\nconnection failed" in error
     assert "Diagnostics\nConfig: /tmp/config.toml" in error
     assert context_hint(row) == "Start playback from a library item."
+
+
+def test_discover_provider_502_error_is_actionable_and_sanitized():
+    raw_error = (
+        "(502) bad gateway; https://metadata.provider.plex.tv/library/metadata/abc"
+        "?includeBandwidths=1 <html><head><title>502 Bad Gateway</title></head>"
+        "<body><center><h1>502 Bad Gateway</h1></center><hr><center>cloudflare</center></body></html>"
+    )
+
+    message, recovery = discover_error_copy(raw_error)
+
+    assert message == (
+        "Plex Discover is temporarily unavailable because Plex's hosted metadata provider returned 502 Bad Gateway."
+    )
+    assert recovery == "Try the Discover search again in a few minutes."
+    assert "<html>" not in message
+    assert "relogin" not in recovery.lower()
+
+
+def test_discover_error_copy_strips_html_for_generic_errors():
+    message, recovery = discover_error_copy("provider failed <html><body>nope</body></html>")
+
+    assert message == "provider failed nope"
+    assert recovery == "Retry the Discover search. If it keeps failing, relogin with Plex from Settings."
 
 
 def test_render_details_limits_dense_stream_lists_and_wraps_rows():
