@@ -267,6 +267,10 @@ def test_discover_result_without_availability_does_not_fetch_children(monkeypatc
     asyncio.run(run_discover_without_availability_check(monkeypatch))
 
 
+def test_discover_provider_502_shows_discover_error():
+    asyncio.run(run_discover_provider_502_error_check())
+
+
 def test_escape_cancels_slow_discover_search():
     asyncio.run(run_escape_cancels_slow_discover_search_check())
 
@@ -1521,6 +1525,37 @@ class SlowDiscoverService:
         self.discover_calls.append((query, start, size, media_type))
         time.sleep(0.5)
         return self.page
+
+
+class FailingDiscoverService:
+    def discover_page(self, query: str, start: int, size: int, media_type: str = "movies_shows") -> MediaPage:
+        raise RuntimeError(
+            "(502) bad gateway; https://metadata.provider.plex.tv/library/metadata/abc "
+            "<html><head><title>502 Bad Gateway</title></head><body>cloudflare</body></html>"
+        )
+
+
+async def run_discover_provider_502_error_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = FailingDiscoverService()
+
+        app.run_discover_search("Back to the Future")
+        for _ in range(80):
+            if app.query_one("#media-title").content == "Discover Error":
+                break
+            await pilot.pause(0.1)
+
+        rendered = str(app.query_one("#detail-content").content)
+        assert app.query_one("#media-title").content == "Discover Error"
+        assert "Plex Discover Error" in rendered
+        assert "502 Bad" in rendered
+        assert "Gateway" in rendered
+        assert "<html>" not in rendered
+        assert "Try the Discover search again" in rendered
+        assert "minutes." in rendered
 
 
 async def run_escape_cancels_slow_discover_search_check():
