@@ -820,8 +820,13 @@ def test_hosted_live_tv_guide_page_fetches_selected_channel_programs(monkeypatch
                   },
                   {
                     "ratingKey": "program-2",
-                    "title": "Next Show",
+                    "title": "Earlier Show",
                     "Media": [{"beginsAt": 1782921600000, "endsAt": 1782925200000, "duration": 3600000}]
+                  },
+                  {
+                    "ratingKey": "program-3",
+                    "title": "Next Show",
+                    "Media": [{"beginsAt": 1782928800000, "endsAt": 1782932400000, "duration": 3600000}]
                   }
                 ]
               }
@@ -854,6 +859,7 @@ def test_hosted_live_tv_guide_page_fetches_selected_channel_programs(monkeypatch
     assert [(item.title, item.kind, item.playable) for item in page.items] == [
         ("Morning News", "livetv_program", False),
         ("Next Show", "livetv_program", False),
+        ("Earlier Show", "livetv_program", False),
     ]
     assert "On now" in page.items[0].subtitle
     assert page.items[0].artwork_path == "https://images.example/news.png"
