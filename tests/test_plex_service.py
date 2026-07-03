@@ -760,6 +760,7 @@ def test_hosted_live_tv_page_fetches_channels_with_account_token(monkeypatch):
                     "id": "channel-1",
                     "title": "Live One",
                     "callSign": "ONE",
+                    "summary": "Live channel description",
                     "isHd": true,
                     "thumb": "https://images.example/one.png",
                     "Media": [{"protocol": "hls", "container": "mpegts", "Part": [{"key": "/hls/one.m3u8"}]}]
@@ -794,6 +795,7 @@ def test_hosted_live_tv_page_fetches_channels_with_account_token(monkeypatch):
         ("Locked", "HLS", "livetv", False),
     ]
     assert page.items[0].artwork_path == "https://images.example/one.png"
+    assert media_details(page.items[0]).summary == "Live channel description"
     assert page.items[0].raw.getStreamURL() == f"{EPG_PROVIDER_BASE}/hls/one.m3u8?X-Plex-Token=account-token"
     assert page.total == 2
 
@@ -818,8 +820,13 @@ def test_hosted_live_tv_guide_page_fetches_selected_channel_programs(monkeypatch
                   },
                   {
                     "ratingKey": "program-2",
-                    "title": "Next Show",
+                    "title": "Earlier Show",
                     "Media": [{"beginsAt": 1782921600000, "endsAt": 1782925200000, "duration": 3600000}]
+                  },
+                  {
+                    "ratingKey": "program-3",
+                    "title": "Next Show",
+                    "Media": [{"beginsAt": 1782928800000, "endsAt": 1782932400000, "duration": 3600000}]
                   }
                 ]
               }
@@ -850,12 +857,13 @@ def test_hosted_live_tv_guide_page_fetches_selected_channel_programs(monkeypatch
         )
     ]
     assert [(item.title, item.kind, item.playable) for item in page.items] == [
+        ("Earlier Show", "livetv_program", False),
         ("Morning News", "livetv_program", False),
         ("Next Show", "livetv_program", False),
     ]
-    assert "On now" in page.items[0].subtitle
-    assert page.items[0].artwork_path == "https://images.example/news.png"
-    details = media_details(page.items[0])
+    assert "On now" in page.items[1].subtitle
+    assert page.items[1].artwork_path == "https://images.example/news.png"
+    details = media_details(page.items[1])
     metadata = dict(details.metadata)
     assert metadata["Begins"]
     assert metadata["Ends"]

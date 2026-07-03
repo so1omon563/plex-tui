@@ -18,6 +18,10 @@ from plextui.app import (
     EmptyStateRow,
     LibraryRow,
     LibraryMenuRow,
+    LIVE_TV_GUIDE_LOADING,
+    LIVE_TV_GUIDE_LOADED_STATUS,
+    LIVE_TV_GUIDE_LOADING_ROW,
+    LIVE_TV_GUIDE_LOADING_STATUS,
     LoadMoreRow,
     MediaGrid,
     OnPlexLiveRow,
@@ -281,6 +285,10 @@ def test_discover_alternate_action_opens_on_plex_vod():
 
 def test_on_plex_live_entrypoint_opens_hosted_channels():
     asyncio.run(run_on_plex_live_entrypoint_check())
+
+
+def test_on_plex_live_enrichment_repaints_channel_rows():
+    asyncio.run(run_on_plex_live_enrichment_repaints_channel_rows_check())
 
 
 def test_on_plex_live_channel_enter_opens_guide():
@@ -1657,6 +1665,57 @@ async def run_on_plex_live_entrypoint_check():
         assert service.hosted_live_tv_enrich_calls == [["channel-1"]]
 
 
+async def run_on_plex_live_enrichment_repaints_channel_rows_check():
+    channel_raw = SimpleNamespace(
+        TYPE="livetv",
+        title="Live One",
+        call_sign="ONE",
+        is_hd=True,
+        grid_key="grid-1",
+        guide_status=LIVE_TV_GUIDE_LOADING,
+    )
+    channel = MediaItem("Live One", "ONE  HD", "livetv", "channel-1", True, channel_raw)
+    current = SimpleNamespace(title="Now Showing", begins_at=1782925200000, ends_at=1782928800000)
+    next_program = SimpleNamespace(title="Up Next", begins_at=1782928800000, ends_at=1782932400000)
+    enriched_raw = SimpleNamespace(
+        TYPE="livetv",
+        title="Live One",
+        call_sign="ONE",
+        is_hd=True,
+        current_program=current,
+        next_program=next_program,
+    )
+    enriched = replace(channel, raw=enriched_raw)
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        state = BrowseState("Live TV on Plex", [channel], source="livetv", next_start=1, total=1)
+        app.browsing_stack = [state]
+        app.show_browse_state(state)
+        await pilot.pause(0.2)
+
+        row = app.query_one("#media").highlighted_child
+        assert row is not None
+        assert LIVE_TV_GUIDE_LOADING_ROW in row.label_text
+        assert "\n" not in row.label_text
+
+        app.set_hosted_live_tv_enrichment_status(state, LIVE_TV_GUIDE_LOADING_STATUS)
+        assert app.query_one("#status").content == LIVE_TV_GUIDE_LOADING_STATUS
+
+        app.apply_hosted_live_tv_enrichment(state, [enriched])
+        await pilot.pause(0.2)
+
+        row = app.query_one("#media").highlighted_child
+        assert row is not None
+        assert "\n" not in row.label_text
+        assert "Live One" in row.label_text
+        assert "Now Showing" in row.label_text
+        assert "→ Up Next" in row.label_text
+        assert app.selected_media().key == "channel-1"
+        assert app.query_one("#status").content == LIVE_TV_GUIDE_LOADED_STATUS
+
+
 async def run_on_plex_live_channel_guide_check():
     channel_raw = SimpleNamespace(TYPE="livetv", title="Live One", grid_key="grid-1")
     channel = MediaItem("Live One", "ONE  HD  HLS", "livetv", "channel-1", True, channel_raw)
@@ -1684,7 +1743,8 @@ async def run_on_plex_live_channel_guide_check():
 
 
 async def run_on_plex_live_guide_list_view_check():
-    program = MediaItem("Coda", "2:00 PM-3:00 PM  480", "livetv_program", "program-1", False, Raw(), artwork_path="/thumb")
+    raw = SimpleNamespace(begins_at=1782914400000, ends_at=1782918000000, duration=3600000)
+    program = MediaItem("Coda", "2:00 PM-3:00 PM  480", "livetv_program", "program-1", False, raw, artwork_path="/thumb")
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
@@ -1700,7 +1760,8 @@ async def run_on_plex_live_guide_list_view_check():
         row = app.query_one("#media").highlighted_child
         assert row is not None
         assert "Coda" in row.label_text
-        assert "2:00 PM-3:00 PM" in row.label_text
+        assert "-" in row.label_text
+        assert "480" not in row.label_text
 
 
 async def run_unavailable_on_plex_live_channel_check():

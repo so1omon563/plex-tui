@@ -8,9 +8,10 @@ import textwrap
 import time
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, is_dataclass, replace
 from difflib import SequenceMatcher
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from rich.align import Align
@@ -108,6 +109,20 @@ GRID_PREFETCH_WORKERS = 3
 DETAIL_SUMMARY_WIDTH = 38
 DETAIL_LABEL_WIDTH = 20
 DETAIL_STREAM_LIMIT = 5
+LIVE_TV_GUIDE_LOADING_STATUS = "Live TV: loading Now/Next guide info..."
+LIVE_TV_GUIDE_LOADED_STATUS = "Live TV: Now/Next guide info loaded"
+LIVE_TV_GUIDE_UNAVAILABLE_STATUS = "Live TV: no Now/Next guide info available"
+LIVE_TV_GUIDE_LOADING_ROW = "Loading guide..."
+LIVE_TV_GUIDE_UNAVAILABLE_ROW = "No guide data"
+LIVE_TV_GUIDE_LOADING = "loading"
+LIVE_TV_GUIDE_UNAVAILABLE = "unavailable"
+LIVE_TV_CHANNEL_WIDTH = 24
+LIVE_TV_NOW_WIDTH = 28
+LIVE_TV_TIME_WIDTH = 18
+LIVE_TV_NEXT_WIDTH = 24
+LIVE_TV_GUIDE_TIME_WIDTH = 17
+LIVE_TV_GUIDE_TITLE_WIDTH = 36
+LIVE_TV_GUIDE_INFO_WIDTH = 14
 
 
 @dataclass
@@ -1231,9 +1246,10 @@ class PlexTuiApp(App[None]):
         )
 
         def update() -> None:
+            items = live_tv_channels_with_guide_status(page.items, LIVE_TV_GUIDE_LOADING)
             state = BrowseState(
                 title,
-                page.items,
+                items,
                 source="livetv",
                 next_start=page.next_start,
                 total=page.total,
@@ -1241,8 +1257,8 @@ class PlexTuiApp(App[None]):
             self.browsing_stack = [state]
             self.show_browse_state(state)
             self.focus_media_browser()
-            self.set_status(render_browse_status(state))
-            self.enrich_hosted_live_tv_channels(state, list(page.items))
+            self.set_status(LIVE_TV_GUIDE_LOADING_STATUS)
+            self.enrich_hosted_live_tv_channels(state, list(items))
 
         self.call_from_thread(update)
 
@@ -1276,7 +1292,8 @@ class PlexTuiApp(App[None]):
                 context_media=channel,
             )
             self.browsing_stack.append(state)
-            self.show_browse_state(state)
+            selected_key = live_tv_current_program_key(page.items)
+            self.show_browse_state(state, selected_key=selected_key)
             self.focus_media_browser()
             self.set_status(render_browse_status(state))
 
@@ -1690,8 +1707,13 @@ class PlexTuiApp(App[None]):
             if not self.browsing_stack or self.browsing_stack[-1] is not state:
                 self.loading_more = False
                 return
-            first_new_key = page.items[0].key if page.items else None
-            state.items.extend(page.items)
+            page_items = (
+                live_tv_channels_with_guide_status(page.items, LIVE_TV_GUIDE_LOADING)
+                if state.source == "livetv"
+                else page.items
+            )
+            first_new_key = page_items[0].key if page_items else None
+            state.items.extend(page_items)
             state.next_start = page.next_start
             state.total = page.total
             self.loading_more = False
@@ -1708,9 +1730,11 @@ class PlexTuiApp(App[None]):
                     status = f"Jumped to {alphabet_group_label(item)}: {item.title}"
             self.show_browse_state(state, selected_key=target_key)
             self.focus_media_browser()
-            self.set_status(status)
             if state.source == "livetv":
-                self.enrich_hosted_live_tv_channels(state, list(page.items))
+                self.set_status(LIVE_TV_GUIDE_LOADING_STATUS)
+                self.enrich_hosted_live_tv_channels(state, list(page_items))
+            else:
+                self.set_status(status)
 
         self.call_from_thread(update)
 
@@ -1721,22 +1745,42 @@ class PlexTuiApp(App[None]):
         enrich = getattr(self.service, "enrich_hosted_live_tv_channels", None)
         if not callable(enrich):
             return
+        self.call_from_thread(self.set_hosted_live_tv_enrichment_status, state, LIVE_TV_GUIDE_LOADING_STATUS)
         enriched = enrich(items)
         self.call_from_thread(self.apply_hosted_live_tv_enrichment, state, enriched)
+
+    def set_hosted_live_tv_enrichment_status(self, state: BrowseState, message: str) -> None:
+        if self.browsing_stack and self.browsing_stack[-1] is state and state.source == "livetv":
+            self.set_status(message)
 
     def apply_hosted_live_tv_enrichment(self, state: BrowseState, items: list[MediaItem]) -> None:
         if not self.browsing_stack or self.browsing_stack[-1] is not state or state.source != "livetv":
             return
         enriched_by_key = {item.key: item for item in items}
         if not enriched_by_key:
+            state.items = live_tv_channels_with_guide_status(state.items, LIVE_TV_GUIDE_UNAVAILABLE)
+            self.show_browse_state(state)
+            self.set_status(LIVE_TV_GUIDE_UNAVAILABLE_STATUS)
             return
         selected = self.selected_media()
         selected_key = selected.key if selected is not None else None
-        updated = [enriched_by_key.get(item.key, item) for item in state.items]
+        updated = [
+            live_tv_channel_with_guide_status(
+                enriched_by_key.get(item.key, item),
+                LIVE_TV_GUIDE_UNAVAILABLE,
+            )
+            for item in state.items
+        ]
         if updated == state.items:
+            self.set_status(LIVE_TV_GUIDE_UNAVAILABLE_STATUS)
             return
         state.items = updated
         self.show_browse_state(state, selected_key=selected_key)
+        self.set_timer(
+            0.05,
+            lambda: self.set_hosted_live_tv_enrichment_status(state, LIVE_TV_GUIDE_LOADED_STATUS),
+            name="livetv-enrichment-status",
+        )
 
     @work(thread=True)
     def open_media(self, media: MediaItem) -> None:
@@ -4320,6 +4364,8 @@ def render_live_tv_details(
         guide_rows = live_tv_channel_guide_rows(raw)
         if guide_rows:
             append_detail_section(lines, "Guide", detail_key_value_rows(guide_rows))
+        elif guide_status := live_tv_channel_guide_status_label(raw):
+            append_detail_section(lines, "Guide", [guide_status])
 
     summary = getattr(details, "summary")
     summary_fallback = (
@@ -4390,6 +4436,19 @@ def live_tv_channel_guide_rows(raw: object | None) -> list[tuple[str, str]]:
     ]
 
 
+def live_tv_channel_guide_status(raw: object | None) -> str:
+    return str(getattr(raw, "guide_status", "") or "")
+
+
+def live_tv_channel_guide_status_label(raw: object | None) -> str:
+    status = live_tv_channel_guide_status(raw)
+    if status == LIVE_TV_GUIDE_LOADING:
+        return LIVE_TV_GUIDE_LOADING_ROW
+    if status == LIVE_TV_GUIDE_UNAVAILABLE:
+        return LIVE_TV_GUIDE_UNAVAILABLE_ROW
+    return ""
+
+
 def live_tv_channel_program_label(program: object | None) -> str:
     if program is None:
         return ""
@@ -4402,7 +4461,9 @@ def live_tv_channel_program_label(program: object | None) -> str:
         if value
     )
     title = str(getattr(program, "title", "") or "")
-    return " ".join(value for value in (time_label, title) if value)
+    if title and time_label:
+        return f"{title} ({time_label})"
+    return title or time_label
 
 
 def live_tv_channel_quality_values(raw: object | None) -> list[str]:
@@ -4778,6 +4839,30 @@ def media_row(item: MediaItem, config: AppConfig, bulk_selected: bool = False) -
     return MediaRow(item, bulk_selected=bulk_selected)
 
 
+def live_tv_channels_with_guide_status(items: list[MediaItem], status: str) -> list[MediaItem]:
+    return [live_tv_channel_with_guide_status(item, status) for item in items]
+
+
+def live_tv_channel_with_guide_status(item: MediaItem, status: str) -> MediaItem:
+    raw = item.raw
+    if not getattr(raw, "grid_key", ""):
+        return item
+    if live_tv_channel_guide_rows(raw):
+        status = ""
+    if is_dataclass(raw):
+        return replace(item, raw=replace(raw, guide_status=status))
+    if hasattr(raw, "__dict__"):
+        values = dict(vars(raw))
+        values["guide_status"] = status
+        return replace(item, raw=SimpleNamespace(**values))
+    return item
+
+
+def live_tv_current_program_key(items: list[MediaItem]) -> str | None:
+    current = next((item for item in items if bool(getattr(item.raw, "on_air", False))), None)
+    return current.key if current is not None else None
+
+
 def live_tv_row_label(media: MediaItem, bulk_selected: bool = False) -> str:
     if media.kind == "livetv_program":
         return live_tv_program_row_label(media, bulk_selected)
@@ -4792,30 +4877,128 @@ def live_tv_row_marker(media: MediaItem, bulk_selected: bool = False) -> str:
 
 def live_tv_channel_row_label(media: MediaItem, bulk_selected: bool = False) -> str:
     marker = live_tv_row_marker(media, bulk_selected)
+    return f"{marker} {live_tv_channel_picker_label(media)}"
+
+
+def live_tv_channel_picker_label(media: MediaItem) -> str:
+    raw = media.raw
+    current = getattr(raw, "current_program", None)
+    next_program = getattr(raw, "next_program", None)
+    if current is not None:
+        channel = fixed_width(media.title, LIVE_TV_CHANNEL_WIDTH)
+        now = fixed_width(live_tv_program_title(current), LIVE_TV_NOW_WIDTH)
+        when = live_tv_program_compact_time_progress(current).ljust(LIVE_TV_TIME_WIDTH)
+        next_text = f"→ {live_tv_program_title(next_program)}" if next_program is not None else ""
+        return f"{channel}  {now}  {when}  {truncate_text(next_text, LIVE_TV_NEXT_WIDTH)}".rstrip()
+    status = live_tv_channel_guide_status_label(raw)
+    if status:
+        return f"{fixed_width(media.title, LIVE_TV_CHANNEL_WIDTH)}  {status}"
+    if next_program is not None:
+        next_text = f"→ {live_tv_program_title(next_program)}"
+        return f"{fixed_width(media.title, LIVE_TV_CHANNEL_WIDTH)}  {truncate_text(next_text, LIVE_TV_NOW_WIDTH)}"
     quality = live_tv_quality_label(media)
-    guide = live_tv_channel_now_next_label(media.raw)
-    details = "  ".join(value for value in (quality, guide) if value)
-    return f"{marker} {media.title}{('  ' + details) if details else ''}"
+    return f"{media.title}  {quality}" if quality else media.title
 
 
-def live_tv_channel_now_next_label(raw: object | None) -> str:
-    rows = live_tv_channel_guide_rows(raw)
-    return "  ".join(f"{label}: {value}" for label, value in rows)
+def live_tv_program_title(program: object | None) -> str:
+    return str(getattr(program, "title", "") or "")
+
+
+def live_tv_program_time_progress(program: object | None) -> str:
+    if program is None:
+        return ""
+    time_label = "-".join(
+        value
+        for value in (
+            live_tv_timestamp(getattr(program, "begins_at", 0)),
+            live_tv_timestamp(getattr(program, "ends_at", 0)),
+        )
+        if value
+    )
+    progress = live_tv_program_progress_label(program)
+    return " ".join(value for value in (time_label, progress) if value)
+
+
+def live_tv_program_compact_time_progress(program: object | None) -> str:
+    if program is None:
+        return ""
+    time_label = live_tv_compact_time_range(
+        getattr(program, "begins_at", 0),
+        getattr(program, "ends_at", 0),
+    )
+    progress = live_tv_program_progress_label(program)
+    return " ".join(value for value in (time_label, progress) if value)
+
+
+def live_tv_compact_time_range(begins_at: object, ends_at: object) -> str:
+    start = live_tv_compact_timestamp(begins_at)
+    end = live_tv_compact_timestamp(ends_at)
+    if not start:
+        return end
+    if not end:
+        return start
+    if start[-1:] == end[-1:]:
+        start = start[:-1]
+    return f"{start}–{end}"
+
+
+def live_tv_compact_timestamp(milliseconds: object) -> str:
+    if not milliseconds:
+        return ""
+    try:
+        return time.strftime("%-I:%M%p", time.localtime(int(milliseconds) / 1000)).lower().replace("m", "")
+    except (TypeError, ValueError, OSError):
+        return ""
+
+
+def live_tv_program_progress_label(program: object) -> str:
+    begins_at = int(getattr(program, "begins_at", 0) or 0)
+    ends_at = int(getattr(program, "ends_at", 0) or 0)
+    if not begins_at or ends_at <= begins_at:
+        return ""
+    now = int(time.time() * 1000)
+    if now < begins_at or now >= ends_at:
+        return ""
+    return f"{int((now - begins_at) * 100 / (ends_at - begins_at))}% in"
+
+
+def fixed_width(value: str, width: int) -> str:
+    return truncate_text(value, width).ljust(width)
 
 
 def live_tv_program_row_label(media: MediaItem, bulk_selected: bool = False) -> str:
     marker = live_tv_row_marker(media, bulk_selected)
     raw = media.raw
-    subtitle_bits = live_tv_subtitle_bits(media)
-    start = live_tv_timestamp(getattr(raw, "begins_at", 0))
-    time_label = start or live_tv_subtitle_time(subtitle_bits)
-    duration = live_tv_duration_label(raw)
-    resolution = str(getattr(raw, "video_resolution", "") or live_tv_subtitle_resolution(subtitle_bits)).upper()
-    on_air = "On now" if bool(getattr(raw, "on_air", False)) else ""
-    details = [duration, resolution, on_air]
-    detail_text = "  ".join(bit for bit in details if bit)
-    title = media.title if not time_label else f"{time_label:<8}  {media.title}"
-    return f"{marker} {title}{('  ' + detail_text) if detail_text else ''}"
+    when = fixed_width(live_tv_program_time_range(raw), LIVE_TV_GUIDE_TIME_WIDTH)
+    title = fixed_width(media.title, LIVE_TV_GUIDE_TITLE_WIDTH)
+    info = truncate_text(live_tv_program_guide_info(raw), LIVE_TV_GUIDE_INFO_WIDTH)
+    return f"{marker} {when}  {title}  {info}".rstrip()
+
+
+def live_tv_program_time_range(raw: object) -> str:
+    begins_at = getattr(raw, "begins_at", 0)
+    ends_at = getattr(raw, "ends_at", 0)
+    start = live_tv_timestamp(begins_at)
+    end = live_tv_timestamp(ends_at)
+    if start and end:
+        return f"{start}-{end}"
+    return start
+
+
+def live_tv_program_guide_info(raw: object) -> str:
+    if bool(getattr(raw, "on_air", False)):
+        left = live_tv_program_minutes_left(raw)
+        return f"Now · {left} left" if left else "Now"
+    return live_tv_duration_label(raw)
+
+
+def live_tv_program_minutes_left(raw: object) -> str:
+    ends_at = live_tv_int(getattr(raw, "ends_at", 0))
+    if not ends_at:
+        return ""
+    remaining = max(0, ends_at - int(time.time() * 1000))
+    minutes = (remaining + 59_999) // 60_000
+    return f"{minutes}m" if minutes else ""
 
 
 def live_tv_timestamp(milliseconds: object) -> str:
