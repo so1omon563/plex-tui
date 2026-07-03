@@ -3495,7 +3495,7 @@ class PlexTuiApp(App[None]):
         except Exception as exc:
             if self.search_was_cancelled(token):
                 return
-            self.call_from_thread(self.show_error, str(exc))
+            self.call_from_thread(self.show_discover_error, str(exc))
             return
         write_performance_log(
             "discover_page",
@@ -4196,6 +4196,15 @@ class PlexTuiApp(App[None]):
         view.clear()
         view.append(EmptyStateRow("Plex error", "Open Settings or relogin, then retry."))
         self.show_detail_text(render_error_state_details("Plex Error", text, config_hint, recovery_hint))
+
+    def show_discover_error(self, text: str) -> None:
+        message, recovery = discover_error_copy(text)
+        self.set_status(f"Discover error: {message}")
+        self.set_media_title("Discover Error")
+        view = self.show_media_list()
+        view.clear()
+        view.append(EmptyStateRow("Plex Discover error", recovery))
+        self.show_detail_text(render_error_state_details("Plex Discover Error", message, "Service: Plex Discover", recovery))
 
     def show_playback_error(self, text: str) -> None:
         self.detail_refresh_token += 1
@@ -6526,6 +6535,29 @@ def render_error_state_details(title: str, error: str, diagnostic: str, recovery
         *wrapped_detail_text(recovery),
     ]
     return "\n".join(lines)
+
+
+def discover_error_copy(error: str) -> tuple[str, str]:
+    if plex_discover_provider_unavailable(error):
+        return (
+            "Plex Discover is temporarily unavailable because Plex's hosted metadata provider returned 502 Bad Gateway.",
+            "Try the Discover search again in a few minutes.",
+        )
+    return clean_error_text(error), "Retry the Discover search. If it keeps failing, relogin with Plex from Settings."
+
+
+def plex_discover_provider_unavailable(error: str) -> bool:
+    text = str(error).lower()
+    provider_hosts = ("discover.provider.plex.tv", "metadata.provider.plex.tv")
+    return any(host in text for host in provider_hosts) and ("502" in text or "bad gateway" in text)
+
+
+def clean_error_text(error: str, limit: int = 220) -> str:
+    text = re.sub(r"<[^>]+>", " ", str(error))
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
 
 
 def alphabet_jump_index(items: list[MediaItem], current_index: int, direction: int) -> int | None:
