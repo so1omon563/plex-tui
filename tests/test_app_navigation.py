@@ -283,6 +283,10 @@ def test_on_plex_live_entrypoint_opens_hosted_channels():
     asyncio.run(run_on_plex_live_entrypoint_check())
 
 
+def test_on_plex_live_enrichment_repaints_channel_rows():
+    asyncio.run(run_on_plex_live_enrichment_repaints_channel_rows_check())
+
+
 def test_on_plex_live_channel_enter_opens_guide():
     asyncio.run(run_on_plex_live_channel_guide_check())
 
@@ -1655,6 +1659,45 @@ async def run_on_plex_live_entrypoint_check():
                 break
             await pilot.pause(0.1)
         assert service.hosted_live_tv_enrich_calls == [["channel-1"]]
+
+
+async def run_on_plex_live_enrichment_repaints_channel_rows_check():
+    channel_raw = SimpleNamespace(TYPE="livetv", title="Live One", call_sign="ONE", is_hd=True)
+    channel = MediaItem("Live One", "ONE  HD", "livetv", "channel-1", True, channel_raw)
+    current = SimpleNamespace(title="Now Showing", begins_at=1782925200000, ends_at=1782928800000)
+    next_program = SimpleNamespace(title="Up Next", begins_at=1782928800000, ends_at=1782932400000)
+    enriched_raw = SimpleNamespace(
+        TYPE="livetv",
+        title="Live One",
+        call_sign="ONE",
+        is_hd=True,
+        current_program=current,
+        next_program=next_program,
+    )
+    enriched = replace(channel, raw=enriched_raw)
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+        state = BrowseState("Live TV on Plex", [channel], source="livetv", next_start=1, total=1)
+        app.browsing_stack = [state]
+        app.show_browse_state(state)
+        await pilot.pause(0.2)
+
+        row = app.query_one("#media").highlighted_child
+        assert row is not None
+        assert "\n  Now " not in row.label_text
+
+        app.apply_hosted_live_tv_enrichment(state, [enriched])
+        await pilot.pause(0.2)
+
+        row = app.query_one("#media").highlighted_child
+        assert row is not None
+        assert "\n  Now " in row.label_text
+        assert "Now Showing" in row.label_text
+        assert "  ·  Next " in row.label_text
+        assert "Up Next" in row.label_text
+        assert app.selected_media().key == "channel-1"
 
 
 async def run_on_plex_live_channel_guide_check():
