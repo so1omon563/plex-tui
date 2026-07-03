@@ -5818,6 +5818,7 @@ def render_help() -> str:
 
 LIBRARY_MENU_ENTRIES = (
     ("library", "Library", "Browse every item in this Plex library."),
+    ("recently_added", "Recently Added", "Browse newest items in this Plex library."),
     ("recommended", "Recommended", "Browse Plex hub rows such as recently added or promoted groups."),
     ("collections", "Collections", "Browse collections from this Plex library."),
     ("playlists", "Playlists", "Browse playlists connected to this Plex library."),
@@ -5827,6 +5828,7 @@ LIBRARY_MENU_ENTRIES = (
 
 LIBRARY_ENTRY_GLYPHS = {
     "library": "▦",
+    "recently_added": "◷",
     "recommended": "✦",
     "collections": "◇",
     "playlists": "▤",
@@ -5862,7 +5864,7 @@ def library_row_description(library: LibraryItem, config: AppConfig) -> str:
         f"Enter: {enter_action}",
         f"Space: {space_action}",
         "",
-        "Library view opens all items. Browse view lets you choose Recommended, Collections, Playlists, or Categories.",
+        "Library view opens all items. Browse view lets you choose Recently Added, Recommended, Collections, Playlists, or Categories.",
     ])
 
 
@@ -5873,6 +5875,7 @@ def library_menu_description(library: LibraryItem) -> str:
         "Choose how to browse this Plex library.",
         "",
         "▦ Library: all items.",
+        "◷ Recently Added: newest items first.",
         "✦ Recommended: Plex hub rows.",
         "◇ Collections: library collections.",
         "▤ Playlists: library playlists.",

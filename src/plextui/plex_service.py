@@ -180,6 +180,14 @@ class PlexService:
         if entry == "recommended":
             raw_items = list(library.raw.hubs())
             return sliced_media_page([to_hub_media_item(item) for item in raw_items], start, size)
+        if entry == "recently_added":
+            raw_items = library.raw.search(
+                sort="addedAt:desc",
+                maxresults=size,
+                container_start=start,
+                container_size=size,
+            )
+            return media_page_from_raw(raw_items, start)
         if entry == "collections":
             raw_items = library.raw.collections(
                 maxresults=size,

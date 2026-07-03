@@ -2159,10 +2159,25 @@ def test_library_menu_rows_list_supported_entrypoints():
 
     rows = library_menu_rows(library)
 
-    assert [row.entry for row in rows] == ["library", "recommended", "collections", "playlists", "categories"]
-    assert [row.label_text for row in rows] == ["Library", "Recommended", "Collections", "Playlists", "Categories"]
+    assert [row.entry for row in rows] == [
+        "library",
+        "recently_added",
+        "recommended",
+        "collections",
+        "playlists",
+        "categories",
+    ]
+    assert [row.label_text for row in rows] == [
+        "Library",
+        "Recently Added",
+        "Recommended",
+        "Collections",
+        "Playlists",
+        "Categories",
+    ]
     assert [row.display_text for row in rows] == [
         "▦ Library",
+        "◷ Recently Added",
         "✦ Recommended",
         "◇ Collections",
         "▤ Playlists",
