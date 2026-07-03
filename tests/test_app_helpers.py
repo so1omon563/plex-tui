@@ -384,13 +384,13 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
 
 def test_live_tv_program_progress_label_uses_current_window(monkeypatch):
     monkeypatch.setattr("plextui.app.time.time", lambda: 2.0)
-    assert live_tv_program_progress_label(SimpleNamespace(begins_at=1000, ends_at=3000)) == "50%"
+    assert live_tv_program_progress_label(SimpleNamespace(begins_at=1000, ends_at=3000)) == "50% in"
 
 
 def test_live_tv_program_compact_time_keeps_full_range(monkeypatch):
     monkeypatch.setattr("plextui.app.time.time", lambda: 2.0)
     label = live_tv_program_compact_time_progress(SimpleNamespace(begins_at=1000, ends_at=3000))
-    assert label.endswith(" 50%")
+    assert label.endswith(" 50% in")
     assert "..." not in label
 
 

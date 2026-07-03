@@ -4953,7 +4953,7 @@ def live_tv_program_progress_label(program: object) -> str:
     now = int(time.time() * 1000)
     if now < begins_at or now >= ends_at:
         return ""
-    return f"{int((now - begins_at) * 100 / (ends_at - begins_at))}%"
+    return f"{int((now - begins_at) * 100 / (ends_at - begins_at))}% in"
 
 
 def fixed_width(value: str, width: int) -> str:
