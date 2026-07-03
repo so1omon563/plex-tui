@@ -28,6 +28,7 @@ from plextui.app import (
     PlaylistCreateRow,
     PlaylistTargetRow,
     ProfileRow,
+    SettingsNumericRow,
     artwork_fetch_pixel_size,
     card_artwork_fetch_size,
     grid_artwork_cache_key,
@@ -37,7 +38,7 @@ from plextui.app import (
 )
 from textual.widgets import ListView
 from plextui.auth import ProfileChoice
-from plextui.config import AppConfig
+from plextui.config import MAX_PAGE_SIZE, AppConfig
 from plextui.models import LibraryItem, MediaItem
 from plextui.player import PlayerError, StreamChoice
 from plextui.plex_service import MediaPage
@@ -4203,11 +4204,19 @@ async def run_numeric_settings_left_right_check():
             assert app.config.page_size == 90
             app.action_grid_left()
             assert app.config.page_size == 80
+            app.config = replace(app.config, page_size=MAX_PAGE_SIZE)
+            app.action_show_settings(selected_action="set_page_size")
+            await pilot.pause(0.2)
+            app.action_grid_right()
+            assert app.config.page_size == MAX_PAGE_SIZE
 
         await pilot.pause(0.2)
         assert save_config.call_count == 2
         assert app.settings_visible
         assert app.query_one("#media-title").content == "Settings"
+        row = app.query_one("#media", ListView).highlighted_child
+        assert isinstance(row, SettingsNumericRow)
+        assert row.action == "set_page_size"
 
 
 async def run_option_settings_left_right_check():

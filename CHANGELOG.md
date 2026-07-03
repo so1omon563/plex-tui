@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Kept compact Settings numeric rows selected when Left/Right adjustment reaches
+  a minimum or maximum value.
 - Allowed playback from the current Live TV guide program by routing it through
   the selected channel stream.
 - Fixed hosted Live TV guides so the currently airing program appears before

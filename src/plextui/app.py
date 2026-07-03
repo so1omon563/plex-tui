@@ -3207,13 +3207,14 @@ class PlexTuiApp(App[None]):
     def update_numeric_preference(self, name: str, step: int, minimum: int, maximum: int) -> bool:
         current = int(getattr(self.config, name))
         value = min(maximum, max(minimum, current + step))
+        action = f"set_{name}"
         if value == current:
-            self.action_show_settings()
+            self.action_show_settings(selected_action=action)
             return True
         if not self.update_preferences(**{name: value}):
             return False
         label = numeric_setting_label(name)
-        self.refresh_settings_after_change(f"set_{name}", label, str(value))
+        self.refresh_settings_after_change(action, label, str(value))
         return True
 
     def prompt_mpv_window_size(self) -> None:
