@@ -1697,8 +1697,8 @@ async def run_on_plex_live_enrichment_repaints_channel_rows_check():
 
         row = app.query_one("#media").highlighted_child
         assert row is not None
-        assert f"\n  {LIVE_TV_GUIDE_LOADING_ROW}" in row.label_text
-        assert "\n  Now " not in row.label_text
+        assert LIVE_TV_GUIDE_LOADING_ROW in row.label_text
+        assert "\n" not in row.label_text
 
         app.set_hosted_live_tv_enrichment_status(state, LIVE_TV_GUIDE_LOADING_STATUS)
         assert app.query_one("#status").content == LIVE_TV_GUIDE_LOADING_STATUS
@@ -1708,8 +1708,10 @@ async def run_on_plex_live_enrichment_repaints_channel_rows_check():
 
         row = app.query_one("#media").highlighted_child
         assert row is not None
-        assert "\n  guide  Now: Now Showing (" in row.label_text
-        assert "  |  Next: Up Next (" in row.label_text
+        assert "\n" not in row.label_text
+        assert "Live One" in row.label_text
+        assert "Now Showing" in row.label_text
+        assert "→ Up Next" in row.label_text
         assert app.selected_media().key == "channel-1"
         assert app.query_one("#status").content == LIVE_TV_GUIDE_LOADED_STATUS
 
@@ -1741,7 +1743,8 @@ async def run_on_plex_live_channel_guide_check():
 
 
 async def run_on_plex_live_guide_list_view_check():
-    program = MediaItem("Coda", "2:00 PM-3:00 PM  480", "livetv_program", "program-1", False, Raw(), artwork_path="/thumb")
+    raw = SimpleNamespace(begins_at=1782914400000, ends_at=1782918000000, duration=3600000)
+    program = MediaItem("Coda", "2:00 PM-3:00 PM  480", "livetv_program", "program-1", False, raw, artwork_path="/thumb")
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
@@ -1757,7 +1760,8 @@ async def run_on_plex_live_guide_list_view_check():
         row = app.query_one("#media").highlighted_child
         assert row is not None
         assert "Coda" in row.label_text
-        assert "2:00 PM-3:00 PM" in row.label_text
+        assert "-" in row.label_text
+        assert "480" not in row.label_text
 
 
 async def run_unavailable_on_plex_live_channel_check():

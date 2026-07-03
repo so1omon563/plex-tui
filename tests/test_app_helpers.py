@@ -58,6 +58,8 @@ from plextui.app import (
     grid_page_key,
     grid_status,
     library_menu_rows,
+    live_tv_program_compact_time_progress,
+    live_tv_program_progress_label,
     media_row,
     media_row_status,
     media_rows,
@@ -321,7 +323,7 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
             ends_at=1782928800000,
         ),
         next_program=SimpleNamespace(
-            title="Up Next",
+            title="Up Next With An Extremely Long Title",
             begins_at=1782928800000,
             ends_at=1782932400000,
         ),
@@ -342,9 +344,10 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
     config = AppConfig("http://plex", "token", "client-id")
 
     row_label = media_row(media, config).label_text
-    assert row_label.startswith("▶ Stories by AMC  AMCP · HD")
-    assert "\n  guide  Now: Now Showing (" in row_label
-    assert "  |  Next: Up Next (" in row_label
+    assert row_label.startswith("▶ Stories by AMC")
+    assert "\n" not in row_label
+    assert "Now Showing" in row_label
+    assert "→ Up Next With An Ext..." in row_label
     assert "Guide\nNow:" in rendered
     assert "Now Showing" in rendered
     assert "Next:" in rendered
@@ -363,7 +366,8 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
             guide_status=LIVE_TV_GUIDE_LOADING,
         ),
     ), config).label_text
-    assert f"\n  {LIVE_TV_GUIDE_LOADING_ROW}" in loading
+    assert LIVE_TV_GUIDE_LOADING_ROW in loading
+    assert "\n" not in loading
     unavailable = media_row(replace(
         media,
         raw=SimpleNamespace(
@@ -374,7 +378,20 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
             guide_status=LIVE_TV_GUIDE_UNAVAILABLE,
         ),
     ), config).label_text
-    assert f"\n  {LIVE_TV_GUIDE_UNAVAILABLE_ROW}" in unavailable
+    assert LIVE_TV_GUIDE_UNAVAILABLE_ROW in unavailable
+    assert "\n" not in unavailable
+
+
+def test_live_tv_program_progress_label_uses_current_window(monkeypatch):
+    monkeypatch.setattr("plextui.app.time.time", lambda: 2.0)
+    assert live_tv_program_progress_label(SimpleNamespace(begins_at=1000, ends_at=3000)) == "50%"
+
+
+def test_live_tv_program_compact_time_keeps_full_range(monkeypatch):
+    monkeypatch.setattr("plextui.app.time.time", lambda: 2.0)
+    label = live_tv_program_compact_time_progress(SimpleNamespace(begins_at=1000, ends_at=3000))
+    assert label.endswith(" 50%")
+    assert "..." not in label
 
 
 def test_render_details_prioritizes_live_tv_guide_program_schedule():
@@ -2110,11 +2127,26 @@ def test_media_row_formats_live_tv_guide_program_as_schedule_row():
     row = MediaRow(MediaItem("Ordinary Witches", "Live TV Program  720", "livetv_program", "2", False, raw))
 
     assert row.label_text.startswith("› ")
+    assert "-" in row.label_text
     assert "Ordinary Witches" in row.label_text
-    assert "49m" in row.label_text
-    assert "720" in row.label_text
-    assert "On now" in row.label_text
+    assert "Now" in row.label_text
+    assert "720" not in row.label_text
     assert "Live TV Program" not in row.label_text
+
+
+def test_live_tv_guide_program_row_shows_time_left(monkeypatch):
+    monkeypatch.setattr("plextui.app.time.time", lambda: 1782923400)
+    raw = SimpleNamespace(
+        begins_at=1782921600000,
+        ends_at=1782925200000,
+        duration=3600000,
+        on_air=True,
+    )
+
+    row = MediaRow(MediaItem("Black Wind Howls", "", "livetv_program", "2", False, raw))
+
+    assert "Black Wind Howls" in row.label_text
+    assert "30m left" in row.label_text
 
 
 def test_media_grid_tracks_selection_and_visible_page():
