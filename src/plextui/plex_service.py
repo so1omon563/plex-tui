@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import json
 import re
+import time
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 from typing import Any
@@ -91,6 +92,8 @@ class HostedLiveTVChannel:
     container: str = ""
     thumb: str = ""
     art: str = ""
+    current_program: HostedLiveTVGuideProgram | None = None
+    next_program: HostedLiveTVGuideProgram | None = None
 
     TYPE = "livetv"
 
@@ -302,7 +305,7 @@ class PlexService:
         grid_key = getattr(raw, "grid_key", "") if isinstance(raw, HostedLiveTVChannel) else ""
         if not grid_key:
             raise ValueError("Live TV channel does not include a guide key")
-        query = urlencode({"channelGridKey": grid_key, "date": (guide_date or date.today()).isoformat()})
+        query = urlencode({"channelGridKey": grid_key, "date": (guide_date or hosted_live_tv_guide_date()).isoformat()})
         data = epg_provider_json(f"/grid?{query}", self.config.account_token)
         container = data.get("MediaContainer", {})
         programs = [
@@ -312,6 +315,43 @@ class PlexService:
         ]
         programs.sort(key=hosted_live_tv_program_sort_key)
         return sliced_media_page([to_media_item(program) for program in programs], start, size)
+
+    def enrich_hosted_live_tv_channels(self, items: list[MediaItem]) -> list[MediaItem]:
+        return [self.enrich_hosted_live_tv_channel(item) for item in items]
+
+    def enrich_hosted_live_tv_channel(self, item: MediaItem) -> MediaItem:
+        raw = item.raw
+        if not isinstance(raw, HostedLiveTVChannel) or not raw.grid_key:
+            return item
+        try:
+            current, next_program = self.hosted_live_tv_now_next(raw)
+        except Exception:
+            return item
+        if current is None and next_program is None:
+            return item
+        return to_media_item(replace(raw, current_program=current, next_program=next_program))
+
+    def hosted_live_tv_now_next(
+        self,
+        channel: HostedLiveTVChannel,
+        guide_date: date | None = None,
+    ) -> tuple[HostedLiveTVGuideProgram | None, HostedLiveTVGuideProgram | None]:
+        query = urlencode({"channelGridKey": channel.grid_key, "date": (guide_date or hosted_live_tv_guide_date()).isoformat()})
+        data = epg_provider_json(f"/grid?{query}", self.config.account_token)
+        container = data.get("MediaContainer", {})
+        programs = [
+            program
+            for program in (hosted_live_tv_program_from_raw(raw) for raw in container.get("Metadata", []))
+            if program is not None
+        ]
+        programs.sort(key=hosted_live_tv_program_sort_key)
+        current = next((program for program in programs if program.on_air), None)
+        after_ms = current.ends_at if current is not None and current.ends_at else int(time.time() * 1000)
+        next_program = next(
+            (program for program in programs if program is not current and program.begins_at >= after_ms),
+            None,
+        )
+        return current, next_program
 
     def continue_watching_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
         hubs = getattr(self.server.library, "hubs", None)
@@ -494,11 +534,20 @@ def dedupe_media_items(raw_items: list[Any]) -> list[Any]:
     unique: list[Any] = []
     seen = set[str]()
     for raw in raw_items:
-        key = media_key(raw)
+        key = dedupe_media_key(raw)
         if key not in seen:
             seen.add(key)
             unique.append(raw)
     return unique
+
+
+def dedupe_media_key(raw: Any) -> str:
+    for attr in ("guid", "ratingKey", "key"):
+        value = getattr(raw, attr, None)
+        if value is None or value == "" or value != value:
+            continue
+        return str(value)
+    return f"unkeyed:{id(raw)}"
 
 
 def to_media_item(raw: Any) -> MediaItem:
@@ -599,19 +648,32 @@ def hosted_live_tv_program_from_raw(raw: dict[str, Any]) -> HostedLiveTVGuidePro
     key = str(raw.get("ratingKey") or raw.get("key") or raw.get("guid") or "")
     if not key:
         return None
+    begins_at = parse_timestamp_ms(media.get("beginsAt"))
+    ends_at = parse_timestamp_ms(media.get("endsAt"))
     return HostedLiveTVGuideProgram(
         title=str(raw.get("title") or "Untitled Program"),
         key=key,
-        begins_at=parse_timestamp_ms(media.get("beginsAt")),
-        ends_at=parse_timestamp_ms(media.get("endsAt")),
+        begins_at=begins_at,
+        ends_at=ends_at,
         duration=parse_int(media.get("duration")),
-        on_air=bool(media.get("onAir")),
+        on_air=hosted_live_tv_program_on_air(media.get("onAir"), begins_at, ends_at),
         video_resolution=str(media.get("videoResolution") or ""),
         summary=str(raw.get("summary") or ""),
         thumb=hosted_live_tv_program_image(raw),
         art=str(raw.get("art") or ""),
         year=parse_optional_int(raw.get("year")),
     )
+
+
+def hosted_live_tv_program_on_air(flag: Any, begins_at: int, ends_at: int, now_ms: int | None = None) -> bool:
+    if begins_at and ends_at:
+        current = now_ms if now_ms is not None else int(time.time() * 1000)
+        return begins_at <= current < ends_at
+    return bool(flag)
+
+
+def hosted_live_tv_guide_date() -> date:
+    return datetime.now(timezone.utc).date()
 
 
 def hosted_live_tv_program_image(raw: dict[str, Any]) -> str:

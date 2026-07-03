@@ -1615,6 +1615,11 @@ async def run_on_plex_live_entrypoint_check():
         assert app.query_one("#media").highlighted_child.media.title == "Live One"
         assert app.query_one("#media").display
         assert not app.query_one("#media-grid-scroll").display
+        for _ in range(20):
+            if service.hosted_live_tv_enrich_calls:
+                break
+            await pilot.pause(0.1)
+        assert service.hosted_live_tv_enrich_calls == [["channel-1"]]
 
 
 async def run_on_plex_live_channel_guide_check():
@@ -1790,6 +1795,7 @@ class FakePagedService:
         self.discover_calls = []
         self.video_on_demand_calls = []
         self.hosted_live_tv_calls = []
+        self.hosted_live_tv_enrich_calls = []
         self.hosted_live_tv_guide_calls = []
         self.guide_page = MediaPage([], start=0, total=0)
         self.children_calls = []
@@ -1827,6 +1833,10 @@ class FakePagedService:
     def hosted_live_tv_page(self, start: int, size: int) -> MediaPage:
         self.hosted_live_tv_calls.append((start, size))
         return self.page
+
+    def enrich_hosted_live_tv_channels(self, items: list[MediaItem]) -> list[MediaItem]:
+        self.hosted_live_tv_enrich_calls.append([item.key for item in items])
+        return items
 
     def hosted_live_tv_guide_page(self, channel: MediaItem, size: int = 40) -> MediaPage:
         self.hosted_live_tv_guide_calls.append((channel.key, size))
@@ -3700,10 +3710,11 @@ async def run_open_parent_context_from_continue_watching_episode_check():
         await pilot.pause(0.2)
 
         await pilot.press("b")
+        media_calls = await wait_for_calls(service.media_from_key_calls, pilot, attempts=80)
         children_calls = await wait_for_calls(service.children_calls, pilot, attempts=80)
         selected = await wait_for_selected_title(app, pilot, "Episode 1", attempts=80)
 
-        assert service.media_from_key_calls == ["/library/metadata/season-1"]
+        assert media_calls == ["/library/metadata/season-1"]
         assert children_calls == [("season-1", 40)]
         assert app.browsing_stack[-1].title == "Season 1"
         assert selected is not None
@@ -3727,10 +3738,11 @@ async def run_open_show_context_from_continue_watching_episode_check():
         await pilot.pause(0.2)
 
         await pilot.press("B")
+        media_calls = await wait_for_calls(service.media_from_key_calls, pilot, attempts=80)
         children_calls = await wait_for_calls(service.children_calls, pilot, attempts=80)
         selected = await wait_for_selected_title(app, pilot, "Season 1", attempts=80)
 
-        assert service.media_from_key_calls == ["/library/metadata/show-1"]
+        assert media_calls == ["/library/metadata/show-1"]
         assert children_calls == [("show-1", 40)]
         assert app.browsing_stack[-1].title == "Berserk"
         assert selected is not None

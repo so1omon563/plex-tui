@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 from plextui.models import LibraryItem, MediaItem
 from plextui.plex_service import (
@@ -15,6 +15,7 @@ from plextui.plex_service import (
     episode_show_parent_key,
     kind_label,
     hosted_live_tv_channel_from_raw,
+    hosted_live_tv_guide_date,
     media_key,
     media_details,
     progress_bar,
@@ -22,6 +23,7 @@ from plextui.plex_service import (
     row_progress_marker,
     to_media_item,
     availability_urls,
+    hosted_live_tv_program_on_air,
     hosted_live_tv_program_from_raw,
     signed_epg_url,
     watched_state,
@@ -547,6 +549,46 @@ def test_continue_watching_page_includes_items_from_all_sources():
     assert page.total == 2
 
 
+def test_continue_watching_dedupes_same_guid_with_different_keys():
+    class AndorVariant(TvEpisodeRawItem):
+        title = "Andor"
+        guid = "plex://episode/andor-1"
+
+        def __init__(self, rating_key: str) -> None:
+            self.ratingKey = rating_key
+            self.key = f"/library/metadata/{rating_key}"
+
+    hub_item = AndorVariant("direct")
+    endpoint_item = AndorVariant("optimized")
+    raw_library = type(
+        "Library",
+        (),
+        {
+            "calls": [],
+            "hubs": lambda self, **kwargs: self.calls.append(("hubs", kwargs))
+            or [RawHub([hub_item])],
+            "onDeck": lambda self: self.calls.append(("onDeck",))
+            or [],
+        },
+    )()
+    service = object.__new__(PlexService)
+    service.server = type(
+        "Server",
+        (),
+        {
+            "library": raw_library,
+            "calls": [],
+            "continueWatching": lambda self: self.calls.append(("continueWatching",))
+            or [endpoint_item],
+        },
+    )()
+
+    page = service.continue_watching_page(start=0, size=10)
+
+    assert [item.title for item in page.items] == ["Andor"]
+    assert page.total == 1
+
+
 def test_continue_watching_page_fetches_non_playable_items_by_key():
     raw_library = type(
         "Library",
@@ -781,6 +823,7 @@ def test_hosted_live_tv_guide_page_fetches_selected_channel_programs(monkeypatch
         )
 
     monkeypatch.setattr("plextui.plex_service.urlopen", fake_urlopen)
+    monkeypatch.setattr("plextui.plex_service.time.time", lambda: 1782927000)
     service = object.__new__(PlexService)
     service.config = type("Config", (), {"account_token": "account-token"})()
     channel = to_media_item(
@@ -815,6 +858,94 @@ def test_hosted_live_tv_guide_page_fetches_selected_channel_programs(monkeypatch
     assert details.summary == "Headlines"
 
 
+def test_hosted_live_tv_channel_enrichment_adds_now_next(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append((request.full_url, dict(request.header_items()), timeout))
+        return JsonResponse(
+            b"""
+            {
+              "MediaContainer": {
+                "Metadata": [
+                  {
+                    "ratingKey": "program-0",
+                    "title": "Already Over",
+                    "Media": [{"beginsAt": 1782921600000, "endsAt": 1782925200000}]
+                  },
+                  {
+                    "ratingKey": "program-1",
+                    "title": "Now Showing",
+                    "Media": [{"beginsAt": 1782925200000, "endsAt": 1782928800000, "onAir": true}]
+                  },
+                  {
+                    "ratingKey": "program-2",
+                    "title": "Up Next",
+                    "Media": [{"beginsAt": 1782928800000, "endsAt": 1782932400000}]
+                  }
+                ]
+              }
+            }
+            """
+        )
+
+    monkeypatch.setattr("plextui.plex_service.urlopen", fake_urlopen)
+    monkeypatch.setattr("plextui.plex_service.time.time", lambda: 1782927000)
+    service = object.__new__(PlexService)
+    service.config = type("Config", (), {"account_token": "account-token"})()
+    channel = to_media_item(
+        HostedLiveTVChannel(
+            title="Live One",
+            key="channel-1",
+            stream_url="https://stream.example/one.m3u8",
+            grid_key="grid-1",
+        )
+    )
+
+    enriched = service.enrich_hosted_live_tv_channel(channel)
+
+    assert calls == [
+        (
+            f"{EPG_PROVIDER_BASE}/grid?channelGridKey=grid-1&date={hosted_live_tv_guide_date().isoformat()}",
+            {"Accept": "application/json", "X-plex-token": "account-token"},
+            10,
+        )
+    ]
+    assert enriched.raw.current_program.title == "Now Showing"
+    assert enriched.raw.next_program.title == "Up Next"
+
+
+def test_hosted_live_tv_guide_date_uses_utc(monkeypatch):
+    class FakeDateTime:
+        @classmethod
+        def now(cls, tz=None):
+            assert tz is timezone.utc
+            return datetime(2026, 7, 3, 0, 48, tzinfo=timezone.utc)
+
+    monkeypatch.setattr("plextui.plex_service.datetime", FakeDateTime)
+
+    assert hosted_live_tv_guide_date() == date(2026, 7, 3)
+
+
+def test_hosted_live_tv_channel_enrichment_keeps_channel_on_missing_data(monkeypatch):
+    def fake_urlopen(request, timeout):
+        raise OSError("guide unavailable")
+
+    monkeypatch.setattr("plextui.plex_service.urlopen", fake_urlopen)
+    service = object.__new__(PlexService)
+    service.config = type("Config", (), {"account_token": "account-token"})()
+    channel = to_media_item(
+        HostedLiveTVChannel(
+            title="Live One",
+            key="channel-1",
+            stream_url="https://stream.example/one.m3u8",
+            grid_key="grid-1",
+        )
+    )
+
+    assert service.enrich_hosted_live_tv_channel(channel) is channel
+
+
 def test_hosted_live_tv_program_mapping_accepts_second_epoch_timestamps():
     program = hosted_live_tv_program_from_raw(
         {
@@ -827,6 +958,12 @@ def test_hosted_live_tv_program_mapping_accepts_second_epoch_timestamps():
     assert program is not None
     assert program.begins_at == 1782921600000
     assert program.ends_at == 1782925200000
+
+
+def test_hosted_live_tv_program_on_air_prefers_schedule_window():
+    assert hosted_live_tv_program_on_air(False, 1_000, 2_000, now_ms=1_500)
+    assert not hosted_live_tv_program_on_air(True, 1_000, 2_000, now_ms=2_500)
+    assert hosted_live_tv_program_on_air(True, 0, 0, now_ms=2_500)
 
 
 def test_hosted_live_tv_channel_mapping_signs_absolute_and_relative_urls():
