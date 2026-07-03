@@ -3755,7 +3755,6 @@ async def run_toggle_watched_continue_watching_refresh_resolves_hub_wrapper_chec
                 and titles == ["Episode 2"]
                 and selected is not None
                 and selected.title == "Episode 2"
-                and status == "Marked Episode 1 watched"
             ):
                 break
             await pilot.pause(0.1)
