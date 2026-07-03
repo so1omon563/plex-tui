@@ -1950,6 +1950,7 @@ async def run_library_menu_check():
         rows = list(app.query_one("#media").children)
         assert [row.label_text for row in rows if isinstance(row, LibraryMenuRow)] == [
             "Library",
+            "Recently Added",
             "Recommended",
             "Collections",
             "Playlists",
@@ -2000,6 +2001,7 @@ async def run_sidebar_library_space_menu_check():
         rows = list(app.query_one("#media").children)
         assert [row.label_text for row in rows if isinstance(row, LibraryMenuRow)] == [
             "Library",
+            "Recently Added",
             "Recommended",
             "Collections",
             "Playlists",
@@ -2027,6 +2029,7 @@ async def run_sidebar_library_selection_menu_default_check():
         rows = list(app.query_one("#media").children)
         assert [row.label_text for row in rows if isinstance(row, LibraryMenuRow)] == [
             "Library",
+            "Recently Added",
             "Recommended",
             "Collections",
             "Playlists",
@@ -2056,6 +2059,7 @@ async def run_library_entry_back_to_menu_check():
         rows = list(app.query_one("#media").children)
         assert [row.label_text for row in rows if isinstance(row, LibraryMenuRow)] == [
             "Library",
+            "Recently Added",
             "Recommended",
             "Collections",
             "Playlists",
@@ -2097,12 +2101,14 @@ async def run_library_submenu_keyboard_flow_check():
         menu_rows = list(app.query_one("#media").children)
         assert [row.label_text for row in menu_rows if isinstance(row, LibraryMenuRow)] == [
             "Library",
+            "Recently Added",
             "Recommended",
             "Collections",
             "Playlists",
             "Categories",
         ]
 
+        await pilot.press("down")
         await pilot.press("down")
         await pilot.press("enter")
         await pilot.pause(0.5)
@@ -2125,6 +2131,7 @@ async def run_library_submenu_keyboard_flow_check():
         menu_rows = list(app.query_one("#media").children)
         assert [row.label_text for row in menu_rows if isinstance(row, LibraryMenuRow)] == [
             "Library",
+            "Recently Added",
             "Recommended",
             "Collections",
             "Playlists",

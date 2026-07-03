@@ -4,6 +4,7 @@
 
 - Fixed Plex Discover provider 502 failures so they show a concise retry
   message instead of raw provider HTML or misleading relogin guidance.
+- Added per-library Recently Added browsing from the library browse-mode menu.
 - Added background now/next enrichment for hosted Live TV channel rows and
   details when guide data is available.
 - Fixed Continue Watching deduplication for the same episode returned with

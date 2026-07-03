@@ -336,12 +336,14 @@ def test_library_entry_page_fetches_supported_submenus():
     library = LibraryItem("Movies", "1", "movie", raw_library)
 
     recommended = service.library_entry_page(library, "recommended", start=0, size=2)
+    recently_added = service.library_entry_page(library, "recently_added", start=25, size=25)
     collections = service.library_entry_page(library, "collections", start=50, size=25)
     playlists = service.library_entry_page(library, "playlists", start=75, size=25)
     categories = service.library_entry_page(library, "categories", start=0, size=25)
 
     assert raw_library.calls == [
         ("hubs", {}),
+        (None, {"sort": "addedAt:desc", "maxresults": 25, "container_start": 25, "container_size": 25}),
         ("collections", {"maxresults": 25, "container_start": 50, "container_size": 25}),
         ("playlists", {"maxresults": 25, "container_start": 75, "container_size": 25}),
         ("choices", "genre"),
@@ -351,6 +353,9 @@ def test_library_entry_page_fetches_supported_submenus():
     assert [item.playable for item in recommended.items] == [False, False]
     assert recommended.start == 0
     assert recommended.total == 2
+    assert len(recently_added.items) == 1
+    assert recently_added.start == 25
+    assert recently_added.has_more
     assert len(collections.items) == 1
     assert collections.has_more
     assert len(playlists.items) == 1
