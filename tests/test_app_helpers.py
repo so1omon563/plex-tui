@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from io import BytesIO
 from subprocess import CompletedProcess, TimeoutExpired
 from types import SimpleNamespace
@@ -300,6 +301,50 @@ def test_render_details_prioritizes_live_tv_channel_context():
     assert rendered.index("Actions") < rendered.index("Technical")
     assert "Protocol:  HLS" in rendered
     assert "Container: mpegts" in rendered
+
+
+def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
+    raw = SimpleNamespace(
+        call_sign="AMCP",
+        language="English",
+        is_hd=True,
+        protocol="hls",
+        container="mpegts",
+        current_program=SimpleNamespace(
+            title="Now Showing",
+            begins_at=1782925200000,
+            ends_at=1782928800000,
+        ),
+        next_program=SimpleNamespace(
+            title="Up Next",
+            begins_at=1782928800000,
+            ends_at=1782932400000,
+        ),
+    )
+    media = MediaItem("Stories by AMC", "AMCP  HD  HLS", "livetv", "channel-1", True, raw)
+    details = MediaDetails(
+        title="Stories by AMC",
+        kind="livetv",
+        facts=["Live TV Channel"],
+        metadata=[("Type", "livetv")],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=True,
+    )
+
+    rendered = render_details(details, AppConfig("http://plex", "token", "client-id"), raw=raw)
+    config = AppConfig("http://plex", "token", "client-id")
+
+    assert "Now: 10:00 AM-11:00 AM Now Showing" in media_row(media, config).label_text
+    assert "Next: 11:00 AM-12:00 PM Up Next" in media_row(media, config).label_text
+    assert "Guide\nNow:" in rendered
+    assert "Now Showing" in rendered
+    assert "Next:" in rendered
+    assert "Up Next" in rendered
+    plain = media_row(replace(media, raw=SimpleNamespace(call_sign="AMCP", is_hd=True, protocol="hls")), config).label_text
+    assert "Now:" not in plain
+    assert "Next:" not in plain
 
 
 def test_render_details_prioritizes_live_tv_guide_program_schedule():

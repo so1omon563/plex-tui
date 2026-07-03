@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added background now/next enrichment for hosted Live TV channel rows and
+  details when guide data is available.
+- Fixed Continue Watching deduplication for the same episode returned with
+  different wrapper keys.
 - Kept compact Settings numeric rows selected when Left/Right adjustment reaches
   a minimum or maximum value.
 - Allowed playback from the current Live TV guide program by routing it through

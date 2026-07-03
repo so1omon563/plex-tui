@@ -1207,6 +1207,7 @@ class PlexTuiApp(App[None]):
             self.show_browse_state(state)
             self.focus_media_browser()
             self.set_status(render_browse_status(state))
+            self.enrich_hosted_live_tv_channels(state, list(page.items))
 
         self.call_from_thread(update)
 
@@ -1708,8 +1709,34 @@ class PlexTuiApp(App[None]):
             self.show_browse_state(state, selected_key=target_key)
             self.focus_media_browser()
             self.set_status(status)
+            if state.source == "livetv":
+                self.enrich_hosted_live_tv_channels(state, list(page.items))
 
         self.call_from_thread(update)
+
+    @work(thread=True)
+    def enrich_hosted_live_tv_channels(self, state: BrowseState, items: list[MediaItem]) -> None:
+        if self.service is None or not items:
+            return
+        enrich = getattr(self.service, "enrich_hosted_live_tv_channels", None)
+        if not callable(enrich):
+            return
+        enriched = enrich(items)
+        self.call_from_thread(self.apply_hosted_live_tv_enrichment, state, enriched)
+
+    def apply_hosted_live_tv_enrichment(self, state: BrowseState, items: list[MediaItem]) -> None:
+        if not self.browsing_stack or self.browsing_stack[-1] is not state or state.source != "livetv":
+            return
+        enriched_by_key = {item.key: item for item in items}
+        if not enriched_by_key:
+            return
+        selected = self.selected_media()
+        selected_key = selected.key if selected is not None else None
+        updated = [enriched_by_key.get(item.key, item) for item in state.items]
+        if updated == state.items:
+            return
+        state.items = updated
+        self.show_browse_state(state, selected_key=selected_key)
 
     @work(thread=True)
     def open_media(self, media: MediaItem) -> None:
@@ -4281,6 +4308,9 @@ def render_live_tv_details(
         channel_rows = live_tv_channel_rows(raw)
         if channel_rows:
             append_detail_section(lines, "Channel", detail_key_value_rows(channel_rows))
+        guide_rows = live_tv_channel_guide_rows(raw)
+        if guide_rows:
+            append_detail_section(lines, "Guide", detail_key_value_rows(guide_rows))
 
     summary = getattr(details, "summary")
     summary_fallback = (
@@ -4336,6 +4366,34 @@ def live_tv_channel_rows(raw: object | None) -> list[tuple[str, str]]:
         )
         if value
     ]
+
+
+def live_tv_channel_guide_rows(raw: object | None) -> list[tuple[str, str]]:
+    if raw is None:
+        return []
+    return [
+        (label, value)
+        for label, program in (
+            ("Now", getattr(raw, "current_program", None)),
+            ("Next", getattr(raw, "next_program", None)),
+        )
+        if (value := live_tv_channel_program_label(program))
+    ]
+
+
+def live_tv_channel_program_label(program: object | None) -> str:
+    if program is None:
+        return ""
+    time_label = "-".join(
+        value
+        for value in (
+            live_tv_timestamp(getattr(program, "begins_at", 0)),
+            live_tv_timestamp(getattr(program, "ends_at", 0)),
+        )
+        if value
+    )
+    title = str(getattr(program, "title", "") or "")
+    return " ".join(value for value in (time_label, title) if value)
 
 
 def live_tv_channel_quality_values(raw: object | None) -> list[str]:
@@ -4726,7 +4784,14 @@ def live_tv_row_marker(media: MediaItem, bulk_selected: bool = False) -> str:
 def live_tv_channel_row_label(media: MediaItem, bulk_selected: bool = False) -> str:
     marker = live_tv_row_marker(media, bulk_selected)
     quality = live_tv_quality_label(media)
-    return f"{marker} {media.title}{('  ' + quality) if quality else ''}"
+    guide = live_tv_channel_now_next_label(media.raw)
+    details = "  ".join(value for value in (quality, guide) if value)
+    return f"{marker} {media.title}{('  ' + details) if details else ''}"
+
+
+def live_tv_channel_now_next_label(raw: object | None) -> str:
+    rows = live_tv_channel_guide_rows(raw)
+    return "  ".join(f"{label}: {value}" for label, value in rows)
 
 
 def live_tv_program_row_label(media: MediaItem, bulk_selected: bool = False) -> str:
