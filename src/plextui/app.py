@@ -1897,7 +1897,11 @@ class PlexTuiApp(App[None]):
                 rows, selected_row_index = media_rows(state.items, self.config, selected_index, self.bulk_selected_keys)
                 if state.has_more:
                     rows.append(LoadMoreRow(len(state.items), state.total))
-                self.replace_media_rows(rows, selected_row_index)
+                self.replace_media_rows(
+                    rows,
+                    selected_row_index,
+                    scroll_selected_to_top=state.source == "livetv_guide" and selected_row_index > 0,
+                )
             self.show_media_details(state.items[selected_index])
             write_performance_log(
                 "browse_render",
@@ -1926,8 +1930,13 @@ class PlexTuiApp(App[None]):
         if status is not None:
             self.set_status(status)
 
-    def replace_media_rows(self, rows: list[ListItem], selected_index: int | None = None) -> None:
-        self.replace_list_rows_async("#media", rows, selected_index, "media-list")
+    def replace_media_rows(
+        self,
+        rows: list[ListItem],
+        selected_index: int | None = None,
+        scroll_selected_to_top: bool = False,
+    ) -> None:
+        self.replace_list_rows_async("#media", rows, selected_index, "media-list", scroll_selected_to_top)
 
     def replace_list_rows_async(
         self,
@@ -1935,20 +1944,35 @@ class PlexTuiApp(App[None]):
         rows: list[ListItem],
         selected_index: int | None,
         group: str,
+        scroll_selected_to_top: bool = False,
     ) -> None:
         self.run_worker(
-            self.replace_list_rows(selector, rows, selected_index),
+            self.replace_list_rows(selector, rows, selected_index, scroll_selected_to_top),
             group=group,
             exclusive=True,
         )
 
-    async def replace_list_rows(self, selector: str, rows: list[ListItem], selected_index: int | None = None) -> None:
+    async def replace_list_rows(
+        self,
+        selector: str,
+        rows: list[ListItem],
+        selected_index: int | None = None,
+        scroll_selected_to_top: bool = False,
+    ) -> None:
         view = self.query_one(selector, ListView)
         await view.clear()
         if rows:
             await view.extend(rows)
         if selected_index is not None and rows:
             set_list_index(view, selected_index)
+            if scroll_selected_to_top:
+                view.call_after_refresh(
+                    view.scroll_to_widget,
+                    view.children[selected_index],
+                    animate=False,
+                    top=True,
+                    immediate=True,
+                )
 
     def show_media_details(self, item: MediaItem) -> None:
         self.detail_refresh_token += 1
