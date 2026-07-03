@@ -4881,7 +4881,7 @@ def live_tv_channel_now_next_label(raw: object | None) -> str:
 def live_tv_channel_now_next_row(raw: object | None) -> str:
     rows = live_tv_channel_guide_rows(raw)
     if rows:
-        return "  |  ".join(f"{label.upper()}  {value}" for label, value in rows)
+        return "guide  " + "  |  ".join(f"{label}: {value}" for label, value in rows)
     return live_tv_channel_guide_status_label(raw)
 
 
