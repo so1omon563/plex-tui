@@ -1433,11 +1433,12 @@ class PlexTuiApp(App[None]):
         if action == "resume_selected" and media.kind in {"livetv", "livetv_program"}:
             return False
         if action == "play_selected" and media.kind == "livetv_program" and not media.playable:
-            return False
+            return live_tv_guide_playback_channel(self.current_browse_state(), media) is not None
         return True
 
     def current_browse_state(self) -> BrowseState | None:
-        return self.browsing_stack[-1] if self.browsing_stack else None
+        stack = getattr(self, "browsing_stack", [])
+        return stack[-1] if stack else None
 
     def current_browse_state_source(self) -> str:
         state = self.current_browse_state()
@@ -1737,7 +1738,7 @@ class PlexTuiApp(App[None]):
             )
             return
         if media.kind == "livetv_program":
-            self.call_from_thread(self.set_status, f"Selected guide program: {media.title}.")
+            self.call_from_thread(self.set_status, f"Guide program: {media.title}. Escape returns to channels.")
             return
         if media.playable:
             self.call_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
@@ -3680,6 +3681,7 @@ class PlexTuiApp(App[None]):
         if media is None:
             self.set_status("No media selected")
             return
+        media = live_tv_guide_playback_channel(self.current_browse_state(), media) or media
         self.play_media(media, bool(resume_offset_ms(media.raw)), playback_mode="transcode")
 
     def action_toggle_watched(self) -> object | None:
@@ -3903,6 +3905,7 @@ class PlexTuiApp(App[None]):
         if media is None:
             self.set_status("No media selected")
             return
+        media = live_tv_guide_playback_channel(self.current_browse_state(), media) or media
         self.play_media(media, resume)
 
     def play_media(
@@ -4203,6 +4206,9 @@ def render_details(
     raw: object | None = None,
     context_actions: tuple[str, ...] = (),
 ) -> str:
+    if is_live_tv_detail(details):
+        return render_live_tv_details(details, config, raw, context_actions)
+
     header_metadata_rows = list(getattr(details, "metadata"))
     metadata_rows = list(header_metadata_rows)
     episode_context = episode_context_rows(details, header_metadata_rows)
@@ -4251,6 +4257,168 @@ def render_details(
     append_detail_section(lines, "Technical", technical_rows)
 
     return "\n".join(lines)
+
+
+def is_live_tv_detail(details: object) -> bool:
+    return getattr(details, "kind", "") in {"livetv", "livetv_program"}
+
+
+def render_live_tv_details(
+    details: object,
+    config: AppConfig | None = None,
+    raw: object | None = None,
+    context_actions: tuple[str, ...] = (),
+) -> str:
+    metadata = list(getattr(details, "metadata"))
+    lines = render_live_tv_header(details, metadata, raw)
+
+    if getattr(details, "kind", "") == "livetv_program":
+        schedule_rows = live_tv_program_schedule_rows(metadata)
+        if schedule_rows:
+            append_detail_section(lines, "Schedule", detail_key_value_rows(schedule_rows))
+    else:
+        channel_rows = live_tv_channel_rows(raw)
+        if channel_rows:
+            append_detail_section(lines, "Channel", detail_key_value_rows(channel_rows))
+
+    summary = getattr(details, "summary")
+    summary_fallback = (
+        "No program summary reported"
+        if getattr(details, "kind", "") == "livetv_program"
+        else "No channel summary reported"
+    )
+    append_detail_section(lines, "Summary", wrapped_detail_text(summary or summary_fallback))
+
+    append_detail_section(lines, "Actions", live_tv_action_rows(details, context_actions))
+
+    technical_rows = live_tv_technical_rows(details, metadata, config, raw)
+    append_detail_section(lines, "Technical", technical_rows)
+
+    return "\n".join(lines)
+
+
+def render_live_tv_header(
+    details: object,
+    metadata: list[tuple[str, str]],
+    raw: object | None = None,
+) -> list[str]:
+    title = getattr(details, "title")
+    title_lines = textwrap.wrap(title, width=DETAIL_SUMMARY_WIDTH) or [title]
+    kind = kind_label(str(getattr(details, "kind", "")))
+    facts = [kind]
+    if getattr(details, "kind", "") == "livetv_program":
+        compact = [
+            detail_metadata_value(metadata, "Year"),
+            detail_metadata_value(metadata, "Duration"),
+            live_tv_on_air_label(detail_metadata_value(metadata, "On Air")),
+            detail_metadata_value(metadata, "Resolution").upper(),
+        ]
+        fact_line = " • ".join(value for value in compact if value)
+        if fact_line:
+            facts.append(fact_line)
+    else:
+        quality = " • ".join(value for value in live_tv_channel_quality_values(raw) if value)
+        if quality:
+            facts.append(quality)
+    return [*title_lines, "", *facts]
+
+
+def live_tv_channel_rows(raw: object | None) -> list[tuple[str, str]]:
+    if raw is None:
+        return []
+    return [
+        (label, value)
+        for label, value in (
+            ("Call Sign", str(getattr(raw, "call_sign", "") or "")),
+            ("Language", str(getattr(raw, "language", "") or "")),
+            ("Quality", "HD" if bool(getattr(raw, "is_hd", False)) else ""),
+        )
+        if value
+    ]
+
+
+def live_tv_channel_quality_values(raw: object | None) -> list[str]:
+    if raw is None:
+        return []
+    return [
+        str(getattr(raw, "call_sign", "") or ""),
+        "HD" if bool(getattr(raw, "is_hd", False)) else "",
+        str(getattr(raw, "protocol", "") or "").upper(),
+    ]
+
+
+def live_tv_program_schedule_rows(metadata: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    rows = []
+    begins = detail_metadata_value(metadata, "Begins")
+    ends = detail_metadata_value(metadata, "Ends")
+    if begins or ends:
+        rows.append(("Time", "-".join(value for value in (begins, ends) if value)))
+    for label in ("Duration", "On Air", "Resolution"):
+        value = detail_metadata_value(metadata, label)
+        if not value:
+            continue
+        if label == "On Air":
+            value = live_tv_on_air_label(value)
+        elif label == "Resolution":
+            value = value.upper()
+        rows.append((label, value))
+    return rows
+
+
+def live_tv_on_air_label(value: str) -> str:
+    if value == "yes":
+        return "On now"
+    if value == "no":
+        return "Not on now"
+    return value
+
+
+def live_tv_action_rows(details: object, context_actions: tuple[str, ...]) -> list[str]:
+    if context_actions:
+        return [live_tv_action_label(action) for action in context_actions]
+    if getattr(details, "kind", "") == "livetv":
+        if bool(getattr(details, "playable")):
+            return ["Enter opens guide", "p starts channel", "o starts optimized"]
+        return ["Unavailable for external playback"]
+    return ["Escape returns to channels"]
+
+
+def live_tv_guide_playback_channel(state: BrowseState | None, item: MediaItem | None) -> MediaItem | None:
+    if state is None or state.source != "livetv_guide" or item is None or item.kind != "livetv_program":
+        return None
+    channel = state.context_media
+    if channel is not None and channel.playable and bool(getattr(item.raw, "on_air", False)):
+        return channel
+    return None
+
+
+def live_tv_action_label(action: str) -> str:
+    label = action.removeprefix("Live TV: ").removeprefix("Guide: ")
+    if label == "unavailable for external playback":
+        return "Unavailable for external playback"
+    return label.replace("this channel", "channel")
+
+
+def live_tv_technical_rows(
+    details: object,
+    metadata: list[tuple[str, str]],
+    config: AppConfig | None = None,
+    raw: object | None = None,
+) -> list[str]:
+    rows = detail_key_value_rows([("Type", kind_label(str(getattr(details, "kind", ""))))])
+    extra_rows = []
+    if getattr(details, "kind", "") == "livetv":
+        extra_rows = [
+            ("Protocol", str(getattr(raw, "protocol", "") or "").upper()),
+            ("Container", str(getattr(raw, "container", "") or "")),
+        ]
+    else:
+        extra_rows = [
+            ("Year", detail_metadata_value(metadata, "Year")),
+        ]
+    rows.extend(detail_key_value_rows([(label, value) for label, value in extra_rows if value]))
+    rows.extend(technical_detail_rows(details, config))
+    return rows
 
 
 def technical_detail_rows(details: object, config: AppConfig | None = None, raw: object | None = None) -> list[str]:
@@ -5684,8 +5852,8 @@ def context_hint(row: object) -> str:
             return "Media: Enter guide / p play channel / o optimized"
         if row.media.kind == "livetv_program":
             if row.media.playable:
-                return "Media: Enter opens details / p play program / Escape back"
-            return "Media: Enter opens details / Escape back"
+                return "Media: p play program / Escape back"
+            return "Media: Escape back"
         if row.media.playable:
             return "Media: Enter selects / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
@@ -5743,7 +5911,9 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
             return ("Live TV: Enter opens guide", "Live TV: p starts this channel", "Live TV: o starts optimized")
         return ("Live TV: unavailable for external playback",)
     if item is not None and item.kind == "livetv_program":
-        actions = ["Guide: Enter opens details", "Guide: Escape returns to channels"]
+        actions = ["Guide: Escape returns to channels"]
+        if live_tv_guide_playback_channel(state, item) is not None:
+            actions.extend(["Guide: p starts channel", "Guide: o starts optimized"])
         if item.playable:
             actions.append("Guide: p starts this program")
         return tuple(actions)
@@ -5767,6 +5937,8 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
 def media_row_status(row: MediaRow, state: BrowseState | None) -> str:
     if state is not None and state.source == "discover" and availability_urls(row.media.raw):
         return "Media: Enter opens availability link or provider picker"
+    if live_tv_guide_playback_channel(state, row.media) is not None:
+        return "Media: p play channel / o optimized / Escape back"
     status = context_hint(row)
     if is_playlist_browse_state(state):
         status = f"{status} / Backspace/Delete remove from playlist"

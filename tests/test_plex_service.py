@@ -802,12 +802,12 @@ def test_hosted_live_tv_guide_page_fetches_selected_channel_programs(monkeypatch
         )
     ]
     assert [(item.title, item.kind, item.playable) for item in page.items] == [
-        ("Next Show", "livetv_program", False),
         ("Morning News", "livetv_program", False),
+        ("Next Show", "livetv_program", False),
     ]
-    assert "On now" in page.items[1].subtitle
-    assert page.items[1].artwork_path == "https://images.example/news.png"
-    details = media_details(page.items[1])
+    assert "On now" in page.items[0].subtitle
+    assert page.items[0].artwork_path == "https://images.example/news.png"
+    details = media_details(page.items[0])
     metadata = dict(details.metadata)
     assert metadata["Begins"]
     assert metadata["Ends"]
