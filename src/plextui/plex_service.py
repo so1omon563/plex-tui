@@ -92,6 +92,7 @@ class HostedLiveTVChannel:
     container: str = ""
     thumb: str = ""
     art: str = ""
+    summary: str = ""
     current_program: HostedLiveTVGuideProgram | None = None
     next_program: HostedLiveTVGuideProgram | None = None
     guide_status: str = ""
@@ -649,6 +650,7 @@ def hosted_live_tv_channel_from_raw(raw: dict[str, Any], account_token: str) -> 
         container=str((media.get("container") if media else "") or (part.get("container") if part else "") or ""),
         thumb=str(raw.get("thumb") or raw.get("coverPoster") or ""),
         art=str(raw.get("art") or ""),
+        summary=str(raw.get("summary") or ""),
     )
 
 

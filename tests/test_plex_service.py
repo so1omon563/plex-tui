@@ -760,6 +760,7 @@ def test_hosted_live_tv_page_fetches_channels_with_account_token(monkeypatch):
                     "id": "channel-1",
                     "title": "Live One",
                     "callSign": "ONE",
+                    "summary": "Live channel description",
                     "isHd": true,
                     "thumb": "https://images.example/one.png",
                     "Media": [{"protocol": "hls", "container": "mpegts", "Part": [{"key": "/hls/one.m3u8"}]}]
@@ -794,6 +795,7 @@ def test_hosted_live_tv_page_fetches_channels_with_account_token(monkeypatch):
         ("Locked", "HLS", "livetv", False),
     ]
     assert page.items[0].artwork_path == "https://images.example/one.png"
+    assert media_details(page.items[0]).summary == "Live channel description"
     assert page.items[0].raw.getStreamURL() == f"{EPG_PROVIDER_BASE}/hls/one.m3u8?X-Plex-Token=account-token"
     assert page.total == 2
 

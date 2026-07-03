@@ -343,8 +343,8 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
 
     row_label = media_row(media, config).label_text
     assert row_label.startswith("▶ Stories by AMC  AMCP · HD")
-    assert "\n  Now: Now Showing (" in row_label
-    assert "  |  Next: Up Next (" in row_label
+    assert "\n  NOW  Now Showing (" in row_label
+    assert "  |  NEXT  Up Next (" in row_label
     assert "Guide\nNow:" in rendered
     assert "Now Showing" in rendered
     assert "Next:" in rendered
