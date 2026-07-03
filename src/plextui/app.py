@@ -4354,7 +4354,7 @@ def render_live_tv_details(
     lines = render_live_tv_header(details, metadata, raw)
 
     if getattr(details, "kind", "") == "livetv_program":
-        schedule_rows = live_tv_program_schedule_rows(metadata)
+        schedule_rows = live_tv_program_schedule_rows(metadata, raw)
         if schedule_rows:
             append_detail_section(lines, "Schedule", detail_key_value_rows(schedule_rows))
     else:
@@ -4426,14 +4426,17 @@ def live_tv_channel_rows(raw: object | None) -> list[tuple[str, str]]:
 def live_tv_channel_guide_rows(raw: object | None) -> list[tuple[str, str]]:
     if raw is None:
         return []
+    current = getattr(raw, "current_program", None)
+    progress = live_tv_program_progress_label(current) if current is not None else ""
+    remaining = live_tv_program_minutes_left(current) if current is not None else ""
     return [
         (label, value)
         for label, program in (
-            ("Now", getattr(raw, "current_program", None)),
+            ("Now", current),
             ("Next", getattr(raw, "next_program", None)),
         )
         if (value := live_tv_channel_program_label(program))
-    ]
+    ] + [(label, value) for label, value in (("Progress", progress), ("Remaining", remaining)) if value]
 
 
 def live_tv_channel_guide_status(raw: object | None) -> str:
@@ -4476,7 +4479,10 @@ def live_tv_channel_quality_values(raw: object | None) -> list[str]:
     ]
 
 
-def live_tv_program_schedule_rows(metadata: list[tuple[str, str]]) -> list[tuple[str, str]]:
+def live_tv_program_schedule_rows(
+    metadata: list[tuple[str, str]],
+    raw: object | None = None,
+) -> list[tuple[str, str]]:
     rows = []
     begins = detail_metadata_value(metadata, "Begins")
     ends = detail_metadata_value(metadata, "Ends")
@@ -4487,15 +4493,17 @@ def live_tv_program_schedule_rows(metadata: list[tuple[str, str]]) -> list[tuple
         if not value:
             continue
         if label == "On Air":
-            value = live_tv_on_air_label(value)
+            value = live_tv_on_air_label(value, raw)
         elif label == "Resolution":
             value = value.upper()
         rows.append((label, value))
     return rows
 
 
-def live_tv_on_air_label(value: str) -> str:
+def live_tv_on_air_label(value: str, raw: object | None = None) -> str:
     if value == "yes":
+        if raw is not None and (left := live_tv_program_minutes_left(raw)):
+            return f"Now · {left} left"
         return "On now"
     if value == "no":
         return "Not on now"
@@ -4927,7 +4935,14 @@ def live_tv_program_compact_time_progress(program: object | None) -> str:
         getattr(program, "ends_at", 0),
     )
     progress = live_tv_program_progress_label(program)
-    return " ".join(value for value in (time_label, progress) if value)
+    label = " ".join(value for value in (time_label, progress) if value)
+    if len(label) <= LIVE_TV_TIME_WIDTH:
+        return label
+    compact_progress = progress.removesuffix(" in")
+    label = " ".join(value for value in (time_label, compact_progress) if value)
+    if len(label) <= LIVE_TV_TIME_WIDTH:
+        return label
+    return time_label
 
 
 def live_tv_compact_time_range(begins_at: object, ends_at: object) -> str:
