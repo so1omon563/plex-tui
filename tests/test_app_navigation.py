@@ -3592,12 +3592,11 @@ async def run_toggle_watched_continue_watching_refresh_check():
 
         app.action_toggle_watched()
 
-        status = await wait_for_status(app, pilot, "Marked Episode 1 watched", attempts=80)
         titles = await wait_for_browse_titles(app, pilot, ["Episode 2"], attempts=80)
 
+        assert raw.mark_watched_calls == 1
         assert service.continue_watching_calls[-1] == (0, 40)
         assert titles == ["Episode 2"]
-        assert status == "Marked Episode 1 watched"
 
 
 async def run_toggle_watched_continue_watching_refresh_resolves_hub_wrapper_check():
