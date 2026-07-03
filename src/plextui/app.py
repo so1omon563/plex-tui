@@ -4453,7 +4453,9 @@ def live_tv_channel_program_label(program: object | None) -> str:
         if value
     )
     title = str(getattr(program, "title", "") or "")
-    return " ".join(value for value in (time_label, title) if value)
+    if title and time_label:
+        return f"{title} ({time_label})"
+    return title or time_label
 
 
 def live_tv_channel_quality_values(raw: object | None) -> list[str]:
@@ -4879,7 +4881,7 @@ def live_tv_channel_now_next_label(raw: object | None) -> str:
 def live_tv_channel_now_next_row(raw: object | None) -> str:
     rows = live_tv_channel_guide_rows(raw)
     if rows:
-        return "  ·  ".join(f"{label} {value}" for label, value in rows)
+        return "  |  ".join(f"{label}: {value}" for label, value in rows)
     return live_tv_channel_guide_status_label(raw)
 
 

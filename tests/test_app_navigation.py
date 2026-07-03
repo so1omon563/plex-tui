@@ -1708,10 +1708,8 @@ async def run_on_plex_live_enrichment_repaints_channel_rows_check():
 
         row = app.query_one("#media").highlighted_child
         assert row is not None
-        assert "\n  Now " in row.label_text
-        assert "Now Showing" in row.label_text
-        assert "  ·  Next " in row.label_text
-        assert "Up Next" in row.label_text
+        assert "\n  Now: Now Showing (" in row.label_text
+        assert "  |  Next: Up Next (" in row.label_text
         assert app.selected_media().key == "channel-1"
         assert app.query_one("#status").content == LIVE_TV_GUIDE_LOADED_STATUS
 
