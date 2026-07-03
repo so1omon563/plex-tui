@@ -1292,7 +1292,8 @@ class PlexTuiApp(App[None]):
                 context_media=channel,
             )
             self.browsing_stack.append(state)
-            self.show_browse_state(state)
+            selected_key = live_tv_current_program_key(page.items)
+            self.show_browse_state(state, selected_key=selected_key)
             self.focus_media_browser()
             self.set_status(render_browse_status(state))
 
@@ -4855,6 +4856,11 @@ def live_tv_channel_with_guide_status(item: MediaItem, status: str) -> MediaItem
         values["guide_status"] = status
         return replace(item, raw=SimpleNamespace(**values))
     return item
+
+
+def live_tv_current_program_key(items: list[MediaItem]) -> str | None:
+    current = next((item for item in items if bool(getattr(item.raw, "on_air", False))), None)
+    return current.key if current is not None else None
 
 
 def live_tv_row_label(media: MediaItem, bulk_selected: bool = False) -> str:

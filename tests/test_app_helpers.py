@@ -58,6 +58,7 @@ from plextui.app import (
     grid_page_key,
     grid_status,
     library_menu_rows,
+    live_tv_current_program_key,
     live_tv_program_compact_time_progress,
     live_tv_program_progress_label,
     media_row,
@@ -392,6 +393,14 @@ def test_live_tv_program_compact_time_keeps_full_range(monkeypatch):
     label = live_tv_program_compact_time_progress(SimpleNamespace(begins_at=1000, ends_at=3000))
     assert label.endswith(" 50% in")
     assert "..." not in label
+
+
+def test_live_tv_current_program_key_keeps_chronological_items():
+    earlier = MediaItem("Earlier", "", "livetv_program", "program-1", False, SimpleNamespace(on_air=False))
+    current = MediaItem("Current", "", "livetv_program", "program-2", False, SimpleNamespace(on_air=True))
+    future = MediaItem("Future", "", "livetv_program", "program-3", False, SimpleNamespace(on_air=False))
+
+    assert live_tv_current_program_key([earlier, current, future]) == "program-2"
 
 
 def test_render_details_prioritizes_live_tv_guide_program_schedule():

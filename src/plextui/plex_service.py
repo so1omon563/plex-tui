@@ -699,16 +699,8 @@ def hosted_live_tv_program_subtitle(program: HostedLiveTVGuideProgram) -> str:
     return "  ".join(bit for bit in bits if bit)
 
 
-def hosted_live_tv_program_sort_key(program: HostedLiveTVGuideProgram) -> tuple[int, int, str]:
-    begins_at = program.begins_at or program.ends_at
-    now_ms = int(time.time() * 1000)
-    if program.on_air:
-        bucket = 0
-    elif begins_at >= now_ms:
-        bucket = 1
-    else:
-        bucket = 2
-    return (bucket, begins_at, program.key)
+def hosted_live_tv_program_sort_key(program: HostedLiveTVGuideProgram) -> tuple[int, str]:
+    return (program.begins_at or program.ends_at, program.key)
 
 
 def hosted_live_tv_time_range(program: HostedLiveTVGuideProgram) -> str:
