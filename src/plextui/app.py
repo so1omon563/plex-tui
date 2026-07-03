@@ -1207,7 +1207,6 @@ class PlexTuiApp(App[None]):
             self.show_browse_state(state)
             self.focus_media_browser()
             self.set_status(render_browse_status(state))
-            self.enrich_hosted_live_tv_channels(state, list(page.items))
 
         self.call_from_thread(update)
 
@@ -1243,6 +1242,7 @@ class PlexTuiApp(App[None]):
             self.show_browse_state(state)
             self.focus_media_browser()
             self.set_status(render_browse_status(state))
+            self.enrich_hosted_live_tv_channels(state, list(page.items))
 
         self.call_from_thread(update)
 

@@ -346,7 +346,11 @@ class PlexService:
         ]
         programs.sort(key=hosted_live_tv_program_sort_key)
         current = next((program for program in programs if program.on_air), None)
-        next_program = next((program for program in programs if program is not current and not program.on_air), None)
+        after_ms = current.ends_at if current is not None and current.ends_at else int(time.time() * 1000)
+        next_program = next(
+            (program for program in programs if program is not current and program.begins_at >= after_ms),
+            None,
+        )
         return current, next_program
 
     def continue_watching_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:

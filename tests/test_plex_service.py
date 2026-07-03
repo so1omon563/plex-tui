@@ -869,6 +869,11 @@ def test_hosted_live_tv_channel_enrichment_adds_now_next(monkeypatch):
               "MediaContainer": {
                 "Metadata": [
                   {
+                    "ratingKey": "program-0",
+                    "title": "Already Over",
+                    "Media": [{"beginsAt": 1782921600000, "endsAt": 1782925200000}]
+                  },
+                  {
                     "ratingKey": "program-1",
                     "title": "Now Showing",
                     "Media": [{"beginsAt": 1782925200000, "endsAt": 1782928800000, "onAir": true}]
