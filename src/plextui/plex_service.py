@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import json
 import re
 import time
@@ -305,7 +305,7 @@ class PlexService:
         grid_key = getattr(raw, "grid_key", "") if isinstance(raw, HostedLiveTVChannel) else ""
         if not grid_key:
             raise ValueError("Live TV channel does not include a guide key")
-        query = urlencode({"channelGridKey": grid_key, "date": (guide_date or date.today()).isoformat()})
+        query = urlencode({"channelGridKey": grid_key, "date": (guide_date or hosted_live_tv_guide_date()).isoformat()})
         data = epg_provider_json(f"/grid?{query}", self.config.account_token)
         container = data.get("MediaContainer", {})
         programs = [
@@ -336,7 +336,7 @@ class PlexService:
         channel: HostedLiveTVChannel,
         guide_date: date | None = None,
     ) -> tuple[HostedLiveTVGuideProgram | None, HostedLiveTVGuideProgram | None]:
-        query = urlencode({"channelGridKey": channel.grid_key, "date": (guide_date or date.today()).isoformat()})
+        query = urlencode({"channelGridKey": channel.grid_key, "date": (guide_date or hosted_live_tv_guide_date()).isoformat()})
         data = epg_provider_json(f"/grid?{query}", self.config.account_token)
         container = data.get("MediaContainer", {})
         programs = [
@@ -666,6 +666,10 @@ def hosted_live_tv_program_on_air(flag: Any, begins_at: int, ends_at: int, now_m
         current = now_ms if now_ms is not None else int(time.time() * 1000)
         return begins_at <= current < ends_at
     return bool(flag)
+
+
+def hosted_live_tv_guide_date() -> date:
+    return datetime.now(timezone.utc).date()
 
 
 def hosted_live_tv_program_image(raw: dict[str, Any]) -> str:

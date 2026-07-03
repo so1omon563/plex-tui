@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 from plextui.models import LibraryItem, MediaItem
 from plextui.plex_service import (
@@ -15,6 +15,7 @@ from plextui.plex_service import (
     episode_show_parent_key,
     kind_label,
     hosted_live_tv_channel_from_raw,
+    hosted_live_tv_guide_date,
     media_key,
     media_details,
     progress_bar,
@@ -900,13 +901,25 @@ def test_hosted_live_tv_channel_enrichment_adds_now_next(monkeypatch):
 
     assert calls == [
         (
-            f"{EPG_PROVIDER_BASE}/grid?channelGridKey=grid-1&date={date.today().isoformat()}",
+            f"{EPG_PROVIDER_BASE}/grid?channelGridKey=grid-1&date={hosted_live_tv_guide_date().isoformat()}",
             {"Accept": "application/json", "X-plex-token": "account-token"},
             10,
         )
     ]
     assert enriched.raw.current_program.title == "Now Showing"
     assert enriched.raw.next_program.title == "Up Next"
+
+
+def test_hosted_live_tv_guide_date_uses_utc(monkeypatch):
+    class FakeDateTime:
+        @classmethod
+        def now(cls, tz=None):
+            assert tz is timezone.utc
+            return datetime(2026, 7, 3, 0, 48, tzinfo=timezone.utc)
+
+    monkeypatch.setattr("plextui.plex_service.datetime", FakeDateTime)
+
+    assert hosted_live_tv_guide_date() == date(2026, 7, 3)
 
 
 def test_hosted_live_tv_channel_enrichment_keeps_channel_on_missing_data(monkeypatch):
