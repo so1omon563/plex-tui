@@ -18,7 +18,9 @@ from plextui.app import (
     EmptyStateRow,
     LibraryRow,
     LibraryMenuRow,
+    LIVE_TV_GUIDE_LOADING,
     LIVE_TV_GUIDE_LOADED_STATUS,
+    LIVE_TV_GUIDE_LOADING_ROW,
     LIVE_TV_GUIDE_LOADING_STATUS,
     LoadMoreRow,
     MediaGrid,
@@ -1664,7 +1666,14 @@ async def run_on_plex_live_entrypoint_check():
 
 
 async def run_on_plex_live_enrichment_repaints_channel_rows_check():
-    channel_raw = SimpleNamespace(TYPE="livetv", title="Live One", call_sign="ONE", is_hd=True)
+    channel_raw = SimpleNamespace(
+        TYPE="livetv",
+        title="Live One",
+        call_sign="ONE",
+        is_hd=True,
+        grid_key="grid-1",
+        guide_status=LIVE_TV_GUIDE_LOADING,
+    )
     channel = MediaItem("Live One", "ONE  HD", "livetv", "channel-1", True, channel_raw)
     current = SimpleNamespace(title="Now Showing", begins_at=1782925200000, ends_at=1782928800000)
     next_program = SimpleNamespace(title="Up Next", begins_at=1782928800000, ends_at=1782932400000)
@@ -1688,6 +1697,7 @@ async def run_on_plex_live_enrichment_repaints_channel_rows_check():
 
         row = app.query_one("#media").highlighted_child
         assert row is not None
+        assert f"\n  {LIVE_TV_GUIDE_LOADING_ROW}" in row.label_text
         assert "\n  Now " not in row.label_text
 
         app.set_hosted_live_tv_enrichment_status(state, LIVE_TV_GUIDE_LOADING_STATUS)

@@ -21,6 +21,10 @@ from plextui.app import (
     LoadMoreRow,
     LibraryRow,
     LibraryMenuRow,
+    LIVE_TV_GUIDE_LOADING,
+    LIVE_TV_GUIDE_LOADING_ROW,
+    LIVE_TV_GUIDE_UNAVAILABLE,
+    LIVE_TV_GUIDE_UNAVAILABLE_ROW,
     MediaGrid,
     MediaRow,
     OnPlexLiveRow,
@@ -351,6 +355,28 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
     assert "Now:" not in plain
     assert "Next:" not in plain
     assert "\n" not in plain
+    loading = media_row(replace(
+        media,
+        raw=SimpleNamespace(
+            call_sign="AMCP",
+            is_hd=True,
+            protocol="hls",
+            grid_key="grid-1",
+            guide_status=LIVE_TV_GUIDE_LOADING,
+        ),
+    ), config).label_text
+    assert f"\n  {LIVE_TV_GUIDE_LOADING_ROW}" in loading
+    unavailable = media_row(replace(
+        media,
+        raw=SimpleNamespace(
+            call_sign="AMCP",
+            is_hd=True,
+            protocol="hls",
+            grid_key="grid-1",
+            guide_status=LIVE_TV_GUIDE_UNAVAILABLE,
+        ),
+    ), config).label_text
+    assert f"\n  {LIVE_TV_GUIDE_UNAVAILABLE_ROW}" in unavailable
 
 
 def test_render_details_prioritizes_live_tv_guide_program_schedule():

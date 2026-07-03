@@ -94,6 +94,7 @@ class HostedLiveTVChannel:
     art: str = ""
     current_program: HostedLiveTVGuideProgram | None = None
     next_program: HostedLiveTVGuideProgram | None = None
+    guide_status: str = ""
 
     TYPE = "livetv"
 

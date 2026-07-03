@@ -8,9 +8,10 @@ import textwrap
 import time
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, is_dataclass, replace
 from difflib import SequenceMatcher
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from rich.align import Align
@@ -111,6 +112,10 @@ DETAIL_STREAM_LIMIT = 5
 LIVE_TV_GUIDE_LOADING_STATUS = "Live TV: loading Now/Next guide info..."
 LIVE_TV_GUIDE_LOADED_STATUS = "Live TV: Now/Next guide info loaded"
 LIVE_TV_GUIDE_UNAVAILABLE_STATUS = "Live TV: no Now/Next guide info available"
+LIVE_TV_GUIDE_LOADING_ROW = "Loading guide..."
+LIVE_TV_GUIDE_UNAVAILABLE_ROW = "Guide unavailable"
+LIVE_TV_GUIDE_LOADING = "loading"
+LIVE_TV_GUIDE_UNAVAILABLE = "unavailable"
 
 
 @dataclass
@@ -1234,9 +1239,10 @@ class PlexTuiApp(App[None]):
         )
 
         def update() -> None:
+            items = live_tv_channels_with_guide_status(page.items, LIVE_TV_GUIDE_LOADING)
             state = BrowseState(
                 title,
-                page.items,
+                items,
                 source="livetv",
                 next_start=page.next_start,
                 total=page.total,
@@ -1244,8 +1250,8 @@ class PlexTuiApp(App[None]):
             self.browsing_stack = [state]
             self.show_browse_state(state)
             self.focus_media_browser()
-            self.set_status(render_browse_status(state))
-            self.enrich_hosted_live_tv_channels(state, list(page.items))
+            self.set_status(LIVE_TV_GUIDE_LOADING_STATUS)
+            self.enrich_hosted_live_tv_channels(state, list(items))
 
         self.call_from_thread(update)
 
@@ -1693,8 +1699,13 @@ class PlexTuiApp(App[None]):
             if not self.browsing_stack or self.browsing_stack[-1] is not state:
                 self.loading_more = False
                 return
-            first_new_key = page.items[0].key if page.items else None
-            state.items.extend(page.items)
+            page_items = (
+                live_tv_channels_with_guide_status(page.items, LIVE_TV_GUIDE_LOADING)
+                if state.source == "livetv"
+                else page.items
+            )
+            first_new_key = page_items[0].key if page_items else None
+            state.items.extend(page_items)
             state.next_start = page.next_start
             state.total = page.total
             self.loading_more = False
@@ -1711,9 +1722,11 @@ class PlexTuiApp(App[None]):
                     status = f"Jumped to {alphabet_group_label(item)}: {item.title}"
             self.show_browse_state(state, selected_key=target_key)
             self.focus_media_browser()
-            self.set_status(status)
             if state.source == "livetv":
-                self.enrich_hosted_live_tv_channels(state, list(page.items))
+                self.set_status(LIVE_TV_GUIDE_LOADING_STATUS)
+                self.enrich_hosted_live_tv_channels(state, list(page_items))
+            else:
+                self.set_status(status)
 
         self.call_from_thread(update)
 
@@ -1737,11 +1750,19 @@ class PlexTuiApp(App[None]):
             return
         enriched_by_key = {item.key: item for item in items}
         if not enriched_by_key:
+            state.items = live_tv_channels_with_guide_status(state.items, LIVE_TV_GUIDE_UNAVAILABLE)
+            self.show_browse_state(state)
             self.set_status(LIVE_TV_GUIDE_UNAVAILABLE_STATUS)
             return
         selected = self.selected_media()
         selected_key = selected.key if selected is not None else None
-        updated = [enriched_by_key.get(item.key, item) for item in state.items]
+        updated = [
+            live_tv_channel_with_guide_status(
+                enriched_by_key.get(item.key, item),
+                LIVE_TV_GUIDE_UNAVAILABLE,
+            )
+            for item in state.items
+        ]
         if updated == state.items:
             self.set_status(LIVE_TV_GUIDE_UNAVAILABLE_STATUS)
             return
@@ -4335,6 +4356,8 @@ def render_live_tv_details(
         guide_rows = live_tv_channel_guide_rows(raw)
         if guide_rows:
             append_detail_section(lines, "Guide", detail_key_value_rows(guide_rows))
+        elif guide_status := live_tv_channel_guide_status_label(raw):
+            append_detail_section(lines, "Guide", [guide_status])
 
     summary = getattr(details, "summary")
     summary_fallback = (
@@ -4403,6 +4426,19 @@ def live_tv_channel_guide_rows(raw: object | None) -> list[tuple[str, str]]:
         )
         if (value := live_tv_channel_program_label(program))
     ]
+
+
+def live_tv_channel_guide_status(raw: object | None) -> str:
+    return str(getattr(raw, "guide_status", "") or "")
+
+
+def live_tv_channel_guide_status_label(raw: object | None) -> str:
+    status = live_tv_channel_guide_status(raw)
+    if status == LIVE_TV_GUIDE_LOADING:
+        return LIVE_TV_GUIDE_LOADING_ROW
+    if status == LIVE_TV_GUIDE_UNAVAILABLE:
+        return LIVE_TV_GUIDE_UNAVAILABLE_ROW
+    return ""
 
 
 def live_tv_channel_program_label(program: object | None) -> str:
@@ -4793,6 +4829,25 @@ def media_row(item: MediaItem, config: AppConfig, bulk_selected: bool = False) -
     return MediaRow(item, bulk_selected=bulk_selected)
 
 
+def live_tv_channels_with_guide_status(items: list[MediaItem], status: str) -> list[MediaItem]:
+    return [live_tv_channel_with_guide_status(item, status) for item in items]
+
+
+def live_tv_channel_with_guide_status(item: MediaItem, status: str) -> MediaItem:
+    raw = item.raw
+    if not getattr(raw, "grid_key", ""):
+        return item
+    if live_tv_channel_guide_rows(raw):
+        status = ""
+    if is_dataclass(raw):
+        return replace(item, raw=replace(raw, guide_status=status))
+    if hasattr(raw, "__dict__"):
+        values = dict(vars(raw))
+        values["guide_status"] = status
+        return replace(item, raw=SimpleNamespace(**values))
+    return item
+
+
 def live_tv_row_label(media: MediaItem, bulk_selected: bool = False) -> str:
     if media.kind == "livetv_program":
         return live_tv_program_row_label(media, bulk_selected)
@@ -4816,12 +4871,16 @@ def live_tv_channel_row_label(media: MediaItem, bulk_selected: bool = False) -> 
 
 def live_tv_channel_now_next_label(raw: object | None) -> str:
     rows = live_tv_channel_guide_rows(raw)
-    return "  ".join(f"{label}: {value}" for label, value in rows)
+    if rows:
+        return "  ".join(f"{label}: {value}" for label, value in rows)
+    return live_tv_channel_guide_status_label(raw)
 
 
 def live_tv_channel_now_next_row(raw: object | None) -> str:
     rows = live_tv_channel_guide_rows(raw)
-    return "  ·  ".join(f"{label} {value}" for label, value in rows)
+    if rows:
+        return "  ·  ".join(f"{label} {value}" for label, value in rows)
+    return live_tv_channel_guide_status_label(raw)
 
 
 def live_tv_program_row_label(media: MediaItem, bulk_selected: bool = False) -> str:
