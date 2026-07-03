@@ -631,6 +631,15 @@ def test_discover_provider_502_error_is_actionable_and_sanitized():
     assert "relogin" not in recovery.lower()
 
 
+def test_discover_search_provider_502_uses_same_retry_copy():
+    raw_error = "(502) Bad Gateway: https://discover.provider.plex.tv/library/search?query=Back"
+
+    message, recovery = discover_error_copy(raw_error)
+
+    assert "Plex Discover is temporarily unavailable" in message
+    assert recovery == "Try the Discover search again in a few minutes."
+
+
 def test_discover_error_copy_strips_html_for_generic_errors():
     message, recovery = discover_error_copy("provider failed <html><body>nope</body></html>")
 

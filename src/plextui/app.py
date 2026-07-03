@@ -6548,7 +6548,8 @@ def discover_error_copy(error: str) -> tuple[str, str]:
 
 def plex_discover_provider_unavailable(error: str) -> bool:
     text = str(error).lower()
-    return "metadata.provider.plex.tv" in text and ("502" in text or "bad gateway" in text)
+    provider_hosts = ("discover.provider.plex.tv", "metadata.provider.plex.tv")
+    return any(host in text for host in provider_hosts) and ("502" in text or "bad gateway" in text)
 
 
 def clean_error_text(error: str, limit: int = 220) -> str:
