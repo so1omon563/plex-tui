@@ -18,6 +18,8 @@ from plextui.app import (
     EmptyStateRow,
     LibraryRow,
     LibraryMenuRow,
+    LIVE_TV_GUIDE_LOADED_STATUS,
+    LIVE_TV_GUIDE_LOADING_STATUS,
     LoadMoreRow,
     MediaGrid,
     OnPlexLiveRow,
@@ -1688,6 +1690,9 @@ async def run_on_plex_live_enrichment_repaints_channel_rows_check():
         assert row is not None
         assert "\n  Now " not in row.label_text
 
+        app.set_hosted_live_tv_enrichment_status(state, LIVE_TV_GUIDE_LOADING_STATUS)
+        assert app.query_one("#status").content == LIVE_TV_GUIDE_LOADING_STATUS
+
         app.apply_hosted_live_tv_enrichment(state, [enriched])
         await pilot.pause(0.2)
 
@@ -1698,6 +1703,7 @@ async def run_on_plex_live_enrichment_repaints_channel_rows_check():
         assert "  ·  Next " in row.label_text
         assert "Up Next" in row.label_text
         assert app.selected_media().key == "channel-1"
+        assert app.query_one("#status").content == LIVE_TV_GUIDE_LOADED_STATUS
 
 
 async def run_on_plex_live_channel_guide_check():

@@ -108,6 +108,9 @@ GRID_PREFETCH_WORKERS = 3
 DETAIL_SUMMARY_WIDTH = 38
 DETAIL_LABEL_WIDTH = 20
 DETAIL_STREAM_LIMIT = 5
+LIVE_TV_GUIDE_LOADING_STATUS = "Live TV: loading Now/Next guide info..."
+LIVE_TV_GUIDE_LOADED_STATUS = "Live TV: Now/Next guide info loaded"
+LIVE_TV_GUIDE_UNAVAILABLE_STATUS = "Live TV: no Now/Next guide info available"
 
 
 @dataclass
@@ -1721,22 +1724,34 @@ class PlexTuiApp(App[None]):
         enrich = getattr(self.service, "enrich_hosted_live_tv_channels", None)
         if not callable(enrich):
             return
+        self.call_from_thread(self.set_hosted_live_tv_enrichment_status, state, LIVE_TV_GUIDE_LOADING_STATUS)
         enriched = enrich(items)
         self.call_from_thread(self.apply_hosted_live_tv_enrichment, state, enriched)
+
+    def set_hosted_live_tv_enrichment_status(self, state: BrowseState, message: str) -> None:
+        if self.browsing_stack and self.browsing_stack[-1] is state and state.source == "livetv":
+            self.set_status(message)
 
     def apply_hosted_live_tv_enrichment(self, state: BrowseState, items: list[MediaItem]) -> None:
         if not self.browsing_stack or self.browsing_stack[-1] is not state or state.source != "livetv":
             return
         enriched_by_key = {item.key: item for item in items}
         if not enriched_by_key:
+            self.set_status(LIVE_TV_GUIDE_UNAVAILABLE_STATUS)
             return
         selected = self.selected_media()
         selected_key = selected.key if selected is not None else None
         updated = [enriched_by_key.get(item.key, item) for item in state.items]
         if updated == state.items:
+            self.set_status(LIVE_TV_GUIDE_UNAVAILABLE_STATUS)
             return
         state.items = updated
         self.show_browse_state(state, selected_key=selected_key)
+        self.set_timer(
+            0.05,
+            lambda: self.set_hosted_live_tv_enrichment_status(state, LIVE_TV_GUIDE_LOADED_STATUS),
+            name="livetv-enrichment-status",
+        )
 
     @work(thread=True)
     def open_media(self, media: MediaItem) -> None:
