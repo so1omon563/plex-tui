@@ -894,6 +894,43 @@ def test_hosted_live_tv_categories_and_category_page_use_channel_genres(monkeypa
     ]
 
 
+def test_hosted_live_tv_categories_skip_featured_fetch_failures(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.full_url)
+        if request.full_url == f"{EPG_PROVIDER_BASE}/lineups/plex/channels/featured":
+            raise TimeoutError("featured timed out")
+        return JsonResponse(
+            b"""
+            {
+              "MediaContainer": {
+                "Channel": [
+                  {
+                    "id": "channel-1",
+                    "title": "News One",
+                    "genreRatingKeys": ["genre_6006cc1d610ee2002c74f37a"],
+                    "Media": [{"Part": [{"key": "/hls/news.m3u8"}]}]
+                  }
+                ]
+              }
+            }
+            """
+        )
+
+    monkeypatch.setattr("plextui.plex_service.urlopen", fake_urlopen)
+    service = object.__new__(PlexService)
+    service.config = type("Config", (), {"account_token": "account-token"})()
+
+    categories = service.hosted_live_tv_categories()
+
+    assert [item.title for item in categories] == ["News"]
+    assert calls == [
+        f"{EPG_PROVIDER_BASE}/lineups/plex/channels",
+        f"{EPG_PROVIDER_BASE}/lineups/plex/channels/featured",
+    ]
+
+
 def test_hosted_live_tv_guide_page_fetches_selected_channel_programs(monkeypatch):
     calls = []
 

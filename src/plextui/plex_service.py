@@ -337,7 +337,10 @@ class PlexService:
             raise ValueError("missing Plex account token; start plex-tui and sign in first")
         channels = self.hosted_live_tv_channels()
         categories: list[MediaItem] = []
-        featured = hosted_live_tv_featured_category(self.config.account_token)
+        try:
+            featured = hosted_live_tv_featured_category(self.config.account_token)
+        except Exception:
+            featured = None
         if featured is not None:
             categories.append(to_media_item(featured))
         for title, genre_key in HOSTED_LIVE_TV_GENRE_CATEGORIES:
