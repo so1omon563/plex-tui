@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made hosted Live TV channel pagination explicit with PageUp/PageDown,
+  Ctrl+U/Ctrl+D, and Live TV-specific `[`/`]` paging, plus channel-specific
+  load-more and loading feedback.
+
 ## 0.15.12 - 2026-07-03
 
 - Fixed Auto playback so local media uses the direct Plex part URL instead of

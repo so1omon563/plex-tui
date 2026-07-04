@@ -1897,6 +1897,8 @@ def test_render_help_groups_key_bindings():
     assert "tab / shift+tab: switch libraries / media focus" in rendered
     assert "d: focus details directly" in rendered
     assert "v: toggle list/grid view" in rendered
+    assert "pageup/pagedown or ctrl+u/ctrl+d: move one media page" in rendered
+    assert "bracket keys: move one Live TV channel page; otherwise jump alphabet section" in rendered
     assert "/: search current view or library" in rendered
     assert "left/right: move across grid cards" in rendered
     assert "p: play selected media from beginning" in rendered
@@ -2342,6 +2344,11 @@ def test_context_hints_for_media_and_load_more():
         "Grid: Arrows/page select card / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
     )
     assert context_hint(LoadMoreRow(100, 200)) == "Media: Enter loads next page"
+    assert LoadMoreRow(40, 694, source="livetv").label_text.strip() == "Load more channels... (40 of 694)"
+    assert LoadMoreRow(40, 694, source="livetv", loading=True).label_text.strip() == (
+        "Loading more channels... (40 of 694)"
+    )
+    assert context_hint(LoadMoreRow(40, 694, source="livetv")) == "Media: Enter loads more Live TV channels"
     assert context_hint(LibraryRow(LibraryItem("Movies", "1", "movie", object()))) == (
         "Libraries: Enter opens primary view / Space opens alternate view"
     )
