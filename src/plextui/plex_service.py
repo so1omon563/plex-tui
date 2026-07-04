@@ -21,6 +21,26 @@ PLAYABLE_TYPES = {"movie", "episode", "track", "clip", "livetv"}
 DEFAULT_PAGE_SIZE = 100
 DISCOVER_PROVIDERS = "discover,PLEXAVOD"
 EPG_PROVIDER_BASE = "https://epg.provider.plex.tv"
+EPG_PROVIDER_VERSION = "7.2"
+HOSTED_LIVE_TV_FEATURED_PATH = "/lineups/plex/channels/featured"
+HOSTED_LIVE_TV_GENRE_CATEGORIES: tuple[tuple[str, str], ...] = (
+    ("Bingeworthy", "genre_6a0c2728768cf9b31f6fe02a"),
+    ("Movies", "genre_620143f98578b9238e1cdb89"),
+    ("True Crime", "genre_6006cc1a610ee2002c74f33f"),
+    ("News", "genre_6006cc1d610ee2002c74f37a"),
+    ("Sports", "genre_620143f98578b9238e1cdb8a"),
+    ("Reality", "genre_6006cc1d610ee2002c74f38c"),
+    ("Classics", "genre_6529021f0f3f142ea6049ecb"),
+    ("Adrenaline & Sci-Fi", "genre_6a0c2728768cf9b31f6fe030"),
+    ("Comedy", "genre_6006cc18610ee2002c74f2f9"),
+    ("Daytime TV & Games", "genre_6a0c2728768cf9b31f6fe034"),
+    ("Explore", "genre_6074b802507c8d42cf7e22eb"),
+    ("Food, Home & Culture", "genre_6a0c2729768cf9b31f6fe040"),
+    ("Kids & Family", "genre_6074b802507c8d42cf7e1678"),
+    ("En Español", "genre_6171e01d4c451f5a44debdf6"),
+    ("Global", "genre_6a0c2729768cf9b31f6fe044"),
+    ("Music", "genre_6006cc1c610ee2002c74f378"),
+)
 
 KIND_LABELS: dict[str, str] = {
     "movie": "Movie",
@@ -94,6 +114,7 @@ class HostedLiveTVChannel:
     thumb: str = ""
     art: str = ""
     summary: str = ""
+    genre_rating_keys: tuple[str, ...] = ()
     current_program: HostedLiveTVGuideProgram | None = None
     next_program: HostedLiveTVGuideProgram | None = None
     guide_status: str = ""
@@ -314,12 +335,29 @@ class PlexService:
     def hosted_live_tv_categories(self) -> list[MediaItem]:
         if not self.config.account_token:
             raise ValueError("missing Plex account token; start plex-tui and sign in first")
-        hubs = epg_provider_json("/hubs", self.config.account_token).get("MediaContainer", {}).get("Hub", [])
+        channels = self.hosted_live_tv_channels()
         categories: list[MediaItem] = []
-        for hub in hubs:
-            category = hosted_live_tv_category_from_hub(hub, self.config.account_token)
-            if category is not None:
-                categories.append(to_media_item(category))
+        featured = hosted_live_tv_featured_category(self.config.account_token)
+        if featured is not None:
+            categories.append(to_media_item(featured))
+        for title, genre_key in HOSTED_LIVE_TV_GENRE_CATEGORIES:
+            channel_ids = tuple(
+                dict.fromkeys(
+                    channel.key
+                    for channel in channels
+                    if genre_key in channel.genre_rating_keys
+                )
+            )
+            if channel_ids:
+                categories.append(
+                    to_media_item(
+                        HostedLiveTVCategory(
+                            title=title,
+                            key=f"livetv-category:genre:{genre_key}",
+                            channel_ids=channel_ids,
+                        )
+                    )
+                )
         return categories
 
     def hosted_live_tv_channels(self) -> list[HostedLiveTVChannel]:
@@ -614,9 +652,11 @@ def to_media_item(raw: Any) -> MediaItem:
             artwork_path=raw.thumb or raw.art,
         )
     if isinstance(raw, HostedLiveTVCategory):
+        channel_count = len(raw.channel_ids)
+        subtitle = f"{channel_count} non-DRM channel" if channel_count == 1 else f"{channel_count} non-DRM channels"
         return MediaItem(
             title=raw.title,
-            subtitle="Live TV Category",
+            subtitle=subtitle,
             kind=raw.TYPE,
             key=raw.key,
             playable=False,
@@ -664,6 +704,7 @@ def epg_provider_json(path: str, account_token: str) -> dict[str, Any]:
         headers={
             "Accept": "application/json",
             "X-Plex-Token": account_token,
+            "X-Plex-Provider-Version": EPG_PROVIDER_VERSION,
         },
     )
     with urlopen(request, timeout=10) as response:
@@ -692,30 +733,34 @@ def hosted_live_tv_channel_from_raw(raw: dict[str, Any], account_token: str) -> 
         thumb=str(raw.get("thumb") or raw.get("coverPoster") or ""),
         art=str(raw.get("art") or ""),
         summary=str(raw.get("summary") or ""),
+        genre_rating_keys=parse_string_tuple(raw.get("genreRatingKeys")),
     )
 
 
-def hosted_live_tv_category_from_hub(raw: dict[str, Any], account_token: str) -> HostedLiveTVCategory | None:
-    key = str(raw.get("key") or "")
-    title = str(raw.get("title") or "")
-    if not key or not title or "fast-" not in key:
-        return None
-    data = epg_provider_json(key, account_token)
-    rows = data.get("MediaContainer", {}).get("Metadata", [])
-    channel_ids = tuple(dict.fromkeys(hosted_live_tv_hub_channel_ids(rows)))
+def hosted_live_tv_featured_category(account_token: str) -> HostedLiveTVCategory | None:
+    data = epg_provider_json(HOSTED_LIVE_TV_FEATURED_PATH, account_token)
+    rows = data.get("MediaContainer", {}).get("Channel", [])
+    channel_ids = tuple(dict.fromkeys(hosted_live_tv_channel_ids(rows)))
     if not channel_ids:
         return None
-    return HostedLiveTVCategory(title=title, key=f"livetv-category:{key}", channel_ids=channel_ids)
+    return HostedLiveTVCategory(title="Featured", key="livetv-category:featured", channel_ids=channel_ids)
 
 
-def hosted_live_tv_hub_channel_ids(rows: list[dict[str, Any]]) -> list[str]:
+def hosted_live_tv_channel_ids(rows: list[dict[str, Any]]) -> list[str]:
     ids: list[str] = []
     for row in rows:
-        media = first_mapping(row.get("Media")) or {}
-        channel_id = str(media.get("channelIdentifier") or "")
+        channel_id = str(row.get("id") or row.get("key") or row.get("gridKey") or "")
         if channel_id:
             ids.append(channel_id)
     return ids
+
+
+def parse_string_tuple(value: Any) -> tuple[str, ...]:
+    if isinstance(value, list):
+        return tuple(str(item) for item in value if item)
+    if isinstance(value, str) and value:
+        return (value,)
+    return ()
 
 
 def hosted_live_tv_program_from_raw(raw: dict[str, Any]) -> HostedLiveTVGuideProgram | None:

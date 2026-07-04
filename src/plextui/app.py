@@ -159,7 +159,7 @@ def live_tv_initial_guide_size(page_size: int) -> int:
 
 def live_tv_all_channels_item() -> MediaItem:
     raw = SimpleNamespace(TYPE="livetv_category", title="All Channels", channel_ids=())
-    return MediaItem("All Channels", "Live TV Category", "livetv_category", "livetv-category:all", False, raw)
+    return MediaItem("All Channels", "Non-DRM channels", "livetv_category", "livetv-category:all", False, raw)
 
 
 def live_tv_category_channel_ids(media: MediaItem | None) -> tuple[str, ...]:

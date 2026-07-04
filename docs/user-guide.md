@@ -82,9 +82,9 @@ plex-tui discover-open "matrix" --index 3 --service-index 1
 `discover-open` opens a selected Plex Discover availability URL in your
 browser. In the TUI, enable Discover or On Plex in Settings to browse
 Plex Discover and Plex Movies & Shows VOD hubs. Enable Live TV to browse
-Plex-hosted Live TV categories, including All Channels. Press Enter on a hosted
-Live TV channel to inspect that channel's hosted guide programs; press `p` to
-start playback when the channel is playable.
+Plex-hosted, non-DRM Live TV categories, including All Channels. Press Enter on
+a hosted Live TV channel to inspect that channel's hosted guide programs; press
+`p` to start playback when the channel is playable.
 
 The guide view is hosted-only. It uses Plex's free Live TV EPG provider and does
 not inspect local DVR tuners, DVR channels, or `/livetv/*` server guide
@@ -93,7 +93,9 @@ endpoints.
 Some On Plex titles and Live TV channels are listed by Plex but cannot be
 played through external players such as `mpv`. plex-tui marks those items
 unavailable when Plex does not provide a playable stream, including protected
-streams that Plex's own clients may handle differently.
+streams that Plex's own clients may handle differently. Plex Web may show
+Widevine-protected Live TV channels, such as DRM-capable category rows, that
+plex-tui intentionally omits from the hosted Live TV channel list.
 
 ## Playback
 
