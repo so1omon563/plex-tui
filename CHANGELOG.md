@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.16.1 - 2026-07-04
+
 - Added a hosted Live TV category picker with an All Channels option so dense
   Plex-hosted, non-DRM channel lists can be narrowed by Plex-provided categories
   before opening channel rows.
