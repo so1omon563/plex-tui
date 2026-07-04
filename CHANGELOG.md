@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.15.12 - 2026-07-03
+
+- Fixed Auto playback so local media uses the direct Plex part URL instead of
+  falling back to Plex's stream-transcode URL negotiation.
 - Loaded more initial hosted Live TV guide rows so the current program can open
   with upcoming programs visible below it.
 - Polished hosted Live TV details so channel rows expose current progress and

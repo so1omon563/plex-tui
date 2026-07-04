@@ -129,9 +129,13 @@ def test_playback_applies_selected_streams_and_resume_offset(debug_log_path):
     assert "--demuxer-max-bytes=128MiB" in args
     assert "--demuxer-readahead-secs=20" in args
     assert "--cache-pause=no" in args
-    assert "--start=65.000" not in args
+    assert "--start=65.000" in args
     assert "--sub-file=http://plex/library/streams/1" in args
-    assert item.kwargs == {"audioStreamID": 42, "offset": 65}
+    assert "--aid=1" in args
+    assert "--sid=1" in args
+    assert args[-1] == "http://plex/library/parts/1/file.mkv"
+    assert handle.stream_mode == "direct"
+    assert not hasattr(item, "kwargs")
     assert "launching mpv" in debug_log_path.read_text(encoding="utf-8")
 
 
@@ -148,7 +152,9 @@ def test_playback_can_start_from_beginning_instead_of_resuming():
     args = popen.call_args.args[0]
     assert handle.start_offset_ms == 0
     assert "--start=65.000" not in args
-    assert item.kwargs == {}
+    assert args[-1] == "http://plex/library/parts/1/file.mkv"
+    assert handle.stream_mode == "direct"
+    assert not hasattr(item, "kwargs")
 
 
 def test_online_metadata_playback_uses_part_url():
@@ -346,8 +352,10 @@ def test_playback_keeps_selected_resume_offset_when_reload_omits_it():
 
     args = popen.call_args.args[0]
     assert handle.start_offset_ms == 65000
-    assert "--start=65.000" not in args
-    assert item.full_item.kwargs == {"offset": 65}
+    assert "--start=65.000" in args
+    assert args[-1] == "http://plex/library/parts/1/file.mkv"
+    assert handle.stream_mode == "direct"
+    assert not hasattr(item.full_item, "kwargs")
 
 
 def test_playback_applies_configured_mpv_window_size():
@@ -523,7 +531,10 @@ def test_subtitle_none_disables_subtitle_selection():
 
     args = popen.call_args.args[0]
     assert handle.subtitle_count == 0
-    assert item.kwargs == {"subtitleStreamID": 0, "offset": 65}
+    assert handle.stream_mode == "direct"
+    assert "--sid=no" in args
+    assert "--start=65.000" in args
+    assert not hasattr(item, "kwargs")
     assert not any(arg.startswith("--sub-file=") for arg in args)
 
 
@@ -751,7 +762,7 @@ def test_playback_errors_on_empty_stream_url():
 
     with patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"):
         try:
-            play_with_mpv(EmptyUrlItem())
+            play_with_mpv(EmptyUrlItem(), playback_mode="transcode")
         except PlayerError as exc:
             assert "empty stream URL" in str(exc)
         else:
