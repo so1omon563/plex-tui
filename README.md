@@ -144,7 +144,7 @@ keyboard shortcuts, artwork modes, diagnostics, and CLI helper commands.
 ## Current Surface
 
 - Plex browser login, server selection, and Plex Home profile switching.
-- Library-first sidebar with Continue Watching, Playlists, normal library browsing, and a Plex Services row for optional Discover, On Plex, and Live TV features.
+- Library-first sidebar with Continue Watching, Playlists, normal library browsing, and a Plex Services row for optional Discover, On Plex, and categorized Live TV features.
 - Movie, show, season, episode, collection, category, hub, and playlist views.
 - Poster artwork in grid view, with Kitty/Ghostty native image support when
   available and block art elsewhere.

@@ -800,6 +800,68 @@ def test_hosted_live_tv_page_fetches_channels_with_account_token(monkeypatch):
     assert page.total == 2
 
 
+def test_hosted_live_tv_categories_and_category_page_use_hub_channel_ids(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.full_url)
+        if request.full_url == f"{EPG_PROVIDER_BASE}/hubs":
+            return JsonResponse(
+                b"""
+                {
+                  "MediaContainer": {
+                    "Hub": [
+                      {"title": "News & Sports", "key": "/hubs/sections/home/news-sports-fast-curated"},
+                      {"title": "Ignored", "key": "/hubs/sections/home/not-live-tv"}
+                    ]
+                  }
+                }
+                """
+            )
+        if request.full_url == f"{EPG_PROVIDER_BASE}/hubs/sections/home/news-sports-fast-curated":
+            return JsonResponse(
+                b"""
+                {
+                  "MediaContainer": {
+                    "Metadata": [
+                      {"Media": [{"channelIdentifier": "channel-1"}]},
+                      {"Media": [{"channelIdentifier": "channel-3"}]},
+                      {"Media": [{"channelIdentifier": "channel-1"}]}
+                    ]
+                  }
+                }
+                """
+            )
+        return JsonResponse(
+            b"""
+            {
+              "MediaContainer": {
+                "Channel": [
+                  {"id": "channel-1", "title": "News One", "Media": [{"Part": [{"key": "/hls/news.m3u8"}]}]},
+                  {"id": "channel-2", "title": "Movie One", "Media": [{"Part": [{"key": "/hls/movie.m3u8"}]}]},
+                  {"id": "channel-3", "title": "News Two", "Media": [{"Part": [{"key": "/hls/news2.m3u8"}]}]}
+                ]
+              }
+            }
+            """
+        )
+
+    monkeypatch.setattr("plextui.plex_service.urlopen", fake_urlopen)
+    service = object.__new__(PlexService)
+    service.config = type("Config", (), {"account_token": "account-token"})()
+
+    categories = service.hosted_live_tv_categories()
+    page = service.hosted_live_tv_page(start=0, size=10, channel_ids=categories[0].raw.channel_ids)
+
+    assert [item.title for item in categories] == ["News & Sports"]
+    assert [item.title for item in page.items] == ["News One", "News Two"]
+    assert calls == [
+        f"{EPG_PROVIDER_BASE}/hubs",
+        f"{EPG_PROVIDER_BASE}/hubs/sections/home/news-sports-fast-curated",
+        f"{EPG_PROVIDER_BASE}/lineups/plex/channels",
+    ]
+
+
 def test_hosted_live_tv_guide_page_fetches_selected_channel_programs(monkeypatch):
     calls = []
 

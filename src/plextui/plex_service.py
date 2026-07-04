@@ -34,6 +34,7 @@ KIND_LABELS: dict[str, str] = {
     "playlist": "Playlist",
     "clip": "Clip",
     "livetv": "Live TV Channel",
+    "livetv_category": "Live TV Category",
     "livetv_program": "Live TV Program",
     "photoalbum": "Photo Album",
 }
@@ -138,6 +139,15 @@ class HostedLiveTVGuideProgram:
     year: int | None = None
 
     TYPE = "livetv_program"
+
+
+@dataclass(frozen=True)
+class HostedLiveTVCategory:
+    title: str
+    key: str
+    channel_ids: tuple[str, ...] = ()
+
+    TYPE = "livetv_category"
 
 
 class PlexService:
@@ -287,12 +297,35 @@ class PlexService:
         hubs = [to_hub_media_item(raw) for raw in account.videoOnDemand()]
         return sliced_media_page(hubs, start, size)
 
-    def hosted_live_tv_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
+    def hosted_live_tv_page(
+        self,
+        start: int = 0,
+        size: int = DEFAULT_PAGE_SIZE,
+        channel_ids: tuple[str, ...] = (),
+    ) -> MediaPage:
         if not self.config.account_token:
             raise ValueError("missing Plex account token; start plex-tui and sign in first")
+        channels = self.hosted_live_tv_channels()
+        if channel_ids:
+            wanted = set(channel_ids)
+            channels = [channel for channel in channels if channel.key in wanted]
+        return sliced_media_page([to_media_item(channel) for channel in channels], start, size)
+
+    def hosted_live_tv_categories(self) -> list[MediaItem]:
+        if not self.config.account_token:
+            raise ValueError("missing Plex account token; start plex-tui and sign in first")
+        hubs = epg_provider_json("/hubs", self.config.account_token).get("MediaContainer", {}).get("Hub", [])
+        categories: list[MediaItem] = []
+        for hub in hubs:
+            category = hosted_live_tv_category_from_hub(hub, self.config.account_token)
+            if category is not None:
+                categories.append(to_media_item(category))
+        return categories
+
+    def hosted_live_tv_channels(self) -> list[HostedLiveTVChannel]:
         data = epg_provider_json("/lineups/plex/channels", self.config.account_token)
         container = data.get("MediaContainer", {})
-        channels = [
+        return [
             channel
             for channel in (
                 hosted_live_tv_channel_from_raw(raw, self.config.account_token)
@@ -300,7 +333,6 @@ class PlexService:
             )
             if channel is not None
         ]
-        return sliced_media_page([to_media_item(channel) for channel in channels], start, size)
 
     def hosted_live_tv_guide_page(
         self,
@@ -581,6 +613,15 @@ def to_media_item(raw: Any) -> MediaItem:
             raw=raw,
             artwork_path=raw.thumb or raw.art,
         )
+    if isinstance(raw, HostedLiveTVCategory):
+        return MediaItem(
+            title=raw.title,
+            subtitle="Live TV Category",
+            kind=raw.TYPE,
+            key=raw.key,
+            playable=False,
+            raw=raw,
+        )
     if isinstance(raw, CategoryRef):
         return MediaItem(
             title=raw.title,
@@ -652,6 +693,29 @@ def hosted_live_tv_channel_from_raw(raw: dict[str, Any], account_token: str) -> 
         art=str(raw.get("art") or ""),
         summary=str(raw.get("summary") or ""),
     )
+
+
+def hosted_live_tv_category_from_hub(raw: dict[str, Any], account_token: str) -> HostedLiveTVCategory | None:
+    key = str(raw.get("key") or "")
+    title = str(raw.get("title") or "")
+    if not key or not title or "fast-" not in key:
+        return None
+    data = epg_provider_json(key, account_token)
+    rows = data.get("MediaContainer", {}).get("Metadata", [])
+    channel_ids = tuple(dict.fromkeys(hosted_live_tv_hub_channel_ids(rows)))
+    if not channel_ids:
+        return None
+    return HostedLiveTVCategory(title=title, key=f"livetv-category:{key}", channel_ids=channel_ids)
+
+
+def hosted_live_tv_hub_channel_ids(rows: list[dict[str, Any]]) -> list[str]:
+    ids: list[str] = []
+    for row in rows:
+        media = first_mapping(row.get("Media")) or {}
+        channel_id = str(media.get("channelIdentifier") or "")
+        if channel_id:
+            ids.append(channel_id)
+    return ids
 
 
 def hosted_live_tv_program_from_raw(raw: dict[str, Any]) -> HostedLiveTVGuideProgram | None:

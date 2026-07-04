@@ -59,6 +59,8 @@ from plextui.app import (
     grid_page_key,
     grid_status,
     library_menu_rows,
+    live_tv_all_channels_item,
+    live_tv_category_channel_ids,
     live_tv_current_program_key,
     live_tv_initial_guide_size,
     live_tv_program_compact_time_progress,
@@ -383,6 +385,20 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
     ), config).label_text
     assert LIVE_TV_GUIDE_UNAVAILABLE_ROW in unavailable
     assert "\n" not in unavailable
+
+
+def test_live_tv_category_filter_uses_channel_ids():
+    category = MediaItem(
+        "News",
+        "Live TV Category",
+        "livetv_category",
+        "livetv-category:News",
+        False,
+        SimpleNamespace(channel_ids=("channel-1", "channel-2")),
+    )
+
+    assert live_tv_category_channel_ids(live_tv_all_channels_item()) == ()
+    assert live_tv_category_channel_ids(category) == ("channel-1", "channel-2")
 
 
 def test_render_details_adds_live_tv_channel_progress_and_remaining(monkeypatch):
