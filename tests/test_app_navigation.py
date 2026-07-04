@@ -339,6 +339,10 @@ def test_show_live_tv_guide_adds_load_more_row():
     asyncio.run(run_live_tv_guide_load_more_row_check())
 
 
+def test_live_tv_load_more_feedback_is_explicit():
+    asyncio.run(run_live_tv_load_more_feedback_check())
+
+
 def test_show_browse_state_uses_empty_state_row():
     asyncio.run(run_empty_browse_state_check())
 
@@ -1857,6 +1861,32 @@ async def run_live_tv_guide_load_more_row_check():
         rows = list(app.query_one("#media").children)
         assert len(rows) == 3
         assert isinstance(rows[-1], LoadMoreRow)
+
+
+async def run_live_tv_load_more_feedback_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        channel = MediaItem("Ion Mystery", "", "livetv", "channel", True, Raw())
+        state = BrowseState("Live TV on Plex", [channel], source="livetv", next_start=1, total=694)
+        app.browsing_stack = [state]
+        app.show_browse_state(state)
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert isinstance(rows[-1], LoadMoreRow)
+        assert rows[-1].label_text.strip() == "Load more channels... (1 of 694)"
+
+        app.show_load_more_feedback(state)
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert isinstance(rows[-1], LoadMoreRow)
+        assert rows[-1].label_text.strip() == "Loading more channels... (1 of 694)"
+        assert app.query_one("#media").highlighted_child is rows[-1]
+        assert app.query_one("#status").content == "Loading more Live TV channels..."
+        assert "hosted Live TV channels" in app.query_one("#detail-content").content
 
 
 async def run_empty_browse_state_check():

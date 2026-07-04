@@ -405,9 +405,16 @@ class MediaGrid(Static):
 
 
 class LoadMoreRow(ListItem):
-    def __init__(self, loaded: int, total: int | None) -> None:
+    def __init__(self, loaded: int, total: int | None, source: str = "", loading: bool = False) -> None:
         total_text = str(total) if total is not None else "?"
-        super().__init__(Label(f"  Load more... ({loaded} of {total_text})"))
+        if source == "livetv":
+            action = "Loading more channels..." if loading else "Load more channels..."
+        else:
+            action = "Loading more..." if loading else "Load more..."
+        self.source = source
+        self.is_loading = loading
+        self.label_text = f"  {action} ({loaded} of {total_text})"
+        super().__init__(Label(self.label_text))
 
 
 class EmptyStateRow(ListItem):
@@ -1018,7 +1025,10 @@ class PlexTuiApp(App[None]):
             self.refresh_footer_bindings()
         elif isinstance(row, LoadMoreRow):
             mark_active_row(event.list_view, row)
-            self.show_detail_text("Load the next page of items.")
+            if row.source == "livetv":
+                self.show_detail_text("Load the next page of hosted Live TV channels.")
+            else:
+                self.show_detail_text("Load the next page of items.")
             self.set_status(context_hint(row))
         elif isinstance(row, ServerRow):
             mark_active_row(event.list_view, row)
@@ -1671,7 +1681,8 @@ class PlexTuiApp(App[None]):
             self.call_from_thread(self.set_status, "No more items to load")
             return
         self.loading_more = True
-        self.post_message(StatusChanged(f"Loading more {state.title}..."))
+        self.post_message(StatusChanged(load_more_status(state)))
+        self.call_from_thread(self.show_load_more_feedback, state, selected_key)
         started = time.perf_counter()
         try:
             if state.source == "discover":
@@ -1742,6 +1753,20 @@ class PlexTuiApp(App[None]):
                 self.set_status(status)
 
         self.call_from_thread(update)
+
+    def show_load_more_feedback(self, state: BrowseState, selected_key: str | None = None) -> None:
+        if not self.browsing_stack or self.browsing_stack[-1] is not state:
+            return
+        self.set_status(load_more_status(state))
+        if state.source != "livetv" or not state.items or self.media_grid_visible():
+            return
+        selected_index = selected_media_index(state.items, selected_key)
+        rows, selected_row_index = media_rows(state.items, self.config, selected_index, self.bulk_selected_keys)
+        rows.append(LoadMoreRow(len(state.items), state.total, source=state.source, loading=True))
+        if selected_key is None:
+            selected_row_index = len(rows) - 1
+        self.replace_media_rows(rows, selected_row_index)
+        self.show_detail_text("Loading the next page of hosted Live TV channels.")
 
     @work(thread=True)
     def enrich_hosted_live_tv_channels(self, state: BrowseState, items: list[MediaItem]) -> None:
@@ -1901,7 +1926,7 @@ class PlexTuiApp(App[None]):
                 self.show_media_list()
                 rows, selected_row_index = media_rows(state.items, self.config, selected_index, self.bulk_selected_keys)
                 if state.has_more:
-                    rows.append(LoadMoreRow(len(state.items), state.total))
+                    rows.append(LoadMoreRow(len(state.items), state.total, source=state.source))
                 self.replace_media_rows(
                     rows,
                     selected_row_index,
@@ -6145,6 +6170,10 @@ def context_hint(row: object) -> str:
     if isinstance(row, LibraryMenuRow):
         return "Library: Enter opens browse mode"
     if isinstance(row, LoadMoreRow):
+        if row.source == "livetv" and row.is_loading:
+            return "Loading more Live TV channels..."
+        if row.source == "livetv":
+            return "Media: Enter loads more Live TV channels"
         return "Media: Enter loads next page"
     if isinstance(row, EmptyStateRow):
         return row.action_text or "Media: No items available"
@@ -6255,6 +6284,12 @@ def render_browse_status(state: BrowseState) -> str:
     if is_playlist_browse_state(state):
         status = f"{status} / Backspace/Delete removes selected item"
     return status
+
+
+def load_more_status(state: BrowseState) -> str:
+    if state.source == "livetv":
+        return "Loading more Live TV channels..."
+    return f"Loading more {state.title}..."
 
 
 def browse_state_media_view(state: BrowseState, config: AppConfig) -> str:

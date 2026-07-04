@@ -2342,6 +2342,11 @@ def test_context_hints_for_media_and_load_more():
         "Grid: Arrows/page select card / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
     )
     assert context_hint(LoadMoreRow(100, 200)) == "Media: Enter loads next page"
+    assert LoadMoreRow(40, 694, source="livetv").label_text.strip() == "Load more channels... (40 of 694)"
+    assert LoadMoreRow(40, 694, source="livetv", loading=True).label_text.strip() == (
+        "Loading more channels... (40 of 694)"
+    )
+    assert context_hint(LoadMoreRow(40, 694, source="livetv")) == "Media: Enter loads more Live TV channels"
     assert context_hint(LibraryRow(LibraryItem("Movies", "1", "movie", object()))) == (
         "Libraries: Enter opens primary view / Space opens alternate view"
     )
