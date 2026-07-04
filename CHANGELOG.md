@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-- Made hosted Live TV channel pagination explicit with PageUp/PageDown and
-  Ctrl+U/Ctrl+D list paging plus channel-specific load-more and loading
-  feedback.
+- Made hosted Live TV channel pagination explicit with PageUp/PageDown,
+  Ctrl+U/Ctrl+D, and Live TV-specific `[`/`]` paging, plus channel-specific
+  load-more and loading feedback.
 
 ## 0.15.12 - 2026-07-03
 

@@ -1140,6 +1140,7 @@ def test_should_auto_load_more_near_end_only():
     assert should_auto_load_more(state, "10", threshold=10)
     assert should_auto_load_more(state, "19", threshold=10)
     assert not should_auto_load_more(BrowseState("Movies", items), "19", threshold=10)
+    assert not should_auto_load_more(BrowseState("Live TV on Plex", items, source="livetv", next_start=20, total=30), "19", threshold=10)
 
 
 async def run_picker_return_check():
@@ -1913,7 +1914,7 @@ async def run_page_down_loads_more_live_tv_channels_check():
         load_calls = []
         app.load_more_media = lambda: load_calls.append("load")  # type: ignore[method-assign]
         app.focus_media_browser()
-        await pilot.press("ctrl+d")
+        await pilot.press("right_square_bracket")
 
         assert load_calls == ["load"]
 
@@ -1935,7 +1936,7 @@ async def run_page_up_moves_live_tv_selection_check():
         await pilot.pause(0.2)
 
         app.focus_media_browser()
-        await pilot.press("ctrl+u")
+        await pilot.press("left_square_bracket")
         await pilot.pause(0.2)
 
         selected = app.selected_media()

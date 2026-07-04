@@ -409,10 +409,15 @@ class MediaListView(ListView):
         page_media = getattr(self.app, "page_media_list", None)
         if not callable(page_media):
             return
-        if event.key in {"pageup", "page_up", "ctrl+u"}:
+        state_source = getattr(self.app, "current_browse_state_source", lambda: "")()
+        if event.key in {"pageup", "page_up", "ctrl+u"} or (
+            state_source == "livetv" and event.key == "left_square_bracket"
+        ):
             page_media(-1)
             event.stop()
-        elif event.key in {"pagedown", "page_down", "ctrl+d"}:
+        elif event.key in {"pagedown", "page_down", "ctrl+d"} or (
+            state_source == "livetv" and event.key == "right_square_bracket"
+        ):
             page_media(1)
             event.stop()
 
@@ -6070,6 +6075,7 @@ def render_help() -> str:
         "]: jump to next alphabet section",
         "left/right: move across grid cards",
         "pageup/pagedown or ctrl+u/ctrl+d: move one media page",
+        "[/]: move one Live TV channel page; otherwise jump alphabet section",
         "",
         "Search",
         "/: search current view or library",
@@ -6972,6 +6978,8 @@ def grid_page_key(items: list[MediaItem]) -> tuple[str, ...]:
 
 def should_auto_load_more(state: BrowseState, selected_key: str, threshold: int) -> bool:
     if not state.has_more:
+        return False
+    if state.source == "livetv":
         return False
     if threshold <= 0:
         return False
