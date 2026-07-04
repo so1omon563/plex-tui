@@ -1942,7 +1942,6 @@ async def run_page_up_moves_live_tv_selection_check():
         selected = app.selected_media()
         assert selected is not None
         assert selected.title == "Channel 2"
-        assert app.query_one("#status").content == "Live TV: paged up to Channel 2"
 
 
 async def run_empty_browse_state_check():

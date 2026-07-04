@@ -6075,7 +6075,7 @@ def render_help() -> str:
         "]: jump to next alphabet section",
         "left/right: move across grid cards",
         "pageup/pagedown or ctrl+u/ctrl+d: move one media page",
-        "[/]: move one Live TV channel page; otherwise jump alphabet section",
+        "bracket keys: move one Live TV channel page; otherwise jump alphabet section",
         "",
         "Search",
         "/: search current view or library",
