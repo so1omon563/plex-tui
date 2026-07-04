@@ -123,6 +123,7 @@ LIVE_TV_NEXT_WIDTH = 24
 LIVE_TV_GUIDE_TIME_WIDTH = 17
 LIVE_TV_GUIDE_TITLE_WIDTH = 36
 LIVE_TV_GUIDE_INFO_WIDTH = 14
+LIVE_TV_GUIDE_INITIAL_PAGES = 2
 
 
 @dataclass
@@ -150,6 +151,10 @@ class BrowseState:
         if self.search:
             return bool(self.search_query and self.selected_library is not None and not self.global_search)
         return self.selected_library is not None
+
+
+def live_tv_initial_guide_size(page_size: int) -> int:
+    return min(MAX_PAGE_SIZE, max(page_size, page_size * LIVE_TV_GUIDE_INITIAL_PAGES))
 
 
 class LibraryRow(ListItem):
@@ -1272,7 +1277,7 @@ class PlexTuiApp(App[None]):
         self.call_from_thread(self.show_loading_state, title, "Loading hosted Live TV guide.")
         started = time.perf_counter()
         try:
-            page = self.service.hosted_live_tv_guide_page(channel, size=self.config.page_size)
+            page = self.service.hosted_live_tv_guide_page(channel, size=live_tv_initial_guide_size(self.config.page_size))
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return

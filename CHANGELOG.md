@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Loaded more initial hosted Live TV guide rows so the current program can open
+  with upcoming programs visible below it.
 - Polished hosted Live TV details so channel rows expose current progress and
   remaining time while compact time ranges stay intact before lower-priority
   next-program text.

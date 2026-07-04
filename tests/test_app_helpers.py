@@ -60,6 +60,7 @@ from plextui.app import (
     grid_status,
     library_menu_rows,
     live_tv_current_program_key,
+    live_tv_initial_guide_size,
     live_tv_program_compact_time_progress,
     live_tv_program_progress_label,
     media_row,
@@ -455,6 +456,12 @@ def test_live_tv_current_program_key_keeps_chronological_items():
     future = MediaItem("Future", "", "livetv_program", "program-3", False, SimpleNamespace(on_air=False))
 
     assert live_tv_current_program_key([earlier, current, future]) == "program-2"
+
+
+def test_live_tv_initial_guide_size_loads_extra_upcoming_context():
+    assert live_tv_initial_guide_size(40) == 80
+    assert live_tv_initial_guide_size(200) == 400
+    assert live_tv_initial_guide_size(300) == 500
 
 
 def test_show_browse_state_scrolls_live_tv_current_program_to_top(monkeypatch):
