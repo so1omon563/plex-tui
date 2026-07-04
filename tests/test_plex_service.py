@@ -786,7 +786,11 @@ def test_hosted_live_tv_page_fetches_channels_with_account_token(monkeypatch):
     assert calls == [
         (
             f"{EPG_PROVIDER_BASE}/lineups/plex/channels",
-            {"Accept": "application/json", "X-plex-token": "account-token"},
+            {
+                "Accept": "application/json",
+                "X-plex-token": "account-token",
+                "X-plex-provider-version": "7.2",
+            },
             10,
         )
     ]
@@ -798,6 +802,133 @@ def test_hosted_live_tv_page_fetches_channels_with_account_token(monkeypatch):
     assert media_details(page.items[0]).summary == "Live channel description"
     assert page.items[0].raw.getStreamURL() == f"{EPG_PROVIDER_BASE}/hls/one.m3u8?X-Plex-Token=account-token"
     assert page.total == 2
+
+
+def test_hosted_live_tv_categories_and_category_page_use_channel_genres(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.full_url)
+        if request.full_url == f"{EPG_PROVIDER_BASE}/lineups/plex/channels":
+            return JsonResponse(
+                b"""
+                {
+                  "MediaContainer": {
+                    "Channel": [
+                      {
+                        "id": "channel-1",
+                        "title": "News One",
+                        "genreRatingKeys": ["genre_6006cc1d610ee2002c74f37a"],
+                        "Media": [{"Part": [{"key": "/hls/news.m3u8"}]}]
+                      },
+                      {
+                        "id": "channel-2",
+                        "title": "Movie One",
+                        "genreRatingKeys": [
+                          "genre_620143f98578b9238e1cdb89",
+                          "genre_620143f98578b9238e1cdb8a"
+                        ],
+                        "Media": [{"Part": [{"key": "/hls/movie.m3u8"}]}]
+                      },
+                      {
+                        "id": "channel-3",
+                        "title": "News Two",
+                        "genreRatingKeys": ["genre_6006cc1d610ee2002c74f37a"],
+                        "Media": [{"Part": [{"key": "/hls/news2.m3u8"}]}]
+                      }
+                    ]
+                  }
+                }
+                """
+            )
+        if request.full_url == f"{EPG_PROVIDER_BASE}/lineups/plex/channels/featured":
+            return JsonResponse(
+                b"""
+                {
+                  "MediaContainer": {
+                    "Channel": [
+                      {"id": "channel-2"},
+                      {"id": "channel-1"},
+                      {"id": "channel-2"}
+                    ]
+                  }
+                }
+                """
+            )
+        return JsonResponse(
+            b"""
+            {
+              "MediaContainer": {
+                "Channel": [
+                  {"id": "channel-1", "title": "News One", "Media": [{"Part": [{"key": "/hls/news.m3u8"}]}]},
+                  {"id": "channel-2", "title": "Movie One", "Media": [{"Part": [{"key": "/hls/movie.m3u8"}]}]},
+                  {"id": "channel-3", "title": "News Two", "Media": [{"Part": [{"key": "/hls/news2.m3u8"}]}]}
+                ]
+              }
+            }
+            """
+        )
+
+    monkeypatch.setattr("plextui.plex_service.urlopen", fake_urlopen)
+    service = object.__new__(PlexService)
+    service.config = type("Config", (), {"account_token": "account-token"})()
+
+    categories = service.hosted_live_tv_categories()
+    featured_page = service.hosted_live_tv_page(start=0, size=10, channel_ids=categories[0].raw.channel_ids)
+    news_page = service.hosted_live_tv_page(start=0, size=10, channel_ids=categories[2].raw.channel_ids)
+
+    assert [item.title for item in categories[:4]] == ["Featured", "Movies", "News", "Sports"]
+    assert [item.subtitle for item in categories[:4]] == [
+        "2 channels",
+        "1 channel",
+        "2 channels",
+        "1 channel",
+    ]
+    assert [item.title for item in featured_page.items] == ["News One", "Movie One"]
+    assert [item.title for item in news_page.items] == ["News One", "News Two"]
+    assert calls == [
+        f"{EPG_PROVIDER_BASE}/lineups/plex/channels",
+        f"{EPG_PROVIDER_BASE}/lineups/plex/channels/featured",
+        f"{EPG_PROVIDER_BASE}/lineups/plex/channels",
+        f"{EPG_PROVIDER_BASE}/lineups/plex/channels",
+    ]
+
+
+def test_hosted_live_tv_categories_skip_featured_fetch_failures(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.full_url)
+        if request.full_url == f"{EPG_PROVIDER_BASE}/lineups/plex/channels/featured":
+            raise TimeoutError("featured timed out")
+        return JsonResponse(
+            b"""
+            {
+              "MediaContainer": {
+                "Channel": [
+                  {
+                    "id": "channel-1",
+                    "title": "News One",
+                    "genreRatingKeys": ["genre_6006cc1d610ee2002c74f37a"],
+                    "Media": [{"Part": [{"key": "/hls/news.m3u8"}]}]
+                  }
+                ]
+              }
+            }
+            """
+        )
+
+    monkeypatch.setattr("plextui.plex_service.urlopen", fake_urlopen)
+    service = object.__new__(PlexService)
+    service.config = type("Config", (), {"account_token": "account-token"})()
+
+    categories = service.hosted_live_tv_categories()
+
+    assert [item.title for item in categories] == ["News"]
+    assert calls == [
+        f"{EPG_PROVIDER_BASE}/lineups/plex/channels",
+        f"{EPG_PROVIDER_BASE}/lineups/plex/channels/featured",
+    ]
 
 
 def test_hosted_live_tv_guide_page_fetches_selected_channel_programs(monkeypatch):
@@ -850,12 +981,12 @@ def test_hosted_live_tv_guide_page_fetches_selected_channel_programs(monkeypatch
     page = service.hosted_live_tv_guide_page(channel, guide_date=date(2026, 7, 1), start=0, size=10)
 
     assert calls == [
-        (
-            f"{EPG_PROVIDER_BASE}/grid?channelGridKey=grid-1&date=2026-07-01",
-            {"Accept": "application/json", "X-plex-token": "account-token"},
-            10,
-        )
-    ]
+            (
+                f"{EPG_PROVIDER_BASE}/grid?channelGridKey=grid-1&date=2026-07-01",
+                {"Accept": "application/json", "X-plex-token": "account-token", "X-plex-provider-version": "7.2"},
+                10,
+            )
+        ]
     assert [(item.title, item.kind, item.playable) for item in page.items] == [
         ("Earlier Show", "livetv_program", False),
         ("Morning News", "livetv_program", False),
@@ -918,12 +1049,12 @@ def test_hosted_live_tv_channel_enrichment_adds_now_next(monkeypatch):
     enriched = service.enrich_hosted_live_tv_channel(channel)
 
     assert calls == [
-        (
-            f"{EPG_PROVIDER_BASE}/grid?channelGridKey=grid-1&date={hosted_live_tv_guide_date().isoformat()}",
-            {"Accept": "application/json", "X-plex-token": "account-token"},
-            10,
-        )
-    ]
+            (
+                f"{EPG_PROVIDER_BASE}/grid?channelGridKey=grid-1&date={hosted_live_tv_guide_date().isoformat()}",
+                {"Accept": "application/json", "X-plex-token": "account-token", "X-plex-provider-version": "7.2"},
+                10,
+            )
+        ]
     assert enriched.raw.current_program.title == "Now Showing"
     assert enriched.raw.next_program.title == "Up Next"
 

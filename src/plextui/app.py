@@ -157,6 +157,18 @@ def live_tv_initial_guide_size(page_size: int) -> int:
     return min(MAX_PAGE_SIZE, max(page_size, page_size * LIVE_TV_GUIDE_INITIAL_PAGES))
 
 
+def live_tv_all_channels_item() -> MediaItem:
+    raw = SimpleNamespace(TYPE="livetv_category", title="All Channels", channel_ids=())
+    return MediaItem("All Channels", "", "livetv_category", "livetv-category:all", False, raw)
+
+
+def live_tv_category_channel_ids(media: MediaItem | None) -> tuple[str, ...]:
+    if media is None or media.kind != "livetv_category":
+        return ()
+    values = getattr(media.raw, "channel_ids", ())
+    return tuple(str(value) for value in values if value)
+
+
 class LibraryRow(ListItem):
     def __init__(self, library: LibraryItem) -> None:
         self.label_text = f"› {library.title}"
@@ -237,7 +249,7 @@ class MediaRow(ListItem):
         marker = "▶" if media.playable else "›"
         if bulk_selected:
             marker = "✓"
-        metadata = media_metadata_label(media, include_kind=True)
+        metadata = media_metadata_label(media, include_kind=media.kind != "livetv_category")
         subtitle = f" · {metadata}" if metadata else ""
         progress = row_progress_marker(media.raw)
         progress_text = f" {progress}" if progress else ""
@@ -969,7 +981,10 @@ class PlexTuiApp(App[None]):
         elif isinstance(row, LibraryMenuRow):
             self.open_library_entry(row.library, row.entry, row.label_text)
         elif isinstance(row, MediaRow):
-            self.open_media(row.media)
+            if row.media.kind == "livetv_category":
+                self.open_hosted_live_tv_channels(row.media)
+            else:
+                self.open_media(row.media)
         elif isinstance(row, LoadMoreRow):
             self.load_more_media()
         elif isinstance(row, ServerRow):
@@ -1265,17 +1280,74 @@ class PlexTuiApp(App[None]):
             return
         title = "Live TV on Plex"
         self.post_message(StatusChanged(f"Loading {title}..."))
+        self.call_from_thread(self.show_loading_state, title, "Loading Plex-hosted Live TV categories.")
+        started = time.perf_counter()
+        try:
+            categories = self.service.hosted_live_tv_categories()
+            page = None if categories else self.service.hosted_live_tv_page(0, self.config.page_size)
+        except Exception as exc:
+            self.call_from_thread(self.show_error, str(exc))
+            return
+        write_performance_log(
+            "hosted_live_tv_categories",
+            started,
+            f"items={len(categories)}",
+        )
+
+        def update() -> None:
+            if not categories:
+                if page is None:
+                    return
+                items = live_tv_channels_with_guide_status(page.items, LIVE_TV_GUIDE_LOADING)
+                state = BrowseState(
+                    "Live TV: All Channels",
+                    items,
+                    source="livetv",
+                    next_start=page.next_start,
+                    total=page.total,
+                )
+                self.browsing_stack = [state]
+                self.show_browse_state(state)
+                self.focus_media_browser()
+                if items:
+                    self.set_status(LIVE_TV_GUIDE_LOADING_STATUS)
+                    self.enrich_hosted_live_tv_channels(state, list(items))
+                else:
+                    self.set_status(render_browse_status(state))
+                return
+            state = BrowseState(
+                title,
+                [live_tv_all_channels_item(), *categories],
+                source="livetv_categories",
+                next_start=len(categories) + 1,
+                total=len(categories) + 1,
+            )
+            self.browsing_stack = [state]
+            self.show_browse_state(state)
+            self.focus_media_browser()
+            self.set_status(render_browse_status(state))
+
+        self.call_from_thread(update)
+
+    @work(thread=True)
+    def open_hosted_live_tv_channels(self, category: MediaItem | None = None) -> None:
+        if self.service is None:
+            self.call_from_thread(self.set_status, "Connect to Plex before browsing Live TV")
+            return
+        category_channel_ids = live_tv_category_channel_ids(category)
+        title = f"Live TV: {category.title}" if category_channel_ids else "Live TV: All Channels"
+        self.post_message(StatusChanged(f"Loading {title}..."))
         self.call_from_thread(self.show_loading_state, title, "Loading Plex-hosted Live TV channels.")
         started = time.perf_counter()
         try:
-            page = self.service.hosted_live_tv_page(0, self.config.page_size)
+            page = self.service.hosted_live_tv_page(0, self.config.page_size, channel_ids=category_channel_ids)
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return
         write_performance_log(
             "hosted_live_tv_page",
             started,
-            f"items={len(page.items)} total={page.total}",
+            f"category={category.title if category_channel_ids and category else ''!r} items={len(page.items)} total={page.total}",
         )
 
         def update() -> None:
@@ -1286,12 +1358,16 @@ class PlexTuiApp(App[None]):
                 source="livetv",
                 next_start=page.next_start,
                 total=page.total,
+                context_media=category,
             )
-            self.browsing_stack = [state]
+            self.browsing_stack.append(state)
             self.show_browse_state(state)
             self.focus_media_browser()
-            self.set_status(LIVE_TV_GUIDE_LOADING_STATUS)
-            self.enrich_hosted_live_tv_channels(state, list(items))
+            if items:
+                self.set_status(LIVE_TV_GUIDE_LOADING_STATUS)
+                self.enrich_hosted_live_tv_channels(state, list(items))
+            else:
+                self.set_status(render_browse_status(state))
 
         self.call_from_thread(update)
 
@@ -1538,8 +1614,9 @@ class PlexTuiApp(App[None]):
                 items = []
                 next_start = 0
                 total = 0
+                category_channel_ids = live_tv_category_channel_ids(state.context_media)
                 for start in range(0, loaded_count, self.config.page_size):
-                    page = self.service.hosted_live_tv_page(start, self.config.page_size)
+                    page = self.service.hosted_live_tv_page(start, self.config.page_size, channel_ids=category_channel_ids)
                     next_start = page.next_start
                     total = page.total
                     items.extend(page.items)
@@ -1748,7 +1825,11 @@ class PlexTuiApp(App[None]):
             elif state.source == "vod":
                 page = self.service.video_on_demand_page(state.next_start, self.config.page_size)
             elif state.source == "livetv":
-                page = self.service.hosted_live_tv_page(state.next_start, self.config.page_size)
+                page = self.service.hosted_live_tv_page(
+                    state.next_start,
+                    self.config.page_size,
+                    channel_ids=live_tv_category_channel_ids(state.context_media),
+                )
             elif state.search:
                 page = self.service.search_page(state.search_query, state.selected_library, state.next_start, self.config.page_size)
             elif state.source == "continue_watching":
@@ -1890,6 +1971,9 @@ class PlexTuiApp(App[None]):
                 media.title,
                 "This Plex Live TV channel is unavailable for external playback.",
             )
+            return
+        if media.kind == "livetv_category":
+            self.call_from_thread(self.open_hosted_live_tv_channels, media)
             return
         if media.kind == "livetv_program":
             self.call_from_thread(self.set_status, f"Guide program: {media.title}. Escape returns to channels.")
@@ -4394,6 +4478,8 @@ def render_details(
     raw: object | None = None,
     context_actions: tuple[str, ...] = (),
 ) -> str:
+    if getattr(details, "kind", "") == "livetv_category":
+        return render_live_tv_category_details(details, config, raw, context_actions)
     if is_live_tv_detail(details):
         return render_live_tv_details(details, config, raw, context_actions)
 
@@ -4449,6 +4535,35 @@ def render_details(
 
 def is_live_tv_detail(details: object) -> bool:
     return getattr(details, "kind", "") in {"livetv", "livetv_program"}
+
+
+def render_live_tv_category_details(
+    details: object,
+    config: AppConfig | None = None,
+    raw: object | None = None,
+    context_actions: tuple[str, ...] = (),
+) -> str:
+    title = getattr(details, "title")
+    title_lines = textwrap.wrap(title, width=DETAIL_SUMMARY_WIDTH) or [title]
+    count = len(tuple(getattr(raw, "channel_ids", ()) or ())) if raw is not None else 0
+    count_label = (
+        "All available channels"
+        if count == 0
+        else (f"{count} channel" if count == 1 else f"{count} channels")
+    )
+    lines = [
+        *title_lines,
+        "",
+        "Live TV Category",
+        count_label,
+    ]
+    append_detail_section(lines, "Coverage", [
+        "Non-DRM hosted channels",
+        "DRM-protected Plex Web channels are omitted",
+    ])
+    append_detail_section(lines, "Playback", playback_readiness_rows(False, "", config, context_actions))
+    append_detail_section(lines, "Technical", technical_detail_rows(details, config, raw))
+    return "\n".join(lines)
 
 
 def render_live_tv_details(
@@ -6236,6 +6351,8 @@ def context_hint(row: object) -> str:
             return "Media: Enter opens playlist / e rename / D delete"
         if row.media.kind == "livetv" and not row.media.playable:
             return "Media: Live TV channel is unavailable for external playback"
+        if row.media.kind == "livetv_category":
+            return "Media: Enter browses Live TV category"
         if row.media.kind == "livetv":
             return "Media: Enter guide / p play channel / o optimized"
         if row.media.kind == "livetv_program":
@@ -6347,7 +6464,7 @@ def load_more_status(state: BrowseState) -> str:
 
 
 def browse_state_media_view(state: BrowseState, config: AppConfig) -> str:
-    if state.source in {"livetv", "livetv_guide"}:
+    if state.source in {"livetv", "livetv_categories", "livetv_guide"}:
         return "list"
     return config.media_view
 

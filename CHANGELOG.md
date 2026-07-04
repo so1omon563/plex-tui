@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a hosted Live TV category picker with an All Channels option so dense
+  Plex-hosted, non-DRM channel lists can be narrowed by Plex-provided categories
+  before opening channel rows.
 - Made hosted Live TV channel pagination explicit with PageUp/PageDown,
   Ctrl+U/Ctrl+D, and Live TV-specific `[`/`]` paging, plus channel-specific
   load-more and loading feedback.
