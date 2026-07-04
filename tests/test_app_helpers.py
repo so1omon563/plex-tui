@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import datetime
 from io import BytesIO
 from subprocess import CompletedProcess, TimeoutExpired
 from types import SimpleNamespace
@@ -59,6 +60,7 @@ from plextui.app import (
     grid_status,
     library_menu_rows,
     live_tv_current_program_key,
+    live_tv_initial_guide_size,
     live_tv_program_compact_time_progress,
     live_tv_program_progress_label,
     media_row,
@@ -383,15 +385,68 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
     assert "\n" not in unavailable
 
 
+def test_render_details_adds_live_tv_channel_progress_and_remaining(monkeypatch):
+    monkeypatch.setattr("plextui.app.time.time", lambda: 2.0)
+    raw = SimpleNamespace(
+        call_sign="AMCP",
+        language="English",
+        is_hd=True,
+        protocol="hls",
+        container="mpegts",
+        current_program=SimpleNamespace(
+            title="Now Showing",
+            begins_at=1000,
+            ends_at=6000,
+        ),
+        next_program=SimpleNamespace(
+            title="Up Next",
+            begins_at=6000,
+            ends_at=12000,
+        ),
+    )
+    details = MediaDetails(
+        title="Stories by AMC",
+        kind="livetv",
+        facts=["Live TV Channel"],
+        metadata=[("Type", "livetv")],
+        audio=[],
+        subtitles=[],
+        summary="",
+        playable=True,
+    )
+
+    rendered = render_details(details, AppConfig("http://plex", "token", "client-id"), raw=raw)
+
+    assert "Progress:  20% in" in rendered
+    assert "Remaining:" in rendered
+    assert "1m" in rendered
+
+
 def test_live_tv_program_progress_label_uses_current_window(monkeypatch):
     monkeypatch.setattr("plextui.app.time.time", lambda: 2.0)
     assert live_tv_program_progress_label(SimpleNamespace(begins_at=1000, ends_at=3000)) == "50% in"
 
 
 def test_live_tv_program_compact_time_keeps_full_range(monkeypatch):
-    monkeypatch.setattr("plextui.app.time.time", lambda: 2.0)
-    label = live_tv_program_compact_time_progress(SimpleNamespace(begins_at=1000, ends_at=3000))
+    begins = int(datetime(2026, 7, 3, 14, 0).timestamp() * 1000)
+    ends = int(datetime(2026, 7, 3, 14, 30).timestamp() * 1000)
+    monkeypatch.setattr("plextui.app.time.time", lambda: (begins + (ends - begins) // 2) / 1000)
+
+    label = live_tv_program_compact_time_progress(SimpleNamespace(begins_at=begins, ends_at=ends))
+
     assert label.endswith(" 50% in")
+    assert "..." not in label
+
+
+def test_live_tv_program_compact_time_drops_progress_label_before_time(monkeypatch):
+    begins = int(datetime(2026, 7, 3, 23, 38).timestamp() * 1000)
+    ends = int(datetime(2026, 7, 4, 0, 27).timestamp() * 1000)
+    monkeypatch.setattr("plextui.app.time.time", lambda: (begins + (ends - begins) // 2) / 1000)
+
+    label = live_tv_program_compact_time_progress(SimpleNamespace(begins_at=begins, ends_at=ends))
+
+    assert label.endswith(" 50%")
+    assert "50% in" not in label
     assert "..." not in label
 
 
@@ -403,7 +458,47 @@ def test_live_tv_current_program_key_keeps_chronological_items():
     assert live_tv_current_program_key([earlier, current, future]) == "program-2"
 
 
-def test_render_details_prioritizes_live_tv_guide_program_schedule():
+def test_live_tv_initial_guide_size_loads_extra_upcoming_context():
+    assert live_tv_initial_guide_size(40) == 80
+    assert live_tv_initial_guide_size(200) == 400
+    assert live_tv_initial_guide_size(300) == 500
+
+
+def test_show_browse_state_scrolls_live_tv_current_program_to_top(monkeypatch):
+    app = PlexTuiApp()
+    app.config = AppConfig("http://plex", "token", "client-id")
+    app.bulk_selected_keys = set()
+    captured = {}
+    monkeypatch.setattr(app, "set_media_title", lambda title: None)
+    monkeypatch.setattr(app, "prune_bulk_selection", lambda state: None)
+    monkeypatch.setattr(app, "show_media_list", lambda: None)
+    monkeypatch.setattr(app, "show_media_details", lambda item: captured.setdefault("details", item))
+
+    def capture_rows(rows, selected_index=None, scroll_selected_to_top=False):
+        captured["selected_index"] = selected_index
+        captured["scroll_selected_to_top"] = scroll_selected_to_top
+
+    monkeypatch.setattr(app, "replace_media_rows", capture_rows)
+    channel = MediaItem("Stories by AMC", "", "livetv", "channel", True, object())
+    items = [
+        MediaItem("Earlier", "", "livetv_program", "program-1", False, SimpleNamespace(on_air=False)),
+        MediaItem("Current", "", "livetv_program", "program-2", False, SimpleNamespace(on_air=True)),
+        MediaItem("Later", "", "livetv_program", "program-3", False, SimpleNamespace(on_air=False)),
+    ]
+
+    app.show_browse_state(
+        BrowseState("Guide: Stories by AMC", items, source="livetv_guide", context_media=channel),
+        selected_key=live_tv_current_program_key(items),
+    )
+
+    assert captured["selected_index"] == 1
+    assert captured["scroll_selected_to_top"] is True
+    assert captured["details"].title == "Current"
+
+
+def test_render_details_prioritizes_live_tv_guide_program_schedule(monkeypatch):
+    monkeypatch.setattr("plextui.app.time.time", lambda: 2.0)
+    raw = SimpleNamespace(on_air=True, begins_at=1000, ends_at=6000)
     details = MediaDetails(
         title="Coda",
         kind="livetv_program",
@@ -425,6 +520,7 @@ def test_render_details_prioritizes_live_tv_guide_program_schedule():
 
     rendered = render_details(
         details,
+        raw=raw,
         context_actions=(
             "Guide: Escape returns to channels",
         ),
@@ -432,7 +528,8 @@ def test_render_details_prioritizes_live_tv_guide_program_schedule():
 
     assert "Coda\n\nLive TV Program\n2026 • 1h 0m • On now • 720" in rendered
     assert "Schedule\nTime:       2:00 PM-3:00 PM" in rendered
-    assert "On Air:     On now" in rendered
+    assert "On Air:" in rendered
+    assert "Now · 1m left" in rendered
     assert "Summary\nA quiet hour of music." in rendered
     assert "Actions\nEscape returns to channels" in rendered
     assert "Guide program\nDetails only" not in rendered

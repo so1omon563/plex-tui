@@ -123,6 +123,7 @@ LIVE_TV_NEXT_WIDTH = 24
 LIVE_TV_GUIDE_TIME_WIDTH = 17
 LIVE_TV_GUIDE_TITLE_WIDTH = 36
 LIVE_TV_GUIDE_INFO_WIDTH = 14
+LIVE_TV_GUIDE_INITIAL_PAGES = 2
 
 
 @dataclass
@@ -150,6 +151,10 @@ class BrowseState:
         if self.search:
             return bool(self.search_query and self.selected_library is not None and not self.global_search)
         return self.selected_library is not None
+
+
+def live_tv_initial_guide_size(page_size: int) -> int:
+    return min(MAX_PAGE_SIZE, max(page_size, page_size * LIVE_TV_GUIDE_INITIAL_PAGES))
 
 
 class LibraryRow(ListItem):
@@ -1272,7 +1277,7 @@ class PlexTuiApp(App[None]):
         self.call_from_thread(self.show_loading_state, title, "Loading hosted Live TV guide.")
         started = time.perf_counter()
         try:
-            page = self.service.hosted_live_tv_guide_page(channel, size=self.config.page_size)
+            page = self.service.hosted_live_tv_guide_page(channel, size=live_tv_initial_guide_size(self.config.page_size))
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return
@@ -1897,7 +1902,11 @@ class PlexTuiApp(App[None]):
                 rows, selected_row_index = media_rows(state.items, self.config, selected_index, self.bulk_selected_keys)
                 if state.has_more:
                     rows.append(LoadMoreRow(len(state.items), state.total))
-                self.replace_media_rows(rows, selected_row_index)
+                self.replace_media_rows(
+                    rows,
+                    selected_row_index,
+                    scroll_selected_to_top=state.source == "livetv_guide" and selected_row_index > 0,
+                )
             self.show_media_details(state.items[selected_index])
             write_performance_log(
                 "browse_render",
@@ -1926,8 +1935,13 @@ class PlexTuiApp(App[None]):
         if status is not None:
             self.set_status(status)
 
-    def replace_media_rows(self, rows: list[ListItem], selected_index: int | None = None) -> None:
-        self.replace_list_rows_async("#media", rows, selected_index, "media-list")
+    def replace_media_rows(
+        self,
+        rows: list[ListItem],
+        selected_index: int | None = None,
+        scroll_selected_to_top: bool = False,
+    ) -> None:
+        self.replace_list_rows_async("#media", rows, selected_index, "media-list", scroll_selected_to_top)
 
     def replace_list_rows_async(
         self,
@@ -1935,20 +1949,35 @@ class PlexTuiApp(App[None]):
         rows: list[ListItem],
         selected_index: int | None,
         group: str,
+        scroll_selected_to_top: bool = False,
     ) -> None:
         self.run_worker(
-            self.replace_list_rows(selector, rows, selected_index),
+            self.replace_list_rows(selector, rows, selected_index, scroll_selected_to_top),
             group=group,
             exclusive=True,
         )
 
-    async def replace_list_rows(self, selector: str, rows: list[ListItem], selected_index: int | None = None) -> None:
+    async def replace_list_rows(
+        self,
+        selector: str,
+        rows: list[ListItem],
+        selected_index: int | None = None,
+        scroll_selected_to_top: bool = False,
+    ) -> None:
         view = self.query_one(selector, ListView)
         await view.clear()
         if rows:
             await view.extend(rows)
         if selected_index is not None and rows:
             set_list_index(view, selected_index)
+            if scroll_selected_to_top:
+                view.call_after_refresh(
+                    view.scroll_to_widget,
+                    view.children[selected_index],
+                    animate=False,
+                    top=True,
+                    immediate=True,
+                )
 
     def show_media_details(self, item: MediaItem) -> None:
         self.detail_refresh_token += 1
@@ -4354,7 +4383,7 @@ def render_live_tv_details(
     lines = render_live_tv_header(details, metadata, raw)
 
     if getattr(details, "kind", "") == "livetv_program":
-        schedule_rows = live_tv_program_schedule_rows(metadata)
+        schedule_rows = live_tv_program_schedule_rows(metadata, raw)
         if schedule_rows:
             append_detail_section(lines, "Schedule", detail_key_value_rows(schedule_rows))
     else:
@@ -4426,14 +4455,17 @@ def live_tv_channel_rows(raw: object | None) -> list[tuple[str, str]]:
 def live_tv_channel_guide_rows(raw: object | None) -> list[tuple[str, str]]:
     if raw is None:
         return []
+    current = getattr(raw, "current_program", None)
+    progress = live_tv_program_progress_label(current) if current is not None else ""
+    remaining = live_tv_program_minutes_left(current) if current is not None else ""
     return [
         (label, value)
         for label, program in (
-            ("Now", getattr(raw, "current_program", None)),
+            ("Now", current),
             ("Next", getattr(raw, "next_program", None)),
         )
         if (value := live_tv_channel_program_label(program))
-    ]
+    ] + [(label, value) for label, value in (("Progress", progress), ("Remaining", remaining)) if value]
 
 
 def live_tv_channel_guide_status(raw: object | None) -> str:
@@ -4476,7 +4508,10 @@ def live_tv_channel_quality_values(raw: object | None) -> list[str]:
     ]
 
 
-def live_tv_program_schedule_rows(metadata: list[tuple[str, str]]) -> list[tuple[str, str]]:
+def live_tv_program_schedule_rows(
+    metadata: list[tuple[str, str]],
+    raw: object | None = None,
+) -> list[tuple[str, str]]:
     rows = []
     begins = detail_metadata_value(metadata, "Begins")
     ends = detail_metadata_value(metadata, "Ends")
@@ -4487,15 +4522,17 @@ def live_tv_program_schedule_rows(metadata: list[tuple[str, str]]) -> list[tuple
         if not value:
             continue
         if label == "On Air":
-            value = live_tv_on_air_label(value)
+            value = live_tv_on_air_label(value, raw)
         elif label == "Resolution":
             value = value.upper()
         rows.append((label, value))
     return rows
 
 
-def live_tv_on_air_label(value: str) -> str:
+def live_tv_on_air_label(value: str, raw: object | None = None) -> str:
     if value == "yes":
+        if raw is not None and (left := live_tv_program_minutes_left(raw)):
+            return f"Now · {left} left"
         return "On now"
     if value == "no":
         return "Not on now"
@@ -4927,7 +4964,14 @@ def live_tv_program_compact_time_progress(program: object | None) -> str:
         getattr(program, "ends_at", 0),
     )
     progress = live_tv_program_progress_label(program)
-    return " ".join(value for value in (time_label, progress) if value)
+    label = " ".join(value for value in (time_label, progress) if value)
+    if len(label) <= LIVE_TV_TIME_WIDTH:
+        return label
+    compact_progress = progress.removesuffix(" in")
+    label = " ".join(value for value in (time_label, compact_progress) if value)
+    if len(label) <= LIVE_TV_TIME_WIDTH:
+        return label
+    return time_label
 
 
 def live_tv_compact_time_range(begins_at: object, ends_at: object) -> str:
