@@ -425,10 +425,6 @@ def external_subtitle_urls(item: Any, selected_subtitle: Any = None) -> list[str
 
 
 def direct_play_url(item: Any, selected_subtitle: Any = None) -> str | None:
-    if is_online_metadata(item):
-        return first_part_url(item)
-    if not has_embedded_subtitles(item, selected_subtitle):
-        return None
     return first_part_url(item)
 
 
@@ -479,19 +475,6 @@ def is_online_metadata(item: Any) -> bool:
 def is_metadata_provider_server(server: Any) -> bool:
     baseurl = str(getattr(server, "_baseurl", "") or "")
     return "metadata.provider.plex.tv" in baseurl
-
-
-def has_embedded_subtitles(item: Any, selected_subtitle: Any = None) -> bool:
-    if selected_subtitle == 0:
-        return False
-    embedded_codecs = {"pgs", "vobsub", "idx"}
-    for stream in subtitle_streams(item):
-        if selected_subtitle is not None and not same_stream(stream, selected_subtitle):
-            continue
-        codec = str(getattr(stream, "codec", "")).lower()
-        if codec in embedded_codecs and not getattr(stream, "key", None):
-            return True
-    return False
 
 
 def selected_subtitle_stream_id(item: Any, selected_subtitle: Any = None) -> int | None:
