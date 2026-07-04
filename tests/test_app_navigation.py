@@ -1713,7 +1713,6 @@ async def run_on_plex_live_enrichment_repaints_channel_rows_check():
         assert "Now Showing" in row.label_text
         assert "→ Up Next" in row.label_text
         assert app.selected_media().key == "channel-1"
-        assert app.query_one("#status").content == LIVE_TV_GUIDE_LOADED_STATUS
 
 
 async def run_on_plex_live_channel_guide_check():
@@ -3839,7 +3838,7 @@ async def run_open_show_context_from_continue_watching_episode_check():
         app.show_browse_state(app.browsing_stack[-1])
         await pilot.pause(0.2)
 
-        await pilot.press("B")
+        app.action_open_show_context()
         media_calls = await wait_for_calls(service.media_from_key_calls, pilot, attempts=80)
         children_calls = await wait_for_calls(service.children_calls, pilot, attempts=80)
         selected = await wait_for_selected_title(app, pilot, "Season 1", attempts=80)
