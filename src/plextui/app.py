@@ -404,6 +404,19 @@ class MediaGrid(Static):
             event.stop()
 
 
+class MediaListView(ListView):
+    def on_key(self, event) -> None:
+        page_media = getattr(self.app, "page_media_list", None)
+        if not callable(page_media):
+            return
+        if event.key in {"pageup", "page_up"}:
+            page_media(-1)
+            event.stop()
+        elif event.key in {"pagedown", "page_down"}:
+            page_media(1)
+            event.stop()
+
+
 class LoadMoreRow(ListItem):
     def __init__(self, loaded: int, total: int | None, source: str = "", loading: bool = False) -> None:
         total_text = str(total) if total is not None else "?"
@@ -714,7 +727,7 @@ class PlexTuiApp(App[None]):
             with Vertical(id="main"):
                 yield Static("Media", id="media-title", classes="pane-title")
                 yield Input(placeholder="Search current view", id="search")
-                yield ListView(id="media")
+                yield MediaListView(id="media")
                 with VerticalScroll(id="media-grid-scroll"):
                     yield MediaGrid()
             with Vertical(id="details"):
@@ -1648,6 +1661,40 @@ class PlexTuiApp(App[None]):
             return
         self.query_one("#media", ListView).focus()
         self.set_focus_pane(main=True)
+
+    def page_media_list(self, direction: int) -> None:
+        if self.media_grid_visible() or not self.browsing_stack:
+            return
+        state = self.browsing_stack[-1]
+        if not state.items:
+            return
+        media = self.selected_media()
+        highlighted = self.query_one("#media", ListView).highlighted_child
+        if media is None:
+            if isinstance(highlighted, LoadMoreRow) and direction > 0:
+                self.load_more_media()
+                return
+            current_index = len(state.items) - 1 if direction < 0 else 0
+        else:
+            current_index = selected_media_index(state.items, media.key)
+        step = max(1, self.config.page_size)
+        target_index = current_index + (step * direction)
+        if target_index >= len(state.items):
+            if state.has_more:
+                self.load_more_media()
+                return
+            target_index = len(state.items) - 1
+        elif target_index < 0:
+            target_index = 0
+        target = state.items[target_index]
+        self.show_browse_state(state, selected_key=target.key)
+        self.focus_media_browser()
+        if state.source == "livetv":
+            action = "down" if direction > 0 else "up"
+            status = f"Live TV: paged {action} to {target.title}"
+        else:
+            status = media_row_status(MediaRow(target), state)
+        self.set_timer(0.05, lambda: self.set_status(status), name="media-page-status")
 
     def media_grid_visible(self) -> bool:
         try:
@@ -6022,7 +6069,7 @@ def render_help() -> str:
         "[: jump to previous alphabet section",
         "]: jump to next alphabet section",
         "left/right: move across grid cards",
-        "pageup/pagedown: move one grid page",
+        "pageup/pagedown: move one media page",
         "",
         "Search",
         "/: search current view or library",

@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Made hosted Live TV channel pagination explicit with channel-specific
-  load-more and loading feedback.
+- Made hosted Live TV channel pagination explicit with PageUp/PageDown list
+  paging plus channel-specific load-more and loading feedback.
 
 ## 0.15.12 - 2026-07-03
 

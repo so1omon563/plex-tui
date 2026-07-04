@@ -343,6 +343,14 @@ def test_live_tv_load_more_feedback_is_explicit():
     asyncio.run(run_live_tv_load_more_feedback_check())
 
 
+def test_page_down_loads_more_live_tv_channels_at_end():
+    asyncio.run(run_page_down_loads_more_live_tv_channels_check())
+
+
+def test_page_up_moves_live_tv_selection_by_page():
+    asyncio.run(run_page_up_moves_live_tv_selection_check())
+
+
 def test_show_browse_state_uses_empty_state_row():
     asyncio.run(run_empty_browse_state_check())
 
@@ -1875,6 +1883,7 @@ async def run_live_tv_load_more_feedback_check():
         await pilot.pause(0.2)
 
         rows = list(app.query_one("#media").children)
+        assert len(rows) == 2
         assert isinstance(rows[-1], LoadMoreRow)
         assert rows[-1].label_text.strip() == "Load more channels... (1 of 694)"
 
@@ -1882,11 +1891,55 @@ async def run_live_tv_load_more_feedback_check():
         await pilot.pause(0.2)
 
         rows = list(app.query_one("#media").children)
+        assert len(rows) == 2
         assert isinstance(rows[-1], LoadMoreRow)
         assert rows[-1].label_text.strip() == "Loading more channels... (1 of 694)"
         assert app.query_one("#media").highlighted_child is rows[-1]
         assert app.query_one("#status").content == "Loading more Live TV channels..."
         assert "hosted Live TV channels" in app.query_one("#detail-content").content
+
+
+async def run_page_down_loads_more_live_tv_channels_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=40)
+        first = MediaItem("Ion Mystery", "", "livetv", "channel-1", True, Raw())
+        state = BrowseState("Live TV on Plex", [first], source="livetv", next_start=1, total=2)
+        app.browsing_stack = [state]
+        app.show_browse_state(state)
+        await pilot.pause(0.2)
+
+        load_calls = []
+        app.load_more_media = lambda: load_calls.append("load")  # type: ignore[method-assign]
+        app.page_media_list(1)
+
+        assert load_calls == ["load"]
+
+
+async def run_page_up_moves_live_tv_selection_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=2)
+        items = [
+            MediaItem("Channel 1", "", "livetv", "channel-1", True, Raw()),
+            MediaItem("Channel 2", "", "livetv", "channel-2", True, Raw()),
+            MediaItem("Channel 3", "", "livetv", "channel-3", True, Raw()),
+            MediaItem("Channel 4", "", "livetv", "channel-4", True, Raw()),
+        ]
+        state = BrowseState("Live TV on Plex", items, source="livetv", next_start=4, total=4)
+        app.browsing_stack = [state]
+        app.show_browse_state(state, selected_key="channel-4")
+        await pilot.pause(0.2)
+
+        app.page_media_list(-1)
+        await pilot.pause(0.2)
+
+        selected = app.selected_media()
+        assert selected is not None
+        assert selected.title == "Channel 2"
+        assert app.query_one("#status").content == "Live TV: paged up to Channel 2"
 
 
 async def run_empty_browse_state_check():
