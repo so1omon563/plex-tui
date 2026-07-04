@@ -4549,6 +4549,10 @@ async def run_help_back_check():
         assert app.query_one("#media-title").content == "Help"
         assert "Keyboard reference" in app.query_one("#detail-content").content
 
+        app.page_media_list(1)
+        await pilot.pause(0.2)
+        assert app.query_one("#media-title").content == "Help"
+
         app.action_back_or_clear()
         await pilot.pause(0.2)
         assert app.query_one("#media-title").content == "Movies"

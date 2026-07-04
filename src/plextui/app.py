@@ -1668,7 +1668,8 @@ class PlexTuiApp(App[None]):
         self.set_focus_pane(main=True)
 
     def page_media_list(self, direction: int) -> None:
-        if self.media_grid_visible() or not self.browsing_stack:
+        if self.help_visible or self.settings_visible or self.picker_visible or self.media_grid_visible() or not self.browsing_stack:
+            self.set_status("Media paging is available while browsing media")
             return
         state = self.browsing_stack[-1]
         if not state.items:
