@@ -390,15 +390,36 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
 def test_live_tv_category_filter_uses_channel_ids():
     category = MediaItem(
         "News",
-        "Live TV Category",
+        "2 channels",
         "livetv_category",
         "livetv-category:News",
         False,
         SimpleNamespace(channel_ids=("channel-1", "channel-2")),
     )
 
+    rendered = render_details(
+        MediaDetails(
+            title=category.title,
+            kind=category.kind,
+            facts=["Live TV Category"],
+            metadata=[("Type", "livetv_category")],
+            audio=[],
+            subtitles=[],
+            summary="",
+            playable=False,
+        ),
+        AppConfig("http://plex", "token", "client-id"),
+        raw=category.raw,
+    )
+
+    assert live_tv_all_channels_item().subtitle == ""
+    assert media_row(live_tv_all_channels_item(), AppConfig("http://plex", "token", "client-id")).label_text == "› All Channels"
+    assert media_row(category, AppConfig("http://plex", "token", "client-id")).label_text == "› News · 2 channels"
     assert live_tv_category_channel_ids(live_tv_all_channels_item()) == ()
     assert live_tv_category_channel_ids(category) == ("channel-1", "channel-2")
+    assert "Live TV Category\n2 channels" in rendered
+    assert "Non-DRM hosted channels" in rendered
+    assert "DRM-protected Plex Web channels are omitted" in rendered
 
 
 def test_render_details_adds_live_tv_channel_progress_and_remaining(monkeypatch):

@@ -879,10 +879,10 @@ def test_hosted_live_tv_categories_and_category_page_use_channel_genres(monkeypa
 
     assert [item.title for item in categories[:4]] == ["Featured", "Movies", "News", "Sports"]
     assert [item.subtitle for item in categories[:4]] == [
-        "2 non-DRM channels",
-        "1 non-DRM channel",
-        "2 non-DRM channels",
-        "1 non-DRM channel",
+        "2 channels",
+        "1 channel",
+        "2 channels",
+        "1 channel",
     ]
     assert [item.title for item in featured_page.items] == ["News One", "Movie One"]
     assert [item.title for item in news_page.items] == ["News One", "News Two"]

@@ -653,7 +653,7 @@ def to_media_item(raw: Any) -> MediaItem:
         )
     if isinstance(raw, HostedLiveTVCategory):
         channel_count = len(raw.channel_ids)
-        subtitle = f"{channel_count} non-DRM channel" if channel_count == 1 else f"{channel_count} non-DRM channels"
+        subtitle = f"{channel_count} channel" if channel_count == 1 else f"{channel_count} channels"
         return MediaItem(
             title=raw.title,
             subtitle=subtitle,

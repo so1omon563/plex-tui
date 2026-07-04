@@ -159,7 +159,7 @@ def live_tv_initial_guide_size(page_size: int) -> int:
 
 def live_tv_all_channels_item() -> MediaItem:
     raw = SimpleNamespace(TYPE="livetv_category", title="All Channels", channel_ids=())
-    return MediaItem("All Channels", "Non-DRM channels", "livetv_category", "livetv-category:all", False, raw)
+    return MediaItem("All Channels", "", "livetv_category", "livetv-category:all", False, raw)
 
 
 def live_tv_category_channel_ids(media: MediaItem | None) -> tuple[str, ...]:
@@ -249,7 +249,7 @@ class MediaRow(ListItem):
         marker = "▶" if media.playable else "›"
         if bulk_selected:
             marker = "✓"
-        metadata = media_metadata_label(media, include_kind=True)
+        metadata = media_metadata_label(media, include_kind=media.kind != "livetv_category")
         subtitle = f" · {metadata}" if metadata else ""
         progress = row_progress_marker(media.raw)
         progress_text = f" {progress}" if progress else ""
@@ -4478,6 +4478,8 @@ def render_details(
     raw: object | None = None,
     context_actions: tuple[str, ...] = (),
 ) -> str:
+    if getattr(details, "kind", "") == "livetv_category":
+        return render_live_tv_category_details(details, config, raw, context_actions)
     if is_live_tv_detail(details):
         return render_live_tv_details(details, config, raw, context_actions)
 
@@ -4533,6 +4535,35 @@ def render_details(
 
 def is_live_tv_detail(details: object) -> bool:
     return getattr(details, "kind", "") in {"livetv", "livetv_program"}
+
+
+def render_live_tv_category_details(
+    details: object,
+    config: AppConfig | None = None,
+    raw: object | None = None,
+    context_actions: tuple[str, ...] = (),
+) -> str:
+    title = getattr(details, "title")
+    title_lines = textwrap.wrap(title, width=DETAIL_SUMMARY_WIDTH) or [title]
+    count = len(tuple(getattr(raw, "channel_ids", ()) or ())) if raw is not None else 0
+    count_label = (
+        "All available channels"
+        if count == 0
+        else (f"{count} channel" if count == 1 else f"{count} channels")
+    )
+    lines = [
+        *title_lines,
+        "",
+        "Live TV Category",
+        count_label,
+    ]
+    append_detail_section(lines, "Coverage", [
+        "Non-DRM hosted channels",
+        "DRM-protected Plex Web channels are omitted",
+    ])
+    append_detail_section(lines, "Playback", playback_readiness_rows(False, "", config, context_actions))
+    append_detail_section(lines, "Technical", technical_detail_rows(details, config, raw))
+    return "\n".join(lines)
 
 
 def render_live_tv_details(
