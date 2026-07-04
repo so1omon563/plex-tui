@@ -2408,7 +2408,7 @@ async def run_load_more_ignores_replaced_browse_state_check():
             if started.is_set():
                 break
             await pilot.pause(0.1)
-        app.browsing_stack = [BrowseState("Continue Watching", [second], source="continue_watching", total=1)]
+        app.browsing_stack = [BrowseState("Continue Watching", [second], source="continue_watching", next_start=1, total=1)]
         release.set()
         for _ in range(50):
             if not app.loading_more:
@@ -3814,7 +3814,7 @@ async def run_toggle_watched_continue_watching_refresh_check():
         await pilot.pause(1.0)
         app.config = AppConfig("http://plex", "token", "client-id")
         app.service = service
-        app.browsing_stack = [BrowseState("Continue Watching", [current], source="continue_watching", total=1)]
+        app.browsing_stack = [BrowseState("Continue Watching", [current], source="continue_watching", next_start=1, total=1)]
         app.show_browse_state(app.browsing_stack[-1])
         selected = await wait_for_selected_title(app, pilot, "Episode 1", attempts=80)
         assert selected is not None
@@ -3849,7 +3849,7 @@ async def run_toggle_watched_continue_watching_refresh_resolves_hub_wrapper_chec
         await pilot.pause(1.0)
         app.config = AppConfig("http://plex", "token", "client-id")
         app.service = service
-        app.browsing_stack = [BrowseState("Continue Watching", [current], source="continue_watching", total=1)]
+        app.browsing_stack = [BrowseState("Continue Watching", [current], source="continue_watching", next_start=1, total=1)]
         app.show_browse_state(app.browsing_stack[-1])
         selected = await wait_for_selected_title(app, pilot, "Episode 1", attempts=80)
         assert selected is not None
@@ -3894,7 +3894,7 @@ async def run_playback_refresh_selects_next_continue_watching_episode_check():
         await pilot.pause(1.0)
         app.config = AppConfig("http://plex", "token", "client-id")
         app.service = service
-        app.browsing_stack = [BrowseState("Continue Watching", [current], source="continue_watching", total=1)]
+        app.browsing_stack = [BrowseState("Continue Watching", [current], source="continue_watching", next_start=1, total=1)]
         app.show_browse_state(app.browsing_stack[-1])
         await pilot.pause(0.2)
 
@@ -3922,7 +3922,7 @@ async def run_open_parent_context_from_continue_watching_episode_check():
         await pilot.pause(1.0)
         app.config = AppConfig("http://plex", "token", "client-id")
         app.service = service
-        app.browsing_stack = [BrowseState("Continue Watching", [episode], source="continue_watching", total=1)]
+        app.browsing_stack = [BrowseState("Continue Watching", [episode], source="continue_watching", next_start=1, total=1)]
         app.show_browse_state(app.browsing_stack[-1])
         await pilot.pause(0.2)
 
@@ -3950,7 +3950,7 @@ async def run_open_show_context_from_continue_watching_episode_check():
         await pilot.pause(1.0)
         app.config = AppConfig("http://plex", "token", "client-id")
         app.service = service
-        app.browsing_stack = [BrowseState("Continue Watching", [episode], source="continue_watching", total=1)]
+        app.browsing_stack = [BrowseState("Continue Watching", [episode], source="continue_watching", next_start=1, total=1)]
         app.show_browse_state(app.browsing_stack[-1])
         await pilot.pause(0.2)
 
