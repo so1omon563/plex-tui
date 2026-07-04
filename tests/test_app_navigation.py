@@ -1912,7 +1912,8 @@ async def run_page_down_loads_more_live_tv_channels_check():
 
         load_calls = []
         app.load_more_media = lambda: load_calls.append("load")  # type: ignore[method-assign]
-        app.page_media_list(1)
+        app.focus_media_browser()
+        await pilot.press("ctrl+d")
 
         assert load_calls == ["load"]
 
@@ -1933,7 +1934,8 @@ async def run_page_up_moves_live_tv_selection_check():
         app.show_browse_state(state, selected_key="channel-4")
         await pilot.pause(0.2)
 
-        app.page_media_list(-1)
+        app.focus_media_browser()
+        await pilot.press("ctrl+u")
         await pilot.pause(0.2)
 
         selected = app.selected_media()

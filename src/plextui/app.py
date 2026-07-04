@@ -409,10 +409,10 @@ class MediaListView(ListView):
         page_media = getattr(self.app, "page_media_list", None)
         if not callable(page_media):
             return
-        if event.key in {"pageup", "page_up"}:
+        if event.key in {"pageup", "page_up", "ctrl+u"}:
             page_media(-1)
             event.stop()
-        elif event.key in {"pagedown", "page_down"}:
+        elif event.key in {"pagedown", "page_down", "ctrl+d"}:
             page_media(1)
             event.stop()
 
@@ -6069,7 +6069,7 @@ def render_help() -> str:
         "[: jump to previous alphabet section",
         "]: jump to next alphabet section",
         "left/right: move across grid cards",
-        "pageup/pagedown: move one media page",
+        "pageup/pagedown or ctrl+u/ctrl+d: move one media page",
         "",
         "Search",
         "/: search current view or library",
