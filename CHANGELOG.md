@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.16.8 - 2026-07-06
+
 - Disabled mpv TLS certificate verification only for Plex Direct `*.plex.direct`
   stream URLs so Sequoia Homebrew mpv builds can open direct-play media instead
   of failing with FFmpeg TLS errors.
