@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Disabled mpv TLS certificate verification only for Plex Direct `*.plex.direct`
+  stream URLs so Sequoia Homebrew mpv builds can open direct-play media instead
+  of failing with FFmpeg TLS errors.
+
 ## 0.16.7 - 2026-07-06
 
 - Removed the nonessential mpv `--focus-on=all` flag from external playback so
