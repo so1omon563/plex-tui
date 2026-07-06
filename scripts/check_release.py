@@ -139,6 +139,7 @@ def check_homebrew_workflow(root: Path) -> CheckResult:
         "python scripts/update_homebrew_formula.py",
         "id: tap-update",
         'HOMEBREW_NO_REQUIRE_TAP_TRUST: "1"',
+        "runs-on: macos-15",
         "bottle_root_url=\"https://github.com/so1omon563/homebrew-plex-tui/releases/download/${bottle_release}\"",
         "grep -Fq",
         "timeout-minutes: 60",

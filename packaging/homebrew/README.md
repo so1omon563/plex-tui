@@ -33,7 +33,7 @@ For each `plex-tui` release:
 
 The source formula is correct but slow on first install because native Python
 resources such as `pillow` are built from source. Release automation publishes
-Apple Silicon macOS bottles so supported installs can pour a prebuilt
+Sequoia Apple Silicon macOS bottles so supported installs can pour a prebuilt
 virtualenv. Intel macOS continues to use Homebrew's source-build path while that
 platform remains supported.
 

@@ -18,7 +18,7 @@ env:
 jobs:
   publish-tap:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
-    runs-on: macos-latest
+    runs-on: macos-15
     permissions:
       contents: read
 
