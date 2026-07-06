@@ -130,7 +130,7 @@ def play_with_mpv(
     if playback_display == "terminal":
         args.extend(terminal_video_args(terminal_video_output, terminal_video_profile))
     else:
-        args.extend(["--force-window=immediate", "--focus-on=all"])
+        args.append("--force-window=immediate")
     if start_offset and not monitor_base_offset:
         args.append(f"--start={start_offset / 1000:.3f}")
     if window_size and playback_display != "terminal":
