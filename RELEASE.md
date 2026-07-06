@@ -130,8 +130,8 @@ be run manually with a release tag. It updates:
 - Formula test expectations if version output changed.
 - Homebrew bottle assets and the generated formula `bottle do` block.
 
-It builds the formula with `brew install --build-bottle`, generates bottle
-metadata with `brew bottle --json`, uploads the bottle tarball to a
+It builds the formula on macOS 15 with `brew install --build-bottle`, generates
+bottle metadata with `brew bottle --json`, uploads the bottle tarball to a
 `plex-tui-X.Y.Z` GitHub Release in the tap repository, merges the generated
 `bottle do` block into the formula, runs `brew audit --strict --online`, opens a
 tap PR, and merges it. This uses `PACKAGING_PR_TOKEN`, which must have access to

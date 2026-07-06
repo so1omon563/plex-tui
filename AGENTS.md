@@ -83,6 +83,8 @@ contracts for these durable areas:
 
 - `.github/workflows/`: CI, version bumping, release, PyPI, Homebrew, and AUR
   automation. Keep workflow changes aligned with release checks and actionlint.
+  Homebrew bottle publishing should stay pinned to macOS 15 unless package
+  coverage is deliberately moved to a different supported bottle target.
 - `src/plextui/`: Python/Textual app source, Plex API mapping, artwork,
   config/auth, mpv playback, and smoke entry points.
 - `tests/`: pytest coverage for app helpers/navigation, service mapping,

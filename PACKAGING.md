@@ -51,8 +51,8 @@ brew install plex-tui
 ```
 
 The formula depends on `mpv` and `python@3.13`, then installs the Python app in
-a Homebrew-managed virtualenv. Post-release automation publishes Homebrew
-bottles for Apple Silicon macOS so supported installs can pour the prebuilt app
+a Homebrew-managed virtualenv. Post-release automation publishes Sequoia Apple
+Silicon Homebrew bottles so supported installs can pour the prebuilt app
 virtualenv instead of rebuilding Python resources such as `pillow` from source.
 Intel macOS remains supported through Homebrew's source install path while that
 platform continues to be supported. If no matching bottle is available,

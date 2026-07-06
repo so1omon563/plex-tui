@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.16.3 - 2026-07-06
+
+- Pinned Homebrew bottle publishing to macOS 15 so Sequoia Apple Silicon
+  installs can pour a bottle instead of falling back to Pillow source builds.
 - Clarified that graphical artwork is supported through Kitty/Ghostty only;
   iTerm2 and WezTerm use block artwork, and Auto ignores stale Kitty
   environment variables in other terminals.
