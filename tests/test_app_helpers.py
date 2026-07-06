@@ -1617,7 +1617,7 @@ def test_collection_grid_titles_wrap_to_two_lines():
     assert grid_card_title_lines("Recently Released Movies", config) == ["Recently Rel..."]
 
 
-def test_card_artwork_fetch_size_uses_higher_resolution_for_kitty(monkeypatch):
+def test_card_artwork_fetch_size_uses_higher_resolution_for_native_renderers(monkeypatch):
     monkeypatch.setenv("KITTY_WINDOW_ID", "1")
 
     block = AppConfig("http://plex", "token", "client", grid_density="comfortable")

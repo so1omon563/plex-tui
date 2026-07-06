@@ -266,3 +266,5 @@ If `rtk` is installed, it can be used to reduce noisy command output while
 preserving command behavior, for example `rtk git status`, `rtk git diff`, or
 `rtk pytest tests/`. Do not require `rtk` for repository work; fall back to the
 normal command when it is unavailable or when raw debugging output is needed.
+Run interactive full-screen TUI checks such as `make run` without `rtk`, because
+the wrapper can affect terminal geometry and retained Textual rendering.

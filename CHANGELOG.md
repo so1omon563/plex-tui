@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Clarified that graphical artwork is supported through Kitty/Ghostty only;
+  iTerm2 and WezTerm use block artwork, and Auto ignores stale Kitty
+  environment variables in other terminals.
+
 ## 0.16.1 - 2026-07-04
 
 - Added a hosted Live TV category picker with an All Channels option so dense

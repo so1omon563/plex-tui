@@ -730,10 +730,10 @@ def terminal_video_args(output: str = "auto", profile: str = "smooth") -> list[s
 
 
 def terminal_kitty_graphics_supported() -> bool:
-    if os.environ.get("KITTY_WINDOW_ID") or os.environ.get("KITTY_PID"):
-        return True
     term_program = os.environ.get("TERM_PROGRAM", "").lower()
     term = os.environ.get("TERM", "").lower()
+    if os.environ.get("KITTY_WINDOW_ID") or os.environ.get("KITTY_PID"):
+        return term_program == "kitty" or term.startswith("xterm-kitty")
     return term_program == "ghostty" or term.startswith("xterm-ghostty")
 
 
