@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.16.5 - 2026-07-06
+
+- Removed mpv's `--no-terminal` flag from external playback so stderr remains
+  available in debug logs while stdin/stdout/stderr stay detached from the TUI.
+
 ## 0.16.4 - 2026-07-06
 
 - Improved mpv playback debug logging so immediate external-player exits record

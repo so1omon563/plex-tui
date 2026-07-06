@@ -123,7 +123,7 @@ def test_playback_applies_selected_streams_and_resume_offset(debug_log_path):
     args = popen.call_args.args[0]
     assert handle.start_offset_ms == 65000
     assert handle.command[0] == "mpv"
-    assert "--no-terminal" in args
+    assert "--no-terminal" not in args
     assert "--force-window=immediate" in args
     assert "--focus-on=all" in args
     assert "--cache=yes" in args
