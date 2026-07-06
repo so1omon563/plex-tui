@@ -12,7 +12,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 from urllib.request import urlopen
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -164,8 +164,8 @@ def play_with_mpv(
         process = subprocess.Popen(
             args,
             stdin=stdin,
-            stdout=stdout if playback_display == "terminal" else subprocess.DEVNULL,
-            stderr=stderr if playback_display == "terminal" else subprocess.PIPE,
+            stdout=stdout if playback_display == "terminal" else subprocess.PIPE,
+            stderr=stderr if playback_display == "terminal" else subprocess.STDOUT,
             start_new_session=playback_display != "terminal",
         )
     except OSError as exc:
@@ -192,14 +192,15 @@ def play_with_mpv(
 
 
 def log_mpv_stderr(process: subprocess.Popen[bytes]) -> None:
-    if getattr(process, "stderr", None) is None:
+    stream = getattr(process, "stderr", None) or getattr(process, "stdout", None)
+    if stream is None:
         return
 
-    threading.Thread(target=_log_mpv_stderr, args=(process,), name="plex-tui-mpv-stderr", daemon=True).start()
+    threading.Thread(target=_log_mpv_stderr, args=(process, stream), name="plex-tui-mpv-stderr", daemon=True).start()
 
 
-def _log_mpv_stderr(process: subprocess.Popen[bytes]) -> None:
-    for raw_line in process.stderr or ():
+def _log_mpv_stderr(process: subprocess.Popen[bytes], stream: Iterable[bytes] | None = None) -> None:
+    for raw_line in stream or process.stderr or ():
         line = raw_line.decode("utf-8", errors="replace").strip()
         if line:
             write_debug_log(f"mpv: {redact_tokens(line)}")

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.16.6 - 2026-07-06
+
+- Captured mpv stdout together with stderr for external playback so immediate
+  launch failures log their fatal message instead of only an exit status.
+
 ## 0.16.5 - 2026-07-06
 
 - Removed mpv's `--no-terminal` flag from external playback so stderr remains
