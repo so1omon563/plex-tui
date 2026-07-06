@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Improved mpv playback debug logging so immediate external-player exits record
+  mpv stderr and non-zero exit status while keeping redacted command lines
+  readable.
+
 ## 0.16.3 - 2026-07-06
 
 - Pinned Homebrew bottle publishing to macOS 15 so Sequoia Apple Silicon
