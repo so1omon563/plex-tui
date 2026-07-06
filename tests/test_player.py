@@ -435,7 +435,7 @@ def test_terminal_playback_balanced_profile_scales_terminal_video():
 
     with (
         patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
-        patch.dict("plextui.player.os.environ", {"KITTY_WINDOW_ID": "1"}, clear=True),
+        patch.dict("plextui.player.os.environ", {"KITTY_WINDOW_ID": "1", "TERM": "xterm-kitty"}, clear=True),
         patch("plextui.player.Path.open", return_value=tty),
         patch("plextui.player.ProgressMonitor.start"),
         patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
@@ -453,7 +453,7 @@ def test_terminal_playback_can_force_tct_when_kitty_is_supported():
 
     with (
         patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
-        patch.dict("plextui.player.os.environ", {"KITTY_WINDOW_ID": "1"}, clear=True),
+        patch.dict("plextui.player.os.environ", {"KITTY_WINDOW_ID": "1", "TERM": "xterm-kitty"}, clear=True),
         patch("plextui.player.Path.open", return_value=tty),
         patch("plextui.player.ProgressMonitor.start"),
         patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,

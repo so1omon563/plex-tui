@@ -179,6 +179,36 @@ def test_auto_protocol_renderer_requires_kitty_terminal(monkeypatch):
     assert protocol_renderer_status("auto") == "Block art; Kitty-compatible terminal not detected"
 
 
+def test_auto_protocol_renderer_ignores_stale_kitty_env_in_iterm(monkeypatch):
+    monkeypatch.setenv("KITTY_WINDOW_ID", "1")
+    monkeypatch.setenv("TERM_PROGRAM", "iTerm.app")
+    monkeypatch.setenv("TERM", "xterm-256color")
+    image = Image.new("RGB", (2, 4), "#00ff00")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+
+    rendered = render_protocol_artwork(buffer.getvalue(), "auto", width=2, max_height=2)
+
+    assert rendered is None
+
+
+def test_auto_protocol_renderer_uses_kitty_when_kitty_env_matches_terminal(tmp_path, monkeypatch):
+    monkeypatch.setenv("KITTY_WINDOW_ID", "1")
+    monkeypatch.delenv("TERM_PROGRAM", raising=False)
+    monkeypatch.setenv("TERM", "xterm-kitty")
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    transmitted = []
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: transmitted.extend(commands))
+    image = Image.new("RGB", (2, 4), "#00ff00")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+
+    rendered = render_protocol_artwork(buffer.getvalue(), "auto", width=2, max_height=2)
+
+    assert isinstance(rendered, KittyImage)
+    assert transmitted == list(rendered.commands)
+
+
 def test_auto_protocol_renderer_uses_kitty_placeholders_in_ghostty(tmp_path, monkeypatch):
     monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
     monkeypatch.delenv("KITTY_PID", raising=False)

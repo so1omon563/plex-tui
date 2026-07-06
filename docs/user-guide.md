@@ -203,9 +203,15 @@ for Plex objects that are not posters.
 - Default mode renders portable colored block art, so it works in ordinary
   terminals without native image support.
 - In Kitty and Ghostty, `artwork_renderer = "auto"` renders native terminal
-  images through Kitty Unicode placeholders.
+  images through Kitty Unicode placeholders when the terminal identity matches
+  Kitty-compatible environment variables.
 - `artwork_renderer = "kitty"` explicitly tries the Kitty graphics protocol in
   other compatible terminals.
+- iTerm2 and WezTerm use block artwork. Their inline image protocols are not
+  supported in plex-tui because they do not compose reliably inside Textual's
+  retained full-screen layout. Full graphical artwork requires Kitty or Ghostty.
+- Run interactive TUI checks with raw `make run` or direct `plex-tui`; terminal
+  wrappers can interfere with Textual layout.
 - Collections, playlists, categories, hubs, and query shelves use geometric
   glyph artwork instead of pretending to be missing posters.
 - Compact, comfortable, and large density modes adjust card and poster sizing.

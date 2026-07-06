@@ -229,7 +229,15 @@ def protocol_renderer_status(renderer: str) -> str:
 
 
 def kitty_graphics_supported() -> bool:
-    return bool(os.environ.get("KITTY_WINDOW_ID") or os.environ.get("KITTY_PID") or ghostty_terminal_detected())
+    return kitty_terminal_detected() or ghostty_terminal_detected()
+
+
+def kitty_terminal_detected() -> bool:
+    if not (os.environ.get("KITTY_WINDOW_ID") or os.environ.get("KITTY_PID")):
+        return False
+    term_program = os.environ.get("TERM_PROGRAM", "").lower()
+    term = os.environ.get("TERM", "").lower()
+    return term_program == "kitty" or term.startswith("xterm-kitty")
 
 
 def ghostty_terminal_detected() -> bool:
