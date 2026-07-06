@@ -143,6 +143,32 @@ def test_playback_applies_selected_streams_and_resume_offset(debug_log_path):
     assert "launching mpv" in debug_log_path.read_text(encoding="utf-8")
 
 
+def test_playback_disables_tls_verification_for_plex_direct_urls():
+    class PlexDirectServer(Server):
+        _baseurl = "https://host.plex.direct:8443"
+
+        def url(self, key: str, includeToken: bool = False) -> str:
+            return self._baseurl + key
+
+    class PlexDirectPart(Part):
+        _server = PlexDirectServer()
+
+    class PlexDirectItem(Item):
+        def iterParts(self):
+            return [PlexDirectPart()]
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        play_with_mpv(PlexDirectItem())
+
+    args = popen.call_args.args[0]
+    assert "--tls-verify=no" in args
+    assert args[-1] == "https://host.plex.direct:8443/library/parts/1/file.mkv"
+
+
 def test_playback_can_start_from_beginning_instead_of_resuming():
     item = Item()
 

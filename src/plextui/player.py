@@ -136,6 +136,7 @@ def play_with_mpv(
     if window_size and playback_display != "terminal":
         args.append(f"--autofit={window_size}")
     args.extend(direct_track_args(direct_url, item, selected_audio, selected_subtitle))
+    args.extend(plex_direct_tls_args([url, *subtitles]))
     for subtitle in subtitles:
         args.append("--sub-file=" + subtitle)
     args.append(url)
@@ -210,6 +211,18 @@ def _log_mpv_stderr(process: subprocess.Popen[bytes], stream: Iterable[bytes] | 
         return
     if returncode:
         write_debug_log(f"mpv exited with status {returncode}")
+
+
+def plex_direct_tls_args(urls: Iterable[str]) -> list[str]:
+    return ["--tls-verify=no"] if any(is_plex_direct_url(url) for url in urls) else []
+
+
+def is_plex_direct_url(url: str) -> bool:
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    return parts.scheme == "https" and (parts.hostname or "").endswith(".plex.direct")
 
 
 class ProgressMonitor:
