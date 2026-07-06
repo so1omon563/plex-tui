@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from os import terminal_size
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -126,6 +127,8 @@ def test_playback_applies_selected_streams_and_resume_offset(debug_log_path):
     assert "--no-terminal" not in args
     assert "--force-window=immediate" in args
     assert "--focus-on=all" in args
+    assert popen.call_args.kwargs["stdout"] == subprocess.PIPE
+    assert popen.call_args.kwargs["stderr"] == subprocess.STDOUT
     assert "--cache=yes" in args
     assert "--demuxer-max-bytes=128MiB" in args
     assert "--demuxer-readahead-secs=20" in args
@@ -769,6 +772,21 @@ def test_mpv_stderr_logs_output_and_nonzero_exit(debug_log_path):
     text = debug_log_path.read_text(encoding="utf-8")
     assert "mpv: [ffmpeg] HTTP error 403" in text
     assert "mpv exited with status 4" in text
+
+
+def test_mpv_stdout_logs_output_and_nonzero_exit(debug_log_path):
+    class FailedProc:
+        stdout = [b"Error parsing option focus-on (option not found)\n"]
+        stderr = None
+
+        def wait(self, timeout=None):
+            return 2
+
+    _log_mpv_stderr(FailedProc(), FailedProc.stdout)
+
+    text = debug_log_path.read_text(encoding="utf-8")
+    assert "mpv: Error parsing option focus-on" in text
+    assert "mpv exited with status 2" in text
 
 
 def test_playback_errors_when_mpv_missing():
