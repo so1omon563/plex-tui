@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.16.7 - 2026-07-06
+
+- Removed the nonessential mpv `--focus-on=all` flag from external playback so
+  older packaged mpv builds do not fail before opening media.
+
 ## 0.16.6 - 2026-07-06
 
 - Captured mpv stdout together with stderr for external playback so immediate

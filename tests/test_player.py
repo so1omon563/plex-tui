@@ -126,7 +126,7 @@ def test_playback_applies_selected_streams_and_resume_offset(debug_log_path):
     assert handle.command[0] == "mpv"
     assert "--no-terminal" not in args
     assert "--force-window=immediate" in args
-    assert "--focus-on=all" in args
+    assert "--focus-on=all" not in args
     assert popen.call_args.kwargs["stdout"] == subprocess.PIPE
     assert popen.call_args.kwargs["stderr"] == subprocess.STDOUT
     assert "--cache=yes" in args
