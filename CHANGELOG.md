@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.16.4 - 2026-07-06
+
 - Improved mpv playback debug logging so immediate external-player exits record
   mpv stderr and non-zero exit status while keeping redacted command lines
   readable.
