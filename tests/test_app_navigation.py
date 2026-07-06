@@ -3785,6 +3785,7 @@ async def run_toggle_watched_marks_unwatched_check():
 
         worker = app.action_toggle_watched()
         assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
         row, selected, status = await wait_for_watched_update(
             app,
             pilot,
@@ -3974,7 +3975,9 @@ async def run_toggle_watched_marks_watched_check():
         app.show_media("Movies", [MediaItem("Movie", "", "movie", "1", True, raw)])
         await pilot.pause(0.2)
 
-        app.action_toggle_watched()
+        worker = app.action_toggle_watched()
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
         row, selected, status = await wait_for_watched_update(
             app,
             pilot,
