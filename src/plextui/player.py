@@ -195,13 +195,20 @@ def log_mpv_stderr(process: subprocess.Popen[bytes]) -> None:
     if getattr(process, "stderr", None) is None:
         return
 
-    def read_stderr() -> None:
-        for raw_line in process.stderr or ():
-            line = raw_line.decode("utf-8", errors="replace").strip()
-            if line:
-                write_debug_log(f"mpv: {redact_tokens(line)}")
+    threading.Thread(target=_log_mpv_stderr, args=(process,), name="plex-tui-mpv-stderr", daemon=True).start()
 
-    threading.Thread(target=read_stderr, name="plex-tui-mpv-stderr", daemon=True).start()
+
+def _log_mpv_stderr(process: subprocess.Popen[bytes]) -> None:
+    for raw_line in process.stderr or ():
+        line = raw_line.decode("utf-8", errors="replace").strip()
+        if line:
+            write_debug_log(f"mpv: {redact_tokens(line)}")
+    try:
+        returncode = process.wait(timeout=0.25)
+    except subprocess.TimeoutExpired:
+        return
+    if returncode:
+        write_debug_log(f"mpv exited with status {returncode}")
 
 
 class ProgressMonitor:
@@ -773,4 +780,4 @@ def log_debug(message: str) -> None:
 
 
 def redact_tokens(text: str) -> str:
-    return re.sub(r"(?i)(x-plex-token|token)=([^&\s]+)", r"\1=REDACTED", text)
+    return re.sub(r"(?i)(x-plex-token|token)=([^&\s'\",)\]]+)", r"\1=REDACTED", text)

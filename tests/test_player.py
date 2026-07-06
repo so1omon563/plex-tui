@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from plextui.player import (
+    _log_mpv_stderr,
     direct_play_url,
     full_metadata,
     is_drm_vod_stream,
@@ -743,6 +744,31 @@ def test_debug_log_redacts_token_text(debug_log_path):
     text = debug_log_path.read_text(encoding="utf-8")
     assert "secret" not in text
     assert "X-Plex-Token=REDACTED" in text
+
+
+def test_debug_log_redaction_keeps_sanitized_command_list_readable(debug_log_path):
+    log_debug(
+        "launching mpv: args="
+        f"{['mpv', '--sub-file=http://plex/sub.srt?X-Plex-Token=secret', 'http://plex/video.mkv']!r}"
+    )
+
+    text = debug_log_path.read_text(encoding="utf-8")
+    assert "secret" not in text
+    assert "--sub-file=http://plex/sub.srt?X-Plex-Token=REDACTED', 'http://plex/video.mkv'" in text
+
+
+def test_mpv_stderr_logs_output_and_nonzero_exit(debug_log_path):
+    class FailedProc:
+        stderr = [b"[ffmpeg] HTTP error 403\n"]
+
+        def wait(self, timeout=None):
+            return 4
+
+    _log_mpv_stderr(FailedProc())
+
+    text = debug_log_path.read_text(encoding="utf-8")
+    assert "mpv: [ffmpeg] HTTP error 403" in text
+    assert "mpv exited with status 4" in text
 
 
 def test_playback_errors_when_mpv_missing():
