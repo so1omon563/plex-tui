@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Cleared stopped player state when launching replacement playback fails so the
+  replacement error remains visible and playback controls report nothing active.
 - Preserved paging metadata for category and capped online child views so
   additional media can be loaded without truncating fully loaded containers.
 - Made CLI helper failures return concise errors without tracebacks, including

@@ -982,6 +982,10 @@ def test_playback_footer_shows_active_playback():
     asyncio.run(run_playback_footer_check())
 
 
+def test_failed_replacement_clears_stopped_player_state():
+    asyncio.run(run_failed_replacement_playback_check())
+
+
 def test_playback_controls_update_active_mpv():
     asyncio.run(run_playback_controls_check())
 
@@ -3649,6 +3653,36 @@ async def run_playback_footer_check():
             "subtitles eng not found, Plex/default"
         )
         assert app.query_one("#status").content != footer.content
+
+
+async def run_failed_replacement_playback_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        media = MediaItem("Replacement", "", "movie", "2", True, Raw())
+        app.show_media("Movies", [media])
+        await pilot.pause(0.2)
+        old_player = SimpleNamespace(title="Old Movie", active=True)
+        app.player = old_player
+        app.active_playback_media = MediaItem("Old Movie", "", "movie", "1", True, Raw())
+
+        with (
+            patch("plextui.app.stop_mpv") as stop,
+            patch("plextui.app.play_with_mpv", side_effect=PlayerError("replacement failed")),
+        ):
+            app.action_play_selected()
+
+        await pilot.pause(0.2)
+        stop.assert_called_once_with(old_player)
+        assert app.player is None
+        assert app.active_playback_media is None
+        assert app.query_one("#media-title").content == "Playback Error"
+        assert "replacement failed" in app.query_one("#detail-content").content
+
+        app.check_player_status()
+        assert app.query_one("#media-title").content == "Playback Error"
+        assert "replacement failed" in app.query_one("#detail-content").content
 
 
 async def run_playback_controls_check():

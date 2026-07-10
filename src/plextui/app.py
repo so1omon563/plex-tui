@@ -4257,6 +4257,7 @@ class PlexTuiApp(App[None]):
         audio_choice = preferred_audio_choice(media.raw, self.config.preferred_audio_language)
         try:
             stop_mpv(self.player)
+            self.player = None
             self.active_playback_media = media
             if self.config.playback_display == "terminal":
                 self.player = self.play_terminal_media(media, subtitle_choice, audio_choice, resume, playback_config)
