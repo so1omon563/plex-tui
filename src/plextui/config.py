@@ -31,6 +31,7 @@ LIBRARY_ENTER_ACTIONS = {"library", "browse_modes"}
 DISCOVER_MEDIA_TYPES = {"movies_shows", "movie", "show", "all"}
 DEBUG_LOG_MAX_BYTES = 1_048_576
 DEBUG_LOG_BACKUP_SUFFIX = ".1"
+DEBUG_LOG_TRUNCATION_MARKER = b"...[truncated]\n"
 _DEBUG_LOG_LOCK = threading.Lock()
 
 
@@ -346,6 +347,10 @@ def write_debug_log(message: str) -> None:
     try:
         path = debug_log_path()
         data = f"{message}\n".encode("utf-8", errors="replace")
+        if len(data) > DEBUG_LOG_MAX_BYTES:
+            content_bytes = max(0, DEBUG_LOG_MAX_BYTES - len(DEBUG_LOG_TRUNCATION_MARKER))
+            content = data[:content_bytes].decode("utf-8", errors="ignore").encode("utf-8")
+            data = (content + DEBUG_LOG_TRUNCATION_MARKER)[:DEBUG_LOG_MAX_BYTES]
         with _DEBUG_LOG_LOCK:
             path.parent.mkdir(parents=True, exist_ok=True)
             if path.exists() and path.stat().st_size + len(data) > DEBUG_LOG_MAX_BYTES:
