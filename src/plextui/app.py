@@ -3859,6 +3859,10 @@ class PlexTuiApp(App[None]):
             self.workers.cancel_group(self, "search")
             state = self.search_return_state
             self.search_return_state = None
+            while self.browsing_stack and self.browsing_stack[-1] is not state:
+                self.browsing_stack.pop()
+            if not self.browsing_stack:
+                self.browsing_stack.append(state)
             self.show_browse_state(state)
             self.focus_media_browser()
             self.set_status(state.title)

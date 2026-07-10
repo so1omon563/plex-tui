@@ -279,6 +279,10 @@ def test_escape_cancels_slow_discover_search():
     asyncio.run(run_escape_cancels_slow_discover_search_check())
 
 
+def test_search_back_restores_visible_and_active_browse_state():
+    asyncio.run(run_search_back_restores_active_state_check())
+
+
 def test_discover_alternate_action_opens_on_plex_vod():
     asyncio.run(run_discover_vod_entrypoint_check())
 
@@ -1611,6 +1615,50 @@ async def run_escape_cancels_slow_discover_search_check():
         assert app.query_one("#media").highlighted_child.media.title == "Existing Movie"
         assert "Slow Result" not in str(app.query_one("#media").render())
         assert not app.query_one("#search").display
+        assert app.search_return_state is None
+
+
+async def run_search_back_restores_active_state_check():
+    original = MediaItem("Original Movie", "2024", "movie", "movie-1", True, Raw())
+    result = MediaItem("Search Result", "2023", "movie", "movie-2", True, Raw())
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        library = LibraryItem("Movies", "1", "movie", object())
+        app.selected_library = library
+        original_state = BrowseState(
+            "Movies",
+            [original],
+            library,
+            source="library",
+            next_start=1,
+            total=2,
+        )
+        search_state = BrowseState(
+            "Search: result",
+            [result],
+            library,
+            search=True,
+            search_query="result",
+            source="library",
+            next_start=1,
+            total=1,
+        )
+        app.browsing_stack = [original_state, search_state]
+        app.search_return_state = original_state
+        app.show_browse_state(search_state)
+        selected = await wait_for_selected_title(app, pilot, "Search Result")
+
+        assert selected is result
+
+        app.action_back_or_clear()
+        selected = await wait_for_selected_title(app, pilot, "Original Movie")
+
+        assert app.browsing_stack == [original_state]
+        assert app.current_browse_state() is original_state
+        assert app.query_one("#media-title").content == "Movies"
+        assert selected is original
         assert app.search_return_state is None
 
 
