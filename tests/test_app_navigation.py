@@ -1621,6 +1621,7 @@ async def run_escape_cancels_slow_discover_search_check():
 async def run_search_back_restores_active_state_check():
     original = MediaItem("Original Movie", "2024", "movie", "movie-1", True, Raw())
     result = MediaItem("Search Result", "2023", "movie", "movie-2", True, Raw())
+    current = MediaItem("Current Movie", "2025", "movie", "movie-3", True, Raw())
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
@@ -1659,6 +1660,21 @@ async def run_search_back_restores_active_state_check():
         assert app.current_browse_state() is original_state
         assert app.query_one("#media-title").content == "Movies"
         assert selected is original
+        assert app.search_return_state is None
+
+        current_state = BrowseState("Current Library", [current], source="library", total=1)
+        app.browsing_stack = [current_state]
+        app.search_return_state = original_state
+        app.show_browse_state(current_state)
+        selected = await wait_for_selected_title(app, pilot, "Current Movie")
+
+        app.action_back_or_clear()
+        await pilot.pause(0.1)
+
+        assert app.browsing_stack == [current_state]
+        assert app.current_browse_state() is current_state
+        assert app.query_one("#media-title").content == "Current Library"
+        assert selected is current
         assert app.search_return_state is None
 
 
