@@ -104,10 +104,13 @@ def positive_int(value: str) -> int:
 
 
 def command_libraries(json_output: bool = False) -> int:
-    service = connect_service()
+    service = connect_service(json_output)
     if service is None:
         return 2
-    libraries = service.libraries()
+    try:
+        libraries = service.libraries()
+    except Exception as exc:
+        return command_error(exc, json_output)
     if json_output:
         print(json.dumps([library_payload(library) for library in libraries], indent=2))
     else:
@@ -125,10 +128,13 @@ def command_status(json_output: bool = False) -> int:
 
 
 def command_continue_watching(limit: int, json_output: bool = False) -> int:
-    service = connect_service()
+    service = connect_service(json_output)
     if service is None:
         return 2
-    page = service.continue_watching_page(0, limit)
+    try:
+        page = service.continue_watching_page(0, limit)
+    except Exception as exc:
+        return command_error(exc, json_output)
     if json_output:
         print(json.dumps([media_payload(item) for item in page.items], indent=2))
     else:
@@ -137,14 +143,13 @@ def command_continue_watching(limit: int, json_output: bool = False) -> int:
 
 
 def command_discover(query: str, limit: int, media_type: str = "movies-shows", json_output: bool = False) -> int:
-    service = connect_service()
+    service = connect_service(json_output)
     if service is None:
         return 2
     try:
         page = service.discover_page(query, 0, limit, discover_media_type_key(media_type))
     except Exception as exc:
-        print(f"plex-tui: {exc}", file=sys.stderr)
-        return 2
+        return command_error(exc, json_output)
     if json_output:
         print(json.dumps([media_payload(item) for item in page.items], indent=2))
     else:
@@ -160,17 +165,14 @@ def command_discover_open(query: str, index: int, service_index: int, limit: int
         page = service.discover_page(query, 0, limit, discover_media_type_key(media_type))
         item = page.items[index - 1]
     except IndexError:
-        print(f"plex-tui: discover result index out of range: {index}", file=sys.stderr)
-        return 2
+        return command_error(f"discover result index out of range: {index}")
     except Exception as exc:
-        print(f"plex-tui: {exc}", file=sys.stderr)
-        return 2
+        return command_error(exc)
     urls = availability_urls(item.raw)
     try:
         label, url = urls[service_index - 1]
     except IndexError:
-        print(f"plex-tui: availability index out of range: {service_index}", file=sys.stderr)
-        return 2
+        return command_error(f"availability index out of range: {service_index}")
     webbrowser.open(url)
     print(f"Opened: {item.title} - {label}")
     return 0
@@ -181,16 +183,18 @@ def discover_media_type_key(value: str) -> str:
 
 
 def command_search(query: str, library: str | None, limit: int, json_output: bool = False) -> int:
-    service = connect_service()
+    service = connect_service(json_output)
     if service is None:
         return 2
-    library_item = None
-    if library:
-        library_item = find_library(service.libraries(), library)
-        if library_item is None:
-            print(f"plex-tui: library not found: {library}", file=sys.stderr)
-            return 2
-    page = service.search_page(query, library_item, 0, limit)
+    try:
+        library_item = None
+        if library:
+            library_item = find_library(service.libraries(), library)
+            if library_item is None:
+                return command_error(f"library not found: {library}", json_output)
+        page = service.search_page(query, library_item, 0, limit)
+    except Exception as exc:
+        return command_error(exc, json_output)
     if json_output:
         print(json.dumps([media_payload(item) for item in page.items], indent=2))
     else:
@@ -198,12 +202,21 @@ def command_search(query: str, library: str | None, limit: int, json_output: boo
     return 0
 
 
-def connect_service() -> PlexService | None:
+def connect_service(json_output: bool = False) -> PlexService | None:
     try:
         return PlexService(load_config())
     except Exception as exc:
-        print(f"plex-tui: {exc}", file=sys.stderr)
+        command_error(exc, json_output)
         return None
+
+
+def command_error(error: object, json_output: bool = False) -> int:
+    message = str(error)
+    if json_output:
+        print(json.dumps({"error": message}, indent=2))
+    else:
+        print(f"plex-tui: {message}", file=sys.stderr)
+    return 2
 
 
 def status_payload() -> dict[str, Any]:

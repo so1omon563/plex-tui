@@ -79,6 +79,10 @@ plex-tui discover "matrix" --limit 5 --media-type movie
 plex-tui discover-open "matrix" --index 3 --service-index 1
 ```
 
+Helper commands return exit code 2 when Plex is unavailable or a request
+fails. Normal output mode writes a concise `plex-tui: ...` message to stderr;
+`--json` writes a parseable `{"error": "..."}` object to stdout instead.
+
 `discover-open` opens a selected Plex Discover availability URL in your
 browser. In the TUI, enable Discover or On Plex in Settings to browse
 Plex Discover and Plex Movies & Shows VOD hubs. Enable Live TV to browse

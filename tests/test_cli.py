@@ -79,6 +79,17 @@ class FakeCliService:
         )
 
 
+class FailingCliService(FakeCliService):
+    def libraries(self) -> list[LibraryItem]:
+        raise ConnectionError("server offline")
+
+    def continue_watching_page(self, start: int, size: int) -> MediaPage:
+        raise ConnectionError("server offline")
+
+    def search_page(self, query: str, library: LibraryItem | None, start: int, size: int) -> MediaPage:
+        raise ConnectionError("server offline")
+
+
 def test_cli_prints_config_path(monkeypatch, capsys):
     monkeypatch.setattr(cli, "config_path", lambda: "/tmp/plex-tui/config.toml")
 
@@ -374,3 +385,56 @@ def test_cli_reports_connection_error(monkeypatch, capsys):
     assert cli.main(["libraries"]) == 2
 
     assert capsys.readouterr().err == "plex-tui: missing Plex config\n"
+
+
+def test_cli_reports_connection_error_as_json(monkeypatch, capsys):
+    class BrokenService:
+        def __init__(self, _config: AppConfig) -> None:
+            raise ValueError("missing Plex config")
+
+    monkeypatch.setattr(cli, "PlexService", BrokenService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("", "", "client-id"))
+
+    assert cli.main(["libraries", "--json"]) == 2
+
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {"error": "missing Plex config"}
+    assert captured.err == ""
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["libraries"],
+        ["continue-watching"],
+        ["search", "alien"],
+    ],
+)
+def test_cli_reports_post_connect_api_errors(monkeypatch, capsys, argv):
+    monkeypatch.setattr(cli, "PlexService", FailingCliService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id"))
+
+    assert cli.main(argv) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "plex-tui: server offline\n"
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["libraries", "--json"],
+        ["continue-watching", "--json"],
+        ["search", "alien", "--json"],
+    ],
+)
+def test_cli_reports_post_connect_api_errors_as_json(monkeypatch, capsys, argv):
+    monkeypatch.setattr(cli, "PlexService", FailingCliService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id"))
+
+    assert cli.main(argv) == 2
+
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {"error": "server offline"}
+    assert captured.err == ""
