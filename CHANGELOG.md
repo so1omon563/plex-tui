@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Made CLI helper failures return concise errors without tracebacks, including
+  a predictable JSON error object when `--json` is requested.
 - Kept malformed configuration startup recoverable through Settings/relogin and
   made preference changes commit in memory only after saving succeeds.
 - Fixed login and Plex Home profile switching when the same server advertises
