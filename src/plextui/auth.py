@@ -64,17 +64,18 @@ class ServerChoice:
         return f"{self.scheme.upper()} ({self.connection_label}{verified})"
 
     @property
-    def sort_key(self) -> tuple[int, str, str, int | None, str]:
+    def sort_key(self) -> tuple[int, str, str, int, str]:
         verified_rank = 0 if self.verified else 1
+        port = self.port if self.port is not None else -1
         if self.is_local and self.scheme == "http":
-            return (verified_rank, "0", self.host, self.port, self.uri)
+            return (verified_rank, "0", self.host, port, self.uri)
         if self.is_local:
-            return (verified_rank, "1", self.host, self.port, self.uri)
+            return (verified_rank, "1", self.host, port, self.uri)
         if self.scheme == "http":
-            return (verified_rank, "2", self.host, self.port, self.uri)
+            return (verified_rank, "2", self.host, port, self.uri)
         if self.is_plex_direct:
-            return (verified_rank, "3", self.host, self.port, self.uri)
-        return (verified_rank, "4", self.host, self.port, self.uri)
+            return (verified_rank, "3", self.host, port, self.uri)
+        return (verified_rank, "4", self.host, port, self.uri)
 
     @staticmethod
     def _looks_like_private_host(host: str) -> bool:
