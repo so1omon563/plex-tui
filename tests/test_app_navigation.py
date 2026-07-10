@@ -1517,6 +1517,7 @@ async def run_discover_single_provider_failure_check(monkeypatch):
         app.service = object()
         app.browsing_stack = [BrowseState("Discover", [item], source="discover")]
         app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
 
         app.open_media(item)
         for _ in range(20):
@@ -1540,6 +1541,7 @@ async def run_discover_provider_exception_check(monkeypatch):
         await pilot.pause(1.0)
         app.browsing_stack = [BrowseState("Discover", [item], source="discover")]
         app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
         app.show_availability_picker(item, [("Prime · Rent", "https://example.com/prime")])
         await pilot.pause(0.1)
         row = app.query_one("#media").highlighted_child
