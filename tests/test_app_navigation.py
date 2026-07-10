@@ -3886,7 +3886,19 @@ async def run_toggle_watched_continue_watching_refresh_check():
 
         app.action_toggle_watched()
 
-        titles = await wait_for_browse_titles(app, pilot, ["Episode 2"], attempts=80)
+        titles = [item.title for item in app.browsing_stack[-1].items]
+        for _ in range(180):
+            titles = [item.title for item in app.browsing_stack[-1].items]
+            if service.continue_watching_calls[-1:] == [(0, 40)] and titles == ["Episode 2"]:
+                break
+            await pilot.pause(0.1)
+        else:
+            raise AssertionError(
+                "Timed out waiting for Continue Watching watched refresh: "
+                f"mark_watched_calls={raw.mark_watched_calls!r}, "
+                f"continue_watching_calls={service.continue_watching_calls!r}, "
+                f"titles={titles!r}"
+            )
 
         assert raw.mark_watched_calls == 1
         assert service.continue_watching_calls[-1] == (0, 40)
