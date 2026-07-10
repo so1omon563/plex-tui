@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed login and Plex Home profile switching when the same server advertises
+  otherwise-equal connections with implicit and explicit ports.
 - Fixed Back navigation after Plex-backed searches so the active browse state
   matches the library rows restored on screen.
 

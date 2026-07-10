@@ -3,7 +3,7 @@ from __future__ import annotations
 from urllib.parse import parse_qs, urlsplit
 
 from plextui import __version__
-from plextui.auth import LoginSession, ProfileChoice, profile_choices, reachable_advertised_urls, reachable_server_choices, plex_headers, switch_profile
+from plextui.auth import LoginSession, ProfileChoice, ServerChoice, profile_choices, reachable_advertised_urls, reachable_server_choices, plex_headers, switch_profile
 from plextui.config import AppConfig
 
 
@@ -171,6 +171,19 @@ def test_login_wait_fails_when_no_resource_connections_are_reachable(monkeypatch
         assert "No reachable Plex Media Server connections" in str(exc)
     else:
         raise AssertionError("expected unreachable login resources to fail")
+
+
+def test_server_choices_sort_implicit_port_before_explicit_port():
+    resource = FakeResource("My Plex", "server-token", [])
+    choices = [
+        ServerChoice("My Plex", "http://localhost:32400", "owned", resource, verified=True),
+        ServerChoice("My Plex", "http://localhost", "owned", resource, verified=True),
+    ]
+
+    assert [choice.uri for choice in sorted(choices, key=lambda choice: choice.sort_key)] == [
+        "http://localhost",
+        "http://localhost:32400",
+    ]
 
 
 def test_login_wait_falls_back_to_reachable_advertised_urls(monkeypatch):
