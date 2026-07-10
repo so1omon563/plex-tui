@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reported browser launch failures for Discover availability links and kept the
+  provider URL visible so it can be opened manually.
 - Cleared stopped player state when launching replacement playback fails so the
   replacement error remains visible and playback controls report nothing active.
 - Preserved paging metadata for category and capped online child views so
