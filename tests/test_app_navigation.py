@@ -263,6 +263,14 @@ def test_discover_sidebar_entrypoint_searches_and_opens_first_availability(monke
     asyncio.run(run_discover_entrypoint_check(monkeypatch))
 
 
+def test_discover_single_provider_reports_browser_launch_failure(monkeypatch):
+    asyncio.run(run_discover_single_provider_failure_check(monkeypatch))
+
+
+def test_discover_provider_picker_reports_browser_launch_exception(monkeypatch):
+    asyncio.run(run_discover_provider_exception_check(monkeypatch))
+
+
 def test_discover_result_with_multiple_providers_opens_provider_picker(monkeypatch):
     asyncio.run(run_discover_provider_picker_check(monkeypatch))
 
@@ -1460,7 +1468,7 @@ async def run_playlists_entrypoint_check():
 
 async def run_discover_entrypoint_check(monkeypatch):
     opened_urls = []
-    monkeypatch.setattr(app_module.webbrowser, "open", opened_urls.append)
+    monkeypatch.setattr(app_module.webbrowser, "open", lambda url: opened_urls.append(url) or True)
     item = MediaItem("The Matrix", "1 provider: Plex · Free", "movie", "discover-1", False, DiscoverRaw())
     service = FakePagedService(MediaPage([item], start=0, total=1))
     app = PlexTuiApp()
@@ -1500,9 +1508,55 @@ async def run_discover_entrypoint_check(monkeypatch):
         assert app.query_one("#status").content == "Opened: The Matrix - Plex · Free"
 
 
+async def run_discover_single_provider_failure_check(monkeypatch):
+    monkeypatch.setattr(app_module.webbrowser, "open", lambda url: False)
+    item = MediaItem("The Matrix", "1 provider: Plex · Free", "movie", "discover-1", False, DiscoverRaw())
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.service = object()
+        app.browsing_stack = [BrowseState("Discover", [item], source="discover")]
+        app.show_browse_state(app.browsing_stack[-1])
+
+        app.open_media(item)
+        for _ in range(20):
+            if "Browser launch failed" in str(app.query_one("#status").content):
+                break
+            await pilot.pause(0.1)
+
+        assert app.query_one("#status").content == (
+            "Browser launch failed; open manually: https://watch.plex.tv/movie"
+        )
+
+
+async def run_discover_provider_exception_check(monkeypatch):
+    def fail_to_open(url):
+        raise RuntimeError("no browser")
+
+    monkeypatch.setattr(app_module.webbrowser, "open", fail_to_open)
+    item = MediaItem("The Matrix", "", "movie", "discover-1", False, MultiProviderDiscoverRaw())
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.browsing_stack = [BrowseState("Discover", [item], source="discover")]
+        app.show_browse_state(app.browsing_stack[-1])
+        app.show_availability_picker(item, [("Prime · Rent", "https://example.com/prime")])
+        await pilot.pause(0.1)
+        row = app.query_one("#media").highlighted_child
+        assert isinstance(row, AvailabilityRow)
+
+        app.open_availability_url(row)
+        await pilot.pause(0.1)
+
+        assert not app.picker_visible
+        assert app.query_one("#status").content == (
+            "Browser launch failed; open manually: https://example.com/prime"
+        )
+
+
 async def run_discover_provider_picker_check(monkeypatch):
     opened_urls = []
-    monkeypatch.setattr(app_module.webbrowser, "open", opened_urls.append)
+    monkeypatch.setattr(app_module.webbrowser, "open", lambda url: opened_urls.append(url) or True)
     item = MediaItem(
         "The Matrix",
         "2 providers: Plex · Free, Prime · Rent",

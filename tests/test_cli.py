@@ -327,7 +327,7 @@ def test_cli_opens_discover_availability(monkeypatch, capsys):
 
     monkeypatch.setattr(cli, "PlexService", CapturingService)
     monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id", account_token="account"))
-    monkeypatch.setattr(cli.webbrowser, "open", lambda url: opened.append(url))
+    monkeypatch.setattr(cli.webbrowser, "open", lambda url: opened.append(url) or True)
 
     assert cli.main(["discover-open", "matrix", "--index", "2", "--limit", "3"]) == 0
 
@@ -335,6 +335,34 @@ def test_cli_opens_discover_availability(monkeypatch, capsys):
     assert service.discover_calls == [("matrix", 0, 3, "movies_shows")]
     assert opened == ["https://tubitv.example/movie"]
     assert capsys.readouterr().out == "Opened: Free Movie - Tubi · Free\n"
+
+
+def test_cli_discover_open_reports_browser_launch_failure(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "PlexService", FakeCliService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id", account_token="account"))
+    monkeypatch.setattr(cli.webbrowser, "open", lambda url: False)
+
+    assert cli.main(["discover-open", "matrix", "--index", "2"]) == 2
+
+    assert capsys.readouterr().err == (
+        "plex-tui: browser launch failed; open manually: https://tubitv.example/movie\n"
+    )
+
+
+def test_cli_discover_open_reports_browser_launch_exception(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "PlexService", FakeCliService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id", account_token="account"))
+
+    def fail_to_open(url):
+        raise RuntimeError("no browser")
+
+    monkeypatch.setattr(cli.webbrowser, "open", fail_to_open)
+
+    assert cli.main(["discover-open", "matrix", "--index", "2"]) == 2
+
+    assert capsys.readouterr().err == (
+        "plex-tui: browser launch failed; open manually: https://tubitv.example/movie\n"
+    )
 
 
 def test_cli_discover_open_reports_missing_index(monkeypatch, capsys):

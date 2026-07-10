@@ -1997,8 +1997,16 @@ class PlexTuiApp(App[None]):
                 self.call_from_thread(self.show_availability_picker, media, urls)
                 return
             label, url = urls[0]
-            webbrowser.open(url)
-            self.call_from_thread(self.set_status, f"Opened: {media.title} - {label}")
+            try:
+                opened = webbrowser.open(url)
+            except Exception:
+                opened = False
+            status = (
+                f"Opened: {media.title} - {label}"
+                if opened
+                else f"Browser launch failed; open manually: {url}"
+            )
+            self.call_from_thread(self.set_status, status)
             return
         if media.kind == "livetv":
             if media.playable:
@@ -2072,13 +2080,20 @@ class PlexTuiApp(App[None]):
         self.set_status("Choose availability provider")
 
     def open_availability_url(self, row: AvailabilityRow) -> None:
-        webbrowser.open(row.url)
+        try:
+            opened = webbrowser.open(row.url)
+        except Exception:
+            opened = False
         self.picker_visible = False
         if self.browsing_stack:
             self.show_browse_state(self.browsing_stack[-1], selected_key=self.picker_media_key)
         self.picker_media_key = None
         self.focus_media_browser()
-        status = f"Opened: {row.media_title} - {row.label}"
+        status = (
+            f"Opened: {row.media_title} - {row.label}"
+            if opened
+            else f"Browser launch failed; open manually: {row.url}"
+        )
         self.set_status(status)
         self.set_timer(0.05, lambda: self.set_status(status), name="availability-choice-status")
 

@@ -173,7 +173,12 @@ def command_discover_open(query: str, index: int, service_index: int, limit: int
         label, url = urls[service_index - 1]
     except IndexError:
         return command_error(f"availability index out of range: {service_index}")
-    webbrowser.open(url)
+    try:
+        opened = webbrowser.open(url)
+    except Exception:
+        opened = False
+    if not opened:
+        return command_error(f"browser launch failed; open manually: {url}")
     print(f"Opened: {item.title} - {label}")
     return 0
 
