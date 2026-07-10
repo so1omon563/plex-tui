@@ -7496,15 +7496,25 @@ def playback_control_rows(config: AppConfig) -> list[str]:
 
 
 def recent_debug_log_lines(path: Path, max_lines: int = 20) -> list[str]:
+    if max_lines <= 0:
+        return []
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        with path.open("rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            position = fh.tell()
+            buffer = b""
+            while position > 0:
+                read_size = min(8192, position)
+                position -= read_size
+                fh.seek(position)
+                buffer = fh.read(read_size) + buffer
+                if len(buffer.splitlines()) > max_lines:
+                    break
+        return [line.decode("utf-8") for line in buffer.splitlines()[-max_lines:]]
     except FileNotFoundError:
         return []
     except (OSError, UnicodeDecodeError):
         return ["Unable to read debug log."]
-    if max_lines <= 0:
-        return []
-    return lines[-max_lines:]
 
 
 def render_debug_log_details(path: Path, max_lines: int = 20) -> str:

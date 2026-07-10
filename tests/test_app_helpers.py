@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 from subprocess import CompletedProcess, TimeoutExpired
 from types import SimpleNamespace
 
@@ -1343,6 +1344,21 @@ def test_recent_debug_log_lines_handles_missing_empty_and_tail(tmp_path):
     log.write_text("\n".join(f"line {index}" for index in range(5)), encoding="utf-8")
     assert recent_debug_log_lines(log, max_lines=2) == ["line 3", "line 4"]
     assert recent_debug_log_lines(log, max_lines=0) == []
+
+    log.write_bytes(b"invalid: \xff\n")
+    assert recent_debug_log_lines(log) == ["Unable to read debug log."]
+
+
+def test_recent_debug_log_lines_tails_large_file_without_read_text(tmp_path, monkeypatch):
+    log = tmp_path / "debug.log"
+    log.write_text("\n".join(f"line {index:05d}" for index in range(20_000)) + "\n", encoding="utf-8")
+
+    def fail_read_text(*args, **kwargs):
+        raise AssertionError("tailing should not read the whole file")
+
+    monkeypatch.setattr(Path, "read_text", fail_read_text)
+
+    assert recent_debug_log_lines(log, max_lines=3) == ["line 19997", "line 19998", "line 19999"]
 
 
 def test_render_debug_log_details_reports_recent_entries(tmp_path):
