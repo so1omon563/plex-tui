@@ -516,33 +516,41 @@ class PlexService:
         return to_media_item(raw) if raw is not None else None
 
     def children(self, item: MediaItem, size: int = DEFAULT_PAGE_SIZE) -> list[MediaItem]:
+        return self.children_page(item, 0, size).items
+
+    def children_page(
+        self,
+        item: MediaItem,
+        start: int = 0,
+        size: int = DEFAULT_PAGE_SIZE,
+    ) -> MediaPage:
         raw = item.raw
         if isinstance(raw, CategoryRef):
-            return self.category_page(raw, 0, DEFAULT_PAGE_SIZE).items
+            return self.category_page(raw, start, size)
         if item.playable and is_online_metadata(raw):
-            return []
+            return MediaPage(items=[], start=start, total=start)
         editions = movie_edition_items(raw)
         if len(editions) > 1:
-            return editions
+            return fully_loaded_media_page(editions, start)
         if is_online_metadata(raw):
-            return online_metadata_children(raw, size)
+            return online_metadata_children_page(raw, start, size)
         if hasattr(raw, "seasons"):
             try:
-                return [to_media_item(child) for child in raw.seasons()]
+                return fully_loaded_media_page([to_media_item(child) for child in raw.seasons()], start)
             except Exception:
                 if is_online_metadata(raw):
-                    return []
+                    return MediaPage(items=[], start=start, total=start)
                 raise
         if hasattr(raw, "episodes"):
             try:
-                return [to_media_item(child) for child in raw.episodes()]
+                return fully_loaded_media_page([to_media_item(child) for child in raw.episodes()], start)
             except Exception:
                 if is_online_metadata(raw):
-                    return []
+                    return MediaPage(items=[], start=start, total=start)
                 raise
         if hasattr(raw, "items"):
-            return [to_media_item(child) for child in hub_items(raw, size=size)]
-        return []
+            return hub_page(raw, start, size)
+        return MediaPage(items=[], start=start, total=start)
 
     def category_page(self, category: CategoryRef, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
         raw = category.raw
@@ -574,16 +582,31 @@ def sliced_media_page(raw_items: list[Any], start: int, size: int) -> MediaPage:
     return MediaPage(items=items, start=start, total=len(raw_items))
 
 
-def hub_items(raw: Any, size: int = DEFAULT_PAGE_SIZE) -> list[Any]:
+def fully_loaded_media_page(items: list[MediaItem], start: int = 0) -> MediaPage:
+    total = len(items)
+    return MediaPage(items=items if start == 0 else [], start=start, total=total)
+
+
+def hub_page(raw: Any, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
     key = str(getattr(raw, "key", "") or "")
     server = getattr(raw, "_server", None)
     vod_base = str(getattr(server, "VOD", "") or "")
     fetch_items = getattr(raw, "fetchItems", None)
     if key.startswith("/") and vod_base and callable(fetch_items):
-        items = list(fetch_items(f"{vod_base.rstrip('/')}{key}", maxresults=size))[:size]
+        raw_items = fetch_items(
+            f"{vod_base.rstrip('/')}{key}",
+            maxresults=size,
+            container_start=start,
+            container_size=size,
+        )
+        reported_total = getattr(raw_items, "totalSize", None)
+        total = int(reported_total if reported_total is not None else start + len(raw_items))
+        items = list(raw_items)[:size]
         to_online_metadata = getattr(server, "_toOnlineMetadata", None)
-        return list(to_online_metadata(items)) if callable(to_online_metadata) else items
-    return list(raw.items())
+        if callable(to_online_metadata):
+            items = list(to_online_metadata(items))
+        return MediaPage([to_media_item(item) for item in items], start=start, total=total)
+    return fully_loaded_media_page([to_media_item(item) for item in raw.items()], start)
 
 
 def to_continue_watching_media(raw: Any) -> Any:
@@ -1262,15 +1285,31 @@ def is_online_metadata(raw: Any) -> bool:
     return bool(parts and is_metadata_provider_server(getattr(parts[0], "_server", None)))
 
 
-def online_metadata_children(raw: Any, size: int = DEFAULT_PAGE_SIZE) -> list[MediaItem]:
+def online_metadata_children_page(
+    raw: Any,
+    start: int = 0,
+    size: int = DEFAULT_PAGE_SIZE,
+) -> MediaPage:
     key = online_metadata_key(raw)
     fetch_items = getattr(raw, "fetchItems", None)
     if not key or not callable(fetch_items):
-        return []
+        return MediaPage(items=[], start=start, total=start)
     try:
-        return [to_media_item(child) for child in fetch_items(f"{key.rstrip('/')}/children", maxresults=size)]
+        raw_items = fetch_items(
+            f"{key.rstrip('/')}/children",
+            maxresults=size,
+            container_start=start,
+            container_size=size,
+        )
     except Exception:
-        return []
+        return MediaPage(items=[], start=start, total=start)
+    reported_total = getattr(raw_items, "totalSize", None)
+    total = int(reported_total if reported_total is not None else start + len(raw_items))
+    return MediaPage(
+        items=[to_media_item(child) for child in list(raw_items)[:size]],
+        start=start,
+        total=total,
+    )
 
 
 def online_metadata_key(raw: Any) -> str:

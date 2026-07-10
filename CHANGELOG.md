@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserved paging metadata for category and capped online child views so
+  additional media can be loaded without truncating fully loaded containers.
 - Made CLI helper failures return concise errors without tracebacks, including
   a predictable JSON error object when `--json` is requested.
 - Kept malformed configuration startup recoverable through Settings/relogin and

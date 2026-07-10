@@ -392,6 +392,10 @@ def test_load_more_media_appends_library_submenu_page():
     asyncio.run(run_load_more_library_submenu_check())
 
 
+def test_open_paged_child_view_can_load_next_page():
+    asyncio.run(run_paged_child_view_check())
+
+
 def test_initial_library_uses_configured_page_size():
     asyncio.run(run_initial_library_page_size_check())
 
@@ -2152,6 +2156,11 @@ class FakePagedService:
         self.children_calls.append((item.key, size))
         return self.children_by_key.get(item.key, [])
 
+    def children_page(self, item: MediaItem, start: int, size: int) -> MediaPage:
+        self.children_calls.append((item.key, size))
+        items = self.children_by_key.get(item.key, [])
+        return MediaPage(items if start == 0 else [], start=start, total=len(items))
+
     def episode_parent(self, item: MediaItem) -> MediaItem | None:
         raw = self.media_from_key(getattr(item.raw, "parentKey", ""))
         return raw if isinstance(raw, MediaItem) else None
@@ -2190,6 +2199,11 @@ class FakeFlowService:
     def children(self, item: MediaItem, size: int = 40) -> list[MediaItem]:
         self.children_calls.append((item.key, size))
         return self.children_by_key.get(item.key, [])
+
+    def children_page(self, item: MediaItem, start: int, size: int) -> MediaPage:
+        self.children_calls.append((item.key, size))
+        items = self.children_by_key.get(item.key, [])
+        return MediaPage(items if start == 0 else [], start=start, total=len(items))
 
 
 async def run_initial_library_page_size_check():
@@ -2539,6 +2553,51 @@ async def run_load_more_library_submenu_check():
         assert [item.title for item in state.items] == ["First", "Second"]
         assert state.next_start == 2
         assert state.has_more
+
+
+async def run_paged_child_view_check():
+    app = PlexTuiApp()
+    container = MediaItem("Sci-Fi", "Category", "category", "category-1", False, Raw())
+    first = MediaItem("First", "", "movie", "1", True, Raw())
+    second = MediaItem("Second", "", "movie", "2", True, Raw())
+
+    class PagedChildService(FakePagedService):
+        def children_page(self, item: MediaItem, start: int, size: int) -> MediaPage:
+            self.children_calls.append((item.key, start, size))
+            return MediaPage([first] if start == 0 else [second], start=start, total=2)
+
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=25)
+        service = PagedChildService(MediaPage([], start=0, total=0))
+        app.service = service
+        app.suppress_auto_load = True
+
+        app.open_media(container)
+        for _ in range(30):
+            if app.browsing_stack:
+                break
+            await pilot.pause(0.1)
+
+        state = app.browsing_stack[-1]
+        assert state.source == "children"
+        assert state.next_start == 1
+        assert state.total == 2
+        assert state.has_more
+
+        app.load_more_media()
+        for _ in range(30):
+            if len(state.items) == 2:
+                break
+            await pilot.pause(0.1)
+
+        assert service.children_calls == [
+            ("category-1", 0, 25),
+            ("category-1", 1, 25),
+        ]
+        assert [item.title for item in state.items] == ["First", "Second"]
+        assert state.next_start == 2
+        assert not state.has_more
 
 
 async def run_load_more_media_preserve_selection_check():
