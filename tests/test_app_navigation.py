@@ -907,6 +907,33 @@ def test_settings_actions_update_preferences():
     asyncio.run(run_settings_action_check())
 
 
+def test_malformed_config_startup_has_recoverable_fallback(monkeypatch):
+    asyncio.run(run_malformed_config_startup_recovery_check(monkeypatch))
+
+
+def test_failed_preference_writes_leave_config_unchanged():
+    app = PlexTuiApp()
+    original = AppConfig(
+        "http://plex",
+        "token",
+        "client-id",
+        preferred_audio_language="jpn",
+        subtitle_mode="auto",
+        page_size=40,
+    )
+    app.config = original
+    errors = []
+    app.show_error = errors.append
+
+    with patch("plextui.app.save_config", side_effect=OSError("disk full")):
+        assert not app.update_preferences(page_size=80)
+        with pytest.raises(OSError, match="disk full"):
+            app.save_stream_preference(StreamChoice(0, "None (disable subtitles)"), "subtitle")
+
+    assert app.config == original
+    assert errors == ["failed to save preference: disk full"]
+
+
 def test_stale_profile_load_does_not_reopen_profile_picker(monkeypatch):
     asyncio.run(run_stale_profile_load_check(monkeypatch))
 
@@ -3238,6 +3265,34 @@ async def run_settings_action_check():
             assert app.config.confirm_start_over is False
 
         assert save_config.call_count == 17
+
+
+async def run_malformed_config_startup_recovery_check(monkeypatch):
+    def fail_load_config():
+        raise ValueError("invalid TOML")
+
+    monkeypatch.setattr(app_module, "load_config", fail_load_config)
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(0.2)
+
+        assert isinstance(app.config, AppConfig)
+        assert not app.config.base_url
+        assert not app.config.token
+        assert app.config.client_identifier.startswith("plex-tui-")
+        assert app.query_one("#media-title").content == "Error"
+        details = str(app.query_one("#detail-content").content)
+        assert "failed to load configuration: invalid" in details
+        assert "TOML" in details
+        assert "Config:" in details
+        assert "config.toml" in details
+        assert "Relogin" in details
+
+        app.action_show_settings()
+        await pilot.pause(0.2)
+
+        assert app.settings_visible
+        assert app.query_one("#media-title").content == "Settings"
 
 
 async def run_stale_profile_load_check(monkeypatch):

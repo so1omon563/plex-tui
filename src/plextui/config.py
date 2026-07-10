@@ -67,6 +67,10 @@ class AppConfig:
     confirm_start_over: bool = True
 
 
+def default_config() -> AppConfig:
+    return AppConfig("", "", f"{APP_NAME}-{uuid.uuid4()}")
+
+
 def config_path() -> Path:
     return Path(user_config_dir(APP_NAME)) / "config.toml"
 

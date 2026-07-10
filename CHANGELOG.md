@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Kept malformed configuration startup recoverable through Settings/relogin and
+  made preference changes commit in memory only after saving succeeds.
 - Fixed login and Plex Home profile switching when the same server advertises
   otherwise-equal connections with implicit and explicit ports.
 - Fixed Back navigation after Plex-backed searches so the active browse state

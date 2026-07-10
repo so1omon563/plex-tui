@@ -55,6 +55,7 @@ from .config import (
     AppConfig,
     cache_path,
     config_path,
+    default_config,
     debug_log_path,
     load_config,
     save_config,
@@ -792,16 +793,21 @@ class PlexTuiApp(App[None]):
         self.detail_artwork_timer = None
         self.detail_cache = {}
         self.libraries = []
+        self.config = default_config()
+        config_error = ""
         try:
             self.config = load_config()
             self.apply_config_theme()
-        except Exception:
-            pass
+        except Exception as exc:
+            config_error = f"failed to load configuration: {exc}"
         self.query_one("#search", Input).display = False
         self.query_one("#media-grid-scroll", VerticalScroll).display = False
         self.clear_playback_footer()
         self.set_interval(1.0, self.check_player_status)
-        self.load_server()
+        if config_error:
+            self.show_error(config_error)
+        else:
+            self.load_server()
 
     def on_focus(self, event: events.Focus) -> None:
         self.update_focus_pane()
@@ -863,11 +869,18 @@ class PlexTuiApp(App[None]):
             return
         if getattr(self.config, "theme", "") == theme_name:
             return
-        self.config = replace(self.config, theme=theme_name)
+        updated_config = replace(self.config, theme=theme_name)
         try:
-            save_config(self.config)
+            save_config(updated_config)
         except OSError as exc:
+            self.applying_config_theme = True
+            try:
+                self.theme = self.config.theme
+            finally:
+                self.applying_config_theme = False
             self.set_status(f"Error: failed to save theme: {exc}")
+            return
+        self.config = updated_config
 
     @work(thread=True)
     def load_server(self) -> None:
@@ -899,7 +912,10 @@ class PlexTuiApp(App[None]):
 
     @work(thread=True)
     def begin_login(self) -> None:
-        self.config = load_config()
+        try:
+            self.config = load_config()
+        except Exception:
+            pass
         self.post_message(StatusChanged("Starting Plex login..."))
         try:
             session = LoginSession(self.config)
@@ -3444,26 +3460,28 @@ class PlexTuiApp(App[None]):
 
     def save_stream_preference(self, choice: StreamChoice, stream_type: str) -> None:
         if stream_type == "audio":
-            self.config = replace(self.config, preferred_audio_language=stream_preference_key(choice))
+            updated_config = replace(self.config, preferred_audio_language=stream_preference_key(choice))
         elif choice.stream_id is None:
-            self.config = replace(self.config, preferred_subtitle_language="", subtitle_mode="auto")
+            updated_config = replace(self.config, preferred_subtitle_language="", subtitle_mode="auto")
         elif choice.stream_id == 0:
-            self.config = replace(self.config, preferred_subtitle_language="", subtitle_mode="none")
+            updated_config = replace(self.config, preferred_subtitle_language="", subtitle_mode="none")
         else:
-            self.config = replace(
+            updated_config = replace(
                 self.config,
                 preferred_subtitle_language=stream_preference_key(choice),
                 subtitle_mode="preferred",
             )
-        save_config(self.config)
+        save_config(updated_config)
+        self.config = updated_config
 
     def update_preferences(self, **changes: object) -> bool:
-        self.config = replace(self.config, **changes)
+        updated_config = replace(self.config, **changes)
         try:
-            save_config(self.config)
+            save_config(updated_config)
         except OSError as exc:
             self.show_error(f"failed to save preference: {exc}")
             return False
+        self.config = updated_config
         return True
 
     def update_numeric_preference(self, name: str, step: int, minimum: int, maximum: int) -> bool:
