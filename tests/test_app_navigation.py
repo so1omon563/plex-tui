@@ -934,6 +934,10 @@ def test_failed_preference_writes_leave_config_unchanged():
     assert errors == ["failed to save preference: disk full"]
 
 
+def test_failed_theme_save_with_invalid_config_uses_registered_fallback():
+    asyncio.run(run_failed_theme_save_fallback_check())
+
+
 def test_stale_profile_load_does_not_reopen_profile_picker(monkeypatch):
     asyncio.run(run_stale_profile_load_check(monkeypatch))
 
@@ -3293,6 +3297,21 @@ async def run_malformed_config_startup_recovery_check(monkeypatch):
 
         assert app.settings_visible
         assert app.query_one("#media-title").content == "Settings"
+
+
+async def run_failed_theme_save_fallback_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(0.2)
+        app.config = replace(app.config, theme="missing-theme")
+
+        with patch("plextui.app.save_config", side_effect=OSError("disk full")):
+            app.theme = "textual-light"
+            await pilot.pause(0.2)
+
+        assert app.config.theme == "missing-theme"
+        assert app.theme == "textual-dark"
+        assert app.query_one("#status").content == "Error: failed to save theme: disk full"
 
 
 async def run_stale_profile_load_check(monkeypatch):

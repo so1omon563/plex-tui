@@ -873,9 +873,12 @@ class PlexTuiApp(App[None]):
         try:
             save_config(updated_config)
         except OSError as exc:
+            rollback_theme = self.config.theme
+            if rollback_theme not in self.available_themes:
+                rollback_theme = "textual-dark"
             self.applying_config_theme = True
             try:
-                self.theme = self.config.theme
+                self.theme = rollback_theme
             finally:
                 self.applying_config_theme = False
             self.set_status(f"Error: failed to save theme: {exc}")
