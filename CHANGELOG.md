@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed Back navigation after Plex-backed searches so the active browse state
+  matches the library rows restored on screen.
+
 ## 0.16.8 - 2026-07-06
 
 - Disabled mpv TLS certificate verification only for Plex Direct `*.plex.direct`
