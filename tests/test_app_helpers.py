@@ -512,9 +512,10 @@ def test_show_browse_state_scrolls_live_tv_current_program_to_top(monkeypatch):
     monkeypatch.setattr(app, "show_media_list", lambda: None)
     monkeypatch.setattr(app, "show_media_details", lambda item: captured.setdefault("details", item))
 
-    def capture_rows(rows, selected_index=None, scroll_selected_to_top=False):
+    def capture_rows(rows, selected_index=None, scroll_selected_to_top=False, status_after_refresh=None):
         captured["selected_index"] = selected_index
         captured["scroll_selected_to_top"] = scroll_selected_to_top
+        captured["status_after_refresh"] = status_after_refresh
 
     monkeypatch.setattr(app, "replace_media_rows", capture_rows)
     channel = MediaItem("Stories by AMC", "", "livetv", "channel", True, object())
@@ -531,6 +532,7 @@ def test_show_browse_state_scrolls_live_tv_current_program_to_top(monkeypatch):
 
     assert captured["selected_index"] == 1
     assert captured["scroll_selected_to_top"] is True
+    assert captured["status_after_refresh"] is None
     assert captured["details"].title == "Current"
 
 

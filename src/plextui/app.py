@@ -2084,25 +2084,34 @@ class PlexTuiApp(App[None]):
             opened = webbrowser.open(row.url)
         except Exception:
             opened = False
-        self.picker_visible = False
-        if self.browsing_stack:
-            self.show_browse_state(self.browsing_stack[-1], selected_key=self.picker_media_key)
-        self.picker_media_key = None
-        self.focus_media_browser()
         status = (
             f"Opened: {row.media_title} - {row.label}"
             if opened
             else f"Browser launch failed; open manually: {row.url}"
         )
-        self.set_status(status)
-        self.set_timer(0.05, lambda: self.set_status(status), name="availability-choice-status")
+        self.picker_visible = False
+        if self.browsing_stack:
+            self.show_browse_state(
+                self.browsing_stack[-1],
+                selected_key=self.picker_media_key,
+                status_after_refresh=status,
+            )
+        else:
+            self.set_status(status)
+        self.picker_media_key = None
+        self.focus_media_browser()
 
     def show_media(self, title: str, items: list[MediaItem], selected_key: str | None = None) -> None:
         self.set_media_title(title)
         state = BrowseState(title, items)
         self.show_browse_state(state, selected_key=selected_key)
 
-    def show_browse_state(self, state: BrowseState, selected_key: str | None = None) -> None:
+    def show_browse_state(
+        self,
+        state: BrowseState,
+        selected_key: str | None = None,
+        status_after_refresh: str | None = None,
+    ) -> None:
         self.set_media_title(state.title)
         self.prune_bulk_selection(state)
         if state.items:
@@ -2123,6 +2132,8 @@ class PlexTuiApp(App[None]):
                 )
                 grid.set_items(state.items, selected_index, self.config, columns, rows, self.bulk_selected_keys)
                 self.schedule_grid_prefetch(grid)
+                if status_after_refresh is not None:
+                    grid.call_after_refresh(self.set_status, status_after_refresh)
             else:
                 self.show_media_list()
                 rows, selected_row_index = media_rows(state.items, self.config, selected_index, self.bulk_selected_keys)
@@ -2132,6 +2143,7 @@ class PlexTuiApp(App[None]):
                     rows,
                     selected_row_index,
                     scroll_selected_to_top=state.source == "livetv_guide" and selected_row_index > 0,
+                    status_after_refresh=status_after_refresh,
                 )
             self.show_media_details(state.items[selected_index])
             write_performance_log(
@@ -2166,8 +2178,16 @@ class PlexTuiApp(App[None]):
         rows: list[ListItem],
         selected_index: int | None = None,
         scroll_selected_to_top: bool = False,
+        status_after_refresh: str | None = None,
     ) -> None:
-        self.replace_list_rows_async("#media", rows, selected_index, "media-list", scroll_selected_to_top)
+        self.replace_list_rows_async(
+            "#media",
+            rows,
+            selected_index,
+            "media-list",
+            scroll_selected_to_top,
+            status_after_refresh,
+        )
 
     def replace_list_rows_async(
         self,
@@ -2176,9 +2196,16 @@ class PlexTuiApp(App[None]):
         selected_index: int | None,
         group: str,
         scroll_selected_to_top: bool = False,
+        status_after_refresh: str | None = None,
     ) -> None:
         self.run_worker(
-            self.replace_list_rows(selector, rows, selected_index, scroll_selected_to_top),
+            self.replace_list_rows(
+                selector,
+                rows,
+                selected_index,
+                scroll_selected_to_top,
+                status_after_refresh,
+            ),
             group=group,
             exclusive=True,
         )
@@ -2189,6 +2216,7 @@ class PlexTuiApp(App[None]):
         rows: list[ListItem],
         selected_index: int | None = None,
         scroll_selected_to_top: bool = False,
+        status_after_refresh: str | None = None,
     ) -> None:
         view = self.query_one(selector, ListView)
         await view.clear()
@@ -2204,6 +2232,8 @@ class PlexTuiApp(App[None]):
                     top=True,
                     immediate=True,
                 )
+        if status_after_refresh is not None:
+            view.call_after_refresh(self.set_status, status_after_refresh)
 
     def show_media_details(self, item: MediaItem) -> None:
         self.detail_refresh_token += 1
