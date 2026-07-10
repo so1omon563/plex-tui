@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Bounded debug logging to a 1 MiB active file plus one rotated backup and
+  tailed recent entries without loading the whole log into memory.
 - Reported browser launch failures for Discover availability links and kept the
   provider URL visible so it can be opened manually.
 - Cleared stopped player state when launching replacement playback fails so the

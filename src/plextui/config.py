@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 import tomllib
 import uuid
 from dataclasses import dataclass
@@ -28,6 +29,10 @@ TRANSCODE_QUALITIES = {"original", "1080p_8", "720p_4", "480p_2"}
 DEFAULT_MPV_WINDOW_SIZE = "80%"
 LIBRARY_ENTER_ACTIONS = {"library", "browse_modes"}
 DISCOVER_MEDIA_TYPES = {"movies_shows", "movie", "show", "all"}
+DEBUG_LOG_MAX_BYTES = 1_048_576
+DEBUG_LOG_BACKUP_SUFFIX = ".1"
+DEBUG_LOG_TRUNCATION_MARKER = b"...[truncated]\n"
+_DEBUG_LOG_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -341,8 +346,18 @@ def _toml_escape(value: str) -> str:
 def write_debug_log(message: str) -> None:
     try:
         path = debug_log_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as fh:
-            fh.write(f"{message}\n")
+        data = f"{message}\n".encode("utf-8", errors="replace")
+        if len(data) > DEBUG_LOG_MAX_BYTES:
+            content_bytes = max(0, DEBUG_LOG_MAX_BYTES - len(DEBUG_LOG_TRUNCATION_MARKER))
+            content = data[:content_bytes].decode("utf-8", errors="ignore").encode("utf-8")
+            data = (content + DEBUG_LOG_TRUNCATION_MARKER)[:DEBUG_LOG_MAX_BYTES]
+        with _DEBUG_LOG_LOCK:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if path.exists() and path.stat().st_size + len(data) > DEBUG_LOG_MAX_BYTES:
+                backup = path.with_name(f"{path.name}{DEBUG_LOG_BACKUP_SUFFIX}")
+                backup.unlink(missing_ok=True)
+                path.replace(backup)
+            with path.open("ab") as fh:
+                fh.write(data)
     except OSError:
         return

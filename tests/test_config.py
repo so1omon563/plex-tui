@@ -15,6 +15,40 @@ def test_config_and_debug_paths_share_platformdirs_base(monkeypatch):
     assert config.debug_log_path() == Path("/tmp/plex-tui/debug.log")
 
 
+def test_debug_log_rotates_to_one_bounded_backup(tmp_path, monkeypatch):
+    log = tmp_path / "debug.log"
+    monkeypatch.setattr(config, "debug_log_path", lambda: log)
+    monkeypatch.setattr(config, "DEBUG_LOG_MAX_BYTES", 20)
+
+    config.write_debug_log("first message")
+    config.write_debug_log("second message")
+
+    backup = tmp_path / "debug.log.1"
+    assert backup.read_text(encoding="utf-8") == "first message\n"
+    assert log.read_text(encoding="utf-8") == "second message\n"
+
+    config.write_debug_log("third message")
+
+    assert backup.read_text(encoding="utf-8") == "second message\n"
+    assert log.read_text(encoding="utf-8") == "third message\n"
+    assert list(tmp_path.glob("debug.log.*")) == [backup]
+
+
+def test_debug_log_caps_single_oversized_entries(tmp_path, monkeypatch):
+    log = tmp_path / "debug.log"
+    backup = tmp_path / "debug.log.1"
+    monkeypatch.setattr(config, "debug_log_path", lambda: log)
+    monkeypatch.setattr(config, "DEBUG_LOG_MAX_BYTES", 32)
+
+    config.write_debug_log("x" * 200)
+    config.write_debug_log("y" * 200)
+
+    assert log.stat().st_size <= 32
+    assert backup.stat().st_size <= 32
+    assert log.read_bytes().endswith(config.DEBUG_LOG_TRUNCATION_MARKER)
+    assert backup.read_bytes().endswith(config.DEBUG_LOG_TRUNCATION_MARKER)
+
+
 def test_config_example_parses_and_uses_known_fields():
     example = Path("config.example.toml").read_text(encoding="utf-8")
     raw = tomllib.loads(example)
