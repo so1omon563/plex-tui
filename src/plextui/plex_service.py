@@ -599,7 +599,8 @@ def hub_page(raw: Any, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPa
             container_start=start,
             container_size=size,
         )
-        total = int(getattr(raw_items, "totalSize", start + len(raw_items)))
+        reported_total = getattr(raw_items, "totalSize", None)
+        total = int(reported_total if reported_total is not None else start + len(raw_items))
         items = list(raw_items)[:size]
         to_online_metadata = getattr(server, "_toOnlineMetadata", None)
         if callable(to_online_metadata):
@@ -1302,7 +1303,8 @@ def online_metadata_children_page(
         )
     except Exception:
         return MediaPage(items=[], start=start, total=start)
-    total = int(getattr(raw_items, "totalSize", start + len(raw_items)))
+    reported_total = getattr(raw_items, "totalSize", None)
+    total = int(reported_total if reported_total is not None else start + len(raw_items))
     return MediaPage(
         items=[to_media_item(child) for child in list(raw_items)[:size]],
         start=start,

@@ -1245,6 +1245,34 @@ def test_vod_hub_children_resolve_relative_hub_key():
     assert not next_page.has_more
 
 
+def test_vod_hub_children_accept_missing_total_size():
+    class MissingTotalResult(list):
+        totalSize = None
+
+    class AccountServer:
+        VOD = "https://vod.provider.plex.tv"
+
+    class VodHub:
+        TYPE = None
+        title = "Sci-Fi"
+        key = "/hubs/sections/movies/sci-fi"
+        ratingKey = "vod-hub"
+        _server = AccountServer()
+
+        def fetchItems(self, _key, **_kwargs):
+            return MissingTotalResult([RawItem()])
+
+        def items(self):
+            raise AssertionError("relative VOD hub keys must use fetchItems")
+
+    service = object.__new__(PlexService)
+
+    page = service.children_page(to_media_item(VodHub()), start=0, size=1)
+
+    assert [item.title for item in page.items] == ["Movie"]
+    assert page.total == 1
+
+
 def test_discover_page_can_show_all_result_types(monkeypatch):
     class FakeAccount:
         def __init__(self, token):
@@ -1539,6 +1567,9 @@ def test_online_metadata_show_child_errors_return_empty_list():
 
 
 def test_online_metadata_children_use_key_children_endpoint():
+    class MissingTotalResult(list):
+        totalSize = None
+
     class OnlineServer:
         _baseurl = "https://metadata.provider.plex.tv"
 
@@ -1557,12 +1588,12 @@ def test_online_metadata_children_use_key_children_endpoint():
 
         def fetchItems(self, key, **kwargs):
             self.calls.append((key, kwargs))
-            return [OnlineSeason()]
+            return MissingTotalResult([OnlineSeason()])
 
     service = object.__new__(PlexService)
     raw = OnlineShow()
 
-    children = service.children(to_media_item(raw), size=5)
+    page = service.children_page(to_media_item(raw), start=0, size=5)
 
     assert raw.calls == [
         (
@@ -1570,7 +1601,8 @@ def test_online_metadata_children_use_key_children_endpoint():
             {"maxresults": 5, "container_start": 0, "container_size": 5},
         )
     ]
-    assert [(child.title, child.kind) for child in children] == [("Season 1", "season")]
+    assert [(child.title, child.kind) for child in page.items] == [("Season 1", "season")]
+    assert page.total == 1
 
 
 def test_online_metadata_children_use_details_key_when_key_is_empty():
