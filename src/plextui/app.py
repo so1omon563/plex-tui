@@ -145,7 +145,7 @@ class BrowseState:
     def has_more(self) -> bool:
         if self.total is None or self.next_start >= self.total:
             return False
-        if self.source in {"continue_watching", "vod", "livetv", "livetv_guide"}:
+        if self.source in {"children", "continue_watching", "vod", "livetv", "livetv_guide"}:
             return True
         if self.source == "discover":
             return bool(self.search_query)
@@ -1694,6 +1694,19 @@ class PlexTuiApp(App[None]):
                         next_start = page.next_start
                         total = page.total
                         items.extend(page.items)
+            elif source == "children" and state.context_media is not None:
+                items = []
+                next_start = 0
+                total = 0
+                for start in range(0, loaded_count, self.config.page_size):
+                    page = self.service.children_page(
+                        state.context_media,
+                        start,
+                        self.config.page_size,
+                    )
+                    next_start = page.next_start
+                    total = page.total
+                    items.extend(page.items)
             elif source in {"playlist", "library"} and state.context_media is not None:
                 playlist_items = self.service.children(state.context_media, self.config.page_size)
                 items = playlist_items
@@ -1848,6 +1861,12 @@ class PlexTuiApp(App[None]):
                     state.next_start,
                     self.config.page_size,
                     channel_ids=live_tv_category_channel_ids(state.context_media),
+                )
+            elif state.source == "children" and state.context_media is not None:
+                page = self.service.children_page(
+                    state.context_media,
+                    state.next_start,
+                    self.config.page_size,
                 )
             elif state.search:
                 page = self.service.search_page(state.search_query, state.selected_library, state.next_start, self.config.page_size)
@@ -2005,23 +2024,34 @@ class PlexTuiApp(App[None]):
             self.call_from_thread(self.show_loading_state, media.title, "Loading child items from Plex.")
             started = time.perf_counter()
             try:
-                children = self.service.children(media, self.config.page_size)
+                page = self.service.children_page(media, 0, self.config.page_size)
             except Exception as exc:
                 self.call_from_thread(self.show_error, str(exc))
                 return
             write_performance_log(
                 "children_load",
                 started,
-                f"title={media.title!r} kind={media.kind!r} key={media.key!r} items={len(children)} playable=0",
+                f"title={media.title!r} kind={media.kind!r} key={media.key!r} "
+                f"items={len(page.items)} total={page.total} playable=0",
             )
-        if not children:
+        if not page.items:
             self.call_from_thread(self.show_empty_state, media.title, "No child items", "Go back and choose another item.")
             return
 
         def update() -> None:
             source = "playlist" if media.kind == "playlist" else "library"
+            if page.has_more:
+                source = "children"
             context_media = media
-            state = BrowseState(media.title, children, self.selected_library, context_media=context_media, source=source)
+            state = BrowseState(
+                media.title,
+                page.items,
+                self.selected_library,
+                context_media=context_media,
+                source=source,
+                next_start=page.next_start,
+                total=page.total,
+            )
             self.browsing_stack.append(state)
             self.show_browse_state(state)
             self.focus_media_browser()

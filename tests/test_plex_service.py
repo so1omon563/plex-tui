@@ -364,14 +364,14 @@ def test_library_entry_page_fetches_supported_submenus():
     assert categories.items[0].kind == "category"
 
 
-def test_category_children_fetch_library_search_results():
+def test_category_children_page_preserves_library_search_pagination():
     raw_library = RawLibrary()
     service = object.__new__(PlexService)
     library = LibraryItem("Movies", "1", "movie", raw_library)
     category = category_items(library)[0]
     raw_library.calls.clear()
 
-    page = service.category_page(category.raw, start=50, size=25)
+    page = service.children_page(category, start=50, size=25)
 
     assert raw_library.calls == [
         (None, {"maxresults": 25, "container_start": 50, "container_size": 25, "genre": "science_fiction"})
@@ -425,6 +425,20 @@ def test_movie_editions_are_visible_as_variants():
         ("Type", "movie"),
         ("Edition", "Director's Cut"),
     ]
+
+
+def test_fully_loaded_playlist_children_are_not_truncated_by_page_size():
+    class FullPlaylist(RawPlaylist):
+        def items(self):
+            return [RawItem(), SecondRawItem()]
+
+    service = object.__new__(PlexService)
+
+    page = service.children_page(to_media_item(FullPlaylist()), start=0, size=1)
+
+    assert [child.title for child in page.items] == ["Movie", "Second Movie"]
+    assert page.total == 2
+    assert not page.has_more
 
 
 def test_search_page_fetches_single_library_search_page():
@@ -1172,6 +1186,9 @@ def test_hosted_live_tv_drm_channel_rejects_stream_url():
 
 
 def test_vod_hub_children_resolve_relative_hub_key():
+    class PagedResult(list):
+        totalSize = 2
+
     class AccountServer:
         VOD = "https://vod.provider.plex.tv"
 
@@ -1196,7 +1213,10 @@ def test_vod_hub_children_resolve_relative_hub_key():
 
         def fetchItems(self, key, **kwargs):
             self.calls.append((key, kwargs))
-            return [RawItem(), SecondRawItem()]
+            items = [RawItem(), SecondRawItem()]
+            start = kwargs["container_start"]
+            size = kwargs["container_size"]
+            return PagedResult(items[start:start + size])
 
         def items(self):
             raise AssertionError("relative VOD hub keys must be fetched with the VOD host")
@@ -1204,11 +1224,25 @@ def test_vod_hub_children_resolve_relative_hub_key():
     service = object.__new__(PlexService)
     raw = VodHub()
 
-    children = service.children(to_media_item(raw), size=1)
+    media = to_media_item(raw)
+    children = service.children(media, size=1)
+    next_page = service.children_page(media, start=1, size=1)
 
-    assert raw.calls == [("https://vod.provider.plex.tv/hubs/sections/movies/sci-fi", {"maxresults": 1})]
-    assert raw._server.converted[0].converted_to_online_metadata is True
+    assert raw.calls == [
+        (
+            "https://vod.provider.plex.tv/hubs/sections/movies/sci-fi",
+            {"maxresults": 1, "container_start": 0, "container_size": 1},
+        ),
+        (
+            "https://vod.provider.plex.tv/hubs/sections/movies/sci-fi",
+            {"maxresults": 1, "container_start": 1, "container_size": 1},
+        ),
+    ]
+    assert all(item.converted_to_online_metadata for item in raw._server.converted)
     assert [child.title for child in children] == ["Movie"]
+    assert [child.title for child in next_page.items] == ["Second Movie"]
+    assert next_page.total == 2
+    assert not next_page.has_more
 
 
 def test_discover_page_can_show_all_result_types(monkeypatch):
@@ -1530,7 +1564,12 @@ def test_online_metadata_children_use_key_children_endpoint():
 
     children = service.children(to_media_item(raw), size=5)
 
-    assert raw.calls == [("/library/metadata/show-1/children", {"maxresults": 5})]
+    assert raw.calls == [
+        (
+            "/library/metadata/show-1/children",
+            {"maxresults": 5, "container_start": 0, "container_size": 5},
+        )
+    ]
     assert [(child.title, child.kind) for child in children] == [("Season 1", "season")]
 
 
@@ -1561,5 +1600,10 @@ def test_online_metadata_children_use_details_key_when_key_is_empty():
 
     children = service.children(to_media_item(raw), size=6)
 
-    assert raw.calls == [("/library/metadata/season-1/children", {"maxresults": 6})]
+    assert raw.calls == [
+        (
+            "/library/metadata/season-1/children",
+            {"maxresults": 6, "container_start": 0, "container_size": 6},
+        )
+    ]
     assert [(child.title, child.kind) for child in children] == [("Episode 1", "episode")]
