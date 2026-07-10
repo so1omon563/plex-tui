@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserved Discover provider launch results after the restored browse list
+  finishes repainting so manual URLs are not replaced by generic media hints.
 - Bounded debug logging to a 1 MiB active file plus one rotated backup and
   tailed recent entries without loading the whole log into memory.
 - Reported browser launch failures for Discover availability links and kept the

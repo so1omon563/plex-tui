@@ -1548,7 +1548,7 @@ async def run_discover_provider_exception_check(monkeypatch):
         assert isinstance(row, AvailabilityRow)
 
         app.open_availability_url(row)
-        await pilot.pause(0.1)
+        await pilot.pause(0.5)
 
         assert not app.picker_visible
         assert app.query_one("#status").content == (
