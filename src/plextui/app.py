@@ -2133,7 +2133,7 @@ class PlexTuiApp(App[None]):
                 grid.set_items(state.items, selected_index, self.config, columns, rows, self.bulk_selected_keys)
                 self.schedule_grid_prefetch(grid)
                 if status_after_refresh is not None:
-                    grid.call_after_refresh(self.set_status, status_after_refresh)
+                    self.call_later(self.set_status, status_after_refresh)
             else:
                 self.show_media_list()
                 rows, selected_row_index = media_rows(state.items, self.config, selected_index, self.bulk_selected_keys)
@@ -2233,7 +2233,7 @@ class PlexTuiApp(App[None]):
                     immediate=True,
                 )
         if status_after_refresh is not None:
-            view.call_after_refresh(self.set_status, status_after_refresh)
+            self.call_later(self.set_status, status_after_refresh)
 
     def show_media_details(self, item: MediaItem) -> None:
         self.detail_refresh_token += 1
