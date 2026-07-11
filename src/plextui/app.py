@@ -714,6 +714,7 @@ class PlexTuiApp(App[None]):
     selected_subtitle: StreamChoice | None
     selected_audio: StreamChoice | None
     picker_media_key: str | None
+    pending_media_status: str | None
     bulk_selected_keys: set[str]
     playlist_picker_items: list[MediaItem]
     loading_more: bool
@@ -771,6 +772,7 @@ class PlexTuiApp(App[None]):
         self.selected_subtitle = None
         self.selected_audio = None
         self.picker_media_key = None
+        self.pending_media_status = None
         self.playlist_picker_item = None
         self.playlist_picker_items = []
         self.bulk_selected_keys = set()
@@ -1072,7 +1074,9 @@ class PlexTuiApp(App[None]):
         elif isinstance(row, MediaRow):
             mark_active_row(event.list_view, row)
             self.show_media_details(row.media)
-            self.set_status(media_row_status(row, self.browsing_stack[-1] if self.browsing_stack else None))
+            status = self.pending_media_status
+            self.pending_media_status = None
+            self.set_status(status or media_row_status(row, self.browsing_stack[-1] if self.browsing_stack else None))
             self.maybe_auto_load_more(row.media)
             self.refresh_footer_bindings()
         elif isinstance(row, LoadMoreRow):
@@ -2112,6 +2116,7 @@ class PlexTuiApp(App[None]):
         selected_key: str | None = None,
         status_after_refresh: str | None = None,
     ) -> None:
+        self.pending_media_status = status_after_refresh
         self.set_media_title(state.title)
         self.prune_bulk_selection(state)
         if state.items:
@@ -2133,7 +2138,7 @@ class PlexTuiApp(App[None]):
                 grid.set_items(state.items, selected_index, self.config, columns, rows, self.bulk_selected_keys)
                 self.schedule_grid_prefetch(grid)
                 if status_after_refresh is not None:
-                    grid.call_after_refresh(self.set_status, status_after_refresh)
+                    self.call_later(self.apply_pending_media_status)
             else:
                 self.show_media_list()
                 rows, selected_row_index = media_rows(state.items, self.config, selected_index, self.bulk_selected_keys)
@@ -2232,8 +2237,12 @@ class PlexTuiApp(App[None]):
                     top=True,
                     immediate=True,
                 )
-        if status_after_refresh is not None:
-            view.call_after_refresh(self.set_status, status_after_refresh)
+
+    def apply_pending_media_status(self) -> None:
+        status = self.pending_media_status
+        self.pending_media_status = None
+        if status is not None:
+            self.set_status(status)
 
     def show_media_details(self, item: MediaItem) -> None:
         self.detail_refresh_token += 1
