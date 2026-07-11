@@ -1543,17 +1543,16 @@ async def run_discover_provider_exception_check(monkeypatch):
         app.show_browse_state(app.browsing_stack[-1])
         await pilot.pause(0.2)
         app.show_availability_picker(item, [("Prime · Rent", "https://example.com/prime")])
-        await pilot.pause(0.1)
-        row = app.query_one("#media").highlighted_child
-        assert isinstance(row, AvailabilityRow)
+        rows = await wait_for_availability_rows(app, pilot)
+        assert len(rows) == 1
+        row = rows[0]
 
         app.open_availability_url(row)
-        await pilot.pause(0.5)
+        expected_status = "Browser launch failed; open manually: https://example.com/prime"
+        status = await wait_for_status(app, pilot, expected_status)
 
         assert not app.picker_visible
-        assert app.query_one("#status").content == (
-            "Browser launch failed; open manually: https://example.com/prime"
-        )
+        assert status == expected_status
 
 
 async def run_discover_provider_picker_check(monkeypatch):
