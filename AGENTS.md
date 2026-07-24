@@ -150,6 +150,11 @@ Naming conventions:
 No formatter is currently enforced. Keep edits minimal and consistent with
 nearby code.
 
+For Plex items with multiple media versions, keep `p` and `r` as the normal
+default playback actions and use `V` for explicit version selection. Version
+selection must resolve the chosen Plex part after metadata reload and must not
+silently fall back to another file.
+
 ## Testing Guidelines
 
 Tests use `pytest`. Add focused unit tests for helper logic and app navigation

@@ -143,6 +143,11 @@ transcoding with Original, 1080p 8 Mbps, 720p 4 Mbps, or 480p 2 Mbps quality
 presets. The default `mpv` launch uses `--autofit=80%`; Settings can override it
 with values such as `90%`, `1280x720`, or `80%x80%`.
 
+When Plex groups multiple files as versions of the same movie or episode, use
+`V` to open the Play Version picker. The picker shows resolution, bitrate,
+container, and filename, then plays the selected file for that launch. Normal
+`p` and `r` playback remain unchanged.
+
 ## Playlist Management
 
 Playlist actions are available from selected playable media, the top-level
@@ -185,6 +190,7 @@ selection, then use the same add/remove actions on the selected set.
 | `b` | Open the selected TV episode's season |
 | `B` | Open the selected TV episode's show |
 | `o` | Play selected item as an optimized/transcoded stream |
+| `V` | Choose a specific Plex media version |
 | `c` | Pause or resume active playback |
 | `z` / `.` | Seek active playback back / forward |
 | `x` | Stop launched `mpv` |

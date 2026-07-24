@@ -64,10 +64,13 @@ from .config import (
 )
 from .models import LibraryItem, MediaItem
 from .player import (
+    MediaVersionChoice,
     PlayerError,
     PlayerHandle,
     StreamChoice,
     audio_choices,
+    media_version_choices,
+    media_version_count,
     play_with_mpv,
     preferred_audio_choice,
     preferred_subtitle_choice,
@@ -223,11 +226,20 @@ class AvailabilityRow(ListItem):
 
 
 class ResumeChoiceRow(ListItem):
-    def __init__(self, media: MediaItem, resume: bool) -> None:
+    def __init__(self, media: MediaItem, resume: bool, version_part_id: str | None = None) -> None:
         self.media = media
         self.resume = resume
+        self.version_part_id = version_part_id
         self.label_text = "Resume" if resume else "Start over"
         super().__init__(Label(f"› {self.label_text}"))
+
+
+class MediaVersionRow(ListItem):
+    def __init__(self, media: MediaItem, choice: MediaVersionChoice) -> None:
+        self.media = media
+        self.choice = choice
+        self.label_text = choice.label
+        super().__init__(Label(f"› {choice.label}"))
 
 
 class LibraryMenuRow(ListItem):
@@ -678,6 +690,7 @@ class PlexTuiApp(App[None]):
         Binding("escape", "back_or_clear", "Back"),
         Binding("p", "play_selected", "Play"),
         Binding("o", "play_optimized", "Optimized", show=False),
+        Binding("V", "media_version_picker", "Version", show=False),
         Binding("P", "add_to_playlist", "Playlist", show=False),
         Binding("u", "toggle_bulk_selection", "Select", show=False),
         Binding("e", "rename_playlist", "Rename playlist", show=False),
@@ -997,6 +1010,8 @@ class PlexTuiApp(App[None]):
             self.open_availability_url(row)
         elif isinstance(row, ResumeChoiceRow):
             self.choose_resume_playback(row)
+        elif isinstance(row, MediaVersionRow):
+            self.choose_media_version(row)
         elif isinstance(row, LibraryRow):
             self.open_library_primary(row.library)
         elif isinstance(row, LibraryMenuRow):
@@ -3195,6 +3210,46 @@ class PlexTuiApp(App[None]):
             return
         self.open_stream_picker(media, "audio")
 
+    def action_media_version_picker(self) -> None:
+        media = self.selected_media()
+        if media is None or not media.playable:
+            self.set_status("Select playable media before choosing a version")
+            return
+        self.open_media_version_picker(media)
+
+    @work(thread=True)
+    def open_media_version_picker(self, media: MediaItem) -> None:
+        self.post_message(StatusChanged("Loading media versions..."))
+        try:
+            choices = media_version_choices(media.raw)
+        except Exception as exc:
+            self.call_from_thread(self.show_error, str(exc))
+            return
+        if len(choices) < 2:
+            self.call_from_thread(self.set_status, "Selected media has only one version")
+            return
+
+        def update() -> None:
+            self.picker_visible = True
+            self.settings_visible = False
+            self.picker_media_key = media.key
+            self.set_media_title(f"Play Version: {media.title}")
+            self.show_media_list()
+            self.replace_media_rows([MediaVersionRow(media, choice) for choice in choices], 0)
+            self.query_one("#media", ListView).focus()
+            self.show_detail_text(render_media_version_picker_details(media.title, len(choices)))
+            self.set_status("Choose media version")
+
+        self.call_from_thread(update)
+
+    def choose_media_version(self, row: MediaVersionRow) -> None:
+        self.picker_visible = False
+        if self.browsing_stack:
+            self.show_browse_state(self.browsing_stack[-1], selected_key=self.picker_media_key)
+        self.picker_media_key = None
+        self.focus_media_browser()
+        self.play_media(row.media, resume=False, version_part_id=row.choice.part_id)
+
     def action_clear_audio_preference(self) -> None:
         if self.update_preferences(preferred_audio_language=""):
             self.set_status("Cleared audio preference")
@@ -4285,6 +4340,7 @@ class PlexTuiApp(App[None]):
         resume: bool,
         playback_mode: str | None = None,
         confirm_start_over: bool = True,
+        version_part_id: str | None = None,
     ) -> None:
         if not media.playable:
             self.open_media(media)
@@ -4298,7 +4354,7 @@ class PlexTuiApp(App[None]):
                 transcode_quality=terminal_quality,
             )
         if confirm_start_over and not resume and self.config.confirm_start_over and resume_offset_ms(media.raw):
-            self.show_resume_picker(media)
+            self.show_resume_picker(media, version_part_id)
             return
         if resume and not resume_offset_ms(media.raw):
             self.set_status("No resume position for selected media; press p to play from the beginning")
@@ -4314,7 +4370,14 @@ class PlexTuiApp(App[None]):
             self.player = None
             self.active_playback_media = media
             if self.config.playback_display == "terminal":
-                self.player = self.play_terminal_media(media, subtitle_choice, audio_choice, resume, playback_config)
+                self.player = self.play_terminal_media(
+                    media,
+                    subtitle_choice,
+                    audio_choice,
+                    resume,
+                    playback_config,
+                    version_part_id,
+                )
             else:
                 self.player = play_with_mpv(
                     media.raw,
@@ -4327,6 +4390,7 @@ class PlexTuiApp(App[None]):
                     terminal_video_profile=self.config.terminal_video_profile,
                     transcode_quality=playback_config.transcode_quality,
                     resume=resume,
+                    version_part_id=version_part_id,
                 )
         except PlayerError as exc:
             self.active_playback_media = None
@@ -4355,13 +4419,19 @@ class PlexTuiApp(App[None]):
         status = render_playback_status(media.title, self.player, playback_config, audio_choice, subtitle_choice)
         self.set_playback_footer(status)
 
-    def show_resume_picker(self, media: MediaItem) -> None:
+    def show_resume_picker(self, media: MediaItem, version_part_id: str | None = None) -> None:
         self.picker_visible = True
         self.settings_visible = False
         self.picker_media_key = media.key
         self.set_media_title(f"Playback: {media.title}")
         self.show_media_list()
-        self.replace_media_rows([ResumeChoiceRow(media, True), ResumeChoiceRow(media, False)], 0)
+        self.replace_media_rows(
+            [
+                ResumeChoiceRow(media, True, version_part_id),
+                ResumeChoiceRow(media, False, version_part_id),
+            ],
+            0,
+        )
         self.query_one("#media", ListView).focus()
         self.show_detail_text(f"{media.title}\n\nChoose where playback should start.")
         self.set_status("Choose resume or start over")
@@ -4372,7 +4442,12 @@ class PlexTuiApp(App[None]):
             self.show_browse_state(self.browsing_stack[-1], selected_key=self.picker_media_key)
         self.picker_media_key = None
         self.focus_media_browser()
-        self.play_media(row.media, row.resume, confirm_start_over=False)
+        self.play_media(
+            row.media,
+            row.resume,
+            confirm_start_over=False,
+            version_part_id=row.version_part_id,
+        )
 
     def play_terminal_media(
         self,
@@ -4381,6 +4456,7 @@ class PlexTuiApp(App[None]):
         audio_choice: StreamChoice | None,
         resume: bool,
         playback_config: AppConfig,
+        version_part_id: str | None = None,
     ) -> PlayerHandle:
         try:
             with self.suspend():
@@ -4395,6 +4471,7 @@ class PlexTuiApp(App[None]):
                     terminal_video_profile=self.config.terminal_video_profile,
                     transcode_quality=playback_config.transcode_quality,
                     resume=resume,
+                    version_part_id=version_part_id,
                 )
                 player.process.wait()
                 return player
@@ -6312,6 +6389,7 @@ def render_help() -> str:
         "b: open selected episode's season",
         "B: open selected episode's show",
         "o: play optimized transcode for slow streams",
+        "V: choose a specific media version",
         "c: pause / resume active mpv playback",
         "z: seek active playback back 10 seconds",
         ".: seek active playback forward 30 seconds",
@@ -6353,6 +6431,14 @@ def render_help() -> str:
         f"Config: {config_path()}",
         f"Debug log: {debug_log_path()}",
     ])
+
+
+def render_media_version_picker_details(title: str, count: int) -> str:
+    return (
+        f"{title}\n\n"
+        f"Plex reports {count} media versions.\n\n"
+        "Choose the exact file to play. This overrides automatic version selection for this launch."
+    )
 
 
 LIBRARY_MENU_ENTRIES = (
@@ -6443,6 +6529,8 @@ def context_hint(row: object) -> str:
         return "Availability: Enter opens provider link"
     if isinstance(row, ResumeChoiceRow):
         return "Playback: Enter chooses start point"
+    if isinstance(row, MediaVersionRow):
+        return "Playback: Enter plays this media version"
     if isinstance(row, LibraryRow):
         return "Libraries: Enter opens primary view / Space opens alternate view"
     if isinstance(row, LibraryMenuRow):
@@ -6469,12 +6557,14 @@ def context_hint(row: object) -> str:
                 return "Media: p play program / Escape back"
             return "Media: Escape back"
         if row.media.playable:
-            return "Media: Enter selects / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
+            versions = " / V versions" if media_version_count(row.media.raw) > 1 else ""
+            return f"Media: Enter selects / p play from beginning / r resume / o optimized{versions} / P playlist / w watched / a audio / s subtitles"
         return "Media: Enter opens item"
     if isinstance(row, MediaGrid):
         media = row.selected_media
         if media is not None and media.playable:
-            return "Grid: Arrows/page select card / p play from beginning / r resume / o optimized / P playlist / w watched / a audio / s subtitles"
+            versions = " / V versions" if media_version_count(media.raw) > 1 else ""
+            return f"Grid: Arrows/page select card / p play from beginning / r resume / o optimized{versions} / P playlist / w watched / a audio / s subtitles"
         return "Grid: Arrows/page select card / Enter opens item"
     if isinstance(row, ServerRow):
         return "Servers: Enter selects server"
@@ -6542,7 +6632,11 @@ def current_detail_actions(state: BrowseState | None, item: MediaItem | None = N
             actions.append("TV Context: b opens season")
         if episode_show_parent_key(item.raw):
             actions.append("TV Context: B opens show")
+        if media_version_count(item.raw) > 1:
+            actions.append("Playback: V chooses media version")
         return tuple(actions)
+    if item is not None and item.playable and media_version_count(item.raw) > 1:
+        return ("Playback: V chooses media version",)
     if is_playlist_browse_state(state):
         return (PLAYLIST_REMOVE_HINT,)
     return ()

@@ -12,6 +12,7 @@ from plextui.player import (
     direct_play_url,
     full_metadata,
     is_drm_vod_stream,
+    media_version_choices,
     PlayerError,
     ProgressMonitor,
     StreamChoice,
@@ -185,6 +186,66 @@ def test_playback_can_start_from_beginning_instead_of_resuming():
     assert args[-1] == "http://plex/library/parts/1/file.mkv"
     assert handle.stream_mode == "direct"
     assert not hasattr(item, "kwargs")
+
+
+def test_media_version_picker_labels_and_plays_selected_part():
+    class VersionPart(Part):
+        def __init__(self, part_id, key, filename):
+            self.id = part_id
+            self.key = key
+            self.file = filename
+
+    class VersionMedia:
+        container = "mkv"
+
+        def __init__(self, resolution, bitrate, part):
+            self.videoResolution = resolution
+            self.bitrate = bitrate
+            self.parts = [part]
+
+    class MultiVersionItem(Item):
+        def __init__(self):
+            self.media = [
+                VersionMedia(
+                    "sd",
+                    1870,
+                    VersionPart(25020, "/library/parts/25020/old.mkv", "/media/Old Bluray.mkv"),
+                ),
+                VersionMedia(
+                    "480",
+                    1835,
+                    VersionPart(25033, "/library/parts/25033/new.mkv", "/media/New SDTV.mkv"),
+                ),
+            ]
+
+        def iterParts(self):
+            return [part for media in self.media for part in media.parts]
+
+    item = MultiVersionItem()
+    choices = media_version_choices(item)
+
+    assert [choice.part_id for choice in choices] == ["25020", "25033"]
+    assert choices[1].label == "480p · 1.8 Mbps · MKV · New SDTV.mkv"
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        play_with_mpv(item, version_part_id=choices[1].part_id)
+
+    assert popen.call_args.args[0][-1] == "http://plex/library/parts/25033/new.mkv"
+
+
+def test_playback_rejects_media_version_removed_after_picker_opened():
+    item = Item()
+    item.media = []
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        pytest.raises(PlayerError, match="no longer available"),
+    ):
+        play_with_mpv(item, version_part_id="missing")
 
 
 def test_online_metadata_playback_uses_part_url():

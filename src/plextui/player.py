@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from copy import copy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -46,6 +47,12 @@ class StreamChoice:
     stream: Any = None
 
 
+@dataclass(frozen=True)
+class MediaVersionChoice:
+    part_id: str
+    label: str
+
+
 TRANSCODE_QUALITY_OPTIONS: dict[str, tuple[str, int | None, str]] = {
     "original": ("Original", None, ""),
     "1080p_8": ("1080p 8 Mbps", 8000, "1920x1080"),
@@ -76,6 +83,7 @@ def play_with_mpv(
     terminal_video_profile: str = "smooth",
     transcode_quality: str = "original",
     resume: bool = True,
+    version_part_id: str | None = None,
 ) -> PlayerHandle:
     if shutil.which("mpv") is None:
         log_debug("playback error: mpv was not found in PATH")
@@ -84,12 +92,16 @@ def play_with_mpv(
     browse_item = item
     selected_start_offset = resume_offset_ms(item)
     item = full_metadata(item)
+    if version_part_id is not None:
+        item = scoped_media_version(item, version_part_id)
     selected_subtitle = resolve_subtitle_choice(item, subtitle_choice)
     selected_audio = resolve_audio_choice(item, audio_choice)
     subtitles = external_subtitle_urls(item, selected_subtitle)
     stream_kwargs = {}
     force_transcode = playback_mode == "transcode"
-    direct_url = None if force_transcode else direct_play_url(item, selected_subtitle) or direct_play_url(browse_item, selected_subtitle)
+    direct_url = None if force_transcode else direct_play_url(item, selected_subtitle)
+    if direct_url is None and version_part_id is None and not force_transcode:
+        direct_url = direct_play_url(browse_item, selected_subtitle)
     fallback_subtitle_id = selected_subtitle_stream_id(item, selected_subtitle) if not subtitles and not direct_url else None
     if fallback_subtitle_id is not None:
         stream_kwargs["subtitleStreamID"] = fallback_subtitle_id
@@ -447,6 +459,64 @@ def external_subtitle_urls(item: Any, selected_subtitle: Any = None) -> list[str
 
 def direct_play_url(item: Any, selected_subtitle: Any = None) -> str | None:
     return first_part_url(item)
+
+
+def media_version_choices(item: Any) -> list[MediaVersionChoice]:
+    item = full_metadata(item)
+    choices: list[MediaVersionChoice] = []
+    for media in getattr(item, "media", []) or []:
+        parts = list(getattr(media, "parts", []) or [])
+        if not parts:
+            continue
+        part = parts[0]
+        part_id = str(getattr(part, "id", "") or "")
+        if not part_id:
+            continue
+        choices.append(MediaVersionChoice(part_id, media_version_label(media, part)))
+    return choices
+
+
+def media_version_count(item: Any) -> int:
+    return sum(1 for media in getattr(item, "media", []) or [] if getattr(media, "parts", None))
+
+
+def media_version_label(media: Any, part: Any) -> str:
+    values: list[str] = []
+    resolution = str(getattr(media, "videoResolution", "") or "").strip()
+    if resolution:
+        normalized_resolution = resolution.lower()
+        if normalized_resolution.isdigit():
+            values.append(f"{resolution}p")
+        elif normalized_resolution in {"sd", "hd", "uhd", "4k", "8k"}:
+            values.append(resolution.upper())
+        else:
+            values.append(resolution)
+    bitrate = getattr(media, "bitrate", None)
+    try:
+        if bitrate:
+            values.append(f"{int(bitrate) / 1000:.1f} Mbps")
+    except (TypeError, ValueError):
+        pass
+    container = str(getattr(media, "container", "") or "").strip()
+    if container:
+        values.append(container.upper())
+    filename = Path(str(getattr(part, "file", "") or "")).name
+    if filename:
+        values.append(filename)
+    return " · ".join(values) or f"Media part {getattr(part, 'id', '')}"
+
+
+def scoped_media_version(item: Any, part_id: str) -> Any:
+    selected_media = None
+    for media in getattr(item, "media", []) or []:
+        if any(str(getattr(part, "id", "") or "") == str(part_id) for part in getattr(media, "parts", []) or []):
+            selected_media = media
+            break
+    if selected_media is None:
+        raise PlayerError("selected media version is no longer available; reopen the version picker")
+    scoped = copy(item)
+    scoped.media = [selected_media]
+    return scoped
 
 
 def is_drm_vod_stream(url: str) -> bool:

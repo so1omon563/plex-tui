@@ -1959,6 +1959,7 @@ def test_render_help_groups_key_bindings():
     assert "p: play selected media from beginning" in rendered
     assert "r: resume selected media from saved progress" in rendered
     assert "o: play optimized transcode for slow streams" in rendered
+    assert "V: choose a specific media version" in rendered
     assert "w: mark selected media watched / unwatched" in rendered
     assert "Live TV" in rendered
     assert "enter on Live TV sidebar row: browse hosted Live TV channels" in rendered
@@ -2047,6 +2048,7 @@ def test_footer_shows_core_bindings_and_help_keeps_full_reference():
     assert "alternate_library_action" in hidden
     assert "add_to_playlist" in hidden
     assert "play_optimized" in hidden
+    assert "media_version_picker" in hidden
     assert "toggle_bulk_selection" in hidden
     assert "rename_playlist" in hidden
     assert "delete_playlist" in hidden
