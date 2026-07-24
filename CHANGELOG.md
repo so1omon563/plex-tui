@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.17.1 - 2026-07-24
+
 - Added a `V` Play Version picker for movies and episodes with multiple Plex
   media files, including resolution, bitrate, container, and filename labels.
 
