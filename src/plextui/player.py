@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from copy import copy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -46,6 +47,14 @@ class StreamChoice:
     stream: Any = None
 
 
+@dataclass(frozen=True)
+class MediaVersionChoice:
+    part_id: str
+    label: str
+    media_index: int = 0
+    part_index: int = 0
+
+
 TRANSCODE_QUALITY_OPTIONS: dict[str, tuple[str, int | None, str]] = {
     "original": ("Original", None, ""),
     "1080p_8": ("1080p 8 Mbps", 8000, "1920x1080"),
@@ -76,6 +85,7 @@ def play_with_mpv(
     terminal_video_profile: str = "smooth",
     transcode_quality: str = "original",
     resume: bool = True,
+    version_part_id: str | None = None,
 ) -> PlayerHandle:
     if shutil.which("mpv") is None:
         log_debug("playback error: mpv was not found in PATH")
@@ -83,13 +93,30 @@ def play_with_mpv(
 
     browse_item = item
     selected_start_offset = resume_offset_ms(item)
-    item = full_metadata(item)
-    selected_subtitle = resolve_subtitle_choice(item, subtitle_choice)
-    selected_audio = resolve_audio_choice(item, audio_choice)
+    media_index = part_index = None
+    if version_part_id is not None:
+        item = required_full_metadata(item)
+        item, media_index, part_index = selected_media_version(item, version_part_id)
+    else:
+        item = full_metadata(item)
+    selected_subtitle = resolve_subtitle_choice(
+        item,
+        subtitle_choice,
+        match_language_only=version_part_id is not None,
+    )
+    selected_audio = resolve_audio_choice(
+        item,
+        audio_choice,
+        match_language_only=version_part_id is not None,
+    )
     subtitles = external_subtitle_urls(item, selected_subtitle)
     stream_kwargs = {}
+    if media_index is not None and part_index is not None:
+        stream_kwargs.update(mediaIndex=media_index, partIndex=part_index)
     force_transcode = playback_mode == "transcode"
-    direct_url = None if force_transcode else direct_play_url(item, selected_subtitle) or direct_play_url(browse_item, selected_subtitle)
+    direct_url = None if force_transcode else direct_play_url(item, selected_subtitle)
+    if direct_url is None and version_part_id is None and not force_transcode:
+        direct_url = direct_play_url(browse_item, selected_subtitle)
     fallback_subtitle_id = selected_subtitle_stream_id(item, selected_subtitle) if not subtitles and not direct_url else None
     if fallback_subtitle_id is not None:
         stream_kwargs["subtitleStreamID"] = fallback_subtitle_id
@@ -367,6 +394,24 @@ def full_metadata(item: Any) -> Any:
         return item
 
 
+def required_full_metadata(item: Any) -> Any:
+    if is_online_metadata(item):
+        online_item = online_vod_metadata(item)
+        if online_item is None:
+            raise PlayerError("could not refresh selected media version from Plex")
+        return online_item
+    reload_item = getattr(item, "reload", None)
+    if not callable(reload_item):
+        raise PlayerError("selected media version cannot be refreshed from Plex")
+    try:
+        reloaded = reload_item()
+    except Exception as exc:
+        raise PlayerError(f"could not refresh selected media version from Plex: {exc}") from exc
+    if reloaded is None:
+        raise PlayerError("could not refresh selected media version from Plex")
+    return reloaded
+
+
 def online_vod_metadata(item: Any) -> Any | None:
     key = metadata_item_key(item)
     server = getattr(item, "_server", None)
@@ -397,18 +442,36 @@ def metadata_item_key(item: Any) -> str:
     return ""
 
 
-def resolve_subtitle_choice(item: Any, choice: StreamChoice | None) -> Any:
+def resolve_subtitle_choice(
+    item: Any,
+    choice: StreamChoice | None,
+    match_language_only: bool = False,
+) -> Any:
     if choice is None:
         return None
     if choice.stream_id == 0:
         return 0
-    return find_stream_by_id(subtitle_streams(item), choice.stream_id) or choice.stream
+    streams = subtitle_streams(item)
+    if not match_language_only:
+        selected = find_stream_by_id(streams, choice.stream_id)
+        if selected is not None:
+            return selected
+    return find_stream_by_language(streams, choice.stream)
 
 
-def resolve_audio_choice(item: Any, choice: StreamChoice | None) -> Any:
+def resolve_audio_choice(
+    item: Any,
+    choice: StreamChoice | None,
+    match_language_only: bool = False,
+) -> Any:
     if choice is None:
         return None
-    return find_stream_by_id(audio_streams(item), choice.stream_id) or choice.stream
+    streams = audio_streams(item)
+    if not match_language_only:
+        selected = find_stream_by_id(streams, choice.stream_id)
+        if selected is not None:
+            return selected
+    return find_stream_by_language(streams, choice.stream)
 
 
 def transcode_quality_kwargs(value: str) -> dict[str, object]:
@@ -447,6 +510,77 @@ def external_subtitle_urls(item: Any, selected_subtitle: Any = None) -> list[str
 
 def direct_play_url(item: Any, selected_subtitle: Any = None) -> str | None:
     return first_part_url(item)
+
+
+def media_version_choices(item: Any) -> list[MediaVersionChoice]:
+    item = full_metadata(item)
+    choices: list[MediaVersionChoice] = []
+    for media_index, media in enumerate(getattr(item, "media", []) or []):
+        parts = list(getattr(media, "parts", []) or [])
+        if not parts:
+            continue
+        part = parts[0]
+        part_id = str(getattr(part, "id", "") or "")
+        if not part_id:
+            continue
+        choices.append(MediaVersionChoice(part_id, media_version_label(media, part), media_index, 0))
+    return choices
+
+
+def media_version_count(item: Any) -> int:
+    return sum(1 for media in getattr(item, "media", []) or [] if getattr(media, "parts", None))
+
+
+def media_version_label(media: Any, part: Any) -> str:
+    values: list[str] = []
+    resolution = str(getattr(media, "videoResolution", "") or "").strip()
+    if resolution:
+        normalized_resolution = resolution.lower()
+        if normalized_resolution.isdigit():
+            values.append(f"{resolution}p")
+        elif normalized_resolution in {"sd", "hd", "uhd", "4k", "8k"}:
+            values.append(resolution.upper())
+        else:
+            values.append(resolution)
+    bitrate = getattr(media, "bitrate", None)
+    try:
+        if bitrate:
+            values.append(f"{int(bitrate) / 1000:.1f} Mbps")
+    except (TypeError, ValueError):
+        pass
+    container = str(getattr(media, "container", "") or "").strip()
+    if container:
+        values.append(container.upper())
+    filename = Path(str(getattr(part, "file", "") or "")).name
+    if filename:
+        values.append(filename)
+    return " · ".join(values) or f"Media part {getattr(part, 'id', '')}"
+
+
+def scoped_media_version(item: Any, part_id: str) -> Any:
+    scoped, _media_index, _part_index = selected_media_version(item, part_id)
+    return scoped
+
+
+def selected_media_version(item: Any, part_id: str) -> tuple[Any, int, int]:
+    for media_index, media in enumerate(getattr(item, "media", []) or []):
+        for part_index, part in enumerate(getattr(media, "parts", []) or []):
+            if str(getattr(part, "id", "") or "") != str(part_id):
+                continue
+            scoped = copy(item)
+            scoped.media = [media]
+            return scoped, media_index, part_index
+    raise PlayerError("selected media version is no longer available; reopen the version picker")
+
+
+def find_stream_by_language(streams: list[Any], selected_stream: Any) -> Any:
+    language = stream_language_key(selected_stream)
+    if not language:
+        return None
+    for stream in streams:
+        if stream_language_key(stream) == language:
+            return stream
+    return None
 
 
 def is_drm_vod_stream(url: str) -> bool:

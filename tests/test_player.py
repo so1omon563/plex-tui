@@ -12,6 +12,7 @@ from plextui.player import (
     direct_play_url,
     full_metadata,
     is_drm_vod_stream,
+    media_version_choices,
     PlayerError,
     ProgressMonitor,
     StreamChoice,
@@ -185,6 +186,136 @@ def test_playback_can_start_from_beginning_instead_of_resuming():
     assert args[-1] == "http://plex/library/parts/1/file.mkv"
     assert handle.stream_mode == "direct"
     assert not hasattr(item, "kwargs")
+
+
+def test_media_version_picker_labels_and_plays_selected_part():
+    class VersionPart(Part):
+        def __init__(self, part_id, key, filename, audio, subtitle):
+            self.id = part_id
+            self.key = key
+            self.file = filename
+            self.audio = audio
+            self.subtitle = subtitle
+
+        def audioStreams(self):
+            return [self.audio]
+
+        def subtitleStreams(self):
+            return [self.subtitle]
+
+    class VersionMedia:
+        container = "mkv"
+
+        def __init__(self, resolution, bitrate, part):
+            self.videoResolution = resolution
+            self.bitrate = bitrate
+            self.parts = [part]
+
+    class MultiVersionItem(Item):
+        stream_calls = []
+
+        def __init__(self):
+            old_audio = MagicMock(id=42, languageCode="jpn")
+            old_subtitle = MagicMock(id=1, languageCode="eng", key=None)
+            new_audio = MagicMock(id=84, languageCode="jpn")
+            new_subtitle = MagicMock(id=2, languageCode="eng", key=None)
+            self.media = [
+                VersionMedia(
+                    "sd",
+                    1870,
+                    VersionPart(
+                        25020,
+                        "/library/parts/25020/old.mkv",
+                        "/media/Old Bluray.mkv",
+                        old_audio,
+                        old_subtitle,
+                    ),
+                ),
+                VersionMedia(
+                    "480",
+                    1835,
+                    VersionPart(
+                        25033,
+                        "/library/parts/25033/new.mkv",
+                        "/media/New SDTV.mkv",
+                        new_audio,
+                        new_subtitle,
+                    ),
+                ),
+            ]
+
+        def iterParts(self):
+            return [part for media in self.media for part in media.parts]
+
+        def getStreamURL(self, **kwargs):
+            self.stream_calls.append(kwargs)
+            return "http://plex/transcode.m3u8"
+
+    item = MultiVersionItem()
+    choices = media_version_choices(item)
+
+    assert [choice.part_id for choice in choices] == ["25020", "25033"]
+    assert choices[1].label == "480p · 1.8 Mbps · MKV · New SDTV.mkv"
+
+    old_part = item.media[0].parts[0]
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        play_with_mpv(
+            item,
+            audio_choice=StreamChoice(42, "Japanese", old_part.audio),
+            subtitle_choice=StreamChoice(1, "English", old_part.subtitle),
+            version_part_id=choices[1].part_id,
+        )
+
+    assert popen.call_args.args[0][-1] == "http://plex/library/parts/25033/new.mkv"
+    assert "--aid=1" in popen.call_args.args[0]
+    assert "--sid=1" in popen.call_args.args[0]
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()),
+    ):
+        play_with_mpv(
+            item,
+            audio_choice=StreamChoice(42, "Japanese", old_part.audio),
+            subtitle_choice=StreamChoice(1, "English", old_part.subtitle),
+            playback_mode="transcode",
+            version_part_id=choices[1].part_id,
+        )
+
+    assert item.stream_calls[-1]["mediaIndex"] == 1
+    assert item.stream_calls[-1]["partIndex"] == 0
+    assert item.stream_calls[-1]["audioStreamID"] == 84
+    assert item.stream_calls[-1]["subtitleStreamID"] == 2
+
+
+def test_media_version_playback_requires_successful_metadata_reload():
+    class StaleVersionItem(Item):
+        media = [MagicMock(parts=[MagicMock(id=25033)])]
+
+        def reload(self):
+            raise RuntimeError("server unavailable")
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        pytest.raises(PlayerError, match="could not refresh selected media version"),
+    ):
+        play_with_mpv(StaleVersionItem(), version_part_id="25033")
+
+
+def test_playback_rejects_media_version_removed_after_picker_opened():
+    item = Item()
+    item.media = []
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        pytest.raises(PlayerError, match="no longer available"),
+    ):
+        play_with_mpv(item, version_part_id="missing")
 
 
 def test_online_metadata_playback_uses_part_url():

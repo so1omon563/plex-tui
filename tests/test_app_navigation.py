@@ -24,6 +24,7 @@ from plextui.app import (
     LIVE_TV_GUIDE_LOADING_STATUS,
     LoadMoreRow,
     MediaGrid,
+    MediaVersionRow,
     OnPlexLiveRow,
     OnPlexRow,
     PlexServicesRow,
@@ -44,7 +45,7 @@ from textual.widgets import ListView
 from plextui.auth import ProfileChoice
 from plextui.config import MAX_PAGE_SIZE, AppConfig
 from plextui.models import LibraryItem, MediaItem
-from plextui.player import PlayerError, StreamChoice
+from plextui.player import MediaVersionChoice, PlayerError, StreamChoice
 from plextui.plex_service import MediaPage
 
 STARTUP_LOAD_SERVER = PlexTuiApp.load_server
@@ -1141,6 +1142,10 @@ def test_remove_continue_watching_requires_continue_watching_view():
 
 def test_stream_picker_updates_active_playback():
     asyncio.run(run_stream_picker_live_switch_check())
+
+
+def test_media_version_picker_plays_selected_file():
+    asyncio.run(run_media_version_picker_check())
 
 
 def test_quick_preference_actions_update_config():
@@ -4618,6 +4623,40 @@ async def run_remove_continue_watching_requires_view_check():
 
         assert raw.remove_calls == 0
         assert app.query_one("#status").content == "Open Continue Watching or a playlist before removing an item"
+
+
+async def run_media_version_picker_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        item = MediaItem("Episode", "", "episode", "1", True, Raw())
+        choices = [
+            MediaVersionChoice("10", "480p · Old.mkv"),
+            MediaVersionChoice("20", "480p · New.mkv"),
+        ]
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.browsing_stack = [BrowseState("Season 1", [item])]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        with patch("plextui.app.media_version_choices", return_value=choices):
+            worker = app.open_media_version_picker(item)
+            await asyncio.wait_for(worker.wait(), timeout=20)
+
+        rows = []
+        for _ in range(20):
+            rows = [row for row in app.query_one("#media").children if isinstance(row, MediaVersionRow)]
+            if len(rows) == 2:
+                break
+            await pilot.pause(0.1)
+        assert [row.choice.part_id for row in rows] == ["10", "20"]
+        assert app.picker_visible
+
+        with patch.object(app, "play_media") as play:
+            app.choose_media_version(rows[1])
+
+        play.assert_called_once_with(item, resume=False, version_part_id="20")
+        assert not app.picker_visible
 
 
 async def run_stream_picker_live_switch_check():
