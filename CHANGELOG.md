@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required standalone PR-title tokens for version and publishing markers so
+  marker-like words cannot create tags or releases.
+
 ## 0.17.1 - 2026-07-24
 
 - Added a `V` Play Version picker for movies and episodes with multiple Plex

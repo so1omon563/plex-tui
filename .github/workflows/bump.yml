@@ -10,13 +10,7 @@ env:
 
 jobs:
   bump-version:
-    if: |
-      github.event.pull_request.merged == true &&
-      (
-        contains(github.event.pull_request.title, '#patch') ||
-        contains(github.event.pull_request.title, '#minor') ||
-        contains(github.event.pull_request.title, '#major')
-      )
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -24,6 +18,7 @@ jobs:
       new_tag: ${{ steps.bump.outputs.new_version }}
       previous_tag: ${{ steps.bump.outputs.previous_version }}
       skipped: ${{ steps.bump.outputs.skipped }}
+      bump_requested: ${{ steps.release-intent.outputs.bump_requested }}
       release_requested: ${{ steps.release-intent.outputs.release_requested }}
 
     steps:
@@ -32,37 +27,28 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Detect release markers
+        id: release-intent
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: python scripts/check_release.py --pr-title "$PR_TITLE" --github-output "$GITHUB_OUTPUT"
+
       - name: Bump version tag
         id: bump
+        if: steps.release-intent.outputs.bump_requested == 'true'
         uses: so1omon563/custom-semver-bumper@v1
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           branch_name: ${{ github.event.pull_request.head.ref }}
+          default_bump: none
           # Floating pointer tags are owned by release-creator so they only move
           # when a GitHub Release is intentionally published.
-
-      - name: Detect release request
-        id: release-intent
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          set -euo pipefail
-
-          text="$(printf '%s\n' "$PR_TITLE" | tr '[:upper:]' '[:lower:]')"
-          release_requested=false
-          for marker in "#release" "#publish" "#ship"; do
-            if grep -qF "$marker" <<< "$text"; then
-              release_requested=true
-              break
-            fi
-          done
-
-          echo "release_requested=$release_requested" >> "$GITHUB_OUTPUT"
 
   create-release:
     name: Create GitHub Release
     needs: bump-version
     if: |
+      needs.bump-version.outputs.bump_requested == 'true' &&
       needs.bump-version.outputs.release_requested == 'true' &&
       needs.bump-version.outputs.skipped != 'true'
     runs-on: ubuntu-latest
