@@ -1715,6 +1715,58 @@ async def run_startup_continue_watching_default_check(monkeypatch):
         assert service.entry_calls == []
 
 
+def test_overlapping_server_loads_keep_service_config_worker_local(monkeypatch):
+    first_started = threading.Event()
+    release_first = threading.Event()
+    configs = iter([
+        AppConfig("http://server-a", "token-a", "client"),
+        AppConfig("http://server-b", "token-b", "client"),
+    ])
+    services = {}
+
+    class Service:
+        friendly_name = "Server"
+
+        def __init__(self, service_config):
+            self.config = service_config
+            self.server_identifier = service_config.base_url.rsplit("-", 1)[-1]
+            services[service_config.base_url] = self
+            if service_config.base_url.endswith("server-a"):
+                first_started.set()
+                assert release_first.wait(timeout=2)
+
+        def libraries(self):
+            return []
+
+    fake = SimpleNamespace(
+        server_load_token=2,
+        config=AppConfig("", "", "client"),
+        service=None,
+        call_from_thread=lambda callback, *args: callback(*args),
+        apply_config_theme=lambda: None,
+        set_status=lambda _message: None,
+        populate_libraries=lambda _libraries: None,
+        open_continue_watching=lambda: None,
+    )
+    monkeypatch.setattr(app_module, "load_config", lambda: next(configs))
+    monkeypatch.setattr(app_module, "PlexService", Service)
+
+    first = threading.Thread(target=PlexTuiApp._load_server.__wrapped__, args=(fake, 1))
+    second = threading.Thread(target=PlexTuiApp._load_server.__wrapped__, args=(fake, 2))
+    first.start()
+    assert first_started.wait(timeout=2)
+    second.start()
+    second.join(timeout=2)
+    release_first.set()
+    first.join(timeout=2)
+
+    assert services["http://server-a"].config.base_url == "http://server-a"
+    assert services["http://server-a"].config.server_identifier == "a"
+    assert services["http://server-b"].config.base_url == "http://server-b"
+    assert services["http://server-b"].config.server_identifier == "b"
+    assert fake.service is services["http://server-b"]
+
+
 async def run_playlists_entrypoint_check():
     service = PlaylistService()
     app = PlexTuiApp()
@@ -4200,6 +4252,15 @@ async def run_settings_library_visibility_check():
         assert isinstance(rows[2], LibraryRow)
         assert rows[2].library.title == "Movies"
         assert isinstance(rows[3], PlexServicesRow)
+
+        config_on_server_a = replace(app.config, server_identifier="server-a")
+        app.config = replace(config_on_server_a, server_identifier="server-b")
+        app.libraries = [movies, tv]
+        with patch("plextui.app.save_config"):
+            app.toggle_library_visibility("1")
+        assert app.config.current_hidden_library_keys == ("1",)
+        app.config = replace(app.config, server_identifier="server-a")
+        assert app.config.current_hidden_library_keys == ("2",)
 
 
 async def run_settings_sidebar_entrypoint_visibility_check():

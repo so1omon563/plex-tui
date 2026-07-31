@@ -143,6 +143,8 @@ def test_config_example_parses_and_uses_known_fields():
         "theme",
     }
     assert raw["base_url"]
+    assert "hidden_library_keys =" not in example
+    assert "library_order_keys =" not in example
     assert raw["token"]
     assert raw["client_identifier"]
     assert 'library_enter_action = "library"' in example
@@ -372,6 +374,8 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     assert loaded.library_order_keys == ("7", "2")
     assert loaded.hidden_library_keys_server_identifier == "server-a"
     assert loaded.library_order_keys_server_identifier == "server-a"
+    assert loaded.hidden_library_keys_by_server == (("server-a", ("2", "7")),)
+    assert loaded.library_order_keys_by_server == (("server-a", ("7", "2")),)
     assert loaded.grid_density == "large"
     assert loaded.show_playlists is False
     assert loaded.show_discover is False
@@ -387,6 +391,8 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     assert 'library_order_keys = "7,2"' in text
     assert 'hidden_library_keys_server_identifier = "server-a"' in text
     assert 'library_order_keys_server_identifier = "server-a"' in text
+    assert 'hidden_library_keys_by_server = "{\\"server-a\\":[\\"2\\",\\"7\\"]}"' in text
+    assert 'library_order_keys_by_server = "{\\"server-a\\":[\\"7\\",\\"2\\"]}"' in text
     assert 'grid_density = "large"' in text
     assert "show_playlists = false" in text
     assert "show_discover" not in text
@@ -516,6 +522,34 @@ def test_environment_connection_override_clears_unverifiable_legacy_preferences(
 
     assert loaded.hidden_library_keys == ()
     assert loaded.library_order_keys == ()
+
+
+def test_library_preferences_round_trip_for_multiple_servers(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    monkeypatch.setattr(config, "config_path", lambda: config_file)
+    saved = config.AppConfig(
+        "http://server-b",
+        "token-b",
+        "client",
+        server_identifier="server-b",
+        hidden_library_keys=("2",),
+        library_order_keys=("2", "1"),
+        hidden_library_keys_server_identifier="server-b",
+        library_order_keys_server_identifier="server-b",
+        hidden_library_keys_by_server=(("server-a", ("1",)),),
+        library_order_keys_by_server=(("server-a", ("1", "2")),),
+    )
+
+    config.save_config(saved)
+    loaded_b = config.load_config()
+    loaded_a = config.AppConfig(
+        **{**loaded_b.__dict__, "server_identifier": "server-a"}
+    )
+
+    assert loaded_b.current_hidden_library_keys == ("2",)
+    assert loaded_b.current_library_order_keys == ("2", "1")
+    assert loaded_a.current_hidden_library_keys == ("1",)
+    assert loaded_a.current_library_order_keys == ("1", "2")
 
 
 def test_library_order_keys_parse_unique_csv_values(tmp_path, monkeypatch):

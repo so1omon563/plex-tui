@@ -61,6 +61,7 @@ from .config import (
     default_config,
     debug_log_path,
     load_config,
+    replace_server_library_keys,
     save_config,
     valid_mpv_window_size,
     write_debug_log,
@@ -761,6 +762,7 @@ class PlexTuiApp(App[None]):
     search_return_state: BrowseState | None
     search_token: int
     profile_request_token: int
+    server_load_token: int
     applying_config_theme: bool
     detail_refresh_token: int
     navigation_worker: Worker[Any] | None
@@ -821,6 +823,7 @@ class PlexTuiApp(App[None]):
         self.search_return_state = None
         self.search_token = 0
         self.profile_request_token = 0
+        self.server_load_token = 0
         self.applying_config_theme = False
         self.detail_refresh_token = 0
         self.navigation_worker = None
@@ -920,26 +923,35 @@ class PlexTuiApp(App[None]):
             return
         self.config = updated_config
 
+    def load_server(self) -> Worker[Any]:
+        self.server_load_token += 1
+        self.set_status("Connecting to Plex...")
+        return self._load_server(self.server_load_token)
+
     @work(thread=True)
-    def load_server(self) -> None:
-        self.post_message(StatusChanged("Connecting to Plex..."))
+    def _load_server(self, token: int) -> None:
         try:
-            self.config = load_config()
-            if not self.config.base_url or not self.config.token:
-                self.call_from_thread(self.begin_login)
+            config = load_config()
+            if not config.base_url or not config.token:
+                self.call_from_thread(lambda: token == self.server_load_token and self.begin_login())
                 return
-            service = PlexService(self.config)
-            self.config = replace(
-                self.config,
+            service = PlexService(config)
+            config = replace(
+                config,
                 server_identifier=str(getattr(service, "server_identifier", "") or ""),
             )
-            service.config = self.config
+            service.config = config
             libraries = service.libraries()
         except Exception as exc:
-            self.call_from_thread(self.show_error, str(exc))
+            self.call_from_thread(
+                lambda message=str(exc): token == self.server_load_token and self.show_error(message)
+            )
             return
 
         def update() -> None:
+            if token != self.server_load_token:
+                return
+            self.config = config
             self.service = service
             self.detail_cache = {}
             self.libraries = libraries
@@ -3243,6 +3255,11 @@ class PlexTuiApp(App[None]):
         if not self.update_preferences(
             hidden_library_keys=next_hidden,
             hidden_library_keys_server_identifier=self.config.server_identifier,
+            hidden_library_keys_by_server=replace_server_library_keys(
+                self.config.hidden_library_keys_by_server,
+                self.config.server_identifier,
+                next_hidden,
+            ),
         ):
             return
         visible = visible_libraries(self.libraries, self.config)
@@ -3276,6 +3293,11 @@ class PlexTuiApp(App[None]):
         if not self.update_preferences(
             library_order_keys=tuple(keys),
             library_order_keys_server_identifier=self.config.server_identifier,
+            library_order_keys_by_server=replace_server_library_keys(
+                self.config.library_order_keys_by_server,
+                self.config.server_identifier,
+                tuple(keys),
+            ),
         ):
             return
         visible = visible_libraries(self.libraries, self.config)

@@ -60,14 +60,8 @@ client_identifier = "plex-tui-your-stable-client-id"
 # grid_prefetch_pages controls how many grid pages ahead poster artwork is
 # prepared. Use 0 to fetch only the visible page.
 # grid_prefetch_pages = 3
-# hidden_library_keys hides noisy Plex libraries from the sidebar. Use Settings
-# to toggle libraries after connecting, or list keys manually as comma-separated
-# values. plex-tui automatically scopes these keys and library_order_keys to the
-# connected server's stable identity.
-# hidden_library_keys = "1,4"
-# library_order_keys pins the sidebar order. Use Settings to move libraries
-# after connecting, or list keys manually as comma-separated values.
-# library_order_keys = "2,1,4"
+# Use Settings after connecting to hide or reorder libraries. plex-tui stores
+# those preferences against each connected server's verified stable identity.
 # show_playlists controls the playlists entrypoint. Discover, On Plex, and
 # Live TV are optional Plex features: disabled by default, discoverable from
 # the Plex Services sidebar row, and easy to enable in Settings.
