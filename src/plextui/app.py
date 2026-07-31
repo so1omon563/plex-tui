@@ -1652,6 +1652,9 @@ class PlexTuiApp(App[None]):
 
     def invalidate_navigation_results(self) -> None:
         self.navigation_worker = None
+        self.invalidate_search_results()
+
+    def invalidate_search_results(self) -> None:
         self.search_token += 1
         self.workers.cancel_group(self, "search")
 
@@ -3918,6 +3921,7 @@ class PlexTuiApp(App[None]):
             self.search_token += 1
             self.run_search(query, False, self.search_token, live=True)
         else:
+            self.invalidate_search_results()
             self.restore_fuzzy_search_source()
 
     @work(thread=True, exclusive=True, group="search")
@@ -3932,7 +3936,7 @@ class PlexTuiApp(App[None]):
             def update_fuzzy() -> None:
                 if self.search_was_cancelled(token):
                     return
-                self.post_message(StatusChanged(f"Fuzzy searching {local_source.title} for {query}..."))
+                self.set_status(f"Fuzzy searching {local_source.title} for {query}...")
                 self.show_loading_state(title, f"Matching loaded items from {local_source.title}.")
                 self.show_fuzzy_search_results(query, local_source, matches, focus=True)
 
@@ -3942,17 +3946,30 @@ class PlexTuiApp(App[None]):
         if self.service is None:
             return
         scope = "all libraries" if global_search else "current library"
-        self.post_message(StatusChanged(f"Searching {scope} for {query}..."))
         title = f"Global search: {query}" if global_search else f"Search: {query}"
-        self.call_from_thread(self.show_loading_state, title, f"Searching {scope}.")
+
+        def show_search_loading() -> None:
+            if self.search_was_cancelled(token):
+                return
+            self.set_status(f"Searching {scope} for {query}...")
+            self.show_loading_state(title, f"Searching {scope}.")
+
+        self.call_from_thread(show_search_loading)
+        if self.search_was_cancelled(token):
+            return
         started = time.perf_counter()
         try:
             library = None if global_search else self.selected_library
             page = self.service.search_page(query, library, 0, self.config.page_size)
         except Exception as exc:
-            if self.search_was_cancelled(token):
-                return
-            self.call_from_thread(self.show_error, str(exc))
+            message = str(exc)
+
+            def show_search_error() -> None:
+                if self.search_was_cancelled(token):
+                    return
+                self.show_error(message)
+
+            self.call_from_thread(show_search_error)
             return
         write_performance_log(
             "search_page",
@@ -4085,17 +4102,35 @@ class PlexTuiApp(App[None]):
         self.set_status(f"{title}: {len(matches)} matches from {len(local_source.items)} loaded items")
 
     def restore_fuzzy_search_source(self) -> None:
+        overlay_visible = (
+            getattr(self, "help_visible", False)
+            or getattr(self, "settings_visible", False)
+            or getattr(self, "picker_visible", False)
+            or getattr(self, "playlist_picker_visible", False)
+        )
         if self.browsing_stack and self.browsing_stack[-1].source == "fuzzy_search":
             self.browsing_stack.pop()
-            if self.browsing_stack:
+            if self.browsing_stack and not overlay_visible:
                 state = self.browsing_stack[-1]
                 self.show_browse_state(state)
                 self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items))
             return
-        if self.browsing_stack and self.browsing_stack[-1].search and self.search_return_state is not None:
-            self.browsing_stack.pop()
+        if self.search_return_state is not None:
             state = self.search_return_state
             self.search_return_state = None
+            current = self.current_browse_state()
+            if current is not state:
+                if (
+                    current is not None
+                    and current.search
+                    and len(self.browsing_stack) >= 2
+                    and self.browsing_stack[-2] is state
+                ):
+                    self.browsing_stack.pop()
+                else:
+                    return
+            if overlay_visible:
+                return
             self.show_browse_state(state)
             self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items))
 

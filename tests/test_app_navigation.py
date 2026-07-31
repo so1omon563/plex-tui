@@ -293,6 +293,60 @@ def test_search_back_restores_visible_and_active_browse_state():
     asyncio.run(run_search_back_restores_active_state_check())
 
 
+def test_clearing_search_does_not_restore_stale_source_after_navigation():
+    app = PlexTuiApp()
+    source = BrowseState(
+        "Movies",
+        [MediaItem("Old Movie", "", "movie", "old", True, Raw())],
+        source="library",
+        total=1,
+    )
+    current = BrowseState(
+        "TV Shows",
+        [MediaItem("Current Show", "", "show", "current", True, Raw())],
+        source="library",
+        total=1,
+    )
+    shown_states = []
+    statuses = []
+    app.browsing_stack = [current]
+    app.search_return_state = source
+    app.show_browse_state = shown_states.append
+    app.set_status = statuses.append
+
+    app.restore_fuzzy_search_source()
+
+    assert app.current_browse_state() is current
+    assert app.search_return_state is None
+    assert shown_states == []
+    assert statuses == []
+
+
+def test_clearing_search_does_not_repaint_newer_overlay():
+    app = PlexTuiApp()
+    source = BrowseState(
+        "Movies",
+        [MediaItem("Movie", "", "movie", "movie", True, Raw())],
+        source="library",
+        total=1,
+    )
+    shown_states = []
+    statuses = []
+    app.browsing_stack = [source]
+    app.search_return_state = source
+    app.settings_visible = True
+    app.show_browse_state = shown_states.append
+    app.set_status = statuses.append
+
+    app.restore_fuzzy_search_source()
+
+    assert app.current_browse_state() is source
+    assert app.search_return_state is None
+    assert app.settings_visible
+    assert shown_states == []
+    assert statuses == []
+
+
 def test_discover_alternate_action_opens_on_plex_vod():
     asyncio.run(run_discover_vod_entrypoint_check())
 
@@ -462,7 +516,10 @@ def test_current_view_search_uses_fuzzy_loaded_items():
     assert app.browsing_stack[-1].title == "Fuzzy search: interstelar"
     assert [item.title for item in app.browsing_stack[-1].items] == ["Interstellar"]
     assert shown_states == [app.browsing_stack[-1]]
-    assert statuses == ["Fuzzy search: interstelar: 1 matches from 3 loaded items"]
+    assert statuses == [
+        "Fuzzy searching Movies for interstelar...",
+        "Fuzzy search: interstelar: 1 matches from 3 loaded items",
+    ]
 
 
 def test_current_library_search_queries_plex_when_library_is_not_fully_loaded():
@@ -500,7 +557,10 @@ def test_current_library_search_queries_plex_when_library_is_not_fully_loaded():
     assert app.browsing_stack[-1].title == "Search: gantz"
     assert [item.title for item in app.browsing_stack[-1].items] == ["Gantz"]
     assert shown_states == [app.browsing_stack[-1]]
-    assert statuses == ["Search: gantz: 1 items"]
+    assert statuses == [
+        "Searching current library for gantz...",
+        "Search: gantz: 1 items",
+    ]
 
 
 def test_live_current_library_search_queries_plex_when_library_is_not_fully_loaded():
@@ -599,6 +659,7 @@ def test_current_view_search_updates_results_while_typing():
     app.config = AppConfig("http://plex", "token", "client-id")
     app.input_mode = "search"
     app.search_global = False
+    app.search_token = 0
     app.browsing_stack = [
         BrowseState(
             "Movies",
@@ -1239,6 +1300,18 @@ def test_newer_navigation_discards_slow_child_result():
 
 def test_newer_navigation_cancels_slow_search_result():
     asyncio.run(run_newer_navigation_cancels_slow_search_result_check())
+
+
+def test_clearing_live_search_cancels_slow_result():
+    asyncio.run(run_clearing_live_search_cancels_slow_result_check())
+
+
+def test_clearing_live_search_before_loading_skips_stale_loading():
+    asyncio.run(run_clearing_live_search_before_loading_check())
+
+
+def test_clearing_live_search_before_error_skips_stale_error():
+    asyncio.run(run_clearing_live_search_before_error_check())
 
 
 def test_newer_navigation_cancels_slow_fuzzy_search_result():
@@ -2999,6 +3072,173 @@ async def run_newer_navigation_cancels_slow_search_result_check():
         assert service.search_calls == [("stale", library, 0, 40)]
         assert [state.title for state in app.browsing_stack] == ["Continue Watching"]
         assert [item.title for item in app.browsing_stack[-1].items] == ["Current"]
+
+
+async def run_clearing_live_search_cancels_slow_result_check():
+    started = threading.Event()
+    release = threading.Event()
+    source_item = MediaItem("Current", "", "movie", "current", True, Raw())
+    stale_item = MediaItem("Late search result", "", "movie", "late", True, Raw())
+
+    class BlockingSearchService(FakePagedService):
+        def search_page(self, query: str, library: LibraryItem | None, start: int, size: int) -> MediaPage:
+            started.set()
+            release.wait(timeout=10)
+            return MediaPage([stale_item], start=0, total=1)
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        library = LibraryItem("Movies", "1", "movie", object())
+        source = BrowseState("Movies", [source_item], library, next_start=1, total=2)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = BlockingSearchService(MediaPage([], start=0, total=0))
+        app.selected_library = library
+        app.input_mode = "search"
+        app.search_global = False
+        app.search_return_state = None
+        app.browsing_stack = [source]
+        app.suppress_auto_load = True
+        search_workers = []
+        run_search = app.run_search
+        app.run_search = lambda *args, **kwargs: search_workers.append(run_search(*args, **kwargs))
+        shown_states: list[BrowseState] = []
+        statuses: list[str] = []
+        search = SimpleNamespace(id="search")
+
+        with (
+            patch.object(app, "show_loading_state"),
+            patch.object(app, "show_browse_state", side_effect=shown_states.append),
+            patch.object(app, "focus_media_browser"),
+            patch.object(app, "set_status", side_effect=statuses.append),
+        ):
+            app.on_input_changed(SimpleNamespace(input=search, value="late"))
+            try:
+                for _ in range(50):
+                    if started.is_set():
+                        break
+                    await asyncio.sleep(0.1)
+                assert started.is_set()
+
+                token = app.search_token
+                app.on_input_changed(SimpleNamespace(input=search, value=""))
+                assert app.search_was_cancelled(token)
+                assert search_workers[0].is_cancelled
+                assert [state.title for state in app.browsing_stack] == ["Movies"]
+                assert shown_states == [source]
+                cleared_statuses = list(statuses)
+
+                release.set()
+                await asyncio.sleep(0.5)
+            finally:
+                release.set()
+
+        assert [state.title for state in app.browsing_stack] == ["Movies"]
+        assert statuses == cleared_statuses
+        assert statuses[-1] == "Movies: 1 of 2 items loaded"
+
+
+async def run_clearing_live_search_before_loading_check():
+    before_loading = threading.Event()
+    release_loading = threading.Event()
+    source_item = MediaItem("Current", "", "movie", "current", True, Raw())
+    service = FakePagedService(MediaPage([], start=0, total=0))
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        library = LibraryItem("Movies", "1", "movie", object())
+        source = BrowseState("Movies", [source_item], library, next_start=1, total=2)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.selected_library = library
+        app.input_mode = "search"
+        app.search_return_state = source
+        app.browsing_stack = [source]
+        call_from_thread = app.call_from_thread
+
+        def block_before_loading(callback, *args, **kwargs):
+            if getattr(callback, "__name__", "") == "show_search_loading":
+                before_loading.set()
+                release_loading.wait(timeout=10)
+            return call_from_thread(callback, *args, **kwargs)
+
+        app.call_from_thread = block_before_loading
+        shown_loading = []
+        search = SimpleNamespace(id="search")
+        with patch.object(app, "show_loading_state", side_effect=lambda *args: shown_loading.append(args)):
+            app.on_input_changed(SimpleNamespace(input=search, value="late"))
+            try:
+                for _ in range(50):
+                    if before_loading.is_set():
+                        break
+                    await asyncio.sleep(0.1)
+                assert before_loading.is_set()
+
+                app.on_input_changed(SimpleNamespace(input=search, value=""))
+                release_loading.set()
+                await asyncio.sleep(0.5)
+            finally:
+                release_loading.set()
+
+        assert shown_loading == []
+        assert service.search_calls == []
+        assert app.current_browse_state() is source
+
+
+async def run_clearing_live_search_before_error_check():
+    before_error = threading.Event()
+    release_error = threading.Event()
+    source_item = MediaItem("Current", "", "movie", "current", True, Raw())
+
+    class FailingSearchService(FakePagedService):
+        def search_page(
+            self,
+            query: str,
+            library: LibraryItem | None,
+            start: int,
+            size: int,
+        ) -> MediaPage:
+            raise RuntimeError("stale search failure")
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        library = LibraryItem("Movies", "1", "movie", object())
+        source = BrowseState("Movies", [source_item], library, next_start=1, total=2)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = FailingSearchService(MediaPage([], start=0, total=0))
+        app.selected_library = library
+        app.input_mode = "search"
+        app.search_return_state = source
+        app.browsing_stack = [source]
+        call_from_thread = app.call_from_thread
+
+        def block_before_error(callback, *args, **kwargs):
+            if getattr(callback, "__name__", "") == "show_search_error":
+                before_error.set()
+                release_error.wait(timeout=10)
+            return call_from_thread(callback, *args, **kwargs)
+
+        app.call_from_thread = block_before_error
+        errors = []
+        search = SimpleNamespace(id="search")
+        with patch.object(app, "show_loading_state"), patch.object(app, "show_error", side_effect=errors.append):
+            app.on_input_changed(SimpleNamespace(input=search, value="late"))
+            try:
+                for _ in range(50):
+                    if before_error.is_set():
+                        break
+                    await asyncio.sleep(0.1)
+                assert before_error.is_set()
+
+                app.on_input_changed(SimpleNamespace(input=search, value=""))
+                release_error.set()
+                await asyncio.sleep(0.5)
+            finally:
+                release_error.set()
+
+        assert errors == []
+        assert app.current_browse_state() is source
 
 
 async def run_newer_navigation_cancels_slow_fuzzy_search_result_check():

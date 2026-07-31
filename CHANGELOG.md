@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Invalidated in-flight live searches when their query is cleared so delayed
+  results cannot reopen the cleared search.
 - Prevented invalid artwork responses from poisoning the persistent image cache.
 - Preserved immediate-parent Back navigation after opening an empty child.
 - Routed hosted Live TV guide pagination through the guide service.
