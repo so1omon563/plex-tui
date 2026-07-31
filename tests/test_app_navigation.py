@@ -1681,7 +1681,18 @@ async def run_startup_continue_watching_default_check(monkeypatch):
     item = MediaItem("In Progress", "", "movie", "cw-1", True, Raw())
     service = StartupService(MediaPage([item], start=0, total=1))
     monkeypatch.setattr(PlexTuiApp, "load_server", STARTUP_LOAD_SERVER)
-    monkeypatch.setattr(app_module, "load_config", lambda: AppConfig("http://plex", "token", "client-id"))
+    monkeypatch.setattr(
+        app_module,
+        "load_config",
+        lambda: AppConfig(
+            "http://plex",
+            "token",
+            "client-id",
+            hidden_library_keys=("1",),
+            server_identifier="server-a",
+            hidden_library_keys_server_identifier="server-a",
+        ),
+    )
     monkeypatch.setattr(app_module, "PlexService", lambda config: service)
     app = PlexTuiApp()
     async with app.run_test() as pilot:
@@ -1693,6 +1704,9 @@ async def run_startup_continue_watching_default_check(monkeypatch):
         libraries_view = app.query_one("#libraries")
         rows = list(libraries_view.children)
         assert isinstance(rows[0], ContinueWatchingRow)
+        assert isinstance(rows[2], LibraryRow)
+        assert rows[2].library.title == "Movies"
+        assert app.config.server_identifier == "server-b"
         assert libraries_view.highlighted_child is rows[0]
         assert app.browsing_stack[-1].source == "continue_watching"
         selected = await wait_for_selected_title(app, pilot, "In Progress")
@@ -2495,6 +2509,7 @@ class FakePagedService:
 
 class StartupService(FakePagedService):
     friendly_name = "Test Plex"
+    server_identifier = "server-b"
 
     def __init__(self, page: MediaPage) -> None:
         super().__init__(page)

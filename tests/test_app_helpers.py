@@ -1006,6 +1006,9 @@ def test_settings_rows_include_library_visibility_toggles():
         "client-id",
         hidden_library_keys=("2",),
         library_order_keys=("2", "1"),
+        server_identifier="server-a",
+        hidden_library_keys_server_identifier="server-a",
+        library_order_keys_server_identifier="server-a",
     )
     libraries = [
         LibraryItem("Movies", "1", "movie", object()),
@@ -1047,6 +1050,9 @@ def test_visible_libraries_filters_hidden_keys():
         "client-id",
         hidden_library_keys=("2", "missing"),
         library_order_keys=("2", "1"),
+        server_identifier="server-a",
+        hidden_library_keys_server_identifier="server-a",
+        library_order_keys_server_identifier="server-a",
     )
     libraries = [
         LibraryItem("Movies", "1", "movie", object()),
@@ -1233,7 +1239,14 @@ def test_sidebar_rows_use_stable_entrypoint_markers():
 
 
 def test_ordered_libraries_uses_saved_order_and_appends_new_libraries():
-    config = AppConfig("http://plex", "token", "client-id", library_order_keys=("3", "1", "missing"))
+    config = AppConfig(
+        "http://plex",
+        "token",
+        "client-id",
+        library_order_keys=("3", "1", "missing"),
+        server_identifier="server-a",
+        library_order_keys_server_identifier="server-a",
+    )
     libraries = [
         LibraryItem("Movies", "1", "movie", object()),
         LibraryItem("TV", "2", "show", object()),

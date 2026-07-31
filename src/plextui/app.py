@@ -929,6 +929,11 @@ class PlexTuiApp(App[None]):
                 self.call_from_thread(self.begin_login)
                 return
             service = PlexService(self.config)
+            self.config = replace(
+                self.config,
+                server_identifier=str(getattr(service, "server_identifier", "") or ""),
+            )
+            service.config = self.config
             libraries = service.libraries()
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
