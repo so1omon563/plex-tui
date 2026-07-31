@@ -5,7 +5,17 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 
 from plextui import __version__
-from plextui.auth import LoginSession, ProfileChoice, ServerChoice, profile_choices, reachable_advertised_urls, reachable_server_choices, plex_headers, switch_profile
+from plextui.auth import (
+    LoginSession,
+    ProfileChoice,
+    ServerChoice,
+    plex_headers,
+    plex_root_responds,
+    profile_choices,
+    reachable_advertised_urls,
+    reachable_server_choices,
+    switch_profile,
+)
 from plextui.config import AppConfig
 
 
@@ -286,8 +296,8 @@ def test_switch_profile_reuses_current_server_when_profile_has_no_resources(monk
     def switch_home_user(user, pin=None):
         return profile_account
 
-    def plex_root_responds(uri, token, timeout):
-        root_checks.append((uri, token, timeout))
+    def plex_root_responds(uri, token, timeout, server_identifier=""):
+        root_checks.append((uri, token, timeout, server_identifier))
         return uri == "http://plex.example:32400" and token == "Kid-token"
 
     home_account.switchHomeUser = switch_home_user
@@ -300,7 +310,7 @@ def test_switch_profile_reuses_current_server_when_profile_has_no_resources(monk
         ProfileChoice("Kid", "2", False, False, users[0]),
     )
 
-    assert root_checks == [("http://plex.example:32400", "Kid-token", 5)]
+    assert root_checks == [("http://plex.example:32400", "Kid-token", 5, "")]
     assert switched.base_url == "http://plex.example:32400"
     assert switched.token == "Kid-token"
     assert switched.account_token == "Kid-token"
@@ -355,6 +365,50 @@ def test_switch_profile_keeps_server_identity_when_url_changes(monkeypatch):
     assert saved["config"] == switched
 
 
+def test_switch_profile_prefers_exact_configured_url_over_stale_identifier(monkeypatch):
+    users = [FakeUser("Kid", 2)]
+    profile_account = FakeAccount(
+        [
+            FakeResource(
+                "Former Plex",
+                "former-token",
+                [],
+                reachable_uri="https://former.example:32400",
+                identifier="saved-server",
+            ),
+            FakeResource(
+                "Current Plex",
+                "current-token",
+                [],
+                reachable_uri="https://current.example:32400",
+                identifier="current-server",
+            ),
+        ],
+        token="Kid-token",
+        account_id=2,
+        title="Kid",
+    )
+    home_account = FakeAccount([], token="home-token", users=users)
+    home_account.switchHomeUser = lambda user, pin=None: profile_account
+    monkeypatch.setattr("plextui.auth.MyPlexAccount", lambda token: home_account)
+    monkeypatch.setattr("plextui.auth.save_config", lambda config: None)
+
+    switched = switch_profile(
+        AppConfig(
+            "https://current.example:32400",
+            "current-owner-token",
+            "client",
+            account_token="home-token",
+            server_identifier="saved-server",
+        ),
+        ProfileChoice("Kid", "2", False, False, users[0]),
+    )
+
+    assert switched.base_url == "https://current.example:32400"
+    assert switched.token == "current-token"
+    assert switched.server_identifier == "current-server"
+
+
 def test_switch_profile_does_not_fall_back_to_another_server(monkeypatch):
     users = [FakeUser("Kid", 2)]
     profile_account = FakeAccount(
@@ -389,6 +443,37 @@ def test_switch_profile_does_not_fall_back_to_another_server(monkeypatch):
         )
 
 
+def test_switch_profile_verifies_saved_server_identity_before_url_fallback(monkeypatch):
+    users = [FakeUser("Kid", 2)]
+    profile_account = FakeAccount([], token="Kid-token", account_id=2, title="Kid")
+    home_account = FakeAccount([], token="home-token", users=users)
+    home_account.switchHomeUser = lambda user, pin=None: profile_account
+    root_checks = []
+    monkeypatch.setattr("plextui.auth.MyPlexAccount", lambda token: home_account)
+
+    def plex_root_responds(uri, token, timeout, server_identifier=""):
+        root_checks.append((uri, token, timeout, server_identifier))
+        return False
+
+    monkeypatch.setattr("plextui.auth.plex_root_responds", plex_root_responds)
+
+    with pytest.raises(RuntimeError, match="relogin to choose a server explicitly"):
+        switch_profile(
+            AppConfig(
+                "https://reused.example:32400",
+                "owner-server-token",
+                "client",
+                account_token="home-token",
+                server_identifier="saved-server",
+            ),
+            ProfileChoice("Kid", "2", False, False, users[0]),
+        )
+
+    assert root_checks == [
+        ("https://reused.example:32400", "Kid-token", 5, "saved-server")
+    ]
+
+
 def test_reachable_server_choices_deduplicates_connected_urls():
     resources = [
         FakeResource("My Plex", "server-token", [], reachable_uri="http://plex.example:32400"),
@@ -421,6 +506,29 @@ def test_reachable_advertised_urls_accepts_plex_protocol_header(monkeypatch):
         "params": {"X-Plex-Token": ["server-token"]},
         "timeout": 2,
     }
+
+
+def test_plex_root_response_requires_matching_server_identity(monkeypatch):
+    monkeypatch.setattr(
+        "plextui.auth.urlopen",
+        lambda request, timeout: FakeResponse(
+            200,
+            '<MediaContainer machineIdentifier="other-server" />',
+        ),
+    )
+
+    assert not plex_root_responds(
+        "http://plex.example:32400",
+        "server-token",
+        timeout=2,
+        server_identifier="saved-server",
+    )
+    assert plex_root_responds(
+        "http://plex.example:32400",
+        "server-token",
+        timeout=2,
+        server_identifier="other-server",
+    )
 
 
 class FakeResponse:

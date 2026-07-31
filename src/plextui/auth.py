@@ -5,6 +5,7 @@ import webbrowser
 from dataclasses import dataclass, replace
 from urllib.parse import SplitResult, urlencode, urlparse
 from urllib.request import Request, urlopen
+from xml.etree import ElementTree
 
 from plexapi.myplex import MyPlexAccount, MyPlexPinLogin, MyPlexResource
 
@@ -224,7 +225,12 @@ def switch_profile(config: AppConfig, choice: ProfileChoice, pin: str = "") -> A
             active_profile_title=profile_title(account),
             server_identifier=selected.resource_identifier,
         )
-    elif config.base_url and plex_root_responds(config.base_url, account_token, timeout=5):
+    elif config.base_url and plex_root_responds(
+        config.base_url,
+        account_token,
+        timeout=5,
+        server_identifier=config.server_identifier,
+    ):
         saved = replace(
             config,
             token=account_token,
@@ -246,13 +252,13 @@ def matching_server_choice(
     base_url: str,
     resource_identifier: str = "",
 ) -> ServerChoice | None:
-    if resource_identifier:
-        matches = [choice for choice in choices if choice.resource_identifier == resource_identifier]
-        return min(matches, key=lambda choice: choice.sort_key) if matches else None
     target = base_url.rstrip("/")
     for choice in choices:
         if choice.uri.rstrip("/") == target:
             return choice
+    if resource_identifier:
+        matches = [choice for choice in choices if choice.resource_identifier == resource_identifier]
+        return min(matches, key=lambda choice: choice.sort_key) if matches else None
     return None
 
 
@@ -305,7 +311,12 @@ def reachable_advertised_urls(resource: MyPlexResource, timeout: int) -> list[st
     return reachable
 
 
-def plex_root_responds(uri: str, token: str, timeout: int) -> bool:
+def plex_root_responds(
+    uri: str,
+    token: str,
+    timeout: int,
+    server_identifier: str = "",
+) -> bool:
     url = f"{uri}{'&' if '?' in uri else '?'}{urlencode({'X-Plex-Token': token})}"
     request = Request(url, headers={"X-Plex-Token": token})
     try:
@@ -317,7 +328,15 @@ def plex_root_responds(uri: str, token: str, timeout: int) -> bool:
         return False
     if status not in {200, 201, 204}:
         return False
-    return "MediaContainer" in text or headers.get("X-Plex-Protocol") == "1.0"
+    if "MediaContainer" not in text and headers.get("X-Plex-Protocol") != "1.0":
+        return False
+    if not server_identifier:
+        return True
+    try:
+        root = ElementTree.fromstring(text)
+    except ElementTree.ParseError:
+        return False
+    return root.attrib.get("machineIdentifier", "") == server_identifier
 
 
 def plex_headers(config: AppConfig) -> dict[str, str]:
