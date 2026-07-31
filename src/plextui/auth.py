@@ -59,6 +59,10 @@ class ServerChoice:
         return "remote"
 
     @property
+    def resource_identifier(self) -> str:
+        return str(getattr(self.resource, "clientIdentifier", "") or "")
+
+    @property
     def row_label(self) -> str:
         verified = ", reachable" if self.verified else ""
         return f"{self.scheme.upper()} ({self.connection_label}{verified})"
@@ -155,6 +159,7 @@ def save_server_choice(config: AppConfig, account_token: str, choice: ServerChoi
         token=choice.resource.accessToken,
         account_token=account_token,
         home_account_token=account_token,
+        server_identifier=choice.resource_identifier,
     )
     save_config(saved)
     return saved
@@ -206,7 +211,10 @@ def switch_profile(config: AppConfig, choice: ProfileChoice, pin: str = "") -> A
         if "server" in str(resource.provides)
     ])
     if server_choices:
-        selected = matching_server_choice(server_choices, config.base_url) or sorted(server_choices, key=lambda c: c.sort_key)[0]
+        selected = matching_server_choice(server_choices, config.base_url, config.server_identifier)
+    else:
+        selected = None
+    if selected is not None:
         saved = replace(
             config,
             base_url=selected.uri,
@@ -214,6 +222,7 @@ def switch_profile(config: AppConfig, choice: ProfileChoice, pin: str = "") -> A
             account_token=account_token,
             home_account_token=home_token,
             active_profile_title=profile_title(account),
+            server_identifier=selected.resource_identifier,
         )
     elif config.base_url and plex_root_responds(config.base_url, account_token, timeout=5):
         saved = replace(
@@ -224,12 +233,22 @@ def switch_profile(config: AppConfig, choice: ProfileChoice, pin: str = "") -> A
             active_profile_title=profile_title(account),
         )
     else:
-        raise RuntimeError("No reachable Plex server connections found for this profile")
+        raise RuntimeError(
+            "The saved Plex server is not reachable for this profile; "
+            "relogin to choose a server explicitly"
+        )
     save_config(saved)
     return saved
 
 
-def matching_server_choice(choices: list[ServerChoice], base_url: str) -> ServerChoice | None:
+def matching_server_choice(
+    choices: list[ServerChoice],
+    base_url: str,
+    resource_identifier: str = "",
+) -> ServerChoice | None:
+    if resource_identifier:
+        matches = [choice for choice in choices if choice.resource_identifier == resource_identifier]
+        return min(matches, key=lambda choice: choice.sort_key) if matches else None
     target = base_url.rstrip("/")
     for choice in choices:
         if choice.uri.rstrip("/") == target:

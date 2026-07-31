@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Kept Plex Home profile switching on the selected server when its URL changes.
 - Restricted Plex config and debug-log files to the current user and repaired
   overly broad existing POSIX permissions when those files are used.
 - Required standalone PR-title tokens for version and publishing markers so

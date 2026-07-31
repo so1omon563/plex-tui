@@ -115,6 +115,7 @@ def test_config_example_parses_and_uses_known_fields():
         "account_token",
         "home_account_token",
         "active_profile_title",
+        "server_identifier",
         "preferred_audio_language",
         "preferred_subtitle_language",
         "subtitle_mode",
@@ -399,6 +400,7 @@ def test_home_account_token_only_saves_when_different_from_active_profile(tmp_pa
         account_token="kid",
         home_account_token="home",
         active_profile_title="Kid",
+        server_identifier="server-id",
     )
     config.save_config(saved)
     loaded = config.load_config()
@@ -407,9 +409,11 @@ def test_home_account_token_only_saves_when_different_from_active_profile(tmp_pa
     assert 'account_token = "kid"' in text
     assert 'home_account_token = "home"' in text
     assert 'active_profile_title = "Kid"' in text
+    assert 'server_identifier = "server-id"' in text
     assert loaded.account_token == "kid"
     assert loaded.home_account_token == "home"
     assert loaded.active_profile_title == "Kid"
+    assert loaded.server_identifier == "server-id"
 
 
 def test_hidden_library_keys_parse_unique_csv_values(tmp_path, monkeypatch):
