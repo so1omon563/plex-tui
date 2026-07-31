@@ -3952,6 +3952,7 @@ class PlexTuiApp(App[None]):
             elif local_source.source == "library" or local_source.source.startswith("library:"):
                 library = local_source.selected_library
             if library is None:
+                self.search_return_state = None
                 source_title = local_source.title if local_source is not None else "the current view"
                 self.post_message(
                     StatusChanged(
@@ -4145,6 +4146,10 @@ class PlexTuiApp(App[None]):
             if overlay_visible:
                 return
             self.show_browse_state(state)
+            self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items))
+            return
+        if self.browsing_stack:
+            state = self.browsing_stack[-1]
             self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items))
 
     def action_back_or_clear(self) -> None:

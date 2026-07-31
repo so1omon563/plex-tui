@@ -570,6 +570,7 @@ def test_incomplete_non_library_search_does_not_query_stale_library(source):
     stale_library = LibraryItem("Movies", "1", "movie", object())
     service = FakePagedService(MediaPage([], start=0, total=0))
     statuses = []
+    restored_statuses = []
     app.config = AppConfig("http://plex", "token", "client-id")
     app.service = service
     app.selected_library = stale_library
@@ -582,14 +583,19 @@ def test_incomplete_non_library_search_does_not_query_stale_library(source):
             total=2,
         )
     ]
+    app.search_return_state = app.browsing_stack[-1]
     app.post_message = lambda message: statuses.append(message.text)
+    app.set_status = restored_statuses.append
 
     PlexTuiApp.run_search.__wrapped__(app, "missing")
+    app.restore_fuzzy_search_source()
 
     assert service.search_calls == []
+    assert app.search_return_state is None
     assert statuses == [
         "Current-view search is unavailable for Active source; load all items to search locally."
     ]
+    assert restored_statuses == ["Active source: 1 of 2 items loaded"]
 
 
 def test_live_current_library_search_queries_plex_when_library_is_not_fully_loaded():
