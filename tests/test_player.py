@@ -202,12 +202,22 @@ def test_direct_playback_merges_all_split_media_parts():
         def audioStreams(self):
             return []
 
+    class VersionMedia:
+        def __init__(self, *parts):
+            self.parts = list(parts)
+
     class SplitItem(Item):
-        def iterParts(self):
-            return [
-                SplitPart("/library/parts/1/cd1.mkv"),
-                SplitPart("/library/parts/2/cd2.mkv"),
+        def __init__(self):
+            self.media = [
+                VersionMedia(
+                    SplitPart("/library/parts/1/cd1.mkv"),
+                    SplitPart("/library/parts/2/cd2.mkv"),
+                ),
+                VersionMedia(Part()),
             ]
+
+        def iterParts(self):
+            return [part for media in self.media for part in media.parts]
 
         def getStreamURL(self, **kwargs):
             raise AssertionError("split direct playback should not request a transcode URL")
@@ -226,6 +236,7 @@ def test_direct_playback_merges_all_split_media_parts():
         "http://plex/library/parts/1/cd1.mkv",
         "http://plex/library/parts/2/cd2.mkv",
     ]
+    assert not any(arg.startswith("--sub-file=") for arg in args)
     assert handle.monitor.base_offset == 0
     with patch("plextui.player.mpv_get_property", return_value=72.5):
         assert handle.monitor.current_time_ms() == 72_500

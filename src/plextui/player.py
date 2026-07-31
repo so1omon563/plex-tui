@@ -510,7 +510,7 @@ def external_subtitle_urls(item: Any, selected_subtitle: Any = None) -> list[str
         return urls
     if selected_subtitle == 0:
         return urls
-    for part in iter_parts(item):
+    for part in media_parts(item):
         for stream in part.subtitleStreams():
             if selected_subtitle is not None and not same_stream(stream, selected_subtitle):
                 continue
