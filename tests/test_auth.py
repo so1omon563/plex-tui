@@ -15,6 +15,7 @@ from plextui.auth import (
     profile_choices,
     reachable_advertised_urls,
     reachable_server_choices,
+    save_server_choice,
     switch_profile,
 )
 from plextui.config import AppConfig
@@ -253,6 +254,25 @@ def test_profile_choices_include_current_home_users(monkeypatch):
         ("Owner", "1", False, False),
         ("Kid", "2", True, True),
     ]
+
+
+def test_save_server_choice_clears_stale_profile_title(monkeypatch):
+    saved = {}
+    resource = FakeResource("New Plex", "new-token", [], identifier="new-server")
+    choice = ServerChoice("New Plex", "http://new-plex:32400", "owned", resource, verified=True)
+    config = AppConfig(
+        "http://old-plex:32400",
+        "old-token",
+        "client",
+        active_profile_title="Kid",
+    )
+    monkeypatch.setattr("plextui.auth.save_config", lambda value: saved.setdefault("config", value))
+
+    relogged = save_server_choice(config, "new-account-token", choice)
+
+    assert relogged.active_profile_title == ""
+    assert relogged.base_url == "http://new-plex:32400"
+    assert saved["config"] == relogged
 
 
 def test_switch_profile_saves_profile_and_home_tokens(monkeypatch):

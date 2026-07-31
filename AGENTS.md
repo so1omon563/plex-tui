@@ -166,6 +166,8 @@ mpv IPC commands must match newline-delimited replies by `request_id` within a
 bounded timeout and message size while ignoring asynchronous events.
 CLI status and diagnostics must report config-load failures without tracebacks;
 JSON modes must always emit parseable error objects.
+Fresh account login and server selection must clear any previously active Plex
+Home profile identity.
 
 Async view-opening workers must apply UI results through the shared navigation
 identity guard. Newer navigation, overlays, and Back actions invalidate older

@@ -5,6 +5,7 @@
 - Prevented invalid artwork responses from poisoning the persistent image cache.
 - Routed hosted Live TV guide pagination through the guide service.
 - Isolated online VOD metadata reloads from the shared Plex provider connection.
+- Cleared stale managed-profile labels after choosing a server during relogin.
 - Read complete matching mpv IPC replies across fragmented and interleaved
   newline-delimited messages.
 - Preserved contextual action hints when background artwork finishes rendering.
