@@ -1886,6 +1886,12 @@ class PlexTuiApp(App[None]):
                     self.config.page_size,
                     channel_ids=live_tv_category_channel_ids(state.context_media),
                 )
+            elif state.source == "livetv_guide" and state.context_media is not None:
+                page = self.service.hosted_live_tv_guide_page(
+                    state.context_media,
+                    start=state.next_start,
+                    size=self.config.page_size,
+                )
             elif state.source == "children" and state.context_media is not None:
                 page = self.service.children_page(
                     state.context_media,

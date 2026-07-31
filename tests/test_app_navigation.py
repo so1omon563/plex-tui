@@ -393,6 +393,10 @@ def test_load_more_media_appends_continue_watching_page():
     asyncio.run(run_load_more_continue_watching_check())
 
 
+def test_load_more_media_appends_live_tv_guide_page():
+    asyncio.run(run_load_more_live_tv_guide_check())
+
+
 def test_load_more_media_ignores_replaced_browse_state():
     asyncio.run(run_load_more_ignores_replaced_browse_state_check())
 
@@ -2216,8 +2220,14 @@ class FakePagedService:
         self.hosted_live_tv_enrich_calls.append([item.key for item in items])
         return items
 
-    def hosted_live_tv_guide_page(self, channel: MediaItem, size: int = 40) -> MediaPage:
-        self.hosted_live_tv_guide_calls.append((channel.key, size))
+    def hosted_live_tv_guide_page(
+        self,
+        channel: MediaItem,
+        guide_date=None,
+        start: int = 0,
+        size: int = 40,
+    ) -> MediaPage:
+        self.hosted_live_tv_guide_calls.append((channel.key, start, size))
         return self.guide_page
 
     def children(self, item: MediaItem, size: int = 40) -> list[MediaItem]:
@@ -2555,6 +2565,40 @@ async def run_load_more_continue_watching_check():
         assert service.calls == []
         assert [item.title for item in state.items] == ["First", "Second"]
         assert state.next_start == 2
+        assert state.has_more
+
+
+async def run_load_more_live_tv_guide_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=25)
+        channel = MediaItem("Ion Mystery", "", "livetv", "channel-1", True, Raw())
+        first = MediaItem("First", "10:00 AM-11:00 AM", "livetv_program", "program-1", False, Raw())
+        second = MediaItem("Second", "11:00 AM-12:00 PM", "livetv_program", "program-2", False, Raw())
+        library_item = MediaItem("Wrong library item", "", "movie", "movie-1", True, Raw())
+        service = FakePagedService(MediaPage([library_item], start=1, total=2))
+        service.guide_page = MediaPage([second], start=1, total=3)
+        app.service = service
+        state = BrowseState(
+            "Guide: Ion Mystery",
+            [first],
+            source="livetv_guide",
+            next_start=1,
+            total=3,
+            context_media=channel,
+        )
+        app.browsing_stack = [state]
+
+        app.load_more_media()
+        await pilot.pause(0.5)
+
+        assert service.hosted_live_tv_guide_calls == [("channel-1", 1, 25)]
+        assert service.calls == []
+        assert [item.title for item in state.items] == ["First", "Second"]
+        assert [item.kind for item in state.items] == ["livetv_program", "livetv_program"]
+        assert state.next_start == 2
+        assert state.total == 3
         assert state.has_more
 
 

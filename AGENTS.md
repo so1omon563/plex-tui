@@ -156,6 +156,8 @@ selection must resolve the chosen Plex part after metadata reload and must not
 silently fall back to another file.
 Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
+Route hosted Live TV guide paging through `hosted_live_tv_guide_page` with the
+originating channel context; guide states must not fall through to libraries.
 
 ## Testing Guidelines
 

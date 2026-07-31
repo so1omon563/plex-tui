@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Routed hosted Live TV guide pagination through the guide service.
 - Kept delayed post-playback refreshes from replacing another library's rows.
 - Restricted Plex config and debug-log files to the current user and repaired
   overly broad existing POSIX permissions when those files are used.
