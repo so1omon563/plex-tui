@@ -5,6 +5,8 @@
 - Played every ordered part of split Plex media as one continuous mpv timeline
   and reported unsupported multipart transcode or sidecar-subtitle playback
   before launch.
+- Restricted Plex config and debug-log files to the current user and repaired
+  overly broad existing POSIX permissions when those files are used.
 - Required standalone PR-title tokens for version and publishing markers so
   marker-like words cannot create tags or releases.
 
