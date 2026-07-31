@@ -153,7 +153,9 @@ nearby code.
 For Plex items with multiple media versions, keep `p` and `r` as the normal
 default playback actions and use `V` for explicit version selection. Version
 selection must resolve the chosen Plex part after metadata reload and must not
-silently fall back to another file.
+silently fall back to another file. Direct playback must keep every ordered
+part of the selected media version in one continuous timeline; unsupported
+multipart modes must fail clearly before launching mpv.
 Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
 Route hosted Live TV guide paging through `hosted_live_tv_guide_page` with the
@@ -271,6 +273,8 @@ behavior when changing playback or request diagnostics.
 On POSIX, keep the app config directory owner-only (`0700`) and config,
 debug-log, and rotated debug-log files owner-only (`0600`), including when
 repairing existing files.
+Persist Plex server `clientIdentifier` values so profile switches survive URL
+changes and never fall back silently to another server.
 Use `SECURITY.md` for vulnerability reporting policy and keep it aligned with
 token handling, packaging, and release automation changes.
 
