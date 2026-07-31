@@ -3936,7 +3936,7 @@ class PlexTuiApp(App[None]):
             def update_fuzzy() -> None:
                 if self.search_was_cancelled(token):
                     return
-                self.post_message(StatusChanged(f"Fuzzy searching {local_source.title} for {query}..."))
+                self.set_status(f"Fuzzy searching {local_source.title} for {query}...")
                 self.show_loading_state(title, f"Matching loaded items from {local_source.title}.")
                 self.show_fuzzy_search_results(query, local_source, matches, focus=True)
 
@@ -3951,7 +3951,7 @@ class PlexTuiApp(App[None]):
         def show_search_loading() -> None:
             if self.search_was_cancelled(token):
                 return
-            self.post_message(StatusChanged(f"Searching {scope} for {query}..."))
+            self.set_status(f"Searching {scope} for {query}...")
             self.show_loading_state(title, f"Searching {scope}.")
 
         self.call_from_thread(show_search_loading)
@@ -3962,9 +3962,14 @@ class PlexTuiApp(App[None]):
             library = None if global_search else self.selected_library
             page = self.service.search_page(query, library, 0, self.config.page_size)
         except Exception as exc:
-            if self.search_was_cancelled(token):
-                return
-            self.call_from_thread(self.show_error, str(exc))
+            message = str(exc)
+
+            def show_search_error() -> None:
+                if self.search_was_cancelled(token):
+                    return
+                self.show_error(message)
+
+            self.call_from_thread(show_search_error)
             return
         write_performance_log(
             "search_page",
