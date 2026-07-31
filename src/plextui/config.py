@@ -242,9 +242,6 @@ def load_config() -> AppConfig:
     )
     hidden_library_keys = csv_values(data.get("hidden_library_keys", ""))
     library_order_keys = csv_values(data.get("library_order_keys", ""))
-    if (base_url_override or token_override) and not saved_server_identifier:
-        hidden_library_keys = ()
-        library_order_keys = ()
     if not hidden_library_keys_server_identifier and hidden_library_keys:
         hidden_library_keys_server_identifier = saved_server_identifier
     if not library_order_keys_server_identifier and library_order_keys:
