@@ -342,7 +342,13 @@ class PlexService:
         except Exception:
             featured = None
         if featured is not None:
-            categories.append(to_media_item(featured))
+            channel_keys = {channel.key for channel in channels}
+            featured = replace(
+                featured,
+                channel_ids=tuple(channel_id for channel_id in featured.channel_ids if channel_id in channel_keys),
+            )
+            if featured.channel_ids:
+                categories.append(to_media_item(featured))
         for title, genre_key in HOSTED_LIVE_TV_GENRE_CATEGORIES:
             channel_ids = tuple(
                 dict.fromkeys(
@@ -372,7 +378,7 @@ class PlexService:
                 hosted_live_tv_channel_from_raw(raw, self.config.account_token)
                 for raw in container.get("Channel", [])
             )
-            if channel is not None
+            if channel is not None and not channel.drm
         ]
 
     def hosted_live_tv_guide_page(
