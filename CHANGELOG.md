@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Kept Plex Home profile switching on the selected server when its URL changes.
 - Played every ordered part of split Plex media as one continuous mpv timeline
   and reported unsupported multipart transcode or sidecar-subtitle playback
   before launch.
