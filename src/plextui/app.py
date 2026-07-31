@@ -3958,10 +3958,8 @@ class PlexTuiApp(App[None]):
                     if self.search_was_cancelled(token):
                         return
                     self.search_return_state = None
-                    self.post_message(
-                        StatusChanged(
-                            f"Current-view search is unavailable for {source_title}; load all items to search locally."
-                        )
+                    self.set_status(
+                        f"Current-view search is unavailable for {source_title}; load all items to search locally."
                     )
 
                 self.call_from_thread(show_unavailable)

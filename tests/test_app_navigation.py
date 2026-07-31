@@ -570,7 +570,6 @@ def test_incomplete_non_library_search_does_not_query_stale_library(source):
     stale_library = LibraryItem("Movies", "1", "movie", object())
     service = FakePagedService(MediaPage([], start=0, total=0))
     statuses = []
-    restored_statuses = []
     app.config = AppConfig("http://plex", "token", "client-id")
     app.service = service
     app.selected_library = stale_library
@@ -585,8 +584,7 @@ def test_incomplete_non_library_search_does_not_query_stale_library(source):
     ]
     app.search_return_state = app.browsing_stack[-1]
     app.call_from_thread = lambda callback, *args: callback(*args)
-    app.post_message = lambda message: statuses.append(message.text)
-    app.set_status = restored_statuses.append
+    app.set_status = statuses.append
 
     PlexTuiApp.run_search.__wrapped__(app, "missing")
     app.restore_fuzzy_search_source()
@@ -594,9 +592,9 @@ def test_incomplete_non_library_search_does_not_query_stale_library(source):
     assert service.search_calls == []
     assert app.search_return_state is None
     assert statuses == [
-        "Current-view search is unavailable for Active source; load all items to search locally."
+        "Current-view search is unavailable for Active source; load all items to search locally.",
+        "Active source: 1 of 2 items loaded",
     ]
-    assert restored_statuses == ["Active source: 1 of 2 items loaded"]
 
 
 def test_cancelled_incomplete_non_library_search_preserves_newer_return_state():
@@ -617,7 +615,7 @@ def test_cancelled_incomplete_non_library_search_preserves_newer_return_state():
     app.search_token = 1
     app.search_return_state = source
     app.call_from_thread = lambda callback, *args: callbacks.append((callback, args))
-    app.post_message = lambda message: statuses.append(message.text)
+    app.set_status = statuses.append
 
     PlexTuiApp.run_search.__wrapped__(app, "missing", token=1)
     app.search_token = 2
