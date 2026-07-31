@@ -1173,6 +1173,10 @@ def test_settings_move_library_updates_sidebar_order():
     asyncio.run(run_settings_library_order_check())
 
 
+def test_library_preferences_require_verified_server_identity():
+    asyncio.run(run_unverified_server_library_preferences_check())
+
+
 def test_settings_recent_debug_log_action_shows_tail(tmp_path):
     asyncio.run(run_settings_recent_debug_log_check(tmp_path))
 
@@ -4286,6 +4290,26 @@ async def run_settings_library_order_check():
         selected = app.query_one("#media").highlighted_child
         selected_index = media_rows.index(selected)
         assert getattr(media_rows[selected_index], "action", "") == "move_library_down:1"
+
+
+async def run_unverified_server_library_preferences_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.libraries = [
+            LibraryItem("Movies", "1", "movie", object()),
+            LibraryItem("TV", "2", "show", object()),
+        ]
+
+        with patch("plextui.app.save_config") as save_config:
+            app.toggle_library_visibility("2")
+            app.move_library("1", 1)
+
+        assert app.config.hidden_library_keys == ()
+        assert app.config.library_order_keys == ()
+        assert save_config.call_count == 0
+        assert app.query_one("#status").content == "Library preferences require a verified Plex server identity"
 
 
 async def run_settings_recent_debug_log_check(tmp_path):

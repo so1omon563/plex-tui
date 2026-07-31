@@ -3224,6 +3224,9 @@ class PlexTuiApp(App[None]):
         self.set_status(f"Unknown settings action: {action}")
 
     def toggle_library_visibility(self, library_key: str) -> None:
+        if not self.config.server_identifier:
+            self.set_status("Library preferences require a verified Plex server identity")
+            return
         hidden = set(self.config.current_hidden_library_keys)
         if library_key in hidden:
             hidden.remove(library_key)
@@ -3245,6 +3248,9 @@ class PlexTuiApp(App[None]):
         self.refresh_settings_after_change(f"toggle_library_visibility:{library_key}", f"Library: {label}", value)
 
     def move_library(self, library_key: str, direction: int) -> None:
+        if not self.config.server_identifier:
+            self.set_status("Library preferences require a verified Plex server identity")
+            return
         current = ordered_libraries(self.libraries, self.config)
         keys = [library.key for library in current]
         try:
