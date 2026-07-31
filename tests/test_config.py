@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import os
+import stat
 import tomllib
 from pathlib import Path
+
+import pytest
 
 from plextui import config
 
@@ -13,6 +17,57 @@ def test_config_and_debug_paths_share_platformdirs_base(monkeypatch):
     assert config.config_path() == Path("/tmp/plex-tui/config.toml")
     assert config.cache_path() == Path("/tmp/cache/plex-tui")
     assert config.debug_log_path() == Path("/tmp/plex-tui/debug.log")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission modes")
+def test_config_permissions_are_owner_only_and_repaired(tmp_path, monkeypatch):
+    config_file = tmp_path / "config" / "config.toml"
+    monkeypatch.setattr(config, "config_path", lambda: config_file)
+    saved = config.AppConfig("http://plex", "placeholder-token", "client")
+
+    previous_umask = os.umask(0o022)
+    try:
+        config.save_config(saved)
+    finally:
+        os.umask(previous_umask)
+
+    assert stat.S_IMODE(config_file.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(config_file.stat().st_mode) == 0o600
+
+    config_file.parent.chmod(0o755)
+    config_file.chmod(0o644)
+
+    assert config.load_config() == saved
+    assert stat.S_IMODE(config_file.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(config_file.stat().st_mode) == 0o600
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission modes")
+def test_debug_log_permissions_are_owner_only_and_repaired(tmp_path, monkeypatch):
+    log = tmp_path / "config" / "debug.log"
+    backup = tmp_path / "config" / "debug.log.1"
+    monkeypatch.setattr(config, "debug_log_path", lambda: log)
+    monkeypatch.setattr(config, "DEBUG_LOG_MAX_BYTES", 20)
+
+    previous_umask = os.umask(0o022)
+    try:
+        config.write_debug_log("first message")
+        config.write_debug_log("second message")
+    finally:
+        os.umask(previous_umask)
+
+    assert stat.S_IMODE(log.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(log.stat().st_mode) == 0o600
+    assert stat.S_IMODE(backup.stat().st_mode) == 0o600
+
+    log.parent.chmod(0o755)
+    log.chmod(0o644)
+    backup.chmod(0o644)
+    config.write_debug_log("third message")
+
+    assert stat.S_IMODE(log.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(log.stat().st_mode) == 0o600
+    assert stat.S_IMODE(backup.stat().st_mode) == 0o600
 
 
 def test_debug_log_rotates_to_one_bounded_backup(tmp_path, monkeypatch):
