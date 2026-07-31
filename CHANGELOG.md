@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Read complete matching mpv IPC replies across fragmented and interleaved
+  newline-delimited messages.
 - Kept delayed post-playback refreshes from replacing another library's rows.
 - Restricted Plex config and debug-log files to the current user and repaired
   overly broad existing POSIX permissions when those files are used.

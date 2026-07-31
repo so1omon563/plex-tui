@@ -156,6 +156,8 @@ selection must resolve the chosen Plex part after metadata reload and must not
 silently fall back to another file.
 Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
+mpv IPC commands must match newline-delimited replies by `request_id` within a
+bounded timeout and message size while ignoring asynchronous events.
 
 ## Testing Guidelines
 
