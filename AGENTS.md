@@ -156,6 +156,8 @@ selection must resolve the chosen Plex part after metadata reload and must not
 silently fall back to another file. Direct playback must keep every ordered
 part of the selected media version in one continuous timeline; unsupported
 multipart modes must fail clearly before launching mpv.
+Apply asynchronous browse refresh results only when their originating
+`BrowseState` object is still current; source labels are not unique identities.
 
 ## Testing Guidelines
 
