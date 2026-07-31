@@ -327,6 +327,28 @@ def test_kitty_cache_uses_unique_paths_for_queued_transfers(tmp_path, monkeypatc
     assert second.read_bytes() == data
 
 
+def test_kitty_id_reservations_retire_oldest_at_limit(tmp_path, monkeypatch):
+    directory = tmp_path / "kitty"
+    directory.mkdir()
+    deleted = []
+    monkeypatch.setattr(artwork, "KITTY_IMAGE_RESERVATION_LIMIT", 2)
+    monkeypatch.setattr(artwork, "KITTY_SESSION_IMAGE_IDS", {})
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", deleted.extend)
+    artwork.reserve_kitty_image_id(directory, "first", 1, set())
+    artwork.reserve_kitty_image_id(directory, "second", 2, set())
+    os.utime(directory / ".id-000001", (1, 1))
+    os.utime(directory / ".id-000002", (2, 2))
+
+    reserved = artwork.reserve_kitty_image_id(directory, "third", 3, set())
+
+    assert reserved == 3
+    assert deleted == ["\033_Ga=d,d=I,i=1,q=2;\033\\"]
+    assert sorted(path.name for path in directory.glob(".id-*")) == [
+        ".id-000002",
+        ".id-000003",
+    ]
+
+
 def test_protocol_renderer_status_explains_explicit_kitty_force(monkeypatch):
     monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
     monkeypatch.delenv("KITTY_PID", raising=False)

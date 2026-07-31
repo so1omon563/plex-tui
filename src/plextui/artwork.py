@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import fcntl
 import hashlib
 import os
 import sys
@@ -30,6 +31,8 @@ KITTY_CELL_WIDTH_PX = 12
 KITTY_CELL_HEIGHT_PX = 24
 # ponytail: q=2 has no acknowledgement; use response tracking if 60s is too short for delayed terminals.
 KITTY_PENDING_FILE_SECONDS = 60
+# ponytail: cap retained terminal IDs; retire the LRU image if one session exceeds this.
+KITTY_IMAGE_RESERVATION_LIMIT = 4096
 KITTY_TRANSMIT_LOCK = threading.RLock()
 KITTY_SESSION_IMAGE_IDS: dict[str, int] = {}
 KITTY_PLACEHOLDER = "\U0010eeee"
@@ -174,7 +177,7 @@ def prune_artwork_cache(
                 continue
             for path in directory.iterdir():
                 try:
-                    if directory == kitty_directory and path.name.startswith(".id-"):
+                    if directory == kitty_directory and path.name.startswith(".id"):
                         continue
                     if not path.is_file():
                         continue
@@ -359,33 +362,41 @@ def kitty_graphics_file_commands(path: Path, image_id: int, columns: int, rows: 
 
 
 def reserve_kitty_image_id(directory: Path, digest: str, candidate: int, occupied: set[int]) -> int:
-    # ponytail: reservations are tiny and persistent; prune them when terminal lifecycle tracking exists.
-    for marker in directory.glob(".id-*"):
-        try:
-            if marker.read_text() == digest:
-                return int(marker.name.removeprefix(".id-"), 16)
-        except (OSError, ValueError):
-            continue
-
-    while True:
-        if candidate in occupied:
-            candidate = candidate % 0xFFFFFF + 1
-            continue
-        marker = directory / f".id-{candidate:06x}"
-        try:
-            fd = os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        except FileExistsError:
+    lock_fd = os.open(directory / ".ids.lock", os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(lock_fd) as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        markers = list(directory.glob(".id-*"))
+        for marker in markers:
             try:
                 if marker.read_text() == digest:
-                    return candidate
-            except OSError:
-                pass
+                    marker.touch()
+                    return int(marker.name.removeprefix(".id-"), 16)
+            except (OSError, ValueError):
+                continue
+
+        if len(markers) >= KITTY_IMAGE_RESERVATION_LIMIT:
+            marker = min(markers, key=lambda path: path.stat().st_mtime)
+            retired_id = int(marker.name.removeprefix(".id-"), 16)
+            emit_kitty_graphics_commands([f"\033_Ga=d,d=I,i={retired_id},q=2;\033\\"])
+            marker.unlink()
+            occupied.discard(retired_id)
+            for reserved_digest, image_id in list(KITTY_SESSION_IMAGE_IDS.items()):
+                if image_id == retired_id:
+                    del KITTY_SESSION_IMAGE_IDS[reserved_digest]
+            markers.remove(marker)
+
+        marker_ids = {
+            int(marker.name.removeprefix(".id-"), 16)
+            for marker in markers
+        }
+        while candidate in occupied or candidate in marker_ids:
             candidate = candidate % 0xFFFFFF + 1
-            continue
+        marker = directory / f".id-{candidate:06x}"
+        marker_fd = os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         try:
-            os.write(fd, digest.encode("ascii"))
+            os.write(marker_fd, digest.encode("ascii"))
         finally:
-            os.close(fd)
+            os.close(marker_fd)
         return candidate
 
 
@@ -418,6 +429,7 @@ def kitty_protocol_image_path(data: bytes, columns: int, rows: int) -> tuple[Pat
                 reserved_id,
                 set(KITTY_SESSION_IMAGE_IDS.values()) - {reserved_id},
             )
+            KITTY_SESSION_IMAGE_IDS[digest] = reserved_id
             path = create_kitty_transfer_path(directory, reserved_id, digest, data)
             prune_artwork_cache(protected_path=path)
             return path, reserved_id
