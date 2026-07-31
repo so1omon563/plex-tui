@@ -75,7 +75,7 @@ client_identifier = "plex-tui-your-stable-client-id"
 # show_on_plex = false
 # show_on_plex_live = false
 # discover_media_type controls Plex Discover filtering: movies_shows, movie,
-# show, or all. The default avoids noisy non-movie/show results.
+# or show.
 # discover_media_type = "movies_shows"
 
 # Optional artwork settings.

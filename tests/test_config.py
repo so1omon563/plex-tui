@@ -166,6 +166,7 @@ def test_invalid_subtitle_mode_logs_and_normalizes(tmp_path, monkeypatch):
             'page_size = "5"',
             'auto_load_threshold = "500"',
             'grid_prefetch_pages = "20"',
+            'discover_media_type = "all"',
             "",
         ]),
         encoding="utf-8",
@@ -185,6 +186,7 @@ def test_invalid_subtitle_mode_logs_and_normalizes(tmp_path, monkeypatch):
     assert loaded.page_size == config.DEFAULT_PAGE_SIZE
     assert loaded.auto_load_threshold == config.DEFAULT_AUTO_LOAD_THRESHOLD
     assert loaded.grid_prefetch_pages == config.DEFAULT_GRID_PREFETCH_PAGES
+    assert loaded.discover_media_type == "movies_shows"
     log = debug_file.read_text(encoding="utf-8")
     assert "invalid subtitle_mode" in log
     assert "invalid mpv_window_size" in log
@@ -196,6 +198,7 @@ def test_invalid_subtitle_mode_logs_and_normalizes(tmp_path, monkeypatch):
     assert "invalid page_size" in log
     assert "invalid auto_load_threshold" in log
     assert "invalid grid_prefetch_pages" in log
+    assert "invalid discover_media_type 'all'" in log
 
 
 def test_invalid_artwork_settings_log_and_normalize(tmp_path, monkeypatch):

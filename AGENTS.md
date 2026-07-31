@@ -166,6 +166,8 @@ Online VOD metadata reloads must use a scoped Plex server copy and never mutate
 the shared provider server URL.
 mpv IPC commands must match newline-delimited replies by `request_id` within a
 bounded timeout and message size while ignoring asynchronous events.
+Plex Discover filters support movies, shows, or both; movie/show filtering must
+use PlexAPI's server-side `libtype` before its result limit.
 CLI status and diagnostics must report config-load failures without tracebacks;
 JSON modes must always emit parseable error objects.
 Fresh account login and server selection must clear any previously active Plex

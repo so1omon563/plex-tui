@@ -190,7 +190,7 @@ def command_discover_open(query: str, index: int, service_index: int, limit: int
 
 
 def discover_media_type_key(value: str) -> str:
-    return "movies_shows" if value == "movies-shows" else value
+    return "movies_shows" if value in {"movies-shows", "all"} else value
 
 
 def command_search(query: str, library: str | None, limit: int, json_output: bool = False) -> int:

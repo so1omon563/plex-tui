@@ -4,7 +4,6 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timezone
 import json
-import re
 import time
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -299,16 +298,15 @@ class PlexService:
         if not self.config.account_token:
             raise ValueError("missing Plex account token; start plex-tui and sign in first")
         account = MyPlexAccount(token=self.config.account_token)
-        limit = start + size if media_type == "all" else (start + size) * 4
-        raw_items = account.searchDiscover(query, limit=limit, providers=DISCOVER_PROVIDERS)
+        search_options: dict[str, Any] = {"limit": start + size + 1, "providers": DISCOVER_PROVIDERS}
+        if media_type in {"movie", "show"}:
+            search_options["libtype"] = media_type
+        raw_items = account.searchDiscover(query, **search_options)
         items = [
             item
             for item in (to_discover_media_item(raw) for raw in raw_items)
             if discover_media_type_matches(item, media_type)
         ]
-        matching_items = [item for item in items if discover_title_matches(query, item)]
-        if matching_items:
-            items = matching_items
         return sliced_media_page(items, start, size)
 
     def video_on_demand_page(self, start: int = 0, size: int = DEFAULT_PAGE_SIZE) -> MediaPage:
@@ -910,23 +908,9 @@ def to_discover_media_item(raw: Any) -> MediaItem:
 
 
 def discover_media_type_matches(item: MediaItem, media_type: str) -> bool:
-    if media_type == "all":
-        return True
     if media_type == "movies_shows":
         return item.kind in {"movie", "show"}
     return item.kind == media_type
-
-
-def discover_title_matches(query: str, item: MediaItem) -> bool:
-    query_tokens = [token for token in title_tokens(query) if token not in {"a", "an", "and", "of", "the", "to"}]
-    if not query_tokens:
-        return False
-    title = set(title_tokens(item.title))
-    return all(token in title for token in query_tokens)
-
-
-def title_tokens(value: str) -> list[str]:
-    return re.findall(r"[a-z0-9]+", value.lower())
 
 
 def availability_label(raw: Any) -> str:
