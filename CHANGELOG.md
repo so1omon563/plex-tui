@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Routed hosted Live TV guide pagination through the guide service.
+- Isolated online VOD metadata reloads from the shared Plex provider connection.
+- Read complete matching mpv IPC replies across fragmented and interleaved
+  newline-delimited messages.
 - Returned concise text or JSON errors when CLI status and diagnostics cannot
   parse the config file.
 - Inferred or validated release bump markers when staging an explicit version.

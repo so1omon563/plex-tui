@@ -20,6 +20,10 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from .config import write_debug_log
 
 
+MPV_IPC_TIMEOUT_SECONDS = 1.0
+MPV_IPC_MAX_MESSAGE_BYTES = 65_536
+
+
 class PlayerError(RuntimeError):
     pass
 
@@ -364,20 +368,36 @@ def seek_mpv(handle: PlayerHandle, seconds: int) -> bool:
 def mpv_command(socket_path: Path, command: list[Any]) -> dict[str, Any] | None:
     if not socket_path.exists():
         return None
+    request_id = 1
+    deadline = time.monotonic() + MPV_IPC_TIMEOUT_SECONDS
+    buffer = b""
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            sock.settimeout(1)
+            sock.settimeout(MPV_IPC_TIMEOUT_SECONDS)
             sock.connect(str(socket_path))
-            payload = {"command": command}
+            payload = {"command": command, "request_id": request_id}
             sock.sendall((json.dumps(payload) + "\n").encode("utf-8"))
-            data = sock.recv(4096)
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return None
+                sock.settimeout(remaining)
+                chunk = sock.recv(4096)
+                if not chunk:
+                    return None
+                buffer += chunk
+                if len(buffer) > MPV_IPC_MAX_MESSAGE_BYTES:
+                    return None
+                while b"\n" in buffer:
+                    line, buffer = buffer.split(b"\n", 1)
+                    try:
+                        response = json.loads(line)
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        continue
+                    if isinstance(response, dict) and response.get("request_id") == request_id:
+                        return response
     except OSError:
         return None
-    try:
-        response = json.loads(data.decode("utf-8").splitlines()[0])
-    except (IndexError, json.JSONDecodeError, UnicodeDecodeError):
-        return None
-    return response
 
 
 def cleanup_socket(socket_path: Path) -> None:
@@ -431,18 +451,24 @@ def required_full_metadata(item: Any) -> Any:
 def online_vod_metadata(item: Any) -> Any | None:
     key = metadata_item_key(item)
     server = getattr(item, "_server", None)
-    fetch_item = getattr(server, "fetchItem", None)
+    scoped_server = copy(server)
+    if scoped_server is not None and getattr(scoped_server, "_server", None) is server:
+        scoped_server._server = scoped_server
+    fetch_item = getattr(scoped_server, "fetchItem", None)
     if not key or not callable(fetch_item):
         return None
-    old_baseurl = getattr(server, "_baseurl", None)
+    had_baseurl = hasattr(scoped_server, "_baseurl")
+    old_baseurl = getattr(scoped_server, "_baseurl", None)
     try:
-        server._baseurl = vod_provider_base(item, server)
+        scoped_server._baseurl = vod_provider_base(item, server)
         return fetch_item(key)
     except Exception:
         return None
     finally:
-        if old_baseurl is not None:
-            server._baseurl = old_baseurl
+        if had_baseurl:
+            scoped_server._baseurl = old_baseurl
+        else:
+            del scoped_server._baseurl
 
 
 def metadata_item_key(item: Any) -> str:
