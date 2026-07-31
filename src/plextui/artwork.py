@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
+from weakref import WeakValueDictionary
 
 from PIL import Image, ImageOps
 from rich.measure import Measurement
@@ -35,7 +36,8 @@ KITTY_CELL_HEIGHT_PX = 24
 KITTY_PENDING_FILE_SECONDS = 60
 # ponytail: cap retained terminal IDs; retire the LRU image if one session exceeds this.
 KITTY_IMAGE_RESERVATION_LIMIT = 4096
-ARTWORK_CACHE_LOCK = threading.RLock()
+ARTWORK_CACHE_LOCKS_GUARD = threading.Lock()
+ARTWORK_CACHE_LOCKS: WeakValueDictionary[str, threading.RLock] = WeakValueDictionary()
 KITTY_TRANSMIT_LOCK = threading.RLock()
 KITTY_SESSION_IMAGE_IDS: dict[str, int] = {}
 KITTY_PLACEHOLDER = "\U0010eeee"
@@ -151,7 +153,7 @@ def artwork_cache_entry_lock(path: Path) -> Iterator[None]:
     directory = path.parent.parent
     directory.mkdir(parents=True, exist_ok=True)
     lock_path = directory / f".artwork-{path.name}.lock"
-    with ARTWORK_CACHE_LOCK:
+    with artwork_cache_process_lock(path):
         lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
         with os.fdopen(lock_fd) as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
@@ -159,6 +161,16 @@ def artwork_cache_entry_lock(path: Path) -> Iterator[None]:
                 yield
             finally:
                 fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def artwork_cache_process_lock(path: Path) -> threading.RLock:
+    key = str(path.resolve())
+    with ARTWORK_CACHE_LOCKS_GUARD:
+        lock = ARTWORK_CACHE_LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            ARTWORK_CACHE_LOCKS[key] = lock
+        return lock
 
 
 def artwork_url(raw: Any, path: str, config: AppConfig, width: int | None = None, height: int | None = None) -> str:
