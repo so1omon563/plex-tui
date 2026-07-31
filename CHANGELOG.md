@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Isolated online VOD metadata reloads from the shared Plex provider connection.
 - Read complete matching mpv IPC replies across fragmented and interleaved
   newline-delimited messages.
 - Returned concise text or JSON errors when CLI status and diagnostics cannot

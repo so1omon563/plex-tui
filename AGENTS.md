@@ -158,6 +158,8 @@ part of the selected media version in one continuous timeline; unsupported
 multipart modes must fail clearly before launching mpv.
 Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
+Online VOD metadata reloads must use a scoped Plex server copy and never mutate
+the shared provider server URL.
 mpv IPC commands must match newline-delimited replies by `request_id` within a
 bounded timeout and message size while ignoring asynchronous events.
 CLI status and diagnostics must report config-load failures without tracebacks;
