@@ -810,12 +810,11 @@ def test_hosted_live_tv_page_fetches_channels_with_account_token(monkeypatch):
     ]
     assert [(item.title, item.subtitle, item.kind, item.playable) for item in page.items] == [
         ("Live One", "ONE  HD  HLS", "livetv", True),
-        ("Locked", "HLS", "livetv", False),
     ]
     assert page.items[0].artwork_path == "https://images.example/one.png"
     assert media_details(page.items[0]).summary == "Live channel description"
     assert page.items[0].raw.getStreamURL() == f"{EPG_PROVIDER_BASE}/hls/one.m3u8?X-Plex-Token=account-token"
-    assert page.total == 2
+    assert page.total == 1
 
 
 def test_hosted_live_tv_categories_and_category_page_use_channel_genres(monkeypatch):
@@ -849,6 +848,13 @@ def test_hosted_live_tv_categories_and_category_page_use_channel_genres(monkeypa
                         "title": "News Two",
                         "genreRatingKeys": ["genre_6006cc1d610ee2002c74f37a"],
                         "Media": [{"Part": [{"key": "/hls/news2.m3u8"}]}]
+                      },
+                      {
+                        "id": "channel-4",
+                        "title": "Locked News",
+                        "drm": true,
+                        "genreRatingKeys": ["genre_6006cc1d610ee2002c74f37a"],
+                        "Media": [{"Part": [{"key": "/hls/locked.m3u8"}]}]
                       }
                     ]
                   }
@@ -863,7 +869,8 @@ def test_hosted_live_tv_categories_and_category_page_use_channel_genres(monkeypa
                     "Channel": [
                       {"id": "channel-2"},
                       {"id": "channel-1"},
-                      {"id": "channel-2"}
+                      {"id": "channel-2"},
+                      {"id": "channel-4"}
                     ]
                   }
                 }

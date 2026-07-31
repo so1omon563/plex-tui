@@ -160,6 +160,8 @@ Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
 Route hosted Live TV guide paging through `hosted_live_tv_guide_page` with the
 originating channel context; guide states must not fall through to libraries.
+Hosted Plex Live TV pages, categories, counts, and pagination must expose only
+non-DRM channels.
 Online VOD metadata reloads must use a scoped Plex server copy and never mutate
 the shared provider server URL.
 mpv IPC commands must match newline-delimited replies by `request_id` within a

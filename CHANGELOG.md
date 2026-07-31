@@ -5,6 +5,8 @@
 - Prevented invalid artwork responses from poisoning the persistent image cache.
 - Preserved immediate-parent Back navigation after opening an empty child.
 - Routed hosted Live TV guide pagination through the guide service.
+- Omitted DRM-protected channels from hosted Live TV pages, categories, and
+  channel counts.
 - Isolated online VOD metadata reloads from the shared Plex provider connection.
 - Cleared stale managed-profile labels after choosing a server during relogin.
 - Read complete matching mpv IPC replies across fragmented and interleaved
