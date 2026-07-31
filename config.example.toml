@@ -62,7 +62,8 @@ client_identifier = "plex-tui-your-stable-client-id"
 # grid_prefetch_pages = 3
 # hidden_library_keys hides noisy Plex libraries from the sidebar. Use Settings
 # to toggle libraries after connecting, or list keys manually as comma-separated
-# values.
+# values. plex-tui automatically scopes these keys and library_order_keys to the
+# connected server's stable identity.
 # hidden_library_keys = "1,4"
 # library_order_keys pins the sidebar order. Use Settings to move libraries
 # after connecting, or list keys manually as comma-separated values.

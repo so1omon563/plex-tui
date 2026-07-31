@@ -352,6 +352,9 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
         hidden_library_keys=("2", "7"),
         library_order_keys=("7", "2"),
         grid_density="large",
+        server_identifier="server-a",
+        hidden_library_keys_server_identifier="server-a",
+        library_order_keys_server_identifier="server-a",
         show_playlists=False,
         show_discover=False,
         show_on_plex=False,
@@ -367,6 +370,8 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     assert loaded.grid_prefetch_pages == 4
     assert loaded.hidden_library_keys == ("2", "7")
     assert loaded.library_order_keys == ("7", "2")
+    assert loaded.hidden_library_keys_server_identifier == "server-a"
+    assert loaded.library_order_keys_server_identifier == "server-a"
     assert loaded.grid_density == "large"
     assert loaded.show_playlists is False
     assert loaded.show_discover is False
@@ -380,6 +385,8 @@ def test_browsing_performance_settings_round_trip(tmp_path, monkeypatch):
     assert "grid_prefetch_pages = 4" in text
     assert 'hidden_library_keys = "2,7"' in text
     assert 'library_order_keys = "7,2"' in text
+    assert 'hidden_library_keys_server_identifier = "server-a"' in text
+    assert 'library_order_keys_server_identifier = "server-a"' in text
     assert 'grid_density = "large"' in text
     assert "show_playlists = false" in text
     assert "show_discover" not in text
@@ -436,6 +443,30 @@ def test_hidden_library_keys_parse_unique_csv_values(tmp_path, monkeypatch):
     loaded = config.load_config()
 
     assert loaded.hidden_library_keys == ("2", "7", "9")
+
+
+def test_legacy_library_preferences_attach_to_saved_server(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        '\n'.join([
+            'base_url = "http://plex"',
+            'token = "token"',
+            'client_identifier = "client"',
+            'server_identifier = "server-a"',
+            'hidden_library_keys = "2"',
+            'library_order_keys = "2,1"',
+            "",
+        ]),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "config_path", lambda: config_file)
+
+    loaded = config.load_config()
+
+    assert loaded.hidden_library_keys_server_identifier == "server-a"
+    assert loaded.library_order_keys_server_identifier == "server-a"
+    assert loaded.current_hidden_library_keys == ("2",)
+    assert loaded.current_library_order_keys == ("2", "1")
 
 
 def test_library_order_keys_parse_unique_csv_values(tmp_path, monkeypatch):

@@ -71,6 +71,20 @@ class AppConfig:
     discover_media_type: str = "movies_shows"
     confirm_start_over: bool = True
     server_identifier: str = ""
+    hidden_library_keys_server_identifier: str = ""
+    library_order_keys_server_identifier: str = ""
+
+    @property
+    def current_hidden_library_keys(self) -> tuple[str, ...]:
+        if self.server_identifier and self.hidden_library_keys_server_identifier != self.server_identifier:
+            return ()
+        return self.hidden_library_keys
+
+    @property
+    def current_library_order_keys(self) -> tuple[str, ...]:
+        if self.server_identifier and self.library_order_keys_server_identifier != self.server_identifier:
+            return ()
+        return self.library_order_keys
 
 
 def default_config() -> AppConfig:
@@ -127,6 +141,8 @@ def load_config() -> AppConfig:
     home_account_token = data.get("home_account_token", "")
     active_profile_title = data.get("active_profile_title", "")
     server_identifier = data.get("server_identifier", "")
+    hidden_library_keys_server_identifier = data.get("hidden_library_keys_server_identifier", "")
+    library_order_keys_server_identifier = data.get("library_order_keys_server_identifier", "")
     preferred_audio_language = data.get("preferred_audio_language", "")
     preferred_subtitle_language = data.get("preferred_subtitle_language", "")
     subtitle_mode = data.get("subtitle_mode", "auto")
@@ -208,6 +224,10 @@ def load_config() -> AppConfig:
     )
     hidden_library_keys = csv_values(data.get("hidden_library_keys", ""))
     library_order_keys = csv_values(data.get("library_order_keys", ""))
+    if not hidden_library_keys_server_identifier and hidden_library_keys:
+        hidden_library_keys_server_identifier = server_identifier
+    if not library_order_keys_server_identifier and library_order_keys:
+        library_order_keys_server_identifier = server_identifier
     show_playlists = bool_value(data.get("show_playlists", "true"), True, "show_playlists")
     show_discover = bool_value(data.get("show_discover", "false"), False, "show_discover")
     show_on_plex = bool_value(data.get("show_on_plex", "false"), False, "show_on_plex")
@@ -252,6 +272,8 @@ def load_config() -> AppConfig:
         discover_media_type=discover_media_type,
         confirm_start_over=confirm_start_over,
         server_identifier=server_identifier.strip(),
+        hidden_library_keys_server_identifier=hidden_library_keys_server_identifier.strip(),
+        library_order_keys_server_identifier=library_order_keys_server_identifier.strip(),
     )
 
 
@@ -271,6 +293,16 @@ def save_config(config: AppConfig) -> None:
         lines.append(f'active_profile_title = "{_toml_escape(config.active_profile_title)}"')
     if config.server_identifier:
         lines.append(f'server_identifier = "{_toml_escape(config.server_identifier)}"')
+    if config.hidden_library_keys_server_identifier:
+        lines.append(
+            "hidden_library_keys_server_identifier = "
+            f'"{_toml_escape(config.hidden_library_keys_server_identifier)}"'
+        )
+    if config.library_order_keys_server_identifier:
+        lines.append(
+            "library_order_keys_server_identifier = "
+            f'"{_toml_escape(config.library_order_keys_server_identifier)}"'
+        )
     if config.preferred_audio_language:
         lines.append(f'preferred_audio_language = "{_toml_escape(config.preferred_audio_language)}"')
     if config.preferred_subtitle_language:

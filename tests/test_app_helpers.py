@@ -6,6 +6,7 @@ from io import BytesIO
 from pathlib import Path
 from subprocess import CompletedProcess, TimeoutExpired
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from PIL import Image
 from rich.align import Align
@@ -116,7 +117,7 @@ from plextui.app import (
     write_artwork_performance_log,
     write_performance_log,
 )
-from plextui.auth import ProfileChoice
+from plextui.auth import ProfileChoice, ServerChoice, save_server_choice
 from plextui.config import AppConfig
 from plextui.models import LibraryItem, MediaDetails, MediaItem
 from plextui.player import StreamChoice
@@ -1053,6 +1054,73 @@ def test_visible_libraries_filters_hidden_keys():
     ]
 
     assert [library.title for library in visible_libraries(libraries, config)] == ["Movies"]
+
+
+def test_library_preferences_only_apply_to_their_server_with_colliding_keys():
+    libraries_a = [
+        LibraryItem("Movies on A", "1", "movie", object()),
+        LibraryItem("TV on A", "2", "show", object()),
+    ]
+    libraries_b = [
+        LibraryItem("Movies on B", "1", "movie", object()),
+        LibraryItem("TV on B", "2", "show", object()),
+    ]
+    config_a = AppConfig(
+        "http://server-a",
+        "token-a",
+        "client-id",
+        hidden_library_keys=("1",),
+        library_order_keys=("2", "1"),
+        server_identifier="server-a",
+        hidden_library_keys_server_identifier="server-a",
+        library_order_keys_server_identifier="server-a",
+    )
+    with patch("plextui.auth.save_config"):
+        config_b = save_server_choice(
+            config_a,
+            "account-token",
+            ServerChoice(
+                "Server B",
+                "http://server-b",
+                "owned",
+                SimpleNamespace(accessToken="token-b", clientIdentifier="server-b"),
+            ),
+        )
+    config_b_with_hidden = replace(
+        config_b,
+        hidden_library_keys=("2",),
+        hidden_library_keys_server_identifier="server-b",
+    )
+
+    with patch("plextui.auth.save_config"):
+        returned_config_a = save_server_choice(
+            config_b,
+            "account-token",
+            ServerChoice(
+                "Server A",
+                "http://server-a",
+                "owned",
+                SimpleNamespace(accessToken="token-a", clientIdentifier="server-a"),
+            ),
+        )
+
+    assert [library.title for library in visible_libraries(libraries_a, returned_config_a)] == ["TV on A"]
+    assert [library.title for library in visible_libraries(libraries_b, config_b)] == [
+        "Movies on B",
+        "TV on B",
+    ]
+    assert [library.title for library in ordered_libraries(libraries_b, config_b)] == [
+        "Movies on B",
+        "TV on B",
+    ]
+    assert [library.title for library in visible_libraries(libraries_b, config_b_with_hidden)] == [
+        "Movies on B"
+    ]
+    assert [library.title for library in ordered_libraries(libraries_b, config_b_with_hidden)] == [
+        "Movies on B",
+        "TV on B",
+    ]
+    assert [library.title for library in visible_libraries(libraries_a, config_a)] == ["TV on A"]
 
 
 def test_sidebar_rows_can_hide_optional_entrypoints():

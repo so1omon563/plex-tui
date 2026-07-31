@@ -12,6 +12,7 @@
 - Routed hosted Live TV guide pagination through the guide service.
 - Omitted DRM-protected channels from hosted Live TV pages, categories, and
   channel counts.
+- Scoped hidden-library and library-order settings to the connected Plex server.
 - Isolated online VOD metadata reloads from the shared Plex provider connection.
 - Cleared stale managed-profile labels after choosing a server during relogin.
 - Read complete matching mpv IPC replies across fragmented and interleaved
