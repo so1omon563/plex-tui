@@ -1354,6 +1354,26 @@ def test_discover_page_prefers_query_title_matches(monkeypatch):
     assert [item.title for item in page.items] == ["Back to the Future"]
 
 
+def test_discover_page_keeps_title_filtering_stable_across_pages(monkeypatch):
+    class FakeAccount:
+        def __init__(self, token):
+            pass
+
+        def searchDiscover(self, query, **kwargs):
+            items = [BackToSchoolRawItem(), ShowRawItem(), SecondRawItem(), BackToFutureRawItem()]
+            return items[:kwargs["limit"]]
+
+    monkeypatch.setattr("plextui.plex_service.MyPlexAccount", FakeAccount)
+    service = object.__new__(PlexService)
+    service.config = type("Config", (), {"account_token": "account-token"})()
+
+    first_page = service.discover_page("Back to the Future", start=0, size=2)
+    second_page = service.discover_page("Back to the Future", start=2, size=2)
+
+    assert [item.title for item in first_page.items] == ["Back to School", "Second Show"]
+    assert [item.title for item in second_page.items] == ["Second Movie", "Back to the Future"]
+
+
 def test_discover_media_key_falls_back_when_rating_key_is_nan():
     class DiscoverResult(DiscoverRawItem):
         ratingKey = float("nan")

@@ -309,7 +309,8 @@ class PlexService:
             if discover_media_type_matches(item, media_type)
         ]
         matching_items = [item for item in items if discover_title_matches(query, item)]
-        if matching_items:
+        first_page_items = items[: size + 1]
+        if any(discover_title_matches(query, item) for item in first_page_items):
             items = matching_items
         return sliced_media_page(items, start, size)
 
