@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from http.client import IncompleteRead
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -547,7 +548,7 @@ def test_plex_root_response_requires_matching_server_identity(monkeypatch):
     )
 
 
-def test_plex_root_response_reads_complete_document_for_identity(monkeypatch):
+def test_plex_root_response_reads_root_element_from_large_document(monkeypatch):
     document = (
         '<MediaContainer machineIdentifier="saved-server">'
         + (" " * 5000)
@@ -559,6 +560,24 @@ def test_plex_root_response_reads_complete_document_for_identity(monkeypatch):
     )
 
     assert plex_root_responds(
+        "http://plex.example:32400",
+        "server-token",
+        timeout=2,
+        server_identifier="saved-server",
+    )
+
+
+def test_plex_root_response_treats_incomplete_transport_as_unreachable(monkeypatch):
+    class IncompleteResponse(FakeResponse):
+        def read(self, size: int = -1) -> bytes:
+            raise IncompleteRead(b'<MediaContainer machineIdentifier="saved-server"')
+
+    monkeypatch.setattr(
+        "plextui.auth.urlopen",
+        lambda request, timeout: IncompleteResponse(200, ""),
+    )
+
+    assert not plex_root_responds(
         "http://plex.example:32400",
         "server-token",
         timeout=2,

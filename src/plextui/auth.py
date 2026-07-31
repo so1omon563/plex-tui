@@ -3,6 +3,7 @@ from __future__ import annotations
 import ipaddress
 import webbrowser
 from dataclasses import dataclass, replace
+from http.client import IncompleteRead
 from urllib.parse import SplitResult, urlencode, urlparse
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree
@@ -332,9 +333,9 @@ def plex_root_responds(
     try:
         with urlopen(request, timeout=timeout) as response:
             status = response.status
-            text = response.read().decode("utf-8", errors="replace")
+            text = response.read(4096).decode("utf-8", errors="replace")
             headers = response.headers
-    except OSError:
+    except (OSError, IncompleteRead):
         return False
     if status not in {200, 201, 204}:
         return False
@@ -343,8 +344,12 @@ def plex_root_responds(
     if not server_identifier:
         return True
     try:
-        root = ElementTree.fromstring(text)
+        parser = ElementTree.XMLPullParser(events=("start",))
+        parser.feed(text)
+        root = next(element for _event, element in parser.read_events())
     except ElementTree.ParseError:
+        return False
+    except StopIteration:
         return False
     return root.attrib.get("machineIdentifier", "") == server_identifier
 
