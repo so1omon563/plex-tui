@@ -161,6 +161,11 @@ Apply asynchronous browse refresh results only when their originating
 Route hosted Live TV guide paging through `hosted_live_tv_guide_page` with the
 originating channel context; guide states must not fall through to libraries.
 
+Async view-opening workers must apply UI results through the shared navigation
+identity guard. Newer navigation, overlays, and Back actions invalidate older
+results, and media pickers must also verify that their originating selection is
+still current.
+
 ## Testing Guidelines
 
 Tests use `pytest`. Add focused unit tests for helper logic and app navigation
@@ -243,6 +248,9 @@ target fetches tags, chooses the next version from the latest semver tag, update
 `pyproject.toml`, `src/plextui/__init__.py`, and `CHANGELOG.md`, and fails if
 `CHANGELOG.md` has no `Unreleased` notes to release. After staging, run
 `make check-release` and the relevant validation before opening the release PR.
+When `scripts/stage_release.py --version` is used directly, its explicit version
+must equal one supported bump from the latest tag; printed PR guidance uses that
+inferred or explicitly matching marker.
 
 GitHub Release publishing is controlled by standalone release markers in PR
 titles only: `#release`, `#publish`, or `#ship`. Keep those markers out of

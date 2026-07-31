@@ -1157,6 +1157,31 @@ def test_media_version_picker_plays_selected_file():
     asyncio.run(run_media_version_picker_check())
 
 
+def test_newer_navigation_discards_slow_child_result():
+    asyncio.run(run_newer_navigation_discards_slow_child_result_check())
+
+
+def test_newer_navigation_cancels_slow_search_result():
+    asyncio.run(run_newer_navigation_cancels_slow_search_result_check())
+
+
+def test_newer_navigation_cancels_slow_fuzzy_search_result():
+    asyncio.run(run_newer_navigation_cancels_slow_fuzzy_search_result_check())
+
+
+def test_media_version_picker_discards_result_after_selection_changes():
+    asyncio.run(run_media_version_picker_discards_stale_selection_check())
+
+
+def test_stream_picker_discards_result_after_selection_changes():
+    asyncio.run(run_stream_picker_discards_stale_selection_check())
+
+
+@pytest.mark.parametrize("picker_kind", ["media_version", "stream", "playlist"])
+def test_picker_error_discards_result_after_selection_changes(picker_kind):
+    asyncio.run(run_picker_error_discards_stale_selection_check(picker_kind))
+
+
 def test_quick_preference_actions_update_config():
     asyncio.run(run_quick_preference_action_check())
 
@@ -2715,6 +2740,171 @@ async def run_paged_child_view_check():
         assert [item.title for item in state.items] == ["First", "Second"]
         assert state.next_start == 2
         assert not state.has_more
+
+
+async def run_newer_navigation_discards_slow_child_result_check():
+    started = threading.Event()
+    release = threading.Event()
+    container = MediaItem("Slow folder", "", "folder", "folder", False, Raw())
+    stale_child = MediaItem("Stale child", "", "movie", "stale", True, Raw())
+    current = MediaItem("Current", "", "movie", "current", True, Raw())
+
+    class BlockingNavigationService:
+        def children_page(self, item: MediaItem, start: int, size: int) -> MediaPage:
+            started.set()
+            release.wait(timeout=10)
+            return MediaPage([stale_child], start=0, total=1)
+
+        def continue_watching_page(self, start: int, size: int) -> MediaPage:
+            return MediaPage([current], start=0, total=1)
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = BlockingNavigationService()
+
+        with (
+            patch.object(app, "show_loading_state"),
+            patch.object(app, "show_browse_state"),
+            patch.object(app, "focus_media_browser"),
+            patch.object(app, "set_status"),
+        ):
+            app.open_media(container)
+            for _ in range(50):
+                if started.is_set():
+                    break
+                await pilot.pause(0.1)
+            assert started.is_set()
+
+            app.open_continue_watching()
+            for _ in range(50):
+                if app.browsing_stack and app.browsing_stack[-1].title == "Continue Watching":
+                    break
+                await pilot.pause(0.1)
+            assert app.browsing_stack and app.browsing_stack[-1].title == "Continue Watching"
+            release.set()
+            await asyncio.sleep(0.5)
+
+        assert [state.title for state in app.browsing_stack] == ["Continue Watching"]
+        assert [item.title for item in app.browsing_stack[-1].items] == ["Current"]
+
+
+async def run_newer_navigation_cancels_slow_search_result_check():
+    started = threading.Event()
+    release = threading.Event()
+    stale = MediaItem("Stale search result", "", "movie", "stale", True, Raw())
+    current = MediaItem("Current", "", "movie", "current", True, Raw())
+
+    class BlockingSearchService(FakePagedService):
+        def search_page(self, query: str, library: LibraryItem | None, start: int, size: int) -> MediaPage:
+            self.search_calls.append((query, library, start, size))
+            started.set()
+            release.wait(timeout=10)
+            return MediaPage([stale], start=0, total=1)
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        library = LibraryItem("Movies", "1", "movie", object())
+        service = BlockingSearchService(MediaPage([current], start=0, total=1))
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.selected_library = library
+        app.suppress_auto_load = True
+        original = BrowseState("Movies", [current], library, next_start=1, total=2)
+        app.browsing_stack = [original]
+        app.show_browse_state(original)
+        await pilot.pause(0.2)
+
+        token = app.start_search_return()
+        with (
+            patch.object(app, "show_loading_state"),
+            patch.object(app, "show_browse_state"),
+            patch.object(app, "focus_media_browser"),
+            patch.object(app, "set_status"),
+        ):
+            search_worker = app.run_search("stale", False, token)
+            try:
+                for _ in range(50):
+                    if started.is_set():
+                        break
+                    await asyncio.sleep(0.1)
+                assert started.is_set(), f"search worker stopped in {search_worker.state}: {search_worker.error}"
+
+                app.open_continue_watching()
+                assert app.search_was_cancelled(token)
+                assert search_worker.is_cancelled
+                release.set()
+                for _ in range(50):
+                    if app.browsing_stack and app.browsing_stack[-1].title == "Continue Watching":
+                        break
+                    await asyncio.sleep(0.1)
+            finally:
+                release.set()
+
+        assert service.search_calls == [("stale", library, 0, 40)]
+        assert [state.title for state in app.browsing_stack] == ["Continue Watching"]
+        assert [item.title for item in app.browsing_stack[-1].items] == ["Current"]
+
+
+async def run_newer_navigation_cancels_slow_fuzzy_search_result_check():
+    started = threading.Event()
+    release = threading.Event()
+    stale = MediaItem("Stale fuzzy result", "", "movie", "stale", True, Raw())
+    current = MediaItem("Current", "", "movie", "current", True, Raw())
+    loading_titles: list[str] = []
+
+    def blocking_fuzzy_match(query: str, items: list[MediaItem]) -> list[MediaItem]:
+        started.set()
+        release.wait(timeout=10)
+        return [stale]
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        library = LibraryItem("Movies", "1", "movie", object())
+        service = FakePagedService(MediaPage([current], start=0, total=1))
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.selected_library = library
+        app.suppress_auto_load = True
+        app.show_media_details = lambda item: None
+        original = BrowseState("Movies", [current], library, next_start=1, total=1)
+        app.browsing_stack = [original]
+        app.show_browse_state(original)
+        await pilot.pause(0.2)
+
+        token = app.start_search_return()
+        with (
+            patch("plextui.app.fuzzy_match_media", side_effect=blocking_fuzzy_match),
+            patch.object(app, "show_loading_state", side_effect=lambda title, detail: loading_titles.append(title)),
+            patch.object(app, "show_browse_state"),
+            patch.object(app, "focus_media_browser"),
+            patch.object(app, "set_status"),
+        ):
+            search_worker = app.run_search("stale", False, token)
+            try:
+                for _ in range(50):
+                    if started.is_set():
+                        break
+                    await asyncio.sleep(0.1)
+                assert started.is_set(), f"search worker stopped in {search_worker.state}: {search_worker.error}"
+
+                app.open_continue_watching()
+                assert app.search_was_cancelled(token)
+                assert search_worker.is_cancelled
+                release.set()
+                for _ in range(50):
+                    if app.browsing_stack and app.browsing_stack[-1].title == "Continue Watching":
+                        break
+                    await asyncio.sleep(0.1)
+            finally:
+                release.set()
+
+        assert "Fuzzy search: stale" not in loading_titles
+        assert [state.title for state in app.browsing_stack] == ["Continue Watching"]
+        assert [item.title for item in app.browsing_stack[-1].items] == ["Current"]
 
 
 async def run_load_more_media_preserve_selection_check():
@@ -4768,6 +4958,139 @@ async def run_media_version_picker_check():
             app.choose_media_version(rows[1])
 
         play.assert_called_once_with(item, resume=False, version_part_id="20")
+        assert not app.picker_visible
+
+
+async def run_media_version_picker_discards_stale_selection_check():
+    started = threading.Event()
+    release = threading.Event()
+    first = MediaItem("First", "", "movie", "1", True, Raw())
+    second = MediaItem("Second", "", "movie", "2", True, Raw())
+    choices = [
+        MediaVersionChoice("10", "480p · Old.mkv"),
+        MediaVersionChoice("20", "1080p · New.mkv"),
+    ]
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.browsing_stack = [BrowseState("Movies", [first, second])]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        def blocked_choices(raw: object) -> list[MediaVersionChoice]:
+            started.set()
+            release.wait(timeout=10)
+            return choices
+
+        with patch("plextui.app.media_version_choices", side_effect=blocked_choices):
+            worker = app.open_media_version_picker(first)
+            for _ in range(50):
+                if started.is_set():
+                    break
+                await pilot.pause(0.1)
+            assert started.is_set()
+            app.query_one("#media", ListView).index = 1
+            await pilot.pause(0.2)
+            release.set()
+            await asyncio.wait_for(worker.wait(), timeout=20)
+            await pilot.pause(0.2)
+
+        assert app.selected_media() is second
+        assert not app.picker_visible
+
+
+async def run_stream_picker_discards_stale_selection_check():
+    started = threading.Event()
+    release = threading.Event()
+    first = MediaItem("First", "", "movie", "1", True, Raw())
+    second = MediaItem("Second", "", "movie", "2", True, Raw())
+    choices = [StreamChoice(1, "English")]
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.browsing_stack = [BrowseState("Movies", [first, second])]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        def blocked_choices(raw: object) -> list[StreamChoice]:
+            started.set()
+            release.wait(timeout=10)
+            return choices
+
+        with patch("plextui.app.subtitle_choices", side_effect=blocked_choices):
+            worker = app.open_stream_picker(first, "subtitle")
+            for _ in range(50):
+                if started.is_set():
+                    break
+                await pilot.pause(0.1)
+            assert started.is_set()
+            app.query_one("#media", ListView).index = 1
+            await pilot.pause(0.2)
+            release.set()
+            await asyncio.wait_for(worker.wait(), timeout=20)
+            await pilot.pause(0.2)
+
+        assert app.selected_media() is second
+        assert not app.picker_visible
+
+
+async def run_picker_error_discards_stale_selection_check(picker_kind: str):
+    started = threading.Event()
+    release = threading.Event()
+    first = MediaItem("First", "", "movie", "1", True, Raw())
+    second = MediaItem("Second", "", "movie", "2", True, Raw())
+
+    def blocked_error(*args: object) -> list[object]:
+        started.set()
+        release.wait(timeout=10)
+        raise RuntimeError(f"stale {picker_kind} error")
+
+    class BlockingPlaylistService:
+        playlists = blocked_error
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = BlockingPlaylistService()
+        app.browsing_stack = [BrowseState("Movies", [first, second])]
+        app.show_media_details = lambda item: None
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        patcher = None
+        if picker_kind == "media_version":
+            patcher = patch("plextui.app.media_version_choices", side_effect=blocked_error)
+        elif picker_kind == "stream":
+            patcher = patch("plextui.app.subtitle_choices", side_effect=blocked_error)
+        if patcher is not None:
+            patcher.start()
+        try:
+            if picker_kind == "media_version":
+                worker = app.open_media_version_picker(first)
+            elif picker_kind == "stream":
+                worker = app.open_stream_picker(first, "subtitle")
+            else:
+                worker = app.open_playlist_picker([first])
+            for _ in range(50):
+                if started.is_set():
+                    break
+                await pilot.pause(0.1)
+            assert started.is_set()
+            app.query_one("#media", ListView).index = 1
+            await pilot.pause(0.2)
+            release.set()
+            await asyncio.wait_for(worker.wait(), timeout=20)
+            await pilot.pause(0.2)
+        finally:
+            release.set()
+            if patcher is not None:
+                patcher.stop()
+
+        assert app.selected_media() is second
+        assert app.query_one("#media-title").content == "Movies"
         assert not app.picker_visible
 
 

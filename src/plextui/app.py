@@ -11,9 +11,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, is_dataclass, replace
 from datetime import date
 from difflib import SequenceMatcher
+from functools import wraps
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Callable
 
 from rich.align import Align
 from rich.console import Group
@@ -28,6 +29,7 @@ from textual import events
 from textual.message import Message
 from textual.reactive import reactive
 from textual.timer import Timer
+from textual.worker import Worker, get_current_worker
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 
 from . import __version__
@@ -120,6 +122,19 @@ LIVE_TV_GUIDE_LOADED_STATUS = "Live TV: Now/Next guide info loaded"
 LIVE_TV_GUIDE_UNAVAILABLE_STATUS = "Live TV: no Now/Next guide info available"
 LIVE_TV_GUIDE_LOADING_ROW = "Loading guide..."
 LIVE_TV_GUIDE_UNAVAILABLE_ROW = "No guide data"
+
+
+def navigation_work(method: Callable[..., Any]) -> Callable[..., Worker[Any]]:
+    start_worker = work(thread=True)(method)
+
+    @wraps(method)
+    def start(self: PlexTuiApp, *args: object, **kwargs: object) -> Worker[Any]:
+        self.invalidate_navigation_results()
+        worker = start_worker(self, *args, **kwargs)
+        self.navigation_worker = worker
+        return worker
+
+    return start
 LIVE_TV_GUIDE_LOADING = "loading"
 LIVE_TV_GUIDE_UNAVAILABLE = "unavailable"
 LIVE_TV_CHANNEL_WIDTH = 24
@@ -748,6 +763,7 @@ class PlexTuiApp(App[None]):
     profile_request_token: int
     applying_config_theme: bool
     detail_refresh_token: int
+    navigation_worker: Worker[Any] | None
     detail_refresh_timer: Timer | None
     detail_artwork_timer: Timer | None
     detail_cache: dict[str, MediaItem]
@@ -807,6 +823,7 @@ class PlexTuiApp(App[None]):
         self.profile_request_token = 0
         self.applying_config_theme = False
         self.detail_refresh_token = 0
+        self.navigation_worker = None
         self.detail_refresh_timer = None
         self.detail_artwork_timer = None
         self.detail_cache = {}
@@ -1238,6 +1255,7 @@ class PlexTuiApp(App[None]):
         self.call_from_thread(reconnect)
 
     def open_library_menu(self, library: LibraryItem) -> None:
+        self.invalidate_navigation_results()
         self.selected_library = library
         self.browsing_stack = []
         self.set_media_title(library.title)
@@ -1281,17 +1299,17 @@ class PlexTuiApp(App[None]):
             return
         self.set_status("Select a library first")
 
-    @work(thread=True)
+    @navigation_work
     def open_video_on_demand(self) -> None:
         if self.service is None:
-            self.call_from_thread(self.set_status, "Connect to Plex before browsing On Plex")
+            self.call_navigation_from_thread(self.set_status, "Connect to Plex before browsing On Plex")
             return
         self.post_message(StatusChanged("Loading Movies & Shows on Plex..."))
         started = time.perf_counter()
         try:
             page = self.service.video_on_demand_page(0, self.config.page_size)
         except Exception as exc:
-            self.call_from_thread(self.show_error, str(exc))
+            self.call_navigation_from_thread(self.show_error, str(exc))
             return
         write_performance_log(
             "video_on_demand_page",
@@ -1312,22 +1330,22 @@ class PlexTuiApp(App[None]):
             self.focus_media_browser()
             self.set_status(render_browse_status(state))
 
-        self.call_from_thread(update)
+        self.call_navigation_from_thread(update)
 
-    @work(thread=True)
+    @navigation_work
     def open_hosted_live_tv(self) -> None:
         if self.service is None:
-            self.call_from_thread(self.set_status, "Connect to Plex before browsing Live TV")
+            self.call_navigation_from_thread(self.set_status, "Connect to Plex before browsing Live TV")
             return
         title = "Live TV on Plex"
         self.post_message(StatusChanged(f"Loading {title}..."))
-        self.call_from_thread(self.show_loading_state, title, "Loading Plex-hosted Live TV categories.")
+        self.call_navigation_from_thread(self.show_loading_state, title, "Loading Plex-hosted Live TV categories.")
         started = time.perf_counter()
         try:
             categories = self.service.hosted_live_tv_categories()
             page = None if categories else self.service.hosted_live_tv_page(0, self.config.page_size)
         except Exception as exc:
-            self.call_from_thread(self.show_error, str(exc))
+            self.call_navigation_from_thread(self.show_error, str(exc))
             return
         write_performance_log(
             "hosted_live_tv_categories",
@@ -1368,22 +1386,22 @@ class PlexTuiApp(App[None]):
             self.focus_media_browser()
             self.set_status(render_browse_status(state))
 
-        self.call_from_thread(update)
+        self.call_navigation_from_thread(update)
 
-    @work(thread=True)
+    @navigation_work
     def open_hosted_live_tv_channels(self, category: MediaItem | None = None) -> None:
         if self.service is None:
-            self.call_from_thread(self.set_status, "Connect to Plex before browsing Live TV")
+            self.call_navigation_from_thread(self.set_status, "Connect to Plex before browsing Live TV")
             return
         category_channel_ids = live_tv_category_channel_ids(category)
         title = f"Live TV: {category.title}" if category_channel_ids else "Live TV: All Channels"
         self.post_message(StatusChanged(f"Loading {title}..."))
-        self.call_from_thread(self.show_loading_state, title, "Loading Plex-hosted Live TV channels.")
+        self.call_navigation_from_thread(self.show_loading_state, title, "Loading Plex-hosted Live TV channels.")
         started = time.perf_counter()
         try:
             page = self.service.hosted_live_tv_page(0, self.config.page_size, channel_ids=category_channel_ids)
         except Exception as exc:
-            self.call_from_thread(self.show_error, str(exc))
+            self.call_navigation_from_thread(self.show_error, str(exc))
             return
         write_performance_log(
             "hosted_live_tv_page",
@@ -1410,16 +1428,16 @@ class PlexTuiApp(App[None]):
             else:
                 self.set_status(render_browse_status(state))
 
-        self.call_from_thread(update)
+        self.call_navigation_from_thread(update)
 
-    @work(thread=True)
+    @navigation_work
     def open_hosted_live_tv_guide(self, channel: MediaItem) -> None:
         if self.service is None:
-            self.call_from_thread(self.set_status, "Connect to Plex before browsing Live TV")
+            self.call_navigation_from_thread(self.set_status, "Connect to Plex before browsing Live TV")
             return
         title = f"Guide: {channel.title}"
         self.post_message(StatusChanged(f"Loading {title}..."))
-        self.call_from_thread(self.show_loading_state, title, "Loading hosted Live TV guide.")
+        self.call_navigation_from_thread(self.show_loading_state, title, "Loading hosted Live TV guide.")
         started = time.perf_counter()
         guide_date = hosted_live_tv_guide_date()
         try:
@@ -1429,7 +1447,7 @@ class PlexTuiApp(App[None]):
                 size=live_tv_initial_guide_size(self.config.page_size),
             )
         except Exception as exc:
-            self.call_from_thread(self.show_error, str(exc))
+            self.call_navigation_from_thread(self.show_error, str(exc))
             return
         write_performance_log(
             "hosted_live_tv_guide_page",
@@ -1453,9 +1471,10 @@ class PlexTuiApp(App[None]):
             self.focus_media_browser()
             self.set_status(render_browse_status(state))
 
-        self.call_from_thread(update)
+        self.call_navigation_from_thread(update)
 
     def prompt_discover_search(self) -> None:
+        self.invalidate_navigation_results()
         if self.service is None:
             self.set_status("Connect to Plex before searching Discover")
             return
@@ -1470,18 +1489,18 @@ class PlexTuiApp(App[None]):
         self.set_focus_pane(main=True)
         self.set_status("Discover: enter a search query")
 
-    @work(thread=True)
+    @navigation_work
     def open_library_entry(self, library: LibraryItem, entry: str = "library", label: str | None = None) -> None:
         if self.service is None:
             return
         title = library.title if entry == "library" else f"{library.title}: {label or library_entry_label(entry)}"
         self.post_message(StatusChanged(f"Loading {title}..."))
-        self.call_from_thread(self.show_loading_state, title, "Loading library items from Plex.")
+        self.call_navigation_from_thread(self.show_loading_state, title, "Loading library items from Plex.")
         started = time.perf_counter()
         try:
             page = self.service.library_entry_page(library, entry, 0, self.config.page_size)
         except Exception as exc:
-            self.call_from_thread(self.show_error, str(exc))
+            self.call_navigation_from_thread(self.show_error, str(exc))
             return
         write_performance_log(
             "library_page",
@@ -1504,20 +1523,20 @@ class PlexTuiApp(App[None]):
             self.focus_media_browser()
             self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more, page.items))
 
-        self.call_from_thread(update)
+        self.call_navigation_from_thread(update)
 
-    @work(thread=True)
+    @navigation_work
     def open_continue_watching(self) -> None:
         if self.service is None:
             return
         title = "Continue Watching"
         self.post_message(StatusChanged(f"Loading {title}..."))
-        self.call_from_thread(self.show_loading_state, title, "Loading in-progress items from Plex.")
+        self.call_navigation_from_thread(self.show_loading_state, title, "Loading in-progress items from Plex.")
         started = time.perf_counter()
         try:
             page = self.service.continue_watching_page(0, self.config.page_size)
         except Exception as exc:
-            self.call_from_thread(self.show_error, str(exc))
+            self.call_navigation_from_thread(self.show_error, str(exc))
             return
         write_performance_log(
             "continue_watching_page",
@@ -1538,20 +1557,20 @@ class PlexTuiApp(App[None]):
             self.focus_media_browser()
             self.set_status(render_loaded_status(title, len(page.items), page.total, page.has_more, page.items))
 
-        self.call_from_thread(update)
+        self.call_navigation_from_thread(update)
 
-    @work(thread=True)
+    @navigation_work
     def open_playlists(self) -> None:
         if self.service is None:
             return
         title = "Playlists"
         self.post_message(StatusChanged(f"Loading {title}..."))
-        self.call_from_thread(self.show_loading_state, title, "Loading Plex playlists.")
+        self.call_navigation_from_thread(self.show_loading_state, title, "Loading Plex playlists.")
         started = time.perf_counter()
         try:
             playlists = self.service.playlists()
         except Exception as exc:
-            self.call_from_thread(self.show_error, f"failed to load playlists: {exc}")
+            self.call_navigation_from_thread(self.show_error, f"failed to load playlists: {exc}")
             return
         write_performance_log(
             "playlists_page",
@@ -1572,7 +1591,7 @@ class PlexTuiApp(App[None]):
             self.focus_media_browser()
             self.set_status(render_browse_status(state))
 
-        self.call_from_thread(update)
+        self.call_navigation_from_thread(update)
 
     def maybe_auto_load_more(self, media: MediaItem) -> None:
         if self.suppress_auto_load:
@@ -1617,6 +1636,24 @@ class PlexTuiApp(App[None]):
     def current_browse_state_source(self) -> str:
         state = self.current_browse_state()
         return state.source if state is not None else ""
+
+    def call_navigation_from_thread(self, callback: Callable[..., Any], *args: object) -> None:
+        worker = get_current_worker()
+        self.call_from_thread(self.apply_navigation_result, worker, callback, args)
+
+    def apply_navigation_result(
+        self,
+        worker: Worker[Any],
+        callback: Callable[..., Any],
+        args: tuple[object, ...],
+    ) -> None:
+        if worker is self.navigation_worker:
+            callback(*args)
+
+    def invalidate_navigation_results(self) -> None:
+        self.navigation_worker = None
+        self.search_token += 1
+        self.workers.cancel_group(self, "search")
 
     @work(thread=True, exclusive=True)
     def refresh_current_browse_state(
@@ -2024,17 +2061,17 @@ class PlexTuiApp(App[None]):
             name="livetv-enrichment-status",
         )
 
-    @work(thread=True)
+    @navigation_work
     def open_media(self, media: MediaItem) -> None:
         if self.service is None:
             return
         if self.current_browse_state_source() == "discover":
             urls = availability_urls(media.raw)
             if not urls:
-                self.call_from_thread(self.set_status, f"No availability links for {media.title}.")
+                self.call_navigation_from_thread(self.set_status, f"No availability links for {media.title}.")
                 return
             if len(urls) > 1:
-                self.call_from_thread(self.show_availability_picker, media, urls)
+                self.call_navigation_from_thread(self.show_availability_picker, media, urls)
                 return
             label, url = urls[0]
             try:
@@ -2046,35 +2083,35 @@ class PlexTuiApp(App[None]):
                 if opened
                 else f"Browser launch failed; open manually: {url}"
             )
-            self.call_from_thread(self.set_status, status)
+            self.call_navigation_from_thread(self.set_status, status)
             return
         if media.kind == "livetv":
             if media.playable:
-                self.open_hosted_live_tv_guide(media)
+                self.call_navigation_from_thread(self.open_hosted_live_tv_guide, media)
                 return
-            self.call_from_thread(
+            self.call_navigation_from_thread(
                 self.show_playback_unavailable,
                 media.title,
                 "This Plex Live TV channel is unavailable for external playback.",
             )
             return
         if media.kind == "livetv_category":
-            self.call_from_thread(self.open_hosted_live_tv_channels, media)
+            self.call_navigation_from_thread(self.open_hosted_live_tv_channels, media)
             return
         if media.kind == "livetv_program":
-            self.call_from_thread(self.set_status, f"Guide program: {media.title}. Escape returns to channels.")
+            self.call_navigation_from_thread(self.set_status, f"Guide program: {media.title}. Escape returns to channels.")
             return
         if media.playable:
-            self.call_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
+            self.call_navigation_from_thread(self.set_status, f"Selected {media.title}. Press p to play.")
             return
         else:
             self.post_message(StatusChanged(f"Opening {media.title}..."))
-            self.call_from_thread(self.show_loading_state, media.title, "Loading child items from Plex.")
+            self.call_navigation_from_thread(self.show_loading_state, media.title, "Loading child items from Plex.")
             started = time.perf_counter()
             try:
                 page = self.service.children_page(media, 0, self.config.page_size)
             except Exception as exc:
-                self.call_from_thread(self.show_error, str(exc))
+                self.call_navigation_from_thread(self.show_error, str(exc))
                 return
             write_performance_log(
                 "children_load",
@@ -2083,7 +2120,12 @@ class PlexTuiApp(App[None]):
                 f"items={len(page.items)} total={page.total} playable=0",
             )
         if not page.items:
-            self.call_from_thread(self.show_empty_state, media.title, "No child items", "Go back and choose another item.")
+            self.call_navigation_from_thread(
+                self.show_empty_state,
+                media.title,
+                "No child items",
+                "Go back and choose another item.",
+            )
             return
 
         def update() -> None:
@@ -2105,7 +2147,7 @@ class PlexTuiApp(App[None]):
             self.focus_media_browser()
             self.set_status(render_browse_status(state))
 
-        self.call_from_thread(update)
+        self.call_navigation_from_thread(update)
 
     def show_availability_picker(self, media: MediaItem, urls: list[tuple[str, str]]) -> None:
         self.picker_visible = True
@@ -2868,6 +2910,7 @@ class PlexTuiApp(App[None]):
         grid.refresh_grid()
 
     def action_show_settings(self, selected_action: str | None = None) -> None:
+        self.invalidate_navigation_results()
         self.help_visible = False
         self.picker_visible = False
         self.settings_visible = True
@@ -2901,6 +2944,7 @@ class PlexTuiApp(App[None]):
             return
 
     def action_show_help(self) -> None:
+        self.invalidate_navigation_results()
         self.help_visible = True
         self.settings_visible = False
         self.picker_visible = False
@@ -3238,19 +3282,32 @@ class PlexTuiApp(App[None]):
             return
         self.open_media_version_picker(media)
 
-    @work(thread=True)
+    @navigation_work
     def open_media_version_picker(self, media: MediaItem) -> None:
         self.post_message(StatusChanged("Loading media versions..."))
+
+        def origin_is_current() -> bool:
+            selected = self.selected_media()
+            return selected is not None and selected.key == media.key
+
         try:
             choices = media_version_choices(media.raw)
         except Exception as exc:
-            self.call_from_thread(self.show_error, str(exc))
+            message = str(exc)
+
+            def show_error_if_current() -> None:
+                if origin_is_current():
+                    self.show_error(message)
+
+            self.call_navigation_from_thread(show_error_if_current)
             return
         if len(choices) < 2:
-            self.call_from_thread(self.set_status, "Selected media has only one version")
+            self.call_navigation_from_thread(self.set_status, "Selected media has only one version")
             return
 
         def update() -> None:
+            if not origin_is_current():
+                return
             self.picker_visible = True
             self.settings_visible = False
             self.picker_media_key = media.key
@@ -3261,7 +3318,7 @@ class PlexTuiApp(App[None]):
             self.show_detail_text(render_media_version_picker_details(media.title, len(choices)))
             self.set_status("Choose media version")
 
-        self.call_from_thread(update)
+        self.call_navigation_from_thread(update)
 
     def choose_media_version(self, row: MediaVersionRow) -> None:
         self.picker_visible = False
@@ -3295,16 +3352,29 @@ class PlexTuiApp(App[None]):
                 return
             self.set_status(f"mpv window size: {mpv_window_size_value(self.config)}")
 
-    @work(thread=True)
+    @navigation_work
     def open_stream_picker(self, media: MediaItem, stream_type: str) -> None:
         self.post_message(StatusChanged(f"Loading {stream_type} tracks..."))
+
+        def origin_is_current() -> bool:
+            selected = self.selected_media()
+            return selected is not None and selected.key == media.key
+
         try:
             choices = subtitle_choices(media.raw) if stream_type == "subtitle" else audio_choices(media.raw)
         except Exception as exc:
-            self.call_from_thread(self.show_error, str(exc))
+            message = str(exc)
+
+            def show_error_if_current() -> None:
+                if origin_is_current():
+                    self.show_error(message)
+
+            self.call_navigation_from_thread(show_error_if_current)
             return
 
         def update() -> None:
+            if not origin_is_current():
+                return
             current_choice = self.current_stream_choice(media.raw, choices, stream_type)
             current_index = selected_stream_index(choices, current_choice)
             self.picker_visible = True
@@ -3323,7 +3393,7 @@ class PlexTuiApp(App[None]):
             self.show_detail_text(render_picker_details(stream_type, current_choice, self.config))
             self.set_status(f"Choose {stream_type} track")
 
-        self.call_from_thread(update)
+        self.call_navigation_from_thread(update)
 
     def choose_stream(self, choice: StreamChoice, stream_type: str) -> None:
         try:
@@ -3368,19 +3438,32 @@ class PlexTuiApp(App[None]):
             return
         return self.open_playlist_picker(items)
 
-    @work(thread=True, exclusive=True, group="playlist-picker")
+    @navigation_work
     def open_playlist_picker(self, items: list[MediaItem]) -> None:
         if self.service is None:
             return
         media = items[0]
+        expected_keys = {item.key for item in items}
+
+        def origin_is_current() -> bool:
+            return {item.key for item in self.playlist_action_items()} == expected_keys
+
         self.post_message(StatusChanged("Loading playlists..."))
         try:
             playlists = self.service.playlists()
         except Exception as exc:
-            self.call_from_thread(self.show_error, f"failed to load playlists: {exc}")
+            message = f"failed to load playlists: {exc}"
+
+            def show_error_if_current() -> None:
+                if origin_is_current():
+                    self.show_error(message)
+
+            self.call_navigation_from_thread(show_error_if_current)
             return
 
         def update() -> None:
+            if not origin_is_current():
+                return
             self.picker_visible = True
             self.playlist_picker_visible = True
             self.settings_visible = False
@@ -3397,7 +3480,7 @@ class PlexTuiApp(App[None]):
             self.show_detail_text(render_playlist_picker_details(items, len(playlists)))
             self.set_status("Choose playlist target")
 
-        self.call_from_thread(update)
+        self.call_navigation_from_thread(update)
 
     def choose_playlist_target(self, playlist: MediaItem) -> object | None:
         items = self.playlist_picker_items or ([self.playlist_picker_item] if self.playlist_picker_item is not None else [])
@@ -3837,10 +3920,12 @@ class PlexTuiApp(App[None]):
         if local_source is not None and fuzzy_source_is_complete(local_source):
             matches = fuzzy_match_media(query, local_source.items)
             title = f"Fuzzy search: {query}"
-            self.post_message(StatusChanged(f"Fuzzy searching {local_source.title} for {query}..."))
-            self.call_from_thread(self.show_loading_state, title, f"Matching loaded items from {local_source.title}.")
 
             def update_fuzzy() -> None:
+                if self.search_was_cancelled(token):
+                    return
+                self.post_message(StatusChanged(f"Fuzzy searching {local_source.title} for {query}..."))
+                self.show_loading_state(title, f"Matching loaded items from {local_source.title}.")
                 self.show_fuzzy_search_results(query, local_source, matches, focus=True)
 
             self.call_from_thread(update_fuzzy)
@@ -4007,10 +4092,9 @@ class PlexTuiApp(App[None]):
             self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items))
 
     def action_back_or_clear(self) -> None:
+        self.invalidate_navigation_results()
         search = self.query_one("#search", Input)
         if search.display:
-            self.search_token += 1
-            self.workers.cancel_group(self, "search")
             search.value = ""
             search.display = False
             input_mode = self.input_mode
@@ -4036,8 +4120,6 @@ class PlexTuiApp(App[None]):
             return
 
         if self.search_return_state is not None:
-            self.search_token += 1
-            self.workers.cancel_group(self, "search")
             state = self.search_return_state
             self.search_return_state = None
             if any(candidate is state for candidate in self.browsing_stack):
@@ -4081,11 +4163,11 @@ class PlexTuiApp(App[None]):
     def action_resume_selected(self) -> None:
         self.play_selected_media(resume=True)
 
-    @work(thread=True)
+    @navigation_work
     def action_open_parent_context(self) -> None:
         self.open_episode_context("season")
 
-    @work(thread=True)
+    @navigation_work
     def action_open_show_context(self) -> None:
         self.open_episode_context("show")
 
@@ -4094,24 +4176,29 @@ class PlexTuiApp(App[None]):
             return
         media = self.selected_media()
         if media is None or media.kind != "episode":
-            self.call_from_thread(self.set_status, "Select a TV episode first")
+            self.call_navigation_from_thread(self.set_status, "Select a TV episode first")
             return
         key = episode_parent_key(media.raw) if target == "season" else episode_show_parent_key(media.raw)
         if not key:
-            self.call_from_thread(self.set_status, f"No {target} context reported for {media.title}")
+            self.call_navigation_from_thread(self.set_status, f"No {target} context reported for {media.title}")
             return
         self.post_message(StatusChanged(f"Opening {target} context for {media.title}..."))
         context = self.service.episode_parent(media) if target == "season" else self.service.episode_show(media)
         if context is None:
-            self.call_from_thread(self.set_status, f"Could not open {target} context for {media.title}")
+            self.call_navigation_from_thread(self.set_status, f"Could not open {target} context for {media.title}")
             return
         try:
             children = self.service.children(context, self.config.page_size)
         except Exception as exc:
-            self.call_from_thread(self.show_error, str(exc))
+            self.call_navigation_from_thread(self.show_error, str(exc))
             return
         if not children:
-            self.call_from_thread(self.show_empty_state, context.title, "No child items", "Go back and choose another item.")
+            self.call_navigation_from_thread(
+                self.show_empty_state,
+                context.title,
+                "No child items",
+                "Go back and choose another item.",
+            )
             return
 
         def update() -> None:
@@ -4121,7 +4208,7 @@ class PlexTuiApp(App[None]):
             self.focus_media_browser()
             self.set_status(render_browse_status(state))
 
-        self.call_from_thread(update)
+        self.call_navigation_from_thread(update)
 
     def action_play_optimized(self) -> None:
         media = self.selected_media()
