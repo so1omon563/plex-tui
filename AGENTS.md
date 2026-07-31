@@ -160,6 +160,8 @@ Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
 Route hosted Live TV guide paging through `hosted_live_tv_guide_page` with the
 originating channel context; guide states must not fall through to libraries.
+CLI status and diagnostics must report config-load failures without tracebacks;
+JSON modes must always emit parseable error objects.
 
 Async view-opening workers must apply UI results through the shared navigation
 identity guard. Newer navigation, overlays, and Back actions invalidate older
