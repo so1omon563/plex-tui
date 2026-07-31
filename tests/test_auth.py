@@ -39,8 +39,9 @@ class FakePinLogin:
 
 
 class FakeServer:
-    def __init__(self, baseurl: str) -> None:
+    def __init__(self, baseurl: str, identifier: str = "") -> None:
         self._baseurl = baseurl
+        self.machineIdentifier = identifier
 
 
 class FakeResource:
@@ -52,6 +53,7 @@ class FakeResource:
         source: str = "owned",
         reachable_uri: str = "",
         identifier: str = "",
+        connected_identifier: str | None = None,
     ) -> None:
         self.name = name
         self.accessToken = token
@@ -60,6 +62,7 @@ class FakeResource:
         self._connections = connections
         self.reachable_uri = reachable_uri
         self.clientIdentifier = identifier
+        self.connected_identifier = identifier if connected_identifier is None else connected_identifier
         self.connect_timeout = None
 
     def preferred_connections(self) -> list[str]:
@@ -69,7 +72,7 @@ class FakeResource:
         self.connect_timeout = timeout
         if not self.reachable_uri:
             raise RuntimeError("unreachable")
-        return FakeServer(self.reachable_uri)
+        return FakeServer(self.reachable_uri, self.connected_identifier)
 
 
 class FakeAccount:
@@ -485,6 +488,19 @@ def test_reachable_server_choices_deduplicates_connected_urls():
     assert [choice.uri for choice in choices] == ["http://plex.example:32400"]
 
 
+def test_reachable_server_choices_rejects_mismatched_connected_server_identity():
+    resource = FakeResource(
+        "My Plex",
+        "server-token",
+        [],
+        reachable_uri="http://reused.example:32400",
+        identifier="saved-server",
+        connected_identifier="other-server",
+    )
+
+    assert reachable_server_choices([resource], timeout=1) == []
+
+
 def test_reachable_advertised_urls_accepts_plex_protocol_header(monkeypatch):
     resource = FakeResource("My Plex", "server-token", ["http://plex.example:32400"])
     seen = {}
@@ -531,6 +547,25 @@ def test_plex_root_response_requires_matching_server_identity(monkeypatch):
     )
 
 
+def test_plex_root_response_reads_complete_document_for_identity(monkeypatch):
+    document = (
+        '<MediaContainer machineIdentifier="saved-server">'
+        + (" " * 5000)
+        + "</MediaContainer>"
+    )
+    monkeypatch.setattr(
+        "plextui.auth.urlopen",
+        lambda request, timeout: FakeResponse(200, document),
+    )
+
+    assert plex_root_responds(
+        "http://plex.example:32400",
+        "server-token",
+        timeout=2,
+        server_identifier="saved-server",
+    )
+
+
 class FakeResponse:
     def __init__(self, status_code: int, text: str, headers: dict[str, str] | None = None) -> None:
         self.status = status_code
@@ -544,4 +579,5 @@ class FakeResponse:
         return False
 
     def read(self, size: int = -1) -> bytes:
-        return self.text.encode("utf-8")
+        payload = self.text.encode("utf-8")
+        return payload if size < 0 else payload[:size]

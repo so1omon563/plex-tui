@@ -298,15 +298,25 @@ def reachable_resource_urls(resource: MyPlexResource, timeout: int) -> list[str]
     except Exception:
         return reachable_advertised_urls(resource, timeout)
 
+    resource_identifier = str(getattr(resource, "clientIdentifier", "") or "")
+    server_identifier = str(getattr(server, "machineIdentifier", "") or "")
+    if resource_identifier and server_identifier != resource_identifier:
+        return reachable_advertised_urls(resource, timeout)
     uri = str(getattr(server, "_baseurl", "") or getattr(server, "baseurl", "") or "").rstrip("/")
     return [uri] if uri else reachable_advertised_urls(resource, timeout)
 
 
 def reachable_advertised_urls(resource: MyPlexResource, timeout: int) -> list[str]:
     reachable = []
+    server_identifier = str(getattr(resource, "clientIdentifier", "") or "")
     for uri in resource.preferred_connections():
         normalized = uri.rstrip("/")
-        if normalized and plex_root_responds(normalized, resource.accessToken, timeout):
+        if normalized and plex_root_responds(
+            normalized,
+            resource.accessToken,
+            timeout,
+            server_identifier=server_identifier,
+        ):
             reachable.append(normalized)
     return reachable
 
@@ -322,7 +332,7 @@ def plex_root_responds(
     try:
         with urlopen(request, timeout=timeout) as response:
             status = response.status
-            text = response.read(4096).decode("utf-8", errors="replace")
+            text = response.read().decode("utf-8", errors="replace")
             headers = response.headers
     except OSError:
         return False
