@@ -158,6 +158,8 @@ part of the selected media version in one continuous timeline; unsupported
 multipart modes must fail clearly before launching mpv.
 Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
+mpv IPC commands must match newline-delimited replies by `request_id` within a
+bounded timeout and message size while ignoring asynchronous events.
 CLI status and diagnostics must report config-load failures without tracebacks;
 JSON modes must always emit parseable error objects.
 

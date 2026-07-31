@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import json
+import socket
 import subprocess
+import tempfile
+import threading
+import time
 from os import terminal_size
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -13,6 +18,7 @@ from plextui.player import (
     full_metadata,
     is_drm_vod_stream,
     media_version_choices,
+    mpv_command,
     PlayerError,
     ProgressMonitor,
     StreamChoice,
@@ -969,6 +975,43 @@ def test_seek_mpv_sends_relative_seek():
         assert seek_mpv(handle, -10)
 
     command.assert_called_once_with(Path("/tmp/socket"), ["seek", -10, "relative+exact"])
+
+
+def test_mpv_command_reads_fragmented_matching_reply_after_other_messages():
+    with tempfile.TemporaryDirectory(prefix="plex-tui-mpv-", dir="/tmp") as temp_dir:
+        socket_path = Path(temp_dir) / "mpv.sock"
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.bind(str(socket_path))
+        server.listen(1)
+        received = {}
+
+        def respond() -> None:
+            connection, _ = server.accept()
+            with connection:
+                received["request"] = json.loads(connection.recv(4096).splitlines()[0])
+                connection.sendall(
+                    b'{"event":"property-change"}\n'
+                    b'{"request_id":999,"error":"success","data":"unrelated"}\n'
+                )
+                reply = b'{"request_id":1,"error":"success","data":42}\n'
+                split = len(reply) // 2
+                connection.sendall(reply[:split])
+                time.sleep(0.05)
+                connection.sendall(reply[split:])
+
+        thread = threading.Thread(target=respond)
+        thread.start()
+        try:
+            response = mpv_command(socket_path, ["get_property", "time-pos"])
+        finally:
+            thread.join(timeout=2)
+            server.close()
+
+        assert received["request"] == {
+            "command": ["get_property", "time-pos"],
+            "request_id": 1,
+        }
+        assert response == {"request_id": 1, "error": "success", "data": 42}
 
 
 def test_force_transcode_bypasses_direct_play_and_applies_quality():
