@@ -4,6 +4,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts/check_release.py"
 SPEC = importlib.util.spec_from_file_location("check_release", SCRIPT_PATH)
@@ -64,6 +66,53 @@ def test_changelog_requires_current_version_section(tmp_path):
     assert "no dated section for 0.2.1" in result.message
 
 
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Fix playback #patch", (True, False)),
+        ("Ship feature #MINOR #RELEASE", (True, True)),
+        ("No release markers", (False, False)),
+        ("Publish only #ship", (False, False)),
+        ("Words #patchwork #minority #major-version #release-notes", (False, False)),
+        ("Punctuation (#patch) pre#publish", (False, False)),
+    ],
+)
+def test_pr_title_markers_require_exact_tokens(title, expected):
+    assert check_release.parse_pr_title_markers(title) == expected
+
+
+@pytest.mark.parametrize("title", ["Fix #patch #minor", "Fix #major #major"])
+def test_pr_title_markers_reject_multiple_bumps(title):
+    with pytest.raises(ValueError, match="exactly one"):
+        check_release.parse_pr_title_markers(title)
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Fix #patch #major-version",
+        "Fix #minor pre#patch",
+        "Fix (#major) #patch",
+    ],
+)
+def test_pr_title_markers_reject_mixed_marker_like_tokens(title):
+    with pytest.raises(ValueError, match="marker-like"):
+        check_release.parse_pr_title_markers(title)
+
+
+def test_pr_title_marker_cli_writes_github_outputs(tmp_path):
+    output = tmp_path / "github-output"
+
+    result = check_release.main(
+        ["--pr-title", "Ship fix #patch #publish", "--github-output", str(output)]
+    )
+
+    assert result == 0
+    assert output.read_text(encoding="utf-8") == (
+        "bump_requested=true\nbump_type=patch\nrelease_requested=true\n"
+    )
+
+
 def test_release_workflow_requires_bumper_and_release_creator(tmp_path):
     write_release_fixture(tmp_path)
     (tmp_path / ".github/workflows/bump.yml").write_text(
@@ -102,20 +151,20 @@ def test_release_workflow_rejects_floating_major_minor_tags(tmp_path):
     assert "must not move floating major/minor tags" in result.message
 
 
-def test_release_workflow_rejects_body_bump_markers(tmp_path):
+def test_release_workflow_rejects_substring_marker_checks(tmp_path):
     write_release_fixture(tmp_path)
     source = Path(".github/workflows/bump.yml").read_text(encoding="utf-8")
     workflow = source.replace(
-        "contains(github.event.pull_request.title, '#major')",
-        "contains(github.event.pull_request.title, '#major') ||\n"
-        "        contains(github.event.pull_request.body, '#patch')",
+        "if: github.event.pull_request.merged == true",
+        "if: github.event.pull_request.merged == true && "
+        "contains(github.event.pull_request.title, '#patch')",
     )
     (tmp_path / ".github/workflows/bump.yml").write_text(workflow, encoding="utf-8")
 
     result = check_release.check_release_workflow(tmp_path)
 
     assert not result.ok
-    assert "PR titles only" in result.message
+    assert "exact standalone PR-title markers" in result.message
 
 
 def test_homebrew_workflow_requires_bottle_publish_wiring(tmp_path):

@@ -4,6 +4,8 @@
 
 - Discarded stale async browse and picker results after newer navigation,
   selection changes, overlays, or Back actions.
+- Required standalone PR-title tokens for version and publishing markers so
+  marker-like words cannot create tags or releases.
 
 ## 0.17.1 - 2026-07-24
 

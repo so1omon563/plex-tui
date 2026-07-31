@@ -13,6 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+BUMPER_MARKERS = frozenset({"#patch", "#minor", "#major"})
+RELEASE_MARKERS = frozenset({"#release", "#publish", "#ship"})
+
+
 @dataclass(frozen=True)
 class CheckResult:
     ok: bool
@@ -22,7 +26,25 @@ class CheckResult:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd(), help="repository root")
+    parser.add_argument("--pr-title", help="validate release markers in a pull request title")
+    parser.add_argument("--github-output", type=Path, help="write marker results for GitHub Actions")
     args = parser.parse_args(argv)
+
+    if args.pr_title is not None:
+        if args.github_output is None:
+            parser.error("--github-output is required with --pr-title")
+        try:
+            bump_requested, release_requested = parse_pr_title_markers(args.pr_title)
+        except ValueError as exc:
+            print(f"FAIL: {exc}", file=sys.stderr)
+            return 1
+        with args.github_output.open("a", encoding="utf-8") as fh:
+            fh.write(f"bump_requested={str(bump_requested).lower()}\n")
+            fh.write(f"bump_type={selected_bump_type(args.pr_title)}\n")
+            fh.write(f"release_requested={str(release_requested).lower()}\n")
+        return 0
+    if args.github_output is not None:
+        parser.error("--github-output requires --pr-title")
 
     root = args.root.resolve()
     results = run_checks(root)
@@ -33,6 +55,29 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{prefix}: {result.message}")
 
     return 1 if failed else 0
+
+
+def parse_pr_title_markers(title: str) -> tuple[bool, bool]:
+    tokens = title.casefold().split()
+    bump_markers = [token for token in tokens if token in BUMPER_MARKERS]
+    if len(bump_markers) > 1:
+        raise ValueError("PR title must contain exactly one semver bump marker")
+    malformed_bump_tokens = [
+        token
+        for token in tokens
+        if token not in BUMPER_MARKERS and any(marker in token for marker in BUMPER_MARKERS)
+    ]
+    if bump_markers and malformed_bump_tokens:
+        raise ValueError("PR title must not mix a bump marker with marker-like text")
+
+    bump_requested = len(bump_markers) == 1
+    release_requested = bump_requested and any(token in RELEASE_MARKERS for token in tokens)
+    return bump_requested, release_requested
+
+
+def selected_bump_type(title: str) -> str:
+    tokens = title.casefold().split()
+    return next((token.removeprefix("#") for token in tokens if token in BUMPER_MARKERS), "none")
 
 
 def run_checks(root: Path) -> list[CheckResult]:
@@ -90,14 +135,15 @@ def check_release_workflow(root: Path) -> CheckResult:
         'types: ["closed"]',
         'branches: ["main"]',
         "github.event.pull_request.merged == true",
-        "contains(github.event.pull_request.title, '#patch')",
-        "contains(github.event.pull_request.title, '#minor')",
-        "contains(github.event.pull_request.title, '#major')",
         "contents: write",
         "fetch-depth: 0",
+        "bump_requested: ${{ steps.release-intent.outputs.bump_requested }}",
+        "release_requested: ${{ steps.release-intent.outputs.release_requested }}",
+        "python scripts/check_release.py --pr-title \"$PR_TITLE\" --github-output \"$GITHUB_OUTPUT\"",
+        "if: steps.release-intent.outputs.bump_requested == 'true'",
         "uses: so1omon563/custom-semver-bumper@v1",
         "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}",
-        "release_requested: ${{ steps.release-intent.outputs.release_requested }}",
+        "default_bump: ${{ steps.release-intent.outputs.bump_type }}",
         "id: release-intent",
         "uses: so1omon563/release-creator@v1",
         "tag: ${{ needs.bump-version.outputs.new_tag }}",
@@ -115,13 +161,17 @@ def check_release_workflow(root: Path) -> CheckResult:
     if "move-major-tag:" in workflow or "move-minor-tag:" in workflow:
         return CheckResult(False, "bump.yml must not move floating major/minor tags")
 
-    forbidden_body_markers = [
+    unsafe_marker_checks = [
+        "contains(github.event.pull_request.title, '#patch')",
+        "contains(github.event.pull_request.title, '#minor')",
+        "contains(github.event.pull_request.title, '#major')",
         "contains(github.event.pull_request.body, '#patch')",
         "contains(github.event.pull_request.body, '#minor')",
         "contains(github.event.pull_request.body, '#major')",
+        'grep -qF "$marker"',
     ]
-    if any(snippet in workflow for snippet in forbidden_body_markers):
-        return CheckResult(False, "bump.yml must read semver bump markers from PR titles only")
+    if any(snippet in workflow for snippet in unsafe_marker_checks):
+        return CheckResult(False, "bump.yml must use exact standalone PR-title markers")
 
     return CheckResult(True, "bump.yml contains PR merge tagging, release creation, and PyPI publish wiring")
 
