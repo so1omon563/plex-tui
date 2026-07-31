@@ -1771,20 +1771,25 @@ class PlexTuiApp(App[None]):
             else:
                 return
         except Exception as exc:
-            self.call_from_thread(self.show_error, f"failed to refresh media browser: {exc}")
+            message = f"failed to refresh media browser: {exc}"
+
+            def show_refresh_error() -> None:
+                if self.current_browse_state() is state:
+                    self.show_error(message)
+
+            self.call_from_thread(show_refresh_error)
             return
 
         def apply() -> None:
-            current = self.current_browse_state()
-            if current is None or current.source != source:
+            if self.current_browse_state() is not state:
                 return
-            current.items = items
-            current.next_start = next_start
-            current.total = total
+            state.items = items
+            state.next_start = next_start
+            state.total = total
             target_key = selected_key
             if source == "continue_watching":
                 target_key = continue_watching_playback_selection(played_media, items, selected_key)
-            self.show_browse_state(current, selected_key=target_key)
+            self.show_browse_state(state, selected_key=target_key)
             self.focus_media_browser()
 
         self.call_from_thread(apply)

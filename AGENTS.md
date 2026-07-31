@@ -154,6 +154,8 @@ For Plex items with multiple media versions, keep `p` and `r` as the normal
 default playback actions and use `V` for explicit version selection. Version
 selection must resolve the chosen Plex part after metadata reload and must not
 silently fall back to another file.
+Apply asynchronous browse refresh results only when their originating
+`BrowseState` object is still current; source labels are not unique identities.
 
 Async view-opening workers must apply UI results through the shared navigation
 identity guard. Newer navigation, overlays, and Back actions invalidate older
@@ -269,6 +271,9 @@ GitHub CLI notes:
 Never commit real Plex tokens, account tokens, debug logs, or local config files.
 Use `config.example.toml` for examples. Logs should redact tokens; preserve that
 behavior when changing playback or request diagnostics.
+On POSIX, keep the app config directory owner-only (`0700`) and config,
+debug-log, and rotated debug-log files owner-only (`0600`), including when
+repairing existing files.
 Use `SECURITY.md` for vulnerability reporting policy and keep it aligned with
 token handling, packaging, and release automation changes.
 

@@ -1084,6 +1084,10 @@ def test_playback_refresh_selects_next_continue_watching_episode():
     asyncio.run(run_playback_refresh_selects_next_continue_watching_episode_check())
 
 
+def test_playback_refresh_ignores_replaced_library_state():
+    asyncio.run(run_playback_refresh_ignores_replaced_library_state_check())
+
+
 def test_open_parent_context_from_continue_watching_episode():
     asyncio.run(run_open_parent_context_from_continue_watching_episode_check())
 
@@ -4334,6 +4338,65 @@ async def run_playback_refresh_selects_next_continue_watching_episode_check():
         assert service.continue_watching_calls[-1] == (0, 40)
         assert selected is not None
         assert selected.title == "Episode 2"
+
+
+async def run_playback_refresh_ignores_replaced_library_state_check():
+    started = threading.Event()
+    release = threading.Event()
+    refreshed = MediaItem("Refreshed A", "", "movie", "a-new", True, Raw())
+
+    class BlockingService(FakePagedService):
+        def library_entry_page(self, library: LibraryItem, entry: str, start: int, size: int) -> MediaPage:
+            self.entry_calls.append((library, entry, start, size))
+            started.set()
+            release.wait(timeout=5)
+            return self.page
+
+    library_a = LibraryItem("Library A", "1", "movie", object())
+    library_b = LibraryItem("Library B", "2", "movie", object())
+    original_a = MediaItem("Original A", "", "movie", "a-old", True, Raw())
+    original_b = MediaItem("Original B", "", "movie", "b-old", True, Raw())
+    state_a = BrowseState(
+        "Library A",
+        [original_a],
+        library_a,
+        source="library:library",
+        next_start=1,
+        total=1,
+    )
+    state_b = BrowseState(
+        "Library B",
+        [original_b],
+        library_b,
+        source="library:library",
+        next_start=1,
+        total=1,
+    )
+    service = BlockingService(MediaPage([refreshed], start=0, total=1))
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.browsing_stack = [state_a]
+
+        worker = app.refresh_current_browse_state(selected_key=original_a.key, played_media=original_a)
+        for _ in range(50):
+            if started.is_set():
+                break
+            await pilot.pause(0.1)
+        assert started.is_set()
+
+        app.browsing_stack = [state_b]
+        app.show_browse_state(state_b)
+        release.set()
+        await asyncio.wait_for(worker.wait(), timeout=20)
+        await pilot.pause(0.2)
+
+        assert service.entry_calls == [(library_a, "library", 0, 40)]
+        assert app.current_browse_state() is state_b
+        assert [item.title for item in state_b.items] == ["Original B"]
+        assert [item.title for item in state_a.items] == ["Original A"]
 
 
 async def run_open_parent_context_from_continue_watching_episode_check():
