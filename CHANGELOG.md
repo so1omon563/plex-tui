@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Kept delayed post-playback refreshes from replacing another library's rows.
+- Restricted Plex config and debug-log files to the current user and repaired
+  overly broad existing POSIX permissions when those files are used.
 - Required standalone PR-title tokens for version and publishing markers so
   marker-like words cannot create tags or releases.
 
