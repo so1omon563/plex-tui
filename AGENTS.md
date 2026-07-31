@@ -185,6 +185,9 @@ Background detail and artwork refreshes must preserve contextual action hints
 and only repaint the still-selected media item.
 Empty child views must retain their own `BrowseState` so Back returns to the
 immediate parent instead of skipping a level.
+Current-view search must derive its backend and context from the active
+`BrowseState`; incomplete non-library sources must not fall back to a selected
+sidebar library.
 
 ## Testing Guidelines
 

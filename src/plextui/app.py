@@ -3945,6 +3945,25 @@ class PlexTuiApp(App[None]):
 
         if self.service is None:
             return
+        library = None
+        if not global_search:
+            if local_source is None:
+                library = self.selected_library
+            elif local_source.source == "library" or local_source.source.startswith("library:"):
+                library = local_source.selected_library
+            if library is None:
+                source_title = local_source.title if local_source is not None else "the current view"
+
+                def show_unavailable() -> None:
+                    if self.search_was_cancelled(token):
+                        return
+                    self.search_return_state = None
+                    self.set_status(
+                        f"Current-view search is unavailable for {source_title}; load all items to search locally."
+                    )
+
+                self.call_from_thread(show_unavailable)
+                return
         scope = "all libraries" if global_search else "current library"
         title = f"Global search: {query}" if global_search else f"Search: {query}"
 
@@ -3959,7 +3978,6 @@ class PlexTuiApp(App[None]):
             return
         started = time.perf_counter()
         try:
-            library = None if global_search else self.selected_library
             page = self.service.search_page(query, library, 0, self.config.page_size)
         except Exception as exc:
             message = str(exc)
@@ -3987,7 +4005,7 @@ class PlexTuiApp(App[None]):
             state = BrowseState(
                 title,
                 page.items,
-                None if global_search else self.selected_library,
+                library,
                 search=True,
                 search_query=query,
                 global_search=global_search,
@@ -4059,7 +4077,7 @@ class PlexTuiApp(App[None]):
 
     def fuzzy_search_source(self) -> BrowseState | None:
         for state in reversed(self.browsing_stack):
-            if not state.search and state.items:
+            if not state.search:
                 return state
         return None
 
@@ -4132,6 +4150,10 @@ class PlexTuiApp(App[None]):
             if overlay_visible:
                 return
             self.show_browse_state(state)
+            self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items))
+            return
+        if self.browsing_stack:
+            state = self.browsing_stack[-1]
             self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items))
 
     def action_back_or_clear(self) -> None:
