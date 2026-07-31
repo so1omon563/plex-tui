@@ -72,6 +72,7 @@ from plextui.app import (
     next_detail_artwork_mode,
     next_artwork_renderer,
     next_grid_density,
+    next_discover_media_type,
     next_media_view,
     next_mpv_window_size,
     next_playback_display,
@@ -1251,6 +1252,13 @@ def test_next_artwork_renderer_cycles_values():
     assert next_artwork_renderer("auto") == "kitty"
     assert next_artwork_renderer("kitty") == "block"
     assert next_artwork_renderer("bad") == "block"
+
+
+def test_next_discover_media_type_cycles_supported_values():
+    assert next_discover_media_type("movies_shows") == "movie"
+    assert next_discover_media_type("movie") == "show"
+    assert next_discover_media_type("show") == "movies_shows"
+    assert next_discover_media_type("all") == "movies_shows"
 
 
 def test_playback_quality_helpers_cycle_values():

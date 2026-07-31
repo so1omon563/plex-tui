@@ -7117,7 +7117,7 @@ def settings_action_help(action: str) -> str:
     if action == "toggle_show_on_plex_live":
         return "Press Enter to show or hide Live TV in the sidebar."
     if action == "cycle_discover_media_type":
-        return "Press Enter to filter Discover searches by movies, shows, or all results."
+        return "Press Enter to filter Discover searches by movies, shows, or both."
     if action == "cycle_library_enter_action":
         return "Press Enter to choose whether library rows open all items or browse modes by default."
     if action == "cycle_grid_density":
@@ -7576,13 +7576,12 @@ def discover_media_type_value(config: AppConfig) -> str:
         "movies_shows": "Movies & Shows",
         "movie": "Movies",
         "show": "Shows",
-        "all": "All",
     }
     return labels.get(config.discover_media_type, "Movies & Shows")
 
 
 def next_discover_media_type(value: str) -> str:
-    values = ["movies_shows", "movie", "show", "all"]
+    values = ["movies_shows", "movie", "show"]
     try:
         index = values.index(value)
     except ValueError:

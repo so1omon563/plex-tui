@@ -720,7 +720,8 @@ def test_discover_page_uses_account_token_and_slices(monkeypatch):
 
         def searchDiscover(self, query, **kwargs):
             calls.append((query, kwargs))
-            return [DiscoverRawItem(), ShowRawItem(), ClipRawItem(), SecondRawItem()]
+            items = [DiscoverRawItem(), ShowRawItem(), ClipRawItem(), SecondRawItem()]
+            return [item for item in items if item.TYPE in {"movie", "show"}][:kwargs["limit"]]
 
     monkeypatch.setattr("plextui.plex_service.MyPlexAccount", FakeAccount)
     service = object.__new__(PlexService)
@@ -730,12 +731,45 @@ def test_discover_page_uses_account_token_and_slices(monkeypatch):
 
     assert calls == [
         ("token", "account-token"),
-        ("matrix", {"limit": 8, "providers": "discover,PLEXAVOD"}),
+        ("matrix", {"limit": 2, "providers": "discover,PLEXAVOD"}),
     ]
     assert [item.title for item in page.items] == ["Free Movie", "Second Show"]
     assert page.items[0].subtitle == "2024  1 provider: Tubi · Free"
     assert page.items[0].playable is False
-    assert page.total == 3
+    assert page.total == 2
+    assert not page.has_more
+
+
+def test_discover_page_filters_movie_and_show_before_limit(monkeypatch):
+    calls = []
+
+    class FakeAccount:
+        def __init__(self, token):
+            pass
+
+        def searchDiscover(self, query, **kwargs):
+            calls.append(kwargs)
+            target = DiscoverRawItem() if kwargs["libtype"] == "movie" else ShowRawItem()
+            wrong = ShowRawItem() if kwargs["libtype"] == "movie" else DiscoverRawItem()
+            items = [wrong] * 8 + [target]
+            return [item for item in items if item.TYPE == kwargs["libtype"]][:kwargs["limit"]]
+
+    monkeypatch.setattr("plextui.plex_service.MyPlexAccount", FakeAccount)
+    service = object.__new__(PlexService)
+    service.config = type("Config", (), {"account_token": "account-token"})()
+
+    movie_page = service.discover_page("target", start=0, size=1, media_type="movie")
+    show_page = service.discover_page("target", start=0, size=1, media_type="show")
+
+    assert calls == [
+        {"limit": 1, "providers": "discover,PLEXAVOD", "libtype": "movie"},
+        {"limit": 1, "providers": "discover,PLEXAVOD", "libtype": "show"},
+    ]
+    assert [item.kind for item in movie_page.items] == ["movie"]
+    assert [item.kind for item in show_page.items] == ["show"]
+    assert movie_page.total == show_page.total == 1
+    assert not movie_page.has_more
+    assert not show_page.has_more
 
 
 def test_video_on_demand_page_uses_account_token_and_returns_hubs(monkeypatch):
@@ -1280,21 +1314,27 @@ def test_vod_hub_children_accept_missing_total_size():
     assert page.total == 1
 
 
-def test_discover_page_can_show_all_result_types(monkeypatch):
+def test_discover_page_matches_plexapi_movie_show_contract(monkeypatch):
+    calls = []
+
     class FakeAccount:
         def __init__(self, token):
             pass
 
         def searchDiscover(self, query, **kwargs):
-            return [DiscoverRawItem(), ClipRawItem()]
+            calls.append(kwargs)
+            items = [DiscoverRawItem(), ClipRawItem()]
+            return [item for item in items if item.TYPE in {"movie", "show"}][:kwargs["limit"]]
 
     monkeypatch.setattr("plextui.plex_service.MyPlexAccount", FakeAccount)
     service = object.__new__(PlexService)
     service.config = type("Config", (), {"account_token": "account-token"})()
 
-    page = service.discover_page("matrix", start=0, size=2, media_type="all")
+    page = service.discover_page("matrix", start=0, size=2)
 
-    assert [item.title for item in page.items] == ["Free Movie", "Noisy Clip"]
+    assert calls == [{"limit": 2, "providers": "discover,PLEXAVOD"}]
+    assert [item.title for item in page.items] == ["Free Movie"]
+    assert page.total == 1
 
 
 def test_discover_page_prefers_query_title_matches(monkeypatch):
