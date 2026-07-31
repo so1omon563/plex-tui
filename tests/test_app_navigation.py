@@ -322,6 +322,31 @@ def test_clearing_search_does_not_restore_stale_source_after_navigation():
     assert statuses == []
 
 
+def test_clearing_search_does_not_repaint_newer_overlay():
+    app = PlexTuiApp()
+    source = BrowseState(
+        "Movies",
+        [MediaItem("Movie", "", "movie", "movie", True, Raw())],
+        source="library",
+        total=1,
+    )
+    shown_states = []
+    statuses = []
+    app.browsing_stack = [source]
+    app.search_return_state = source
+    app.settings_visible = True
+    app.show_browse_state = shown_states.append
+    app.set_status = statuses.append
+
+    app.restore_fuzzy_search_source()
+
+    assert app.current_browse_state() is source
+    assert app.search_return_state is None
+    assert app.settings_visible
+    assert shown_states == []
+    assert statuses == []
+
+
 def test_discover_alternate_action_opens_on_plex_vod():
     asyncio.run(run_discover_vod_entrypoint_check())
 

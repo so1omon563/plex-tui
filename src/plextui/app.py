@@ -4102,9 +4102,15 @@ class PlexTuiApp(App[None]):
         self.set_status(f"{title}: {len(matches)} matches from {len(local_source.items)} loaded items")
 
     def restore_fuzzy_search_source(self) -> None:
+        overlay_visible = (
+            getattr(self, "help_visible", False)
+            or getattr(self, "settings_visible", False)
+            or getattr(self, "picker_visible", False)
+            or getattr(self, "playlist_picker_visible", False)
+        )
         if self.browsing_stack and self.browsing_stack[-1].source == "fuzzy_search":
             self.browsing_stack.pop()
-            if self.browsing_stack:
+            if self.browsing_stack and not overlay_visible:
                 state = self.browsing_stack[-1]
                 self.show_browse_state(state)
                 self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items))
@@ -4123,6 +4129,8 @@ class PlexTuiApp(App[None]):
                     self.browsing_stack.pop()
                 else:
                     return
+            if overlay_visible:
+                return
             self.show_browse_state(state)
             self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items))
 
