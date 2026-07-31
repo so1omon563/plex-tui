@@ -584,6 +584,7 @@ def test_incomplete_non_library_search_does_not_query_stale_library(source):
         )
     ]
     app.search_return_state = app.browsing_stack[-1]
+    app.call_from_thread = lambda callback, *args: callback(*args)
     app.post_message = lambda message: statuses.append(message.text)
     app.set_status = restored_statuses.append
 
@@ -596,6 +597,36 @@ def test_incomplete_non_library_search_does_not_query_stale_library(source):
         "Current-view search is unavailable for Active source; load all items to search locally."
     ]
     assert restored_statuses == ["Active source: 1 of 2 items loaded"]
+
+
+def test_cancelled_incomplete_non_library_search_preserves_newer_return_state():
+    app = PlexTuiApp()
+    callbacks = []
+    statuses = []
+    source = BrowseState(
+        "VOD",
+        [MediaItem("Loaded", "", "movie", "1", True, Raw())],
+        source="vod",
+        next_start=1,
+        total=2,
+    )
+    newer_return_state = BrowseState("Newer view", [], total=0)
+    app.config = AppConfig("http://plex", "token", "client-id")
+    app.service = FakePagedService(MediaPage([], start=0, total=0))
+    app.browsing_stack = [source]
+    app.search_token = 1
+    app.search_return_state = source
+    app.call_from_thread = lambda callback, *args: callbacks.append((callback, args))
+    app.post_message = lambda message: statuses.append(message.text)
+
+    PlexTuiApp.run_search.__wrapped__(app, "missing", token=1)
+    app.search_token = 2
+    app.search_return_state = newer_return_state
+    callback, args = callbacks.pop()
+    callback(*args)
+
+    assert app.search_return_state is newer_return_state
+    assert statuses == []
 
 
 def test_live_current_library_search_queries_plex_when_library_is_not_fully_loaded():

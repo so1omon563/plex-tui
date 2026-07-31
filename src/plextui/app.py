@@ -3952,13 +3952,19 @@ class PlexTuiApp(App[None]):
             elif local_source.source == "library" or local_source.source.startswith("library:"):
                 library = local_source.selected_library
             if library is None:
-                self.search_return_state = None
                 source_title = local_source.title if local_source is not None else "the current view"
-                self.post_message(
-                    StatusChanged(
-                        f"Current-view search is unavailable for {source_title}; load all items to search locally."
+
+                def show_unavailable() -> None:
+                    if self.search_was_cancelled(token):
+                        return
+                    self.search_return_state = None
+                    self.post_message(
+                        StatusChanged(
+                            f"Current-view search is unavailable for {source_title}; load all items to search locally."
+                        )
                     )
-                )
+
+                self.call_from_thread(show_unavailable)
                 return
         scope = "all libraries" if global_search else "current library"
         title = f"Global search: {query}" if global_search else f"Search: {query}"
