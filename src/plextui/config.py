@@ -76,13 +76,13 @@ class AppConfig:
 
     @property
     def current_hidden_library_keys(self) -> tuple[str, ...]:
-        if self.server_identifier and self.hidden_library_keys_server_identifier != self.server_identifier:
+        if self.hidden_library_keys_server_identifier != self.server_identifier:
             return ()
         return self.hidden_library_keys
 
     @property
     def current_library_order_keys(self) -> tuple[str, ...]:
-        if self.server_identifier and self.library_order_keys_server_identifier != self.server_identifier:
+        if self.library_order_keys_server_identifier != self.server_identifier:
             return ()
         return self.library_order_keys
 

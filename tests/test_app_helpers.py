@@ -1091,6 +1091,7 @@ def test_library_preferences_only_apply_to_their_server_with_colliding_keys():
         hidden_library_keys=("2",),
         hidden_library_keys_server_identifier="server-b",
     )
+    config_with_unknown_server = replace(config_b, server_identifier="")
 
     with patch("plextui.auth.save_config"):
         returned_config_a = save_server_choice(
@@ -1117,6 +1118,10 @@ def test_library_preferences_only_apply_to_their_server_with_colliding_keys():
         "Movies on B"
     ]
     assert [library.title for library in ordered_libraries(libraries_b, config_b_with_hidden)] == [
+        "Movies on B",
+        "TV on B",
+    ]
+    assert [library.title for library in visible_libraries(libraries_b, config_with_unknown_server)] == [
         "Movies on B",
         "TV on B",
     ]
