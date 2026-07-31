@@ -199,6 +199,18 @@ def test_invalid_cache_eviction_and_publication_share_entry_lock(tmp_path, monke
     ]
 
 
+def test_artwork_cache_process_locks_are_scoped_to_cache_key(tmp_path):
+    first_path = tmp_path / "artwork" / "first"
+    second_path = tmp_path / "artwork" / "second"
+
+    first = artwork.artwork_cache_process_lock(first_path)
+    same = artwork.artwork_cache_process_lock(first_path)
+    second = artwork.artwork_cache_process_lock(second_path)
+
+    assert same is first
+    assert second is not first
+
+
 def test_valid_artwork_is_atomically_replaced_into_cache(tmp_path, monkeypatch):
     config = AppConfig(base_url="http://plex", token="token", client_identifier="client")
     buffer = BytesIO()
