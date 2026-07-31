@@ -61,6 +61,7 @@ from .config import (
     default_config,
     debug_log_path,
     load_config,
+    replace_server_library_keys,
     save_config,
     valid_mpv_window_size,
     write_debug_log,
@@ -761,6 +762,7 @@ class PlexTuiApp(App[None]):
     search_return_state: BrowseState | None
     search_token: int
     profile_request_token: int
+    server_load_token: int
     applying_config_theme: bool
     detail_refresh_token: int
     navigation_worker: Worker[Any] | None
@@ -821,6 +823,7 @@ class PlexTuiApp(App[None]):
         self.search_return_state = None
         self.search_token = 0
         self.profile_request_token = 0
+        self.server_load_token = 0
         self.applying_config_theme = False
         self.detail_refresh_token = 0
         self.navigation_worker = None
@@ -920,21 +923,35 @@ class PlexTuiApp(App[None]):
             return
         self.config = updated_config
 
+    def load_server(self) -> Worker[Any]:
+        self.server_load_token += 1
+        self.set_status("Connecting to Plex...")
+        return self._load_server(self.server_load_token)
+
     @work(thread=True)
-    def load_server(self) -> None:
-        self.post_message(StatusChanged("Connecting to Plex..."))
+    def _load_server(self, token: int) -> None:
         try:
-            self.config = load_config()
-            if not self.config.base_url or not self.config.token:
-                self.call_from_thread(self.begin_login)
+            config = load_config()
+            if not config.base_url or not config.token:
+                self.call_from_thread(lambda: token == self.server_load_token and self.begin_login())
                 return
-            service = PlexService(self.config)
+            service = PlexService(config)
+            config = replace(
+                config,
+                server_identifier=str(getattr(service, "server_identifier", "") or ""),
+            )
+            service.config = config
             libraries = service.libraries()
         except Exception as exc:
-            self.call_from_thread(self.show_error, str(exc))
+            self.call_from_thread(
+                lambda message=str(exc): token == self.server_load_token and self.show_error(message)
+            )
             return
 
         def update() -> None:
+            if token != self.server_load_token:
+                return
+            self.config = config
             self.service = service
             self.detail_cache = {}
             self.libraries = libraries
@@ -3224,24 +3241,38 @@ class PlexTuiApp(App[None]):
         self.set_status(f"Unknown settings action: {action}")
 
     def toggle_library_visibility(self, library_key: str) -> None:
-        hidden = set(self.config.hidden_library_keys)
+        if not self.config.server_identifier:
+            self.set_status("Library preferences require a verified Plex server identity")
+            return
+        hidden = set(self.config.current_hidden_library_keys)
         if library_key in hidden:
             hidden.remove(library_key)
         else:
             hidden.add(library_key)
-        next_hidden = tuple(key for key in self.config.hidden_library_keys if key in hidden)
+        next_hidden = tuple(key for key in self.config.current_hidden_library_keys if key in hidden)
         if library_key in hidden and library_key not in next_hidden:
             next_hidden = (*next_hidden, library_key)
-        if not self.update_preferences(hidden_library_keys=next_hidden):
+        if not self.update_preferences(
+            hidden_library_keys=next_hidden,
+            hidden_library_keys_server_identifier=self.config.server_identifier,
+            hidden_library_keys_by_server=replace_server_library_keys(
+                self.config.hidden_library_keys_by_server,
+                self.config.server_identifier,
+                next_hidden,
+            ),
+        ):
             return
         visible = visible_libraries(self.libraries, self.config)
         self.populate_libraries(visible)
         library = library_by_key(self.libraries, library_key)
         label = library.title if library is not None else library_key
-        value = "Hidden" if library_key in self.config.hidden_library_keys else "Visible"
+        value = "Hidden" if library_key in self.config.current_hidden_library_keys else "Visible"
         self.refresh_settings_after_change(f"toggle_library_visibility:{library_key}", f"Library: {label}", value)
 
     def move_library(self, library_key: str, direction: int) -> None:
+        if not self.config.server_identifier:
+            self.set_status("Library preferences require a verified Plex server identity")
+            return
         current = ordered_libraries(self.libraries, self.config)
         keys = [library.key for library in current]
         try:
@@ -3259,7 +3290,15 @@ class PlexTuiApp(App[None]):
             )
             return
         keys[index], keys[target] = keys[target], keys[index]
-        if not self.update_preferences(library_order_keys=tuple(keys)):
+        if not self.update_preferences(
+            library_order_keys=tuple(keys),
+            library_order_keys_server_identifier=self.config.server_identifier,
+            library_order_keys_by_server=replace_server_library_keys(
+                self.config.library_order_keys_by_server,
+                self.config.server_identifier,
+                tuple(keys),
+            ),
+        ):
             return
         visible = visible_libraries(self.libraries, self.config)
         self.populate_libraries(visible, selected_library_key=library_key)
@@ -6230,15 +6269,15 @@ def artwork_status(details: object, config: AppConfig | None) -> str:
 
 
 def visible_libraries(libraries: list[LibraryItem], config: AppConfig) -> list[LibraryItem]:
-    hidden = set(config.hidden_library_keys)
+    hidden = set(config.current_hidden_library_keys)
     return ordered_libraries([library for library in libraries if library.key not in hidden], config)
 
 
 def ordered_libraries(libraries: list[LibraryItem], config: AppConfig) -> list[LibraryItem]:
-    if not config.library_order_keys:
+    if not config.current_library_order_keys:
         return libraries
     by_key = {library.key: library for library in libraries}
-    ordered = [by_key[key] for key in config.library_order_keys if key in by_key]
+    ordered = [by_key[key] for key in config.current_library_order_keys if key in by_key]
     ordered_keys = {library.key for library in ordered}
     ordered.extend(library for library in libraries if library.key not in ordered_keys)
     return ordered
@@ -6302,7 +6341,7 @@ def library_visibility_row(
     config: AppConfig,
     duplicate_titles: set[str] | None = None,
 ) -> SettingsActionRow:
-    state = "Hidden" if library.key in config.hidden_library_keys else "Visible"
+    state = "Hidden" if library.key in config.current_hidden_library_keys else "Visible"
     label = library_settings_label(library, duplicate_titles or set())
     return SettingsActionRow(
         f"{label}: {state}",
@@ -6324,7 +6363,7 @@ def library_order_row(
 
 
 def hidden_library_count_value(config: AppConfig) -> str:
-    count = len(config.hidden_library_keys)
+    count = len(config.current_hidden_library_keys)
     if count == 0:
         return "None"
     if count == 1:
@@ -7052,7 +7091,7 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
         return f"Current grid density: {grid_density_value(config)}"
     if action.startswith("toggle_library_visibility:"):
         key = action.removeprefix("toggle_library_visibility:")
-        state = "Hidden" if key in config.hidden_library_keys else "Visible"
+        state = "Hidden" if key in config.current_hidden_library_keys else "Visible"
         return f"Current library visibility: {state}"
     if action.startswith(("move_library_up:", "move_library_down:")):
         return "Current library order can be changed from the Libraries section."

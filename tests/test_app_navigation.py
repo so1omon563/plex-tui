@@ -1173,6 +1173,10 @@ def test_settings_move_library_updates_sidebar_order():
     asyncio.run(run_settings_library_order_check())
 
 
+def test_library_preferences_require_verified_server_identity():
+    asyncio.run(run_unverified_server_library_preferences_check())
+
+
 def test_settings_recent_debug_log_action_shows_tail(tmp_path):
     asyncio.run(run_settings_recent_debug_log_check(tmp_path))
 
@@ -1677,7 +1681,18 @@ async def run_startup_continue_watching_default_check(monkeypatch):
     item = MediaItem("In Progress", "", "movie", "cw-1", True, Raw())
     service = StartupService(MediaPage([item], start=0, total=1))
     monkeypatch.setattr(PlexTuiApp, "load_server", STARTUP_LOAD_SERVER)
-    monkeypatch.setattr(app_module, "load_config", lambda: AppConfig("http://plex", "token", "client-id"))
+    monkeypatch.setattr(
+        app_module,
+        "load_config",
+        lambda: AppConfig(
+            "http://plex",
+            "token",
+            "client-id",
+            hidden_library_keys=("1",),
+            server_identifier="server-a",
+            hidden_library_keys_server_identifier="server-a",
+        ),
+    )
     monkeypatch.setattr(app_module, "PlexService", lambda config: service)
     app = PlexTuiApp()
     async with app.run_test() as pilot:
@@ -1689,12 +1704,67 @@ async def run_startup_continue_watching_default_check(monkeypatch):
         libraries_view = app.query_one("#libraries")
         rows = list(libraries_view.children)
         assert isinstance(rows[0], ContinueWatchingRow)
+        assert isinstance(rows[2], LibraryRow)
+        assert rows[2].library.title == "Movies"
+        assert app.config.server_identifier == "server-b"
         assert libraries_view.highlighted_child is rows[0]
         assert app.browsing_stack[-1].source == "continue_watching"
         selected = await wait_for_selected_title(app, pilot, "In Progress")
         assert selected is not None
         assert service.continue_watching_calls[-1] == (0, 40)
         assert service.entry_calls == []
+
+
+def test_overlapping_server_loads_keep_service_config_worker_local(monkeypatch):
+    first_started = threading.Event()
+    release_first = threading.Event()
+    configs = iter([
+        AppConfig("http://server-a", "token-a", "client"),
+        AppConfig("http://server-b", "token-b", "client"),
+    ])
+    services = {}
+
+    class Service:
+        friendly_name = "Server"
+
+        def __init__(self, service_config):
+            self.config = service_config
+            self.server_identifier = service_config.base_url.rsplit("-", 1)[-1]
+            services[service_config.base_url] = self
+            if service_config.base_url.endswith("server-a"):
+                first_started.set()
+                assert release_first.wait(timeout=2)
+
+        def libraries(self):
+            return []
+
+    fake = SimpleNamespace(
+        server_load_token=2,
+        config=AppConfig("", "", "client"),
+        service=None,
+        call_from_thread=lambda callback, *args: callback(*args),
+        apply_config_theme=lambda: None,
+        set_status=lambda _message: None,
+        populate_libraries=lambda _libraries: None,
+        open_continue_watching=lambda: None,
+    )
+    monkeypatch.setattr(app_module, "load_config", lambda: next(configs))
+    monkeypatch.setattr(app_module, "PlexService", Service)
+
+    first = threading.Thread(target=PlexTuiApp._load_server.__wrapped__, args=(fake, 1))
+    second = threading.Thread(target=PlexTuiApp._load_server.__wrapped__, args=(fake, 2))
+    first.start()
+    assert first_started.wait(timeout=2)
+    second.start()
+    second.join(timeout=2)
+    release_first.set()
+    first.join(timeout=2)
+
+    assert services["http://server-a"].config.base_url == "http://server-a"
+    assert services["http://server-a"].config.server_identifier == "a"
+    assert services["http://server-b"].config.base_url == "http://server-b"
+    assert services["http://server-b"].config.server_identifier == "b"
+    assert fake.service is services["http://server-b"]
 
 
 async def run_playlists_entrypoint_check():
@@ -2491,6 +2561,7 @@ class FakePagedService:
 
 class StartupService(FakePagedService):
     friendly_name = "Test Plex"
+    server_identifier = "server-b"
 
     def __init__(self, page: MediaPage) -> None:
         super().__init__(page)
@@ -4163,7 +4234,7 @@ async def run_settings_library_visibility_check():
         await pilot.pause(1.0)
         movies = LibraryItem("Movies", "1", "movie", object())
         tv = LibraryItem("TV", "2", "show", object())
-        app.config = AppConfig("http://plex", "token", "client-id")
+        app.config = AppConfig("http://plex", "token", "client-id", server_identifier="server-a")
         app.libraries = [movies, tv]
         app.populate_libraries(app.libraries)
         await pilot.pause(0.2)
@@ -4174,12 +4245,22 @@ async def run_settings_library_visibility_check():
 
         rows = list(app.query_one("#libraries").children)
         assert app.config.hidden_library_keys == ("2",)
+        assert app.config.hidden_library_keys_server_identifier == "server-a"
         assert save_config.call_count == 1
         assert isinstance(rows[0], ContinueWatchingRow)
         assert isinstance(rows[1], PlaylistsRow)
         assert isinstance(rows[2], LibraryRow)
         assert rows[2].library.title == "Movies"
         assert isinstance(rows[3], PlexServicesRow)
+
+        config_on_server_a = replace(app.config, server_identifier="server-a")
+        app.config = replace(config_on_server_a, server_identifier="server-b")
+        app.libraries = [movies, tv]
+        with patch("plextui.app.save_config"):
+            app.toggle_library_visibility("1")
+        assert app.config.current_hidden_library_keys == ("1",)
+        app.config = replace(app.config, server_identifier="server-a")
+        assert app.config.current_hidden_library_keys == ("2",)
 
 
 async def run_settings_sidebar_entrypoint_visibility_check():
@@ -4263,7 +4344,7 @@ async def run_settings_library_order_check():
         movies = LibraryItem("Movies", "1", "movie", object())
         tv = LibraryItem("TV", "2", "show", object())
         music = LibraryItem("Music", "3", "artist", object())
-        app.config = AppConfig("http://plex", "token", "client-id")
+        app.config = AppConfig("http://plex", "token", "client-id", server_identifier="server-a")
         app.libraries = [movies, tv, music]
         app.populate_libraries(app.libraries)
         await pilot.pause(0.2)
@@ -4274,6 +4355,7 @@ async def run_settings_library_order_check():
 
         rows = list(app.query_one("#libraries").children)
         assert app.config.library_order_keys == ("2", "1", "3")
+        assert app.config.library_order_keys_server_identifier == "server-a"
         assert save_config.call_count == 1
         assert isinstance(rows[0], ContinueWatchingRow)
         assert isinstance(rows[1], PlaylistsRow)
@@ -4284,6 +4366,26 @@ async def run_settings_library_order_check():
         selected = app.query_one("#media").highlighted_child
         selected_index = media_rows.index(selected)
         assert getattr(media_rows[selected_index], "action", "") == "move_library_down:1"
+
+
+async def run_unverified_server_library_preferences_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.libraries = [
+            LibraryItem("Movies", "1", "movie", object()),
+            LibraryItem("TV", "2", "show", object()),
+        ]
+
+        with patch("plextui.app.save_config") as save_config:
+            app.toggle_library_visibility("2")
+            app.move_library("1", 1)
+
+        assert app.config.hidden_library_keys == ()
+        assert app.config.library_order_keys == ()
+        assert save_config.call_count == 0
+        assert app.query_one("#status").content == "Library preferences require a verified Plex server identity"
 
 
 async def run_settings_recent_debug_log_check(tmp_path):

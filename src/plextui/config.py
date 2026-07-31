@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import threading
@@ -32,6 +33,7 @@ DISCOVER_MEDIA_TYPES = {"movies_shows", "movie", "show"}
 DEBUG_LOG_MAX_BYTES = 1_048_576
 DEBUG_LOG_BACKUP_SUFFIX = ".1"
 DEBUG_LOG_TRUNCATION_MARKER = b"...[truncated]\n"
+UNOWNED_LIBRARY_PREFERENCES = "__unowned__"
 _DEBUG_LOG_LOCK = threading.Lock()
 
 
@@ -71,6 +73,34 @@ class AppConfig:
     discover_media_type: str = "movies_shows"
     confirm_start_over: bool = True
     server_identifier: str = ""
+    hidden_library_keys_server_identifier: str = ""
+    library_order_keys_server_identifier: str = ""
+    hidden_library_keys_by_server: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    library_order_keys_by_server: tuple[tuple[str, tuple[str, ...]], ...] = ()
+
+    @property
+    def current_hidden_library_keys(self) -> tuple[str, ...]:
+        scoped = library_keys_for_server(self.hidden_library_keys_by_server, self.server_identifier)
+        if scoped is not None:
+            return scoped
+        if (
+            not self.server_identifier
+            or self.hidden_library_keys_server_identifier != self.server_identifier
+        ):
+            return ()
+        return self.hidden_library_keys
+
+    @property
+    def current_library_order_keys(self) -> tuple[str, ...]:
+        scoped = library_keys_for_server(self.library_order_keys_by_server, self.server_identifier)
+        if scoped is not None:
+            return scoped
+        if (
+            not self.server_identifier
+            or self.library_order_keys_server_identifier != self.server_identifier
+        ):
+            return ()
+        return self.library_order_keys
 
 
 def default_config() -> AppConfig:
@@ -120,13 +150,18 @@ def load_config() -> AppConfig:
             raw = tomllib.load(fh)
         data = {k: str(v) for k, v in raw.items() if isinstance(v, str | int)}
 
-    base_url = os.environ.get("PLEX_TUI_BASE_URL") or data.get("base_url", "")
-    token = os.environ.get("PLEX_TUI_TOKEN") or data.get("token", "")
+    base_url_override = os.environ.get("PLEX_TUI_BASE_URL")
+    token_override = os.environ.get("PLEX_TUI_TOKEN")
+    base_url = base_url_override or data.get("base_url", "")
+    token = token_override or data.get("token", "")
     client_identifier = data.get("client_identifier") or f"plex-tui-{uuid.uuid4()}"
     account_token = data.get("account_token", "")
     home_account_token = data.get("home_account_token", "")
     active_profile_title = data.get("active_profile_title", "")
-    server_identifier = data.get("server_identifier", "")
+    saved_server_identifier = data.get("server_identifier", "")
+    server_identifier = "" if base_url_override or token_override else saved_server_identifier
+    hidden_library_keys_server_identifier = data.get("hidden_library_keys_server_identifier", "")
+    library_order_keys_server_identifier = data.get("library_order_keys_server_identifier", "")
     preferred_audio_language = data.get("preferred_audio_language", "")
     preferred_subtitle_language = data.get("preferred_subtitle_language", "")
     subtitle_mode = data.get("subtitle_mode", "auto")
@@ -208,6 +243,36 @@ def load_config() -> AppConfig:
     )
     hidden_library_keys = csv_values(data.get("hidden_library_keys", ""))
     library_order_keys = csv_values(data.get("library_order_keys", ""))
+    if not hidden_library_keys_server_identifier and hidden_library_keys:
+        hidden_library_keys_server_identifier = saved_server_identifier
+    if not library_order_keys_server_identifier and library_order_keys:
+        library_order_keys_server_identifier = saved_server_identifier
+    hidden_library_keys_by_server = parse_library_keys_by_server(
+        data.get("hidden_library_keys_by_server", ""), "hidden_library_keys_by_server"
+    )
+    library_order_keys_by_server = parse_library_keys_by_server(
+        data.get("library_order_keys_by_server", ""), "library_order_keys_by_server"
+    )
+    if (
+        hidden_library_keys_server_identifier
+        and hidden_library_keys_server_identifier != UNOWNED_LIBRARY_PREFERENCES
+        and hidden_library_keys
+    ):
+        hidden_library_keys_by_server = replace_server_library_keys(
+            hidden_library_keys_by_server,
+            hidden_library_keys_server_identifier,
+            hidden_library_keys,
+        )
+    if (
+        library_order_keys_server_identifier
+        and library_order_keys_server_identifier != UNOWNED_LIBRARY_PREFERENCES
+        and library_order_keys
+    ):
+        library_order_keys_by_server = replace_server_library_keys(
+            library_order_keys_by_server,
+            library_order_keys_server_identifier,
+            library_order_keys,
+        )
     show_playlists = bool_value(data.get("show_playlists", "true"), True, "show_playlists")
     show_discover = bool_value(data.get("show_discover", "false"), False, "show_discover")
     show_on_plex = bool_value(data.get("show_on_plex", "false"), False, "show_on_plex")
@@ -252,6 +317,10 @@ def load_config() -> AppConfig:
         discover_media_type=discover_media_type,
         confirm_start_over=confirm_start_over,
         server_identifier=server_identifier.strip(),
+        hidden_library_keys_server_identifier=hidden_library_keys_server_identifier.strip(),
+        library_order_keys_server_identifier=library_order_keys_server_identifier.strip(),
+        hidden_library_keys_by_server=hidden_library_keys_by_server,
+        library_order_keys_by_server=library_order_keys_by_server,
     )
 
 
@@ -271,6 +340,50 @@ def save_config(config: AppConfig) -> None:
         lines.append(f'active_profile_title = "{_toml_escape(config.active_profile_title)}"')
     if config.server_identifier:
         lines.append(f'server_identifier = "{_toml_escape(config.server_identifier)}"')
+    hidden_library_keys_owner = config.hidden_library_keys_server_identifier
+    if config.hidden_library_keys and not hidden_library_keys_owner:
+        hidden_library_keys_owner = UNOWNED_LIBRARY_PREFERENCES
+    if hidden_library_keys_owner:
+        lines.append(
+            "hidden_library_keys_server_identifier = "
+            f'"{_toml_escape(hidden_library_keys_owner)}"'
+        )
+    library_order_keys_owner = config.library_order_keys_server_identifier
+    if config.library_order_keys and not library_order_keys_owner:
+        library_order_keys_owner = UNOWNED_LIBRARY_PREFERENCES
+    if library_order_keys_owner:
+        lines.append(
+            "library_order_keys_server_identifier = "
+            f'"{_toml_escape(library_order_keys_owner)}"'
+        )
+    hidden_library_keys_by_server = config.hidden_library_keys_by_server
+    if (
+        config.hidden_library_keys_server_identifier
+        and config.hidden_library_keys_server_identifier != UNOWNED_LIBRARY_PREFERENCES
+        and config.hidden_library_keys
+    ):
+        hidden_library_keys_by_server = replace_server_library_keys(
+            hidden_library_keys_by_server,
+            config.hidden_library_keys_server_identifier,
+            config.hidden_library_keys,
+        )
+    if hidden_library_keys_by_server:
+        value = serialize_library_keys_by_server(hidden_library_keys_by_server)
+        lines.append(f'hidden_library_keys_by_server = "{_toml_escape(value)}"')
+    library_order_keys_by_server = config.library_order_keys_by_server
+    if (
+        config.library_order_keys_server_identifier
+        and config.library_order_keys_server_identifier != UNOWNED_LIBRARY_PREFERENCES
+        and config.library_order_keys
+    ):
+        library_order_keys_by_server = replace_server_library_keys(
+            library_order_keys_by_server,
+            config.library_order_keys_server_identifier,
+            config.library_order_keys,
+        )
+    if library_order_keys_by_server:
+        value = serialize_library_keys_by_server(library_order_keys_by_server)
+        lines.append(f'library_order_keys_by_server = "{_toml_escape(value)}"')
     if config.preferred_audio_language:
         lines.append(f'preferred_audio_language = "{_toml_escape(config.preferred_audio_language)}"')
     if config.preferred_subtitle_language:
@@ -356,6 +469,54 @@ def csv_values(value: str) -> tuple[str, ...]:
             values.append(item)
             seen.add(item)
     return tuple(values)
+
+
+def library_keys_for_server(
+    entries: tuple[tuple[str, tuple[str, ...]], ...], server_identifier: str
+) -> tuple[str, ...] | None:
+    if not server_identifier:
+        return None
+    return next((keys for owner, keys in entries if owner == server_identifier), None)
+
+
+def replace_server_library_keys(
+    entries: tuple[tuple[str, tuple[str, ...]], ...],
+    server_identifier: str,
+    keys: tuple[str, ...],
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    if not server_identifier:
+        return entries
+    updated = [(owner, values) for owner, values in entries if owner != server_identifier]
+    updated.append((server_identifier, keys))
+    return tuple(updated)
+
+
+def parse_library_keys_by_server(
+    value: str, name: str
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    if not value:
+        return ()
+    try:
+        raw = json.loads(value)
+        if not isinstance(raw, dict):
+            raise ValueError("expected an object")
+        entries = []
+        for owner, keys in raw.items():
+            if not isinstance(owner, str) or not owner or not isinstance(keys, list):
+                raise ValueError("expected nonempty server identifiers and key arrays")
+            if not all(isinstance(key, str) for key in keys):
+                raise ValueError("expected string library keys")
+            entries.append((owner, tuple(dict.fromkeys(key for key in keys if key))))
+        return tuple(entries)
+    except (json.JSONDecodeError, ValueError) as exc:
+        write_debug_log(f"invalid {name}: {exc}; ignoring saved server preferences")
+        return ()
+
+
+def serialize_library_keys_by_server(
+    entries: tuple[tuple[str, tuple[str, ...]], ...]
+) -> str:
+    return json.dumps({owner: list(keys) for owner, keys in entries}, separators=(",", ":"), sort_keys=True)
 
 
 def bool_value(value: str, default: bool, name: str) -> bool:

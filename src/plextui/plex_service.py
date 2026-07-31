@@ -184,6 +184,10 @@ class PlexService:
     def friendly_name(self) -> str:
         return getattr(self.server, "friendlyName", "Plex")
 
+    @property
+    def server_identifier(self) -> str:
+        return str(getattr(self.server, "machineIdentifier", "") or "")
+
     def libraries(self) -> list[LibraryItem]:
         sections = self.server.library.sections()
         return [
