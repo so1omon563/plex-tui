@@ -160,6 +160,8 @@ Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
 mpv IPC commands must match newline-delimited replies by `request_id` within a
 bounded timeout and message size while ignoring asynchronous events.
+CLI status and diagnostics must report config-load failures without tracebacks;
+JSON modes must always emit parseable error objects.
 
 Async view-opening workers must apply UI results through the shared navigation
 identity guard. Newer navigation, overlays, and Back actions invalidate older
