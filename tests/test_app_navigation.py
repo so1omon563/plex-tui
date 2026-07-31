@@ -398,6 +398,10 @@ def test_load_more_media_appends_live_tv_guide_page():
     asyncio.run(run_load_more_live_tv_guide_check())
 
 
+def test_live_tv_guide_without_channel_never_uses_library_fallback():
+    asyncio.run(run_live_tv_guide_without_channel_check())
+
+
 def test_load_more_media_ignores_replaced_browse_state():
     asyncio.run(run_load_more_ignores_replaced_browse_state_check())
 
@@ -2634,6 +2638,32 @@ async def run_load_more_live_tv_guide_check():
         assert state.next_start == 2
         assert state.total == 3
         assert state.has_more
+
+
+async def run_live_tv_guide_without_channel_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=25)
+        service = FakePagedService(MediaPage([], start=0, total=0))
+        app.service = service
+        state = BrowseState("Guide", [], source="livetv_guide", next_start=1, total=2)
+        app.browsing_stack = [state]
+        errors = []
+        app.show_error = errors.append
+
+        app.load_more_media()
+        await pilot.pause(0.2)
+        worker = app.refresh_current_browse_state()
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
+
+        assert service.calls == []
+        assert service.hosted_live_tv_guide_calls == []
+        assert errors == [
+            "Live TV guide channel is unavailable",
+            "failed to refresh media browser: Live TV guide channel is unavailable",
+        ]
 
 
 async def run_load_more_ignores_replaced_browse_state_check():
