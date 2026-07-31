@@ -3010,7 +3010,6 @@ async def run_clearing_live_search_cancels_slow_result_check():
     started = threading.Event()
     release = threading.Event()
     source_item = MediaItem("Current", "", "movie", "current", True, Raw())
-    prior_item = MediaItem("Prior search result", "", "movie", "prior", True, Raw())
     stale_item = MediaItem("Late search result", "", "movie", "late", True, Raw())
 
     class BlockingSearchService(FakePagedService):
@@ -3024,24 +3023,24 @@ async def run_clearing_live_search_cancels_slow_result_check():
         await pilot.pause(1.0)
         library = LibraryItem("Movies", "1", "movie", object())
         source = BrowseState("Movies", [source_item], library, next_start=1, total=2)
-        prior = BrowseState("Search: prior", [prior_item], library, search=True, search_query="prior")
         app.config = AppConfig("http://plex", "token", "client-id")
         app.service = BlockingSearchService(MediaPage([], start=0, total=0))
         app.selected_library = library
         app.input_mode = "search"
         app.search_global = False
-        app.search_return_state = source
-        app.browsing_stack = [source, prior]
+        app.search_return_state = None
+        app.browsing_stack = [source]
         app.suppress_auto_load = True
         search_workers = []
         run_search = app.run_search
         app.run_search = lambda *args, **kwargs: search_workers.append(run_search(*args, **kwargs))
+        shown_states: list[BrowseState] = []
         statuses: list[str] = []
         search = SimpleNamespace(id="search")
 
         with (
             patch.object(app, "show_loading_state"),
-            patch.object(app, "show_browse_state"),
+            patch.object(app, "show_browse_state", side_effect=shown_states.append),
             patch.object(app, "focus_media_browser"),
             patch.object(app, "set_status", side_effect=statuses.append),
         ):
@@ -3058,6 +3057,7 @@ async def run_clearing_live_search_cancels_slow_result_check():
                 assert app.search_was_cancelled(token)
                 assert search_workers[0].is_cancelled
                 assert [state.title for state in app.browsing_stack] == ["Movies"]
+                assert shown_states == [source]
                 cleared_statuses = list(statuses)
 
                 release.set()

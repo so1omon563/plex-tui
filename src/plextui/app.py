@@ -4096,8 +4096,9 @@ class PlexTuiApp(App[None]):
                 self.show_browse_state(state)
                 self.set_status(render_loaded_status(state.title, len(state.items), state.total, state.has_more, state.items))
             return
-        if self.browsing_stack and self.browsing_stack[-1].search and self.search_return_state is not None:
-            self.browsing_stack.pop()
+        if self.search_return_state is not None:
+            if self.browsing_stack and self.browsing_stack[-1].search:
+                self.browsing_stack.pop()
             state = self.search_return_state
             self.search_return_state = None
             self.show_browse_state(state)
