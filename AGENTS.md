@@ -161,6 +161,11 @@ Apply asynchronous browse refresh results only when their originating
 CLI status and diagnostics must report config-load failures without tracebacks;
 JSON modes must always emit parseable error objects.
 
+Async view-opening workers must apply UI results through the shared navigation
+identity guard. Newer navigation, overlays, and Back actions invalidate older
+results, and media pickers must also verify that their originating selection is
+still current.
+
 ## Testing Guidelines
 
 Tests use `pytest`. Add focused unit tests for helper logic and app navigation
