@@ -248,6 +248,9 @@ target fetches tags, chooses the next version from the latest semver tag, update
 `pyproject.toml`, `src/plextui/__init__.py`, and `CHANGELOG.md`, and fails if
 `CHANGELOG.md` has no `Unreleased` notes to release. After staging, run
 `make check-release` and the relevant validation before opening the release PR.
+When `scripts/stage_release.py --version` is used directly, its explicit version
+must equal one supported bump from the latest tag; printed PR guidance uses that
+inferred or explicitly matching marker.
 
 GitHub Release publishing is controlled by standalone release markers in PR
 titles only: `#release`, `#publish`, or `#ship`. Keep those markers out of

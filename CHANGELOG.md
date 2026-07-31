@@ -4,6 +4,7 @@
 
 - Read complete matching mpv IPC replies across fragmented and interleaved
   newline-delimited messages.
+- Inferred or validated release bump markers when staging an explicit version.
 - Discarded stale async browse and picker results after newer navigation,
   selection changes, overlays, or Back actions.
 - Kept Plex Home profile switching on the selected server when its URL changes.
