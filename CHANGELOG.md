@@ -3,7 +3,10 @@
 ## Unreleased
 
 - Played every ordered part of split Plex media as one continuous mpv timeline
-  and reported unsupported multipart transcode playback before launch.
+  and reported unsupported multipart transcode or sidecar-subtitle playback
+  before launch.
+- Required standalone PR-title tokens for version and publishing markers so
+  marker-like words cannot create tags or releases.
 
 ## 0.17.1 - 2026-07-24
 

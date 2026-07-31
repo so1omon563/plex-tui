@@ -25,7 +25,7 @@ Prepare a release PR:
 - Run `make stage-release BUMP=patch`, `BUMP=minor`, or `BUMP=major`.
 - Confirm `README.md`, `PACKAGING.md`, and `config.example.toml` match current behavior.
 - Confirm the Git remote points to `https://github.com/so1omon563/plex-tui`.
-- Make sure the PR title includes the right bump marker:
+- Make sure the PR title includes exactly one standalone bump marker:
   `#patch`, `#minor`, or `#major`.
 - Add `#release`, `#publish`, or `#ship` when the merge should create the
   GitHub Release and publish to PyPI.
@@ -33,6 +33,10 @@ Prepare a release PR:
   issue key in the title, for example
   `SO1-57 Prepare release 0.14.2 #patch #release`, so Linear keeps the PR
   attached while release automation still reads the markers.
+
+Markers are case-insensitive, whitespace-delimited PR-title tokens. Prefixes,
+suffixes, punctuation-wrapped markers, and markers in the PR body do not count.
+Conflicting or repeated bump markers fail validation before any tag is created.
 
 The semver bumper creates tags from merge metadata, but it does not edit project
 files. `make stage-release` fetches tags, chooses the next version from the
@@ -85,11 +89,10 @@ python -m venv /tmp/plex-tui-testpypi
 Merge the release PR after CI passes. The `Version Bump and Release` workflow:
 
 1. Runs `so1omon563/custom-semver-bumper@v1` on the merged PR and creates the
-   next `vX.Y.Z` tag when the merged PR title includes `#patch`, `#minor`, or
-   `#major`.
-2. Runs `so1omon563/release-creator@v1` when the merged PR title includes
-   `#release`, `#publish`, or `#ship`. Keep release markers out of ordinary PR
-   bodies so examples and validation notes do not publish accidentally.
+   next `vX.Y.Z` tag when the merged PR title contains exactly one standalone
+   `#patch`, `#minor`, or `#major` token.
+2. Runs `so1omon563/release-creator@v1` when that title also contains a
+   standalone `#release`, `#publish`, or `#ship` token.
 3. Publishes the tagged package to PyPI through Trusted Publishing after the
    GitHub Release is created.
 

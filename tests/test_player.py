@@ -189,12 +189,15 @@ def test_playback_can_start_from_beginning_instead_of_resuming():
 
 
 def test_direct_playback_merges_all_split_media_parts():
+    class EmbeddedSubtitle:
+        key = None
+
     class SplitPart(Part):
         def __init__(self, key):
             self.key = key
 
         def subtitleStreams(self):
-            return []
+            return [EmbeddedSubtitle()]
 
         def audioStreams(self):
             return []
@@ -226,6 +229,21 @@ def test_direct_playback_merges_all_split_media_parts():
     assert handle.monitor.base_offset == 0
     with patch("plextui.player.mpv_get_property", return_value=72.5):
         assert handle.monitor.current_time_ms() == 72_500
+
+
+def test_multipart_external_subtitles_are_rejected_before_launch():
+    class SplitItem(Item):
+        def iterParts(self):
+            return [Part(), Part()]
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.subprocess.Popen") as popen,
+        pytest.raises(PlayerError, match="does not support external subtitle files"),
+    ):
+        play_with_mpv(SplitItem())
+
+    popen.assert_not_called()
 
 
 def test_multipart_transcode_is_rejected_before_launch():

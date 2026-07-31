@@ -125,6 +125,11 @@ def play_with_mpv(
             playback_parts = media_parts(browse_item)
     if len(playback_parts) > 1 and len(direct_urls) != len(playback_parts):
         raise PlayerError("multipart playback requires direct access to every Plex media part")
+    if len(playback_parts) > 1 and subtitles:
+        raise PlayerError(
+            "multipart playback does not support external subtitle files; "
+            "select embedded subtitles or disable subtitles"
+        )
     direct_url = direct_urls[0] if direct_urls else None
     fallback_subtitle_id = selected_subtitle_stream_id(item, selected_subtitle) if not subtitles and not direct_url else None
     if fallback_subtitle_id is not None:
