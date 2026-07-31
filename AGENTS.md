@@ -161,6 +161,11 @@ Apply asynchronous browse refresh results only when their originating
 mpv IPC commands must match newline-delimited replies by `request_id` within a
 bounded timeout and message size while ignoring asynchronous events.
 
+Async view-opening workers must apply UI results through the shared navigation
+identity guard. Newer navigation, overlays, and Back actions invalidate older
+results, and media pickers must also verify that their originating selection is
+still current.
+
 ## Testing Guidelines
 
 Tests use `pytest`. Add focused unit tests for helper logic and app navigation
