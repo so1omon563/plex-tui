@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import subprocess
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from os import terminal_size
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -429,6 +431,45 @@ def test_online_metadata_full_metadata_fetches_from_vod_provider_and_restores_se
         ("https://vod.provider.plex.tv", "/library/metadata/episode-1")
     ]
     assert item._server._baseurl == "https://metadata.provider.plex.tv"
+    assert full._server is not item._server
+    assert full._server._baseurl == "https://metadata.provider.plex.tv"
+
+
+def test_online_metadata_concurrent_fetches_do_not_mutate_shared_server():
+    barrier = threading.Barrier(2)
+
+    class OnlineServer:
+        _baseurl = "https://metadata.provider.plex.tv"
+
+        def __init__(self):
+            self.fetch_baseurls = []
+
+        def fetchItem(self, key: str):
+            self.fetch_baseurls.append((self._baseurl, key))
+            barrier.wait(timeout=2)
+            return type("FullItem", (), {"key": key, "_server": self})()
+
+    class OnlineItem(Item):
+        def __init__(self, key: str, server: OnlineServer):
+            self.key = key
+            self._server = server
+
+    server = OnlineServer()
+    items = [
+        OnlineItem("/library/metadata/episode-1", server),
+        OnlineItem("/library/metadata/episode-2", server),
+    ]
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(full_metadata, items))
+
+    assert server._baseurl == "https://metadata.provider.plex.tv"
+    assert sorted(server.fetch_baseurls) == [
+        ("https://vod.provider.plex.tv", "/library/metadata/episode-1"),
+        ("https://vod.provider.plex.tv", "/library/metadata/episode-2"),
+    ]
+    assert all(result._server is not server for result in results)
+    assert all(result._server._baseurl == "https://metadata.provider.plex.tv" for result in results)
 
 
 def test_online_metadata_without_vod_stream_raises_player_error():

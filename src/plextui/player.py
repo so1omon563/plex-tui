@@ -415,18 +415,22 @@ def required_full_metadata(item: Any) -> Any:
 def online_vod_metadata(item: Any) -> Any | None:
     key = metadata_item_key(item)
     server = getattr(item, "_server", None)
-    fetch_item = getattr(server, "fetchItem", None)
+    scoped_server = copy(server)
+    fetch_item = getattr(scoped_server, "fetchItem", None)
     if not key or not callable(fetch_item):
         return None
-    old_baseurl = getattr(server, "_baseurl", None)
+    had_baseurl = hasattr(scoped_server, "_baseurl")
+    old_baseurl = getattr(scoped_server, "_baseurl", None)
     try:
-        server._baseurl = vod_provider_base(item, server)
+        scoped_server._baseurl = vod_provider_base(item, server)
         return fetch_item(key)
     except Exception:
         return None
     finally:
-        if old_baseurl is not None:
-            server._baseurl = old_baseurl
+        if had_baseurl:
+            scoped_server._baseurl = old_baseurl
+        else:
+            del scoped_server._baseurl
 
 
 def metadata_item_key(item: Any) -> str:

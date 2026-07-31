@@ -156,6 +156,8 @@ selection must resolve the chosen Plex part after metadata reload and must not
 silently fall back to another file.
 Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
+Online VOD metadata reloads must use a scoped Plex server copy and never mutate
+the shared provider server URL.
 
 ## Testing Guidelines
 
