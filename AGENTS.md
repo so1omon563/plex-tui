@@ -158,6 +158,8 @@ part of the selected media version in one continuous timeline; unsupported
 multipart modes must fail clearly before launching mpv.
 Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
+CLI status and diagnostics must report config-load failures without tracebacks;
+JSON modes must always emit parseable error objects.
 
 Async view-opening workers must apply UI results through the shared navigation
 identity guard. Newer navigation, overlays, and Back actions invalidate older
