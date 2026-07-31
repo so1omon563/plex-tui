@@ -177,6 +177,8 @@ terminal transfers, and share the bounded artwork cache policy.
 Source artwork must decode successfully before atomic cache publication;
 invalid existing entries are evicted so later requests can retry. Cache
 validation, eviction, and publication share a per-key cross-process lock.
+Background detail and artwork refreshes must preserve contextual action hints
+and only repaint the still-selected media item.
 
 ## Testing Guidelines
 
