@@ -35,6 +35,7 @@ KITTY_CELL_HEIGHT_PX = 24
 KITTY_PENDING_FILE_SECONDS = 60
 # ponytail: cap retained terminal IDs; retire the LRU image if one session exceeds this.
 KITTY_IMAGE_RESERVATION_LIMIT = 4096
+ARTWORK_CACHE_LOCK = threading.RLock()
 KITTY_TRANSMIT_LOCK = threading.RLock()
 KITTY_SESSION_IMAGE_IDS: dict[str, int] = {}
 KITTY_PLACEHOLDER = "\U0010eeee"
@@ -94,20 +95,18 @@ class KittyImage:
 
 def fetch_artwork(raw: Any, path: str, config: AppConfig, width: int | None = None, height: int | None = None) -> bytes:
     cached = cached_artwork_path(path, config, width, height)
-    try:
-        data = cached.read_bytes()
-    except FileNotFoundError:
-        pass
-    else:
+    with artwork_cache_entry_lock(cached):
         try:
-            validate_artwork_data(data)
-        except OSError:
-            try:
-                cached.unlink()
-            except FileNotFoundError:
-                pass
+            data = cached.read_bytes()
+        except FileNotFoundError:
+            pass
         else:
-            return data
+            try:
+                validate_artwork_data(data)
+            except OSError:
+                cached.unlink(missing_ok=True)
+            else:
+                return data
 
     url = artwork_url(raw, path, config, width, height)
     request = Request(url, headers={"User-Agent": "plex-tui"})
@@ -135,15 +134,31 @@ def validate_artwork_data(data: bytes) -> None:
 
 
 def write_artwork_cache(path: Path, data: bytes) -> None:
-    fd, raw_path = tempfile.mkstemp(prefix=f".artwork-{path.name}.", suffix=".tmp", dir=path.parent.parent)
-    temporary = Path(raw_path)
-    try:
-        with os.fdopen(fd, "wb") as output:
-            output.write(data)
-        os.replace(temporary, path)
-    except Exception:
-        temporary.unlink(missing_ok=True)
-        raise
+    with artwork_cache_entry_lock(path):
+        fd, raw_path = tempfile.mkstemp(prefix=f".artwork-{path.name}.", suffix=".tmp", dir=path.parent.parent)
+        temporary = Path(raw_path)
+        try:
+            with os.fdopen(fd, "wb") as output:
+                output.write(data)
+            os.replace(temporary, path)
+        except Exception:
+            temporary.unlink(missing_ok=True)
+            raise
+
+
+@contextmanager
+def artwork_cache_entry_lock(path: Path) -> Iterator[None]:
+    directory = path.parent.parent
+    directory.mkdir(parents=True, exist_ok=True)
+    lock_path = directory / f".artwork-{path.name}.lock"
+    with ARTWORK_CACHE_LOCK:
+        lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        with os.fdopen(lock_fd) as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def artwork_url(raw: Any, path: str, config: AppConfig, width: int | None = None, height: int | None = None) -> str:

@@ -142,6 +142,63 @@ def test_invalid_existing_artwork_cache_is_evicted_before_retry(tmp_path, monkey
     assert cached.read_bytes() == valid
 
 
+def test_invalid_cache_eviction_and_publication_share_entry_lock(tmp_path, monkeypatch):
+    config = AppConfig(base_url="http://plex", token="token", client_identifier="client")
+    buffer = BytesIO()
+    Image.new("RGB", (2, 2), "#00ffff").save(buffer, format="PNG")
+    valid = buffer.getvalue()
+    events = []
+    lock_depth = 0
+    validate = artwork.validate_artwork_data
+    unlink = Path.unlink
+
+    @contextmanager
+    def entry_lock(path):
+        nonlocal lock_depth
+        assert path == cached
+        assert lock_depth == 0
+        lock_depth = 1
+        events.append("lock")
+        try:
+            yield
+        finally:
+            events.append("unlock")
+            lock_depth = 0
+
+    def capture_validate(data):
+        events.append(f"validate:{lock_depth}:{data == valid}")
+        validate(data)
+
+    def capture_unlink(path, *args, **kwargs):
+        events.append(f"unlink:{lock_depth}")
+        return unlink(path, *args, **kwargs)
+
+    def fetch_response(request, timeout):
+        events.append(f"fetch:{lock_depth}")
+        return ArtworkResponse(valid)
+
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    cached = cached_artwork_path("/library/metadata/1/thumb", config)
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(b"poisoned")
+    monkeypatch.setattr(artwork, "artwork_cache_entry_lock", entry_lock)
+    monkeypatch.setattr(artwork, "validate_artwork_data", capture_validate)
+    monkeypatch.setattr(Path, "unlink", capture_unlink)
+    monkeypatch.setattr(artwork, "urlopen", fetch_response)
+
+    assert fetch_artwork(RawItem(), "/library/metadata/1/thumb", config) == valid
+    assert events == [
+        "lock",
+        "validate:1:False",
+        "unlink:1",
+        "unlock",
+        "fetch:0",
+        "validate:0:True",
+        "lock",
+        "unlock",
+    ]
+
+
 def test_valid_artwork_is_atomically_replaced_into_cache(tmp_path, monkeypatch):
     config = AppConfig(base_url="http://plex", token="token", client_identifier="client")
     buffer = BytesIO()
