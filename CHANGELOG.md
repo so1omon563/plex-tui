@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Kept delayed post-playback refreshes from replacing another library's rows.
 - Required standalone PR-title tokens for version and publishing markers so
   marker-like words cannot create tags or releases.
 

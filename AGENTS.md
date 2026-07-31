@@ -154,6 +154,8 @@ For Plex items with multiple media versions, keep `p` and `r` as the normal
 default playback actions and use `V` for explicit version selection. Version
 selection must resolve the chosen Plex part after metadata reload and must not
 silently fall back to another file.
+Apply asynchronous browse refresh results only when their originating
+`BrowseState` object is still current; source labels are not unique identities.
 
 ## Testing Guidelines
 
