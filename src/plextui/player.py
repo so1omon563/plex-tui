@@ -114,9 +114,18 @@ def play_with_mpv(
     if media_index is not None and part_index is not None:
         stream_kwargs.update(mediaIndex=media_index, partIndex=part_index)
     force_transcode = playback_mode == "transcode"
-    direct_url = None if force_transcode else direct_play_url(item, selected_subtitle)
-    if direct_url is None and version_part_id is None and not force_transcode:
-        direct_url = direct_play_url(browse_item, selected_subtitle)
+    playback_parts = media_parts(item)
+    if force_transcode and len(playback_parts) > 1:
+        raise PlayerError("multipart playback is not supported in transcode mode; use Auto playback")
+    direct_urls = [] if force_transcode else direct_play_urls(item)
+    if not direct_urls and len(playback_parts) <= 1 and version_part_id is None and not force_transcode:
+        browse_urls = direct_play_urls(browse_item)
+        if browse_urls:
+            direct_urls = browse_urls
+            playback_parts = media_parts(browse_item)
+    if len(playback_parts) > 1 and len(direct_urls) != len(playback_parts):
+        raise PlayerError("multipart playback requires direct access to every Plex media part")
+    direct_url = direct_urls[0] if direct_urls else None
     fallback_subtitle_id = selected_subtitle_stream_id(item, selected_subtitle) if not subtitles and not direct_url else None
     if fallback_subtitle_id is not None:
         stream_kwargs["subtitleStreamID"] = fallback_subtitle_id
@@ -141,7 +150,7 @@ def play_with_mpv(
     if not url:
         log_debug("playback error: Plex returned an empty stream URL")
         raise PlayerError("Plex returned an empty stream URL")
-    if direct_url and is_drm_vod_stream(url):
+    if direct_urls and any(is_drm_vod_stream(direct_part_url) for direct_part_url in direct_urls):
         log_debug("playback error: Plex exposed a DRM-protected VOD stream")
         raise PlayerError("Plex lists this item, but does not provide a playable stream for external players")
 
@@ -154,6 +163,8 @@ def play_with_mpv(
         "--input-ipc-server=" + str(socket_path),
     ]
     args.extend(MPV_NETWORK_CACHE_ARGS)
+    if len(direct_urls) > 1:
+        args.append("--merge-files")
     if playback_display == "terminal":
         args.extend(terminal_video_args(terminal_video_output, terminal_video_profile))
     else:
@@ -163,10 +174,10 @@ def play_with_mpv(
     if window_size and playback_display != "terminal":
         args.append(f"--autofit={window_size}")
     args.extend(direct_track_args(direct_url, item, selected_audio, selected_subtitle))
-    args.extend(plex_direct_tls_args([url, *subtitles]))
+    args.extend(plex_direct_tls_args([*(direct_urls or [url]), *subtitles]))
     for subtitle in subtitles:
         args.append("--sub-file=" + subtitle)
-    args.append(url)
+    args.extend(direct_urls or [url])
     command = sanitize_command(args)
     quality_label = transcode_quality_label(transcode_quality) if stream_mode == "transcode" else "original"
     log_debug(
@@ -509,7 +520,25 @@ def external_subtitle_urls(item: Any, selected_subtitle: Any = None) -> list[str
 
 
 def direct_play_url(item: Any, selected_subtitle: Any = None) -> str | None:
-    return first_part_url(item)
+    urls = direct_play_urls(item)
+    return urls[0] if urls else None
+
+
+def direct_play_urls(item: Any) -> list[str]:
+    urls: list[str] = []
+    for part in media_parts(item):
+        key = getattr(part, "key", None)
+        server = getattr(part, "_server", None)
+        if not key or server is None:
+            return []
+        url = server.url(key, includeToken=True)
+        if is_metadata_provider_server(server):
+            vod_base = vod_provider_base(item, server)
+            metadata_base = str(getattr(server, "_baseurl", "") or "").rstrip("/")
+            if vod_base and metadata_base:
+                url = url.replace(metadata_base, vod_base, 1)
+        urls.append(url)
+    return urls
 
 
 def media_version_choices(item: Any) -> list[MediaVersionChoice]:
@@ -592,24 +621,6 @@ def is_drm_vod_stream(url: str) -> bool:
     except Exception:
         return False
     return "/cbcs/" in text or "method=sample-aes" in text
-
-
-def first_part_url(item: Any) -> str | None:
-    parts = iter_parts(item)
-    if not parts:
-        return None
-    part = parts[0]
-    key = getattr(part, "key", None)
-    server = getattr(part, "_server", None)
-    if not key or server is None:
-        return None
-    url = server.url(key, includeToken=True)
-    if is_metadata_provider_server(server):
-        vod_base = vod_provider_base(item, server)
-        metadata_base = str(getattr(server, "_baseurl", "") or "").rstrip("/")
-        if vod_base and metadata_base:
-            url = url.replace(metadata_base, vod_base, 1)
-    return url
 
 
 def vod_provider_base(item: Any, fallback_server: Any) -> str:
@@ -828,6 +839,14 @@ def iter_parts(item: Any) -> list[Any]:
     for media in getattr(item, "media", []) or []:
         parts.extend(getattr(media, "parts", []) or [])
     return parts
+
+
+def media_parts(item: Any) -> list[Any]:
+    for media in getattr(item, "media", []) or []:
+        parts = list(getattr(media, "parts", []) or [])
+        if parts:
+            return parts
+    return iter_parts(item)
 
 
 def stop_mpv(handle: PlayerHandle | None) -> None:

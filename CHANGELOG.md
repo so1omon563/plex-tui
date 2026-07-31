@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Played every ordered part of split Plex media as one continuous mpv timeline
+  and reported unsupported multipart transcode playback before launch.
+
 ## 0.17.1 - 2026-07-24
 
 - Added a `V` Play Version picker for movies and episodes with multiple Plex
