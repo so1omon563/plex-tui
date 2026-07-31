@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Isolated online VOD metadata reloads from the shared Plex provider connection.
+- Inferred or validated release bump markers when staging an explicit version.
+- Discarded stale async browse and picker results after newer navigation,
+  selection changes, overlays, or Back actions.
 - Kept Plex Home profile switching on the selected server when its URL changes.
 - Played every ordered part of split Plex media as one continuous mpv timeline
   and reported unsupported multipart transcode or sidecar-subtitle playback
