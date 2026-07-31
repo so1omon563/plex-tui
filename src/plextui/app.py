@@ -9,6 +9,7 @@ import time
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, is_dataclass, replace
+from datetime import date
 from difflib import SequenceMatcher
 from pathlib import Path
 from types import SimpleNamespace
@@ -90,6 +91,7 @@ from .plex_service import (
     availability_urls,
     episode_parent_key,
     episode_show_parent_key,
+    hosted_live_tv_guide_date,
     is_online_metadata,
     kind_label,
     media_details,
@@ -143,6 +145,7 @@ class BrowseState:
     total: int | None = None
     context_media: MediaItem | None = None
     discover_media_type: str = "movies_shows"
+    guide_date: date | None = None
 
     @property
     def has_more(self) -> bool:
@@ -1418,8 +1421,13 @@ class PlexTuiApp(App[None]):
         self.post_message(StatusChanged(f"Loading {title}..."))
         self.call_from_thread(self.show_loading_state, title, "Loading hosted Live TV guide.")
         started = time.perf_counter()
+        guide_date = hosted_live_tv_guide_date()
         try:
-            page = self.service.hosted_live_tv_guide_page(channel, size=live_tv_initial_guide_size(self.config.page_size))
+            page = self.service.hosted_live_tv_guide_page(
+                channel,
+                guide_date=guide_date,
+                size=live_tv_initial_guide_size(self.config.page_size),
+            )
         except Exception as exc:
             self.call_from_thread(self.show_error, str(exc))
             return
@@ -1437,6 +1445,7 @@ class PlexTuiApp(App[None]):
                 next_start=page.next_start,
                 total=page.total,
                 context_media=channel,
+                guide_date=guide_date,
             )
             self.browsing_stack.append(state)
             selected_key = live_tv_current_program_key(page.items)
@@ -1889,6 +1898,7 @@ class PlexTuiApp(App[None]):
             elif state.source == "livetv_guide" and state.context_media is not None:
                 page = self.service.hosted_live_tv_guide_page(
                     state.context_media,
+                    guide_date=state.guide_date,
                     start=state.next_start,
                     size=self.config.page_size,
                 )

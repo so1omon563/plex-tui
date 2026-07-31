@@ -4,6 +4,7 @@ import asyncio
 import threading
 import time
 from dataclasses import replace
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -2175,6 +2176,7 @@ class FakePagedService:
         self.hosted_live_tv_calls = []
         self.hosted_live_tv_enrich_calls = []
         self.hosted_live_tv_guide_calls = []
+        self.hosted_live_tv_guide_dates = []
         self.guide_page = MediaPage([], start=0, total=0)
         self.children_calls = []
         self.media_from_key_calls = []
@@ -2228,6 +2230,7 @@ class FakePagedService:
         size: int = 40,
     ) -> MediaPage:
         self.hosted_live_tv_guide_calls.append((channel.key, start, size))
+        self.hosted_live_tv_guide_dates.append(guide_date)
         return self.guide_page
 
     def children(self, item: MediaItem, size: int = 40) -> list[MediaItem]:
@@ -2587,6 +2590,7 @@ async def run_load_more_live_tv_guide_check():
             next_start=1,
             total=3,
             context_media=channel,
+            guide_date=date(2026, 7, 30),
         )
         app.browsing_stack = [state]
 
@@ -2594,6 +2598,7 @@ async def run_load_more_live_tv_guide_check():
         await pilot.pause(0.5)
 
         assert service.hosted_live_tv_guide_calls == [("channel-1", 1, 25)]
+        assert service.hosted_live_tv_guide_dates == [date(2026, 7, 30)]
         assert service.calls == []
         assert [item.title for item in state.items] == ["First", "Second"]
         assert [item.kind for item in state.items] == ["livetv_program", "livetv_program"]
