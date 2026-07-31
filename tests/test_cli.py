@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import plextui.config as config_module
 from plextui import __version__
 from plextui import __main__ as cli
 from plextui.config import AppConfig
@@ -119,6 +120,32 @@ def test_cli_prints_diagnostics(monkeypatch, capsys):
     assert cli.main(["--diagnostics"]) == 0
 
     assert capsys.readouterr().out == "App Diagnostics\nmpv: /usr/bin/mpv\n\n"
+
+
+@pytest.mark.parametrize("argv", [["status"], ["--diagnostics"]])
+def test_cli_text_modes_report_malformed_config(argv, monkeypatch, capsys, tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text('base_url = "unterminated', encoding="utf-8")
+    monkeypatch.setattr(config_module, "config_path", lambda: config_file)
+
+    assert cli.main(argv) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.startswith("plex-tui: failed to load config:")
+    assert "Traceback" not in captured.err
+
+
+def test_cli_status_json_reports_malformed_config(monkeypatch, capsys, tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text('base_url = "unterminated', encoding="utf-8")
+    monkeypatch.setattr(config_module, "config_path", lambda: config_file)
+
+    assert cli.main(["status", "--json"]) == 2
+
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["error"].startswith("failed to load config:")
+    assert captured.err == ""
 
 
 def test_cli_prints_version(capsys):

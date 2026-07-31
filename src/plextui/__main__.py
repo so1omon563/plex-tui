@@ -10,7 +10,7 @@ from typing import Any
 
 from . import __version__
 from .app import detect_mpv, render_app_diagnostics
-from .config import config_path, debug_log_path, load_config
+from .config import AppConfig, config_path, debug_log_path, load_config
 from .models import LibraryItem, MediaItem
 from .plex_service import PlexService, availability_urls, kind_label, progress_percent
 
@@ -67,7 +67,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(debug_log_path())
         return 0
     if args.diagnostics:
-        print(render_app_diagnostics(load_config(), detect_mpv()))
+        config = load_cli_config()
+        if config is None:
+            return 2
+        print(render_app_diagnostics(config, detect_mpv()))
         return 0
     if args.smoke:
         from .smoke import main as smoke_main
@@ -119,7 +122,10 @@ def command_libraries(json_output: bool = False) -> int:
 
 
 def command_status(json_output: bool = False) -> int:
-    status = status_payload()
+    config = load_cli_config(json_output)
+    if config is None:
+        return 2
+    status = status_payload(config)
     if json_output:
         print(json.dumps(status, indent=2))
     else:
@@ -208,10 +214,21 @@ def command_search(query: str, library: str | None, limit: int, json_output: boo
 
 
 def connect_service(json_output: bool = False) -> PlexService | None:
+    config = load_cli_config(json_output)
+    if config is None:
+        return None
     try:
-        return PlexService(load_config())
+        return PlexService(config)
     except Exception as exc:
         command_error(exc, json_output)
+        return None
+
+
+def load_cli_config(json_output: bool = False) -> AppConfig | None:
+    try:
+        return load_config()
+    except Exception as exc:
+        command_error(f"failed to load config: {exc}", json_output)
         return None
 
 
@@ -224,9 +241,8 @@ def command_error(error: object, json_output: bool = False) -> int:
     return 2
 
 
-def status_payload() -> dict[str, Any]:
+def status_payload(config: AppConfig) -> dict[str, Any]:
     path = config_path()
-    config = load_config()
     mpv_path, mpv_version = detect_mpv()
     payload: dict[str, Any] = {
         "ready": False,
