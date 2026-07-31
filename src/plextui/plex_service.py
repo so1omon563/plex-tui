@@ -299,7 +299,7 @@ class PlexService:
         if not self.config.account_token:
             raise ValueError("missing Plex account token; start plex-tui and sign in first")
         account = MyPlexAccount(token=self.config.account_token)
-        search_options: dict[str, Any] = {"limit": start + size, "providers": DISCOVER_PROVIDERS}
+        search_options: dict[str, Any] = {"limit": start + size + 1, "providers": DISCOVER_PROVIDERS}
         if media_type in {"movie", "show"}:
             search_options["libtype"] = media_type
         raw_items = account.searchDiscover(query, **search_options)

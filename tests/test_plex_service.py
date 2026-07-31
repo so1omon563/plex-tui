@@ -731,13 +731,13 @@ def test_discover_page_uses_account_token_and_slices(monkeypatch):
 
     assert calls == [
         ("token", "account-token"),
-        ("matrix", {"limit": 2, "providers": "discover,PLEXAVOD"}),
+        ("matrix", {"limit": 3, "providers": "discover,PLEXAVOD"}),
     ]
     assert [item.title for item in page.items] == ["Free Movie", "Second Show"]
     assert page.items[0].subtitle == "2024  1 provider: Tubi · Free"
     assert page.items[0].playable is False
-    assert page.total == 2
-    assert not page.has_more
+    assert page.total == 3
+    assert page.has_more
 
 
 def test_discover_page_filters_movie_and_show_before_limit(monkeypatch):
@@ -762,8 +762,8 @@ def test_discover_page_filters_movie_and_show_before_limit(monkeypatch):
     show_page = service.discover_page("target", start=0, size=1, media_type="show")
 
     assert calls == [
-        {"limit": 1, "providers": "discover,PLEXAVOD", "libtype": "movie"},
-        {"limit": 1, "providers": "discover,PLEXAVOD", "libtype": "show"},
+        {"limit": 2, "providers": "discover,PLEXAVOD", "libtype": "movie"},
+        {"limit": 2, "providers": "discover,PLEXAVOD", "libtype": "show"},
     ]
     assert [item.kind for item in movie_page.items] == ["movie"]
     assert [item.kind for item in show_page.items] == ["show"]
@@ -1332,7 +1332,7 @@ def test_discover_page_matches_plexapi_movie_show_contract(monkeypatch):
 
     page = service.discover_page("matrix", start=0, size=2)
 
-    assert calls == [{"limit": 2, "providers": "discover,PLEXAVOD"}]
+    assert calls == [{"limit": 3, "providers": "discover,PLEXAVOD"}]
     assert [item.title for item in page.items] == ["Free Movie"]
     assert page.total == 1
 

@@ -342,6 +342,24 @@ def test_cli_searches_discover_with_media_type(monkeypatch):
     assert service.discover_calls == [("matrix", 0, 10, "show")]
 
 
+def test_cli_maps_legacy_discover_all_media_type_to_movies_and_shows(monkeypatch):
+    service = None
+
+    class CapturingService(FakeCliService):
+        def __init__(self, config: AppConfig) -> None:
+            nonlocal service
+            super().__init__(config)
+            service = self
+
+    monkeypatch.setattr(cli, "PlexService", CapturingService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id", account_token="account"))
+
+    assert cli.main(["discover", "matrix", "--media-type", "all"]) == 0
+
+    assert service is not None
+    assert service.discover_calls == [("matrix", 0, 10, "movies_shows")]
+
+
 def test_cli_opens_discover_availability(monkeypatch, capsys):
     service = None
     opened = []
@@ -362,6 +380,25 @@ def test_cli_opens_discover_availability(monkeypatch, capsys):
     assert service.discover_calls == [("matrix", 0, 3, "movies_shows")]
     assert opened == ["https://tubitv.example/movie"]
     assert capsys.readouterr().out == "Opened: Free Movie - Tubi · Free\n"
+
+
+def test_cli_maps_legacy_discover_open_all_media_type_to_movies_and_shows(monkeypatch):
+    service = None
+
+    class CapturingService(FakeCliService):
+        def __init__(self, config: AppConfig) -> None:
+            nonlocal service
+            super().__init__(config)
+            service = self
+
+    monkeypatch.setattr(cli, "PlexService", CapturingService)
+    monkeypatch.setattr(cli, "load_config", lambda: AppConfig("http://plex", "token", "client-id", account_token="account"))
+    monkeypatch.setattr(cli.webbrowser, "open", lambda url: True)
+
+    assert cli.main(["discover-open", "matrix", "--index", "2", "--media-type", "all"]) == 0
+
+    assert service is not None
+    assert service.discover_calls == [("matrix", 0, 10, "movies_shows")]
 
 
 def test_cli_discover_open_reports_browser_launch_failure(monkeypatch, capsys):
