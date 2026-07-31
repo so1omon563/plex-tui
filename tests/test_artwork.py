@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from plextui import artwork
@@ -15,6 +16,7 @@ from plextui.artwork import (
     add_token,
     artwork_url,
     cached_artwork_path,
+    fetch_artwork,
     kitty_graphics_commands,
     kitty_placeholder_lines,
     protocol_renderer_status,
@@ -35,6 +37,22 @@ class RawServer:
 
 class RawItem:
     _server = RawServer()
+
+
+class ArtworkResponse:
+    status = 200
+
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return None
+
+    def read(self, size: int) -> bytes:
+        return self.data[:size]
 
 
 def test_add_token_preserves_existing_query():
@@ -83,6 +101,71 @@ def test_artwork_cache_key_includes_requested_size():
     resized = cached_artwork_path("/library/metadata/1/thumb", config, width=144, height=144)
 
     assert original != resized
+
+
+def test_invalid_artwork_response_is_not_cached_and_valid_retry_succeeds(tmp_path, monkeypatch):
+    config = AppConfig(base_url="http://plex", token="token", client_identifier="client")
+    buffer = BytesIO()
+    Image.new("RGB", (2, 2), "#ff0000").save(buffer, format="PNG")
+    valid = buffer.getvalue()
+    responses = iter((b"not-an-image", valid))
+    calls = []
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(
+        artwork,
+        "urlopen",
+        lambda request, timeout: calls.append((request.full_url, timeout)) or ArtworkResponse(next(responses)),
+    )
+    cached = cached_artwork_path("/library/metadata/1/thumb", config)
+
+    with pytest.raises(OSError, match="not a valid image"):
+        fetch_artwork(RawItem(), "/library/metadata/1/thumb", config)
+
+    assert not cached.exists()
+    assert fetch_artwork(RawItem(), "/library/metadata/1/thumb", config) == valid
+    assert cached.read_bytes() == valid
+    assert len(calls) == 2
+
+
+def test_invalid_existing_artwork_cache_is_evicted_before_retry(tmp_path, monkeypatch):
+    config = AppConfig(base_url="http://plex", token="token", client_identifier="client")
+    buffer = BytesIO()
+    Image.new("RGB", (2, 2), "#00ff00").save(buffer, format="PNG")
+    valid = buffer.getvalue()
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(artwork, "urlopen", lambda request, timeout: ArtworkResponse(valid))
+    cached = cached_artwork_path("/library/metadata/1/thumb", config)
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(b"poisoned")
+
+    assert fetch_artwork(RawItem(), "/library/metadata/1/thumb", config) == valid
+    assert cached.read_bytes() == valid
+
+
+def test_valid_artwork_is_atomically_replaced_into_cache(tmp_path, monkeypatch):
+    config = AppConfig(base_url="http://plex", token="token", client_identifier="client")
+    buffer = BytesIO()
+    Image.new("RGB", (2, 2), "#0000ff").save(buffer, format="PNG")
+    valid = buffer.getvalue()
+    replacements = []
+    replace = os.replace
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(artwork, "urlopen", lambda request, timeout: ArtworkResponse(valid))
+
+    def capture_replace(source, destination):
+        replacements.append((Path(source), Path(destination)))
+        replace(source, destination)
+
+    monkeypatch.setattr(artwork.os, "replace", capture_replace)
+
+    assert fetch_artwork(RawItem(), "/library/metadata/1/thumb", config) == valid
+    cached = cached_artwork_path("/library/metadata/1/thumb", config)
+    assert len(replacements) == 1
+    temporary, destination = replacements[0]
+    assert temporary.parent == tmp_path
+    assert destination == cached
+    assert not temporary.exists()
+    assert cached.read_bytes() == valid
 
 
 def test_render_artwork_returns_halfcell_text():

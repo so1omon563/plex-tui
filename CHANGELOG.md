@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Prevented invalid artwork responses from poisoning the persistent image cache.
 - Routed hosted Live TV guide pagination through the guide service.
 - Isolated online VOD metadata reloads from the shared Plex provider connection.
 - Read complete matching mpv IPC replies across fragmented and interleaved

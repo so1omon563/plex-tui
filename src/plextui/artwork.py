@@ -94,8 +94,20 @@ class KittyImage:
 
 def fetch_artwork(raw: Any, path: str, config: AppConfig, width: int | None = None, height: int | None = None) -> bytes:
     cached = cached_artwork_path(path, config, width, height)
-    if cached.exists():
-        return cached.read_bytes()
+    try:
+        data = cached.read_bytes()
+    except FileNotFoundError:
+        pass
+    else:
+        try:
+            validate_artwork_data(data)
+        except OSError:
+            try:
+                cached.unlink()
+            except FileNotFoundError:
+                pass
+        else:
+            return data
 
     url = artwork_url(raw, path, config, width, height)
     request = Request(url, headers={"User-Agent": "plex-tui"})
@@ -106,11 +118,32 @@ def fetch_artwork(raw: Any, path: str, config: AppConfig, width: int | None = No
         data = response.read(MAX_IMAGE_BYTES + 1)
     if len(data) > MAX_IMAGE_BYTES:
         raise OSError("artwork image is too large")
+    validate_artwork_data(data)
 
     cached.parent.mkdir(parents=True, exist_ok=True)
-    cached.write_bytes(data)
+    write_artwork_cache(cached, data)
     prune_artwork_cache()
     return data
+
+
+def validate_artwork_data(data: bytes) -> None:
+    try:
+        image = load_image(data)
+    except Exception as exc:
+        raise OSError("artwork data is not a valid image") from exc
+    image.close()
+
+
+def write_artwork_cache(path: Path, data: bytes) -> None:
+    fd, raw_path = tempfile.mkstemp(prefix=f".artwork-{path.name}.", suffix=".tmp", dir=path.parent.parent)
+    temporary = Path(raw_path)
+    try:
+        with os.fdopen(fd, "wb") as output:
+            output.write(data)
+        os.replace(temporary, path)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def artwork_url(raw: Any, path: str, config: AppConfig, width: int | None = None, height: int | None = None) -> str:
