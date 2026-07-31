@@ -4,6 +4,7 @@ import asyncio
 import threading
 import time
 from dataclasses import replace
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -391,6 +392,14 @@ def test_load_more_media_appends_next_page():
 
 def test_load_more_media_appends_continue_watching_page():
     asyncio.run(run_load_more_continue_watching_check())
+
+
+def test_load_more_media_appends_live_tv_guide_page():
+    asyncio.run(run_load_more_live_tv_guide_check())
+
+
+def test_live_tv_guide_without_channel_never_uses_library_fallback():
+    asyncio.run(run_live_tv_guide_without_channel_check())
 
 
 def test_load_more_media_ignores_replaced_browse_state():
@@ -1082,6 +1091,10 @@ def test_toggle_watched_refreshes_continue_watching_next_episode_when_raw_item_i
 
 def test_playback_refresh_selects_next_continue_watching_episode():
     asyncio.run(run_playback_refresh_selects_next_continue_watching_episode_check())
+
+
+def test_playback_refresh_keeps_live_tv_guide_date():
+    asyncio.run(run_playback_refresh_keeps_live_tv_guide_date_check())
 
 
 def test_playback_refresh_ignores_replaced_library_state():
@@ -2196,6 +2209,7 @@ class FakePagedService:
         self.hosted_live_tv_calls = []
         self.hosted_live_tv_enrich_calls = []
         self.hosted_live_tv_guide_calls = []
+        self.hosted_live_tv_guide_dates = []
         self.guide_page = MediaPage([], start=0, total=0)
         self.children_calls = []
         self.media_from_key_calls = []
@@ -2241,8 +2255,15 @@ class FakePagedService:
         self.hosted_live_tv_enrich_calls.append([item.key for item in items])
         return items
 
-    def hosted_live_tv_guide_page(self, channel: MediaItem, size: int = 40) -> MediaPage:
-        self.hosted_live_tv_guide_calls.append((channel.key, size))
+    def hosted_live_tv_guide_page(
+        self,
+        channel: MediaItem,
+        guide_date=None,
+        start: int = 0,
+        size: int = 40,
+    ) -> MediaPage:
+        self.hosted_live_tv_guide_calls.append((channel.key, start, size))
+        self.hosted_live_tv_guide_dates.append(guide_date)
         return self.guide_page
 
     def children(self, item: MediaItem, size: int = 40) -> list[MediaItem]:
@@ -2581,6 +2602,68 @@ async def run_load_more_continue_watching_check():
         assert [item.title for item in state.items] == ["First", "Second"]
         assert state.next_start == 2
         assert state.has_more
+
+
+async def run_load_more_live_tv_guide_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=25)
+        channel = MediaItem("Ion Mystery", "", "livetv", "channel-1", True, Raw())
+        first = MediaItem("First", "10:00 AM-11:00 AM", "livetv_program", "program-1", False, Raw())
+        second = MediaItem("Second", "11:00 AM-12:00 PM", "livetv_program", "program-2", False, Raw())
+        library_item = MediaItem("Wrong library item", "", "movie", "movie-1", True, Raw())
+        service = FakePagedService(MediaPage([library_item], start=1, total=2))
+        service.guide_page = MediaPage([second], start=1, total=3)
+        app.service = service
+        state = BrowseState(
+            "Guide: Ion Mystery",
+            [first],
+            source="livetv_guide",
+            next_start=1,
+            total=3,
+            context_media=channel,
+            guide_date=date(2026, 7, 30),
+        )
+        app.browsing_stack = [state]
+
+        app.load_more_media()
+        await pilot.pause(0.5)
+
+        assert service.hosted_live_tv_guide_calls == [("channel-1", 1, 25)]
+        assert service.hosted_live_tv_guide_dates == [date(2026, 7, 30)]
+        assert service.calls == []
+        assert [item.title for item in state.items] == ["First", "Second"]
+        assert [item.kind for item in state.items] == ["livetv_program", "livetv_program"]
+        assert state.next_start == 2
+        assert state.total == 3
+        assert state.has_more
+
+
+async def run_live_tv_guide_without_channel_check():
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id", page_size=25)
+        service = FakePagedService(MediaPage([], start=0, total=0))
+        app.service = service
+        state = BrowseState("Guide", [], source="livetv_guide", next_start=1, total=2)
+        app.browsing_stack = [state]
+        errors = []
+        app.show_error = errors.append
+
+        app.load_more_media()
+        await pilot.pause(0.2)
+        worker = app.refresh_current_browse_state()
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
+
+        assert service.calls == []
+        assert service.hosted_live_tv_guide_calls == []
+        assert errors == [
+            "Live TV guide channel is unavailable",
+            "failed to refresh media browser: Live TV guide channel is unavailable",
+        ]
 
 
 async def run_load_more_ignores_replaced_browse_state_check():
@@ -4405,6 +4488,34 @@ async def run_playback_refresh_selects_next_continue_watching_episode_check():
         assert service.continue_watching_calls[-1] == (0, 40)
         assert selected is not None
         assert selected.title == "Episode 2"
+
+
+async def run_playback_refresh_keeps_live_tv_guide_date_check():
+    channel = MediaItem("Ion Mystery", "", "livetv", "channel-1", True, Raw())
+    program = MediaItem("Program", "", "livetv_program", "program-1", False, Raw())
+    service = FakePagedService(MediaPage([program], start=0, total=1))
+    service.guide_page = MediaPage([program], start=0, total=1)
+    state = BrowseState(
+        "Guide: Ion Mystery",
+        [program],
+        source="livetv_guide",
+        next_start=1,
+        total=1,
+        context_media=channel,
+        guide_date=date(2026, 7, 30),
+    )
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.browsing_stack = [state]
+
+        worker = app.refresh_current_browse_state(selected_key=program.key, played_media=program)
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
+
+        assert service.hosted_live_tv_guide_dates == [date(2026, 7, 30)]
 
 
 async def run_playback_refresh_ignores_replaced_library_state_check():
