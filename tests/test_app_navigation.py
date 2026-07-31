@@ -4944,6 +4944,7 @@ async def run_picker_error_discards_stale_selection_check(picker_kind: str):
         app.config = AppConfig("http://plex", "token", "client-id")
         app.service = BlockingPlaylistService()
         app.browsing_stack = [BrowseState("Movies", [first, second])]
+        app.show_media_details = lambda item: None
         app.show_browse_state(app.browsing_stack[-1])
         await pilot.pause(0.2)
 
