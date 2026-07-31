@@ -411,9 +411,13 @@ def test_online_metadata_full_metadata_fetches_from_vod_provider_and_restores_se
         _baseurl = "https://metadata.provider.plex.tv"
 
         def __init__(self):
+            self._server = self
             self.fetch_baseurls = []
 
         def fetchItem(self, key: str):
+            return self._server.query(key)
+
+        def query(self, key: str):
             self.fetch_baseurls.append((self._baseurl, key))
             return type("FullItem", (), {"title": "Episode", "_server": self})()
 

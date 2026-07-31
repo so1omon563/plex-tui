@@ -416,6 +416,8 @@ def online_vod_metadata(item: Any) -> Any | None:
     key = metadata_item_key(item)
     server = getattr(item, "_server", None)
     scoped_server = copy(server)
+    if scoped_server is not None and getattr(scoped_server, "_server", None) is server:
+        scoped_server._server = scoped_server
     fetch_item = getattr(scoped_server, "fetchItem", None)
     if not key or not callable(fetch_item):
         return None
