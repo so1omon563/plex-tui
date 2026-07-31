@@ -159,6 +159,11 @@ multipart modes must fail clearly before launching mpv.
 Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
 
+Async view-opening workers must apply UI results through the shared navigation
+identity guard. Newer navigation, overlays, and Back actions invalidate older
+results, and media pickers must also verify that their originating selection is
+still current.
+
 ## Testing Guidelines
 
 Tests use `pytest`. Add focused unit tests for helper logic and app navigation
