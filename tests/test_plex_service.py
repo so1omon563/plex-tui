@@ -1337,7 +1337,7 @@ def test_discover_page_matches_plexapi_movie_show_contract(monkeypatch):
     assert page.total == 1
 
 
-def test_discover_page_prefers_query_title_matches(monkeypatch):
+def test_discover_page_preserves_provider_relevance_order(monkeypatch):
     class FakeAccount:
         def __init__(self, token):
             pass
@@ -1351,10 +1351,10 @@ def test_discover_page_prefers_query_title_matches(monkeypatch):
 
     page = service.discover_page("Back to the Future", start=0, size=10)
 
-    assert [item.title for item in page.items] == ["Back to the Future"]
+    assert [item.title for item in page.items] == ["Back to School", "Back to the Future", "Second Show"]
 
 
-def test_discover_page_keeps_title_filtering_stable_across_pages(monkeypatch):
+def test_discover_page_keeps_later_title_matches_reachable(monkeypatch):
     class FakeAccount:
         def __init__(self, token):
             pass
