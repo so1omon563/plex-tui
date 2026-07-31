@@ -162,6 +162,7 @@ def save_server_choice(config: AppConfig, account_token: str, choice: ServerChoi
         account_token=account_token,
         home_account_token=account_token,
         server_identifier=choice.resource_identifier,
+        active_profile_title="",
     )
     save_config(saved)
     return saved
