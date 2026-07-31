@@ -599,6 +599,7 @@ def test_current_view_search_updates_results_while_typing():
     app.config = AppConfig("http://plex", "token", "client-id")
     app.input_mode = "search"
     app.search_global = False
+    app.search_token = 0
     app.browsing_stack = [
         BrowseState(
             "Movies",
@@ -1239,6 +1240,10 @@ def test_newer_navigation_discards_slow_child_result():
 
 def test_newer_navigation_cancels_slow_search_result():
     asyncio.run(run_newer_navigation_cancels_slow_search_result_check())
+
+
+def test_clearing_live_search_cancels_slow_result():
+    asyncio.run(run_clearing_live_search_cancels_slow_result_check())
 
 
 def test_newer_navigation_cancels_slow_fuzzy_search_result():
@@ -2999,6 +3004,70 @@ async def run_newer_navigation_cancels_slow_search_result_check():
         assert service.search_calls == [("stale", library, 0, 40)]
         assert [state.title for state in app.browsing_stack] == ["Continue Watching"]
         assert [item.title for item in app.browsing_stack[-1].items] == ["Current"]
+
+
+async def run_clearing_live_search_cancels_slow_result_check():
+    started = threading.Event()
+    release = threading.Event()
+    source_item = MediaItem("Current", "", "movie", "current", True, Raw())
+    prior_item = MediaItem("Prior search result", "", "movie", "prior", True, Raw())
+    stale_item = MediaItem("Late search result", "", "movie", "late", True, Raw())
+
+    class BlockingSearchService(FakePagedService):
+        def search_page(self, query: str, library: LibraryItem | None, start: int, size: int) -> MediaPage:
+            started.set()
+            release.wait(timeout=10)
+            return MediaPage([stale_item], start=0, total=1)
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        library = LibraryItem("Movies", "1", "movie", object())
+        source = BrowseState("Movies", [source_item], library, next_start=1, total=2)
+        prior = BrowseState("Search: prior", [prior_item], library, search=True, search_query="prior")
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = BlockingSearchService(MediaPage([], start=0, total=0))
+        app.selected_library = library
+        app.input_mode = "search"
+        app.search_global = False
+        app.search_return_state = source
+        app.browsing_stack = [source, prior]
+        app.suppress_auto_load = True
+        search_workers = []
+        run_search = app.run_search
+        app.run_search = lambda *args, **kwargs: search_workers.append(run_search(*args, **kwargs))
+        statuses: list[str] = []
+        search = SimpleNamespace(id="search")
+
+        with (
+            patch.object(app, "show_loading_state"),
+            patch.object(app, "show_browse_state"),
+            patch.object(app, "focus_media_browser"),
+            patch.object(app, "set_status", side_effect=statuses.append),
+        ):
+            app.on_input_changed(SimpleNamespace(input=search, value="late"))
+            try:
+                for _ in range(50):
+                    if started.is_set():
+                        break
+                    await asyncio.sleep(0.1)
+                assert started.is_set()
+
+                token = app.search_token
+                app.on_input_changed(SimpleNamespace(input=search, value=""))
+                assert app.search_was_cancelled(token)
+                assert search_workers[0].is_cancelled
+                assert [state.title for state in app.browsing_stack] == ["Movies"]
+                cleared_statuses = list(statuses)
+
+                release.set()
+                await asyncio.sleep(0.5)
+            finally:
+                release.set()
+
+        assert [state.title for state in app.browsing_stack] == ["Movies"]
+        assert statuses == cleared_statuses
+        assert statuses[-1] == "Movies: 1 of 2 items loaded"
 
 
 async def run_newer_navigation_cancels_slow_fuzzy_search_result_check():

@@ -1652,6 +1652,9 @@ class PlexTuiApp(App[None]):
 
     def invalidate_navigation_results(self) -> None:
         self.navigation_worker = None
+        self.invalidate_search_results()
+
+    def invalidate_search_results(self) -> None:
         self.search_token += 1
         self.workers.cancel_group(self, "search")
 
@@ -3918,6 +3921,7 @@ class PlexTuiApp(App[None]):
             self.search_token += 1
             self.run_search(query, False, self.search_token, live=True)
         else:
+            self.invalidate_search_results()
             self.restore_fuzzy_search_source()
 
     @work(thread=True, exclusive=True, group="search")
