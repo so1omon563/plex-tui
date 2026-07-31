@@ -171,6 +171,9 @@ Async view-opening workers must apply UI results through the shared navigation
 identity guard. Newer navigation, overlays, and Back actions invalidate older
 results, and media pickers must also verify that their originating selection is
 still current.
+Kitty derived images must use verified full-content cache identities, resolve
+short image-ID collisions across concurrent app processes, retain pending
+terminal transfers, and share the bounded artwork cache policy.
 
 ## Testing Guidelines
 

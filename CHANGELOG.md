@@ -15,6 +15,8 @@
 - Played every ordered part of split Plex media as one continuous mpv timeline
   and reported unsupported multipart transcode or sidecar-subtitle playback
   before launch.
+- Made Kitty derived-image identities collision-safe and included their files in
+  artwork cache pruning.
 - Kept delayed post-playback refreshes from replacing another library's rows.
 - Restricted Plex config and debug-log files to the current user and repaired
   overly broad existing POSIX permissions when those files are used.

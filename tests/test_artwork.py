@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import os
+from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 
@@ -124,7 +125,7 @@ def test_render_protocol_artwork_uses_unicode_placeholders_when_kitty_is_detecte
     rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=2, max_height=2)
 
     assert isinstance(rendered, KittyImage)
-    assert rendered.commands[0].startswith("\033_Ga=T,t=f,f=100,q=2,i=")
+    assert rendered.commands[0].startswith("\033_Ga=T,t=t,f=100,q=2,i=")
     assert ",U=1,c=2,r=2;" in rendered.commands[0]
     assert rendered.plain.count(KITTY_PLACEHOLDER) == 4
     assert transmitted == list(rendered.commands)
@@ -243,12 +244,138 @@ def test_protocol_renderer_transmits_kitty_file_reference(tmp_path, monkeypatch)
     assert isinstance(rendered, KittyImage)
     assert transmitted == list(rendered.commands)
     command = transmitted[0]
-    assert ",t=f," in command
+    assert ",t=t," in command
     payload = command.split(";", 1)[1].removesuffix("\033\\")
     image_path = Path(base64.b64decode(payload).decode("utf-8"))
     assert image_path.exists()
     assert image_path.read_bytes().startswith(b"\x89PNG")
     assert base64.b64encode(image_path.read_bytes()).decode("ascii") not in command
+
+
+def test_kitty_cache_resolves_short_id_collisions(tmp_path, monkeypatch):
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(artwork, "kitty_image_id", lambda data, columns, rows: 7)
+    monkeypatch.setattr(artwork, "KITTY_SESSION_IMAGE_IDS", {})
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: None)
+
+    buffers = []
+    for color in ("#ff0000", "#0000ff"):
+        buffer = BytesIO()
+        Image.new("RGB", (4, 4), color).save(buffer, format="PNG")
+        buffers.append(buffer.getvalue())
+
+    first = render_kitty_artwork(buffers[0], width=2, max_height=2, transmit=True)
+    second = render_kitty_artwork(buffers[1], width=2, max_height=2, transmit=True)
+
+    paths = []
+    for rendered in (first, second):
+        payload = rendered.commands[0].split(";", 1)[1].removesuffix("\033\\")
+        paths.append(Path(base64.b64decode(payload).decode("utf-8")))
+    assert first.image_id == 7
+    assert second.image_id == 8
+    assert paths[0] != paths[1]
+    assert paths[0].read_bytes() != paths[1].read_bytes()
+
+
+def test_kitty_cache_does_not_reuse_pruned_session_image_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(artwork, "kitty_image_id", lambda data, columns, rows: 7)
+    monkeypatch.setattr(artwork, "KITTY_SESSION_IMAGE_IDS", {})
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: None)
+
+    buffers = []
+    for color in ("#ff0000", "#0000ff"):
+        buffer = BytesIO()
+        Image.new("RGB", (4, 4), color).save(buffer, format="PNG")
+        buffers.append(buffer.getvalue())
+
+    first = render_kitty_artwork(buffers[0], width=2, max_height=2, transmit=True)
+    payload = first.commands[0].split(";", 1)[1].removesuffix("\033\\")
+    Path(base64.b64decode(payload).decode("utf-8")).unlink()
+    artwork.KITTY_SESSION_IMAGE_IDS.clear()
+    second = render_kitty_artwork(buffers[1], width=2, max_height=2, transmit=True)
+    artwork.KITTY_SESSION_IMAGE_IDS.clear()
+    restored = render_kitty_artwork(buffers[0], width=2, max_height=2, transmit=True)
+
+    assert first.image_id == 7
+    assert second.image_id == 8
+    assert restored.image_id == first.image_id
+
+
+def test_kitty_cache_recreates_transfer_removed_before_read(tmp_path, monkeypatch):
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(artwork, "KITTY_SESSION_IMAGE_IDS", {})
+    data = b"image"
+    first, first_id = artwork.kitty_protocol_image_path(data, 2, 2)
+    first.unlink()
+    restored, restored_id = artwork.kitty_protocol_image_path(data, 2, 2)
+
+    assert restored_id == first_id
+    assert restored != first
+    assert restored.read_bytes() == data
+
+
+def test_kitty_cache_uses_unique_paths_for_queued_transfers(tmp_path, monkeypatch):
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(artwork, "KITTY_SESSION_IMAGE_IDS", {})
+    data = b"image"
+    first, first_id = artwork.kitty_protocol_image_path(data, 2, 2)
+    second, second_id = artwork.kitty_protocol_image_path(data, 2, 2)
+
+    assert second_id == first_id
+    assert second != first
+    assert first.read_bytes() == data
+    assert second.read_bytes() == data
+
+
+def test_kitty_id_reservations_retire_oldest_at_limit(tmp_path, monkeypatch):
+    directory = tmp_path / "kitty"
+    directory.mkdir()
+    deleted = []
+    monkeypatch.setattr(artwork, "KITTY_IMAGE_RESERVATION_LIMIT", 2)
+    monkeypatch.setattr(artwork, "KITTY_SESSION_IMAGE_IDS", {})
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", deleted.extend)
+    artwork.reserve_kitty_image_id(directory, "first", 1, set())
+    artwork.reserve_kitty_image_id(directory, "second", 2, set())
+    os.utime(directory / ".id-000001", (1, 1))
+    os.utime(directory / ".id-000002", (2, 2))
+
+    reserved = artwork.reserve_kitty_image_id(directory, "third", 3, set())
+
+    assert reserved == 3
+    assert deleted == ["\033_Ga=d,d=I,i=1,q=2;\033\\"]
+    assert sorted(path.name for path in directory.glob(".id-*")) == [
+        ".id-000002",
+        ".id-000003",
+    ]
+
+
+def test_kitty_transmit_holds_cross_process_lock_through_emit(tmp_path, monkeypatch):
+    events = []
+
+    @contextmanager
+    def transaction(directory):
+        assert directory == tmp_path / "kitty"
+        events.append("lock")
+        try:
+            yield
+        finally:
+            events.append("unlock")
+
+    def reserve(data, columns, rows):
+        events.append("reserve")
+        return tmp_path / "transfer.png", 7
+
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(artwork, "kitty_terminal_transaction", transaction)
+    monkeypatch.setattr(artwork, "kitty_protocol_image_path", reserve)
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: events.append("emit"))
+    buffer = BytesIO()
+    Image.new("RGB", (4, 4), "#00ff00").save(buffer, format="PNG")
+
+    render_kitty_artwork(buffer.getvalue(), width=2, max_height=2, transmit=True)
+
+    assert events == ["lock", "reserve", "emit", "unlock"]
 
 
 def test_protocol_renderer_status_explains_explicit_kitty_force(monkeypatch):
@@ -299,3 +426,62 @@ def test_prune_artwork_cache_removes_oldest_files(tmp_path, monkeypatch):
 
     assert not old.exists()
     assert new.exists()
+
+
+def test_prune_artwork_cache_bounds_kitty_files_without_deleting_protected_file(tmp_path, monkeypatch):
+    cache_dir = tmp_path / "cache"
+    artwork_dir = cache_dir / "artwork"
+    kitty_dir = cache_dir / "kitty"
+    artwork_dir.mkdir(parents=True)
+    kitty_dir.mkdir()
+    source = artwork_dir / "source.img"
+    derived = kitty_dir / "000001-digest.png"
+    source.write_bytes(b"source")
+    derived.write_bytes(b"derived")
+    os.utime(derived, (1, 1))
+    monkeypatch.setattr(artwork, "cache_path", lambda: cache_dir)
+
+    prune_artwork_cache(limit_bytes=0, protected_path=derived)
+
+    assert not source.exists()
+    assert derived.exists()
+
+    prune_artwork_cache(limit_bytes=0)
+
+    assert not derived.exists()
+
+
+def test_prune_artwork_cache_keeps_pending_kitty_file(tmp_path, monkeypatch):
+    cache_dir = tmp_path / "cache"
+    kitty_dir = cache_dir / "kitty"
+    kitty_dir.mkdir(parents=True)
+    pending = kitty_dir / "000001-digest.png"
+    pending.write_bytes(b"pending")
+    monkeypatch.setattr(artwork, "cache_path", lambda: cache_dir)
+
+    prune_artwork_cache(limit_bytes=0)
+
+    assert pending.exists()
+
+
+def test_prune_artwork_cache_continues_after_entry_disappears(tmp_path, monkeypatch):
+    artwork_dir = tmp_path / "artwork"
+    artwork_dir.mkdir()
+    vanished = artwork_dir / "vanished.img"
+    remaining = artwork_dir / "remaining.img"
+    vanished.write_bytes(b"old")
+    remaining.write_bytes(b"new")
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    stat = Path.stat
+
+    def missing_stat(path, *args, **kwargs):
+        if path == vanished:
+            raise FileNotFoundError(path)
+        return stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", missing_stat)
+
+    prune_artwork_cache(limit_bytes=0)
+
+    assert stat(vanished).st_size == 3
+    assert not remaining.exists()

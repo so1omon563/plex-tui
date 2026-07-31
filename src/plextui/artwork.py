@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import base64
+import fcntl
 import hashlib
 import os
 import sys
+import tempfile
 import threading
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
@@ -26,7 +31,12 @@ ARTWORK_CACHE_LIMIT_BYTES = 100 * 1024 * 1024
 KITTY_PAYLOAD_CHUNK_SIZE = 4096
 KITTY_CELL_WIDTH_PX = 12
 KITTY_CELL_HEIGHT_PX = 24
-KITTY_TRANSMIT_LOCK = threading.Lock()
+# ponytail: q=2 has no acknowledgement; use response tracking if 60s is too short for delayed terminals.
+KITTY_PENDING_FILE_SECONDS = 60
+# ponytail: cap retained terminal IDs; retire the LRU image if one session exceeds this.
+KITTY_IMAGE_RESERVATION_LIMIT = 4096
+KITTY_TRANSMIT_LOCK = threading.RLock()
+KITTY_SESSION_IMAGE_IDS: dict[str, int] = {}
 KITTY_PLACEHOLDER = "\U0010eeee"
 KITTY_PLACEHOLDER_DIACRITICS = tuple(chr(codepoint) for codepoint in (
     0x0305, 0x030D, 0x030E, 0x0310, 0x0312, 0x033D, 0x033E, 0x033F,
@@ -155,31 +165,43 @@ def artwork_is_cached(path: str, config: AppConfig, width: int | None = None, he
     return cached_artwork_path(path, config, width, height).exists()
 
 
-def prune_artwork_cache(limit_bytes: int = ARTWORK_CACHE_LIMIT_BYTES) -> None:
-    directory = cache_path() / "artwork"
-    if not directory.exists():
-        return
-    files = []
-    total = 0
-    try:
-        for path in directory.iterdir():
-            if not path.is_file():
+def prune_artwork_cache(
+    limit_bytes: int = ARTWORK_CACHE_LIMIT_BYTES,
+    *,
+    protected_path: Path | None = None,
+) -> None:
+    with KITTY_TRANSMIT_LOCK:
+        files = []
+        total = 0
+        kitty_directory = cache_path() / "kitty"
+        for directory in (cache_path() / "artwork", kitty_directory):
+            if not directory.exists():
                 continue
-            stat = path.stat()
-            files.append((stat.st_mtime, stat.st_size, path))
-            total += stat.st_size
-    except OSError:
-        return
-    if total <= limit_bytes:
-        return
-    for _, size, path in sorted(files):
-        try:
-            path.unlink()
-        except OSError:
-            continue
-        total -= size
+            for path in directory.iterdir():
+                try:
+                    if directory == kitty_directory and path.name.startswith(".id"):
+                        continue
+                    if not path.is_file():
+                        continue
+                    stat = path.stat()
+                    files.append((stat.st_mtime, stat.st_size, path))
+                    total += stat.st_size
+                except OSError:
+                    continue
         if total <= limit_bytes:
-            break
+            return
+        for modified, size, path in sorted(files):
+            if path == protected_path:
+                continue
+            if path.parent == kitty_directory and time.time() - modified < KITTY_PENDING_FILE_SECONDS:
+                continue
+            try:
+                path.unlink()
+            except OSError:
+                continue
+            total -= size
+            if total <= limit_bytes:
+                break
 
 
 def render_artwork(data: bytes, width: int = 28, max_height: int = 20) -> Text:
@@ -265,20 +287,27 @@ def render_kitty_artwork(data: bytes, width: int = 28, max_height: int = 20, tra
     buffer = BytesIO()
     image.save(buffer, format="PNG")
     image_data = buffer.getvalue()
-    payload = base64.b64encode(image_data).decode("ascii")
-    image_id = kitty_image_id(image_data, columns, rows)
-    commands = (
-        kitty_graphics_file_commands(
-            kitty_protocol_image_path(image_data, image_id),
+    if transmit:
+        with KITTY_TRANSMIT_LOCK:
+            directory = cache_path() / "kitty"
+            directory.mkdir(parents=True, exist_ok=True)
+            with kitty_terminal_transaction(directory):
+                image_path, image_id = kitty_protocol_image_path(image_data, columns, rows)
+                commands = kitty_graphics_file_commands(
+                    image_path,
+                    image_id=image_id,
+                    columns=columns,
+                    rows=rows,
+                )
+                emit_kitty_graphics_commands(commands)
+    else:
+        image_id = kitty_image_id(image_data, columns, rows)
+        commands = kitty_graphics_commands(
+            base64.b64encode(image_data).decode("ascii"),
             image_id=image_id,
             columns=columns,
             rows=rows,
         )
-        if transmit
-        else kitty_graphics_commands(payload, image_id=image_id, columns=columns, rows=rows)
-    )
-    if transmit:
-        emit_kitty_graphics_commands(commands)
     return KittyImage(
         commands=tuple(commands),
         lines=tuple(kitty_placeholder_lines(image_id, columns, rows)),
@@ -334,16 +363,126 @@ def kitty_graphics_commands(
 def kitty_graphics_file_commands(path: Path, image_id: int, columns: int, rows: int) -> list[str]:
     payload = base64.b64encode(str(path).encode("utf-8")).decode("ascii")
     placement = f",i={image_id},U=1,c={max(1, columns)},r={max(1, rows)}"
-    return [f"\033_Ga=T,t=f,f=100,q=2{placement};{payload}\033\\"]
+    return [f"\033_Ga=T,t=t,f=100,q=2{placement};{payload}\033\\"]
 
 
-def kitty_protocol_image_path(data: bytes, image_id: int) -> Path:
-    directory = cache_path() / "kitty"
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{image_id:06x}.png"
-    if not path.exists():
-        path.write_bytes(data)
+@contextmanager
+def kitty_terminal_transaction(directory: Path) -> Iterator[None]:
+    lock_fd = os.open(directory / ".ids.transmit.lock", os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(lock_fd) as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def reserve_kitty_image_id(directory: Path, digest: str, candidate: int, occupied: set[int]) -> int:
+    lock_fd = os.open(directory / ".ids.lock", os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(lock_fd) as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        markers = list(directory.glob(".id-*"))
+        for marker in markers:
+            try:
+                if marker.read_text() == digest:
+                    marker.touch()
+                    return int(marker.name.removeprefix(".id-"), 16)
+            except (OSError, ValueError):
+                continue
+
+        if len(markers) >= KITTY_IMAGE_RESERVATION_LIMIT:
+            marker = min(markers, key=lambda path: path.stat().st_mtime)
+            retired_id = int(marker.name.removeprefix(".id-"), 16)
+            emit_kitty_graphics_commands([f"\033_Ga=d,d=I,i={retired_id},q=2;\033\\"])
+            marker.unlink()
+            occupied.discard(retired_id)
+            for reserved_digest, image_id in list(KITTY_SESSION_IMAGE_IDS.items()):
+                if image_id == retired_id:
+                    del KITTY_SESSION_IMAGE_IDS[reserved_digest]
+            markers.remove(marker)
+
+        marker_ids = {
+            int(marker.name.removeprefix(".id-"), 16)
+            for marker in markers
+        }
+        while candidate in occupied or candidate in marker_ids:
+            candidate = candidate % 0xFFFFFF + 1
+        marker = directory / f".id-{candidate:06x}"
+        marker_fd = os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        try:
+            os.write(marker_fd, digest.encode("ascii"))
+        finally:
+            os.close(marker_fd)
+        return candidate
+
+
+def create_kitty_transfer_path(directory: Path, image_id: int, digest: str, data: bytes) -> Path:
+    fd, raw_path = tempfile.mkstemp(
+        prefix=f"{image_id:06x}-",
+        suffix=f"-{digest}.png",
+        dir=directory,
+    )
+    path = Path(raw_path)
+    try:
+        with os.fdopen(fd, "wb") as transfer:
+            transfer.write(data)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
     return path
+
+
+def kitty_protocol_image_path(data: bytes, columns: int, rows: int) -> tuple[Path, int]:
+    digest = kitty_image_digest(data, columns, rows)
+    with KITTY_TRANSMIT_LOCK:
+        directory = cache_path() / "kitty"
+        directory.mkdir(parents=True, exist_ok=True)
+        reserved_id = KITTY_SESSION_IMAGE_IDS.get(digest)
+        if reserved_id is not None:
+            reserved_id = reserve_kitty_image_id(
+                directory,
+                digest,
+                reserved_id,
+                set(KITTY_SESSION_IMAGE_IDS.values()) - {reserved_id},
+            )
+            KITTY_SESSION_IMAGE_IDS[digest] = reserved_id
+            path = create_kitty_transfer_path(directory, reserved_id, digest, data)
+            prune_artwork_cache(protected_path=path)
+            return path, reserved_id
+
+        entries: dict[int, list[Path]] = {}
+        for existing in directory.glob("*.png"):
+            try:
+                image_id = int(existing.stem.split("-", 1)[0], 16)
+            except ValueError:
+                continue
+            entries.setdefault(image_id, []).append(existing)
+
+        for image_id, paths in entries.items():
+            matching = [path for path in paths if path.stem.endswith(f"-{digest}")]
+            if len(paths) == 1 and matching:
+                image_id = reserve_kitty_image_id(
+                    directory,
+                    digest,
+                    image_id,
+                    set(entries) - {image_id} | set(KITTY_SESSION_IMAGE_IDS.values()),
+                )
+                path = create_kitty_transfer_path(directory, image_id, digest, data)
+                KITTY_SESSION_IMAGE_IDS[digest] = image_id
+                prune_artwork_cache(protected_path=path)
+                return path, image_id
+
+        image_id = kitty_image_id(data, columns, rows)
+        image_id = reserve_kitty_image_id(
+            directory,
+            digest,
+            image_id,
+            set(entries) | set(KITTY_SESSION_IMAGE_IDS.values()),
+        )
+        path = create_kitty_transfer_path(directory, image_id, digest, data)
+        KITTY_SESSION_IMAGE_IDS[digest] = image_id
+        prune_artwork_cache(protected_path=path)
+        return path, image_id
 
 
 def emit_kitty_graphics_commands(commands: list[str]) -> None:
@@ -398,8 +537,11 @@ def write_all(fd: int, payload: bytes) -> None:
 
 
 def kitty_image_id(data: bytes, columns: int, rows: int) -> int:
-    digest = hashlib.sha256(data + f"\0{columns}x{rows}".encode("ascii")).digest()
-    return int.from_bytes(digest[:3], "big") or 1
+    return int(kitty_image_digest(data, columns, rows)[:6], 16) or 1
+
+
+def kitty_image_digest(data: bytes, columns: int, rows: int) -> str:
+    return hashlib.sha256(data + f"\0{columns}x{rows}".encode("ascii")).hexdigest()
 
 
 def kitty_placeholder_lines(image_id: int, columns: int, rows: int) -> list[str]:
