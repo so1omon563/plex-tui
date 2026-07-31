@@ -5,6 +5,7 @@ import hashlib
 import os
 import sys
 import threading
+import time
 from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
@@ -26,6 +27,8 @@ ARTWORK_CACHE_LIMIT_BYTES = 100 * 1024 * 1024
 KITTY_PAYLOAD_CHUNK_SIZE = 4096
 KITTY_CELL_WIDTH_PX = 12
 KITTY_CELL_HEIGHT_PX = 24
+# ponytail: q=2 has no acknowledgement; use response tracking if 60s is too short for delayed terminals.
+KITTY_PENDING_FILE_SECONDS = 60
 KITTY_TRANSMIT_LOCK = threading.RLock()
 KITTY_SESSION_IMAGE_IDS: dict[str, int] = {}
 KITTY_PLACEHOLDER = "\U0010eeee"
@@ -164,7 +167,8 @@ def prune_artwork_cache(
     with KITTY_TRANSMIT_LOCK:
         files = []
         total = 0
-        for directory in (cache_path() / "artwork", cache_path() / "kitty"):
+        kitty_directory = cache_path() / "kitty"
+        for directory in (cache_path() / "artwork", kitty_directory):
             if not directory.exists():
                 continue
             try:
@@ -178,8 +182,10 @@ def prune_artwork_cache(
                 continue
         if total <= limit_bytes:
             return
-        for _, size, path in sorted(files):
+        for modified, size, path in sorted(files):
             if path == protected_path:
+                continue
+            if path.parent == kitty_directory and time.time() - modified < KITTY_PENDING_FILE_SECONDS:
                 continue
             try:
                 path.unlink()
@@ -346,7 +352,7 @@ def kitty_graphics_commands(
 def kitty_graphics_file_commands(path: Path, image_id: int, columns: int, rows: int) -> list[str]:
     payload = base64.b64encode(str(path).encode("utf-8")).decode("ascii")
     placement = f",i={image_id},U=1,c={max(1, columns)},r={max(1, rows)}"
-    return [f"\033_Ga=T,t=f,f=100,q=2{placement};{payload}\033\\"]
+    return [f"\033_Ga=T,t=t,f=100,q=2{placement};{payload}\033\\"]
 
 
 def kitty_protocol_image_path(data: bytes, columns: int, rows: int) -> tuple[Path, int]:

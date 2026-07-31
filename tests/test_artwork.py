@@ -124,7 +124,7 @@ def test_render_protocol_artwork_uses_unicode_placeholders_when_kitty_is_detecte
     rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=2, max_height=2)
 
     assert isinstance(rendered, KittyImage)
-    assert rendered.commands[0].startswith("\033_Ga=T,t=f,f=100,q=2,i=")
+    assert rendered.commands[0].startswith("\033_Ga=T,t=t,f=100,q=2,i=")
     assert ",U=1,c=2,r=2;" in rendered.commands[0]
     assert rendered.plain.count(KITTY_PLACEHOLDER) == 4
     assert transmitted == list(rendered.commands)
@@ -243,7 +243,7 @@ def test_protocol_renderer_transmits_kitty_file_reference(tmp_path, monkeypatch)
     assert isinstance(rendered, KittyImage)
     assert transmitted == list(rendered.commands)
     command = transmitted[0]
-    assert ",t=f," in command
+    assert ",t=t," in command
     payload = command.split(";", 1)[1].removesuffix("\033\\")
     image_path = Path(base64.b64decode(payload).decode("utf-8"))
     assert image_path.exists()
@@ -359,6 +359,7 @@ def test_prune_artwork_cache_bounds_kitty_files_without_deleting_protected_file(
     derived = kitty_dir / "000001-digest.png"
     source.write_bytes(b"source")
     derived.write_bytes(b"derived")
+    os.utime(derived, (1, 1))
     monkeypatch.setattr(artwork, "cache_path", lambda: cache_dir)
 
     prune_artwork_cache(limit_bytes=0, protected_path=derived)
@@ -369,3 +370,16 @@ def test_prune_artwork_cache_bounds_kitty_files_without_deleting_protected_file(
     prune_artwork_cache(limit_bytes=0)
 
     assert not derived.exists()
+
+
+def test_prune_artwork_cache_keeps_pending_kitty_file(tmp_path, monkeypatch):
+    cache_dir = tmp_path / "cache"
+    kitty_dir = cache_dir / "kitty"
+    kitty_dir.mkdir(parents=True)
+    pending = kitty_dir / "000001-digest.png"
+    pending.write_bytes(b"pending")
+    monkeypatch.setattr(artwork, "cache_path", lambda: cache_dir)
+
+    prune_artwork_cache(limit_bytes=0)
+
+    assert pending.exists()
