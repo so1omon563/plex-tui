@@ -87,6 +87,19 @@ def test_pr_title_markers_reject_multiple_bumps(title):
         check_release.parse_pr_title_markers(title)
 
 
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Fix #patch #major-version",
+        "Fix #minor pre#patch",
+        "Fix (#major) #patch",
+    ],
+)
+def test_pr_title_markers_reject_mixed_marker_like_tokens(title):
+    with pytest.raises(ValueError, match="marker-like"):
+        check_release.parse_pr_title_markers(title)
+
+
 def test_pr_title_marker_cli_writes_github_outputs(tmp_path):
     output = tmp_path / "github-output"
 
@@ -96,7 +109,7 @@ def test_pr_title_marker_cli_writes_github_outputs(tmp_path):
 
     assert result == 0
     assert output.read_text(encoding="utf-8") == (
-        "bump_requested=true\nrelease_requested=true\n"
+        "bump_requested=true\nbump_type=patch\nrelease_requested=true\n"
     )
 
 

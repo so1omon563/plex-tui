@@ -40,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         with args.github_output.open("a", encoding="utf-8") as fh:
             fh.write(f"bump_requested={str(bump_requested).lower()}\n")
+            fh.write(f"bump_type={selected_bump_type(args.pr_title)}\n")
             fh.write(f"release_requested={str(release_requested).lower()}\n")
         return 0
     if args.github_output is not None:
@@ -61,10 +62,22 @@ def parse_pr_title_markers(title: str) -> tuple[bool, bool]:
     bump_markers = [token for token in tokens if token in BUMPER_MARKERS]
     if len(bump_markers) > 1:
         raise ValueError("PR title must contain exactly one semver bump marker")
+    malformed_bump_tokens = [
+        token
+        for token in tokens
+        if token not in BUMPER_MARKERS and any(marker in token for marker in BUMPER_MARKERS)
+    ]
+    if bump_markers and malformed_bump_tokens:
+        raise ValueError("PR title must not mix a bump marker with marker-like text")
 
     bump_requested = len(bump_markers) == 1
     release_requested = bump_requested and any(token in RELEASE_MARKERS for token in tokens)
     return bump_requested, release_requested
+
+
+def selected_bump_type(title: str) -> str:
+    tokens = title.casefold().split()
+    return next((token.removeprefix("#") for token in tokens if token in BUMPER_MARKERS), "none")
 
 
 def run_checks(root: Path) -> list[CheckResult]:
@@ -130,7 +143,7 @@ def check_release_workflow(root: Path) -> CheckResult:
         "if: steps.release-intent.outputs.bump_requested == 'true'",
         "uses: so1omon563/custom-semver-bumper@v1",
         "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}",
-        "default_bump: none",
+        "default_bump: ${{ steps.release-intent.outputs.bump_type }}",
         "id: release-intent",
         "uses: so1omon563/release-creator@v1",
         "tag: ${{ needs.bump-version.outputs.new_tag }}",
