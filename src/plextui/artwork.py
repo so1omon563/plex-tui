@@ -27,6 +27,7 @@ KITTY_PAYLOAD_CHUNK_SIZE = 4096
 KITTY_CELL_WIDTH_PX = 12
 KITTY_CELL_HEIGHT_PX = 24
 KITTY_TRANSMIT_LOCK = threading.RLock()
+KITTY_SESSION_IMAGE_IDS: dict[str, int] = {}
 KITTY_PLACEHOLDER = "\U0010eeee"
 KITTY_PLACEHOLDER_DIACRITICS = tuple(chr(codepoint) for codepoint in (
     0x0305, 0x030D, 0x030E, 0x0310, 0x0312, 0x033D, 0x033E, 0x033F,
@@ -353,6 +354,14 @@ def kitty_protocol_image_path(data: bytes, columns: int, rows: int) -> tuple[Pat
     with KITTY_TRANSMIT_LOCK:
         directory = cache_path() / "kitty"
         directory.mkdir(parents=True, exist_ok=True)
+        reserved_id = KITTY_SESSION_IMAGE_IDS.get(digest)
+        if reserved_id is not None:
+            path = directory / f"{reserved_id:06x}-{digest}.png"
+            if not path.exists() or path.read_bytes() != data:
+                path.write_bytes(data)
+            prune_artwork_cache(protected_path=path)
+            return path, reserved_id
+
         entries: dict[int, list[Path]] = {}
         for existing in directory.glob("*.png"):
             try:
@@ -367,14 +376,17 @@ def kitty_protocol_image_path(data: bytes, columns: int, rows: int) -> tuple[Pat
                 path = matching[0]
                 if path.read_bytes() != data:
                     path.write_bytes(data)
+                KITTY_SESSION_IMAGE_IDS[digest] = image_id
                 prune_artwork_cache(protected_path=path)
                 return path, image_id
 
         image_id = kitty_image_id(data, columns, rows)
-        while image_id in entries:
+        reserved_ids = set(KITTY_SESSION_IMAGE_IDS.values())
+        while image_id in entries or image_id in reserved_ids:
             image_id = image_id % 0xFFFFFF + 1
         path = directory / f"{image_id:06x}-{digest}.png"
         path.write_bytes(data)
+        KITTY_SESSION_IMAGE_IDS[digest] = image_id
         prune_artwork_cache(protected_path=path)
         return path, image_id
 

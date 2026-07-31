@@ -254,6 +254,7 @@ def test_protocol_renderer_transmits_kitty_file_reference(tmp_path, monkeypatch)
 def test_kitty_cache_resolves_short_id_collisions(tmp_path, monkeypatch):
     monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
     monkeypatch.setattr(artwork, "kitty_image_id", lambda data, columns, rows: 7)
+    monkeypatch.setattr(artwork, "KITTY_SESSION_IMAGE_IDS", {})
     monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: None)
 
     buffers = []
@@ -273,6 +274,29 @@ def test_kitty_cache_resolves_short_id_collisions(tmp_path, monkeypatch):
     assert second.image_id == 8
     assert paths[0] != paths[1]
     assert paths[0].read_bytes() != paths[1].read_bytes()
+
+
+def test_kitty_cache_does_not_reuse_pruned_session_image_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(artwork, "kitty_image_id", lambda data, columns, rows: 7)
+    monkeypatch.setattr(artwork, "KITTY_SESSION_IMAGE_IDS", {})
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: None)
+
+    buffers = []
+    for color in ("#ff0000", "#0000ff"):
+        buffer = BytesIO()
+        Image.new("RGB", (4, 4), color).save(buffer, format="PNG")
+        buffers.append(buffer.getvalue())
+
+    first = render_kitty_artwork(buffers[0], width=2, max_height=2, transmit=True)
+    payload = first.commands[0].split(";", 1)[1].removesuffix("\033\\")
+    Path(base64.b64decode(payload).decode("utf-8")).unlink()
+    second = render_kitty_artwork(buffers[1], width=2, max_height=2, transmit=True)
+    restored = render_kitty_artwork(buffers[0], width=2, max_height=2, transmit=True)
+
+    assert first.image_id == 7
+    assert second.image_id == 8
+    assert restored.image_id == first.image_id
 
 
 def test_protocol_renderer_status_explains_explicit_kitty_force(monkeypatch):
