@@ -869,6 +869,70 @@ def test_detail_artwork_reuses_rendered_grid_card_cache(monkeypatch):
     assert app.rendered_grid_artwork_cache[grid_artwork_cache_key(full_item, app.config)] == "cached-card"
 
 
+@pytest.mark.parametrize(
+    ("full_item", "state", "expected_actions"),
+    [
+        (
+            MediaItem(
+                "Episode",
+                "",
+                "episode",
+                "episode-1",
+                True,
+                SimpleNamespace(
+                    TYPE="episode",
+                    parentKey="/library/metadata/season-1",
+                    grandparentKey="/library/metadata/show-1",
+                ),
+                artwork_path="/thumb",
+            ),
+            BrowseState("Continue Watching", [], source="continue_watching"),
+            ("TV Context: b opens season", "TV Context: B opens show"),
+        ),
+        (
+            MediaItem("Movie", "", "movie", "movie-1", True, Raw(), artwork_path="/thumb"),
+            BrowseState(
+                "Favorites",
+                [],
+                source="playlist",
+                context_media=MediaItem("Favorites", "", "playlist", "playlist-1", False, Raw()),
+            ),
+            ("Playlist: Backspace/Delete removes from this playlist",),
+        ),
+    ],
+    ids=("episode", "playlist"),
+)
+def test_detail_artwork_callback_preserves_context_actions(monkeypatch, full_item, state, expected_actions):
+    app = PlexTuiApp()
+    app.config = AppConfig("http://plex", "token", "client-id")
+    app.detail_refresh_token = 1
+    app.browsing_stack = [state]
+    app.selected_media = lambda: full_item
+    app.call_from_thread = lambda callback, *args: callback(*args)
+    app.query_one = lambda *args: SimpleNamespace(display=False)
+    rendered_actions = []
+    app.show_detail_text = rendered_actions.append
+    monkeypatch.setattr(app_module, "fetch_artwork", lambda *args, **kwargs: b"image")
+    monkeypatch.setattr(app_module, "render_protocol_artwork", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app_module, "render_artwork", lambda *args, **kwargs: "detail-art")
+    monkeypatch.setattr(
+        app_module,
+        "render_detail_content",
+        lambda *args, context_actions=(), **kwargs: context_actions,
+    )
+
+    PlexTuiApp.fetch_media_detail_artwork.__wrapped__(
+        app,
+        full_item,
+        SimpleNamespace(artwork_path="/thumb"),
+        token=1,
+        detail_size=(30, 20),
+        include_card_artwork=False,
+    )
+
+    assert rendered_actions == [expected_actions]
+
+
 def test_grid_detail_refresh_waits_for_idle_selection():
     asyncio.run(run_grid_detail_refresh_idle_check())
 

@@ -2517,7 +2517,16 @@ class PlexTuiApp(App[None]):
             selected = self.selected_media()
             if selected is not None and selected.key == full_item.key:
                 if artwork is not None:
-                    self.show_detail_text(render_detail_content(details, self.config, artwork, raw=full_item.raw))
+                    self.show_detail_text(render_detail_content(
+                        details,
+                        self.config,
+                        artwork,
+                        raw=full_item.raw,
+                        context_actions=current_detail_actions(
+                            self.browsing_stack[-1] if self.browsing_stack else None,
+                            full_item,
+                        ),
+                    ))
                 grid = self.query_one("#media-grid", MediaGrid)
                 if self.media_grid_visible() and card_artwork is not None:
                     grid.set_artwork(full_item.key, card_artwork)
