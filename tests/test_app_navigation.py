@@ -1160,6 +1160,10 @@ def test_newer_navigation_cancels_slow_search_result():
     asyncio.run(run_newer_navigation_cancels_slow_search_result_check())
 
 
+def test_newer_navigation_cancels_slow_fuzzy_search_result():
+    asyncio.run(run_newer_navigation_cancels_slow_fuzzy_search_result_check())
+
+
 def test_media_version_picker_discards_result_after_selection_changes():
     asyncio.run(run_media_version_picker_discards_stale_selection_check())
 
@@ -2791,6 +2795,65 @@ async def run_newer_navigation_cancels_slow_search_result_check():
                 release.set()
 
         assert service.search_calls == [("stale", library, 0, 40)]
+        assert [state.title for state in app.browsing_stack] == ["Continue Watching"]
+        assert [item.title for item in app.browsing_stack[-1].items] == ["Current"]
+
+
+async def run_newer_navigation_cancels_slow_fuzzy_search_result_check():
+    started = threading.Event()
+    release = threading.Event()
+    stale = MediaItem("Stale fuzzy result", "", "movie", "stale", True, Raw())
+    current = MediaItem("Current", "", "movie", "current", True, Raw())
+    loading_titles: list[str] = []
+
+    def blocking_fuzzy_match(query: str, items: list[MediaItem]) -> list[MediaItem]:
+        started.set()
+        release.wait(timeout=10)
+        return [stale]
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        library = LibraryItem("Movies", "1", "movie", object())
+        service = FakePagedService(MediaPage([current], start=0, total=1))
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.selected_library = library
+        app.suppress_auto_load = True
+        app.show_media_details = lambda item: None
+        original = BrowseState("Movies", [current], library, next_start=1, total=1)
+        app.browsing_stack = [original]
+        app.show_browse_state(original)
+        await pilot.pause(0.2)
+
+        token = app.start_search_return()
+        with (
+            patch("plextui.app.fuzzy_match_media", side_effect=blocking_fuzzy_match),
+            patch.object(app, "show_loading_state", side_effect=lambda title, detail: loading_titles.append(title)),
+            patch.object(app, "show_browse_state"),
+            patch.object(app, "focus_media_browser"),
+            patch.object(app, "set_status"),
+        ):
+            search_worker = app.run_search("stale", False, token)
+            try:
+                for _ in range(50):
+                    if started.is_set():
+                        break
+                    await asyncio.sleep(0.1)
+                assert started.is_set(), f"search worker stopped in {search_worker.state}: {search_worker.error}"
+
+                app.open_continue_watching()
+                assert app.search_was_cancelled(token)
+                assert search_worker.is_cancelled
+                release.set()
+                for _ in range(50):
+                    if app.browsing_stack and app.browsing_stack[-1].title == "Continue Watching":
+                        break
+                    await asyncio.sleep(0.1)
+            finally:
+                release.set()
+
+        assert "Fuzzy search: stale" not in loading_titles
         assert [state.title for state in app.browsing_stack] == ["Continue Watching"]
         assert [item.title for item in app.browsing_stack[-1].items] == ["Current"]
 

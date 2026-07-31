@@ -3904,10 +3904,12 @@ class PlexTuiApp(App[None]):
         if local_source is not None and fuzzy_source_is_complete(local_source):
             matches = fuzzy_match_media(query, local_source.items)
             title = f"Fuzzy search: {query}"
-            self.post_message(StatusChanged(f"Fuzzy searching {local_source.title} for {query}..."))
-            self.call_from_thread(self.show_loading_state, title, f"Matching loaded items from {local_source.title}.")
 
             def update_fuzzy() -> None:
+                if self.search_was_cancelled(token):
+                    return
+                self.post_message(StatusChanged(f"Fuzzy searching {local_source.title} for {query}..."))
+                self.show_loading_state(title, f"Matching loaded items from {local_source.title}.")
                 self.show_fuzzy_search_results(query, local_source, matches, focus=True)
 
             self.call_from_thread(update_fuzzy)
