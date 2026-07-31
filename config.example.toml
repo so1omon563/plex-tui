@@ -5,6 +5,8 @@
 base_url = "http://127.0.0.1:32400"
 token = "your-plex-token"
 client_identifier = "plex-tui-your-stable-client-id"
+# Stable Plex server identity saved automatically after server selection.
+# server_identifier = "your-plex-server-client-identifier"
 
 # Optional account token saved by Plex PIN login.
 # account_token = "your-plex-account-token"
