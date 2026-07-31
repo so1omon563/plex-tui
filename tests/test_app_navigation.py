@@ -1089,6 +1089,10 @@ def test_playback_refresh_selects_next_continue_watching_episode():
     asyncio.run(run_playback_refresh_selects_next_continue_watching_episode_check())
 
 
+def test_playback_refresh_keeps_live_tv_guide_date():
+    asyncio.run(run_playback_refresh_keeps_live_tv_guide_date_check())
+
+
 def test_playback_refresh_ignores_replaced_library_state():
     asyncio.run(run_playback_refresh_ignores_replaced_library_state_check())
 
@@ -4454,6 +4458,34 @@ async def run_playback_refresh_selects_next_continue_watching_episode_check():
         assert service.continue_watching_calls[-1] == (0, 40)
         assert selected is not None
         assert selected.title == "Episode 2"
+
+
+async def run_playback_refresh_keeps_live_tv_guide_date_check():
+    channel = MediaItem("Ion Mystery", "", "livetv", "channel-1", True, Raw())
+    program = MediaItem("Program", "", "livetv_program", "program-1", False, Raw())
+    service = FakePagedService(MediaPage([program], start=0, total=1))
+    service.guide_page = MediaPage([program], start=0, total=1)
+    state = BrowseState(
+        "Guide: Ion Mystery",
+        [program],
+        source="livetv_guide",
+        next_start=1,
+        total=1,
+        context_media=channel,
+        guide_date=date(2026, 7, 30),
+    )
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.browsing_stack = [state]
+
+        worker = app.refresh_current_browse_state(selected_key=program.key, played_media=program)
+        assert worker is not None
+        await asyncio.wait_for(worker.wait(), timeout=20)
+
+        assert service.hosted_live_tv_guide_dates == [date(2026, 7, 30)]
 
 
 async def run_playback_refresh_ignores_replaced_library_state_check():

@@ -1705,7 +1705,11 @@ class PlexTuiApp(App[None]):
                     total = page.total
                     items.extend(page.items)
             elif source == "livetv_guide" and state.context_media is not None:
-                page = self.service.hosted_live_tv_guide_page(state.context_media, size=loaded_count)
+                page = self.service.hosted_live_tv_guide_page(
+                    state.context_media,
+                    guide_date=state.guide_date,
+                    size=loaded_count,
+                )
                 items = page.items
                 next_start = page.next_start
                 total = page.total
