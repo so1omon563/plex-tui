@@ -276,6 +276,8 @@ behavior when changing playback or request diagnostics.
 On POSIX, keep the app config directory owner-only (`0700`) and config,
 debug-log, and rotated debug-log files owner-only (`0600`), including when
 repairing existing files.
+Persist Plex server `clientIdentifier` values so profile switches survive URL
+changes and never fall back silently to another server.
 Use `SECURITY.md` for vulnerability reporting policy and keep it aligned with
 token handling, packaging, and release automation changes.
 
