@@ -70,6 +70,7 @@ class AppConfig:
     show_on_plex_live: bool = False
     discover_media_type: str = "movies_shows"
     confirm_start_over: bool = True
+    server_identifier: str = ""
 
 
 def default_config() -> AppConfig:
@@ -125,6 +126,7 @@ def load_config() -> AppConfig:
     account_token = data.get("account_token", "")
     home_account_token = data.get("home_account_token", "")
     active_profile_title = data.get("active_profile_title", "")
+    server_identifier = data.get("server_identifier", "")
     preferred_audio_language = data.get("preferred_audio_language", "")
     preferred_subtitle_language = data.get("preferred_subtitle_language", "")
     subtitle_mode = data.get("subtitle_mode", "auto")
@@ -249,6 +251,7 @@ def load_config() -> AppConfig:
         show_on_plex_live=show_on_plex_live,
         discover_media_type=discover_media_type,
         confirm_start_over=confirm_start_over,
+        server_identifier=server_identifier.strip(),
     )
 
 
@@ -266,6 +269,8 @@ def save_config(config: AppConfig) -> None:
         lines.append(f'home_account_token = "{_toml_escape(config.home_account_token)}"')
     if config.active_profile_title:
         lines.append(f'active_profile_title = "{_toml_escape(config.active_profile_title)}"')
+    if config.server_identifier:
+        lines.append(f'server_identifier = "{_toml_escape(config.server_identifier)}"')
     if config.preferred_audio_language:
         lines.append(f'preferred_audio_language = "{_toml_escape(config.preferred_audio_language)}"')
     if config.preferred_subtitle_language:
