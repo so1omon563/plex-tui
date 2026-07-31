@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.17.24 - 2026-07-31
+
 - Scoped paged current-view search to its active library and reported
   incomplete non-library views as unavailable instead of querying a stale
   sidebar library.
