@@ -469,6 +469,33 @@ def test_legacy_library_preferences_attach_to_saved_server(tmp_path, monkeypatch
     assert loaded.current_library_order_keys == ("2", "1")
 
 
+def test_environment_connection_override_does_not_apply_saved_server_preferences(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        '\n'.join([
+            'base_url = "http://server-a"',
+            'token = "token-a"',
+            'client_identifier = "client"',
+            'server_identifier = "server-a"',
+            'hidden_library_keys = "1"',
+            'library_order_keys = "2,1"',
+            "",
+        ]),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "config_path", lambda: config_file)
+    monkeypatch.setenv("PLEX_TUI_BASE_URL", "http://server-b")
+    monkeypatch.setenv("PLEX_TUI_TOKEN", "token-b")
+
+    loaded = config.load_config()
+
+    assert loaded.server_identifier == ""
+    assert loaded.hidden_library_keys_server_identifier == "server-a"
+    assert loaded.library_order_keys_server_identifier == "server-a"
+    assert loaded.current_hidden_library_keys == ()
+    assert loaded.current_library_order_keys == ()
+
+
 def test_library_order_keys_parse_unique_csv_values(tmp_path, monkeypatch):
     config_file = tmp_path / "config.toml"
     config_file.write_text(

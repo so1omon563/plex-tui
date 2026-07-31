@@ -134,13 +134,16 @@ def load_config() -> AppConfig:
             raw = tomllib.load(fh)
         data = {k: str(v) for k, v in raw.items() if isinstance(v, str | int)}
 
-    base_url = os.environ.get("PLEX_TUI_BASE_URL") or data.get("base_url", "")
-    token = os.environ.get("PLEX_TUI_TOKEN") or data.get("token", "")
+    base_url_override = os.environ.get("PLEX_TUI_BASE_URL")
+    token_override = os.environ.get("PLEX_TUI_TOKEN")
+    base_url = base_url_override or data.get("base_url", "")
+    token = token_override or data.get("token", "")
     client_identifier = data.get("client_identifier") or f"plex-tui-{uuid.uuid4()}"
     account_token = data.get("account_token", "")
     home_account_token = data.get("home_account_token", "")
     active_profile_title = data.get("active_profile_title", "")
-    server_identifier = data.get("server_identifier", "")
+    saved_server_identifier = data.get("server_identifier", "")
+    server_identifier = "" if base_url_override or token_override else saved_server_identifier
     hidden_library_keys_server_identifier = data.get("hidden_library_keys_server_identifier", "")
     library_order_keys_server_identifier = data.get("library_order_keys_server_identifier", "")
     preferred_audio_language = data.get("preferred_audio_language", "")
@@ -225,9 +228,9 @@ def load_config() -> AppConfig:
     hidden_library_keys = csv_values(data.get("hidden_library_keys", ""))
     library_order_keys = csv_values(data.get("library_order_keys", ""))
     if not hidden_library_keys_server_identifier and hidden_library_keys:
-        hidden_library_keys_server_identifier = server_identifier
+        hidden_library_keys_server_identifier = saved_server_identifier
     if not library_order_keys_server_identifier and library_order_keys:
-        library_order_keys_server_identifier = server_identifier
+        library_order_keys_server_identifier = saved_server_identifier
     show_playlists = bool_value(data.get("show_playlists", "true"), True, "show_playlists")
     show_discover = bool_value(data.get("show_discover", "false"), False, "show_discover")
     show_on_plex = bool_value(data.get("show_on_plex", "false"), False, "show_on_plex")
