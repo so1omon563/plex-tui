@@ -4,6 +4,7 @@ import base64
 import hashlib
 import os
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import dataclass, replace
@@ -388,13 +389,20 @@ def reserve_kitty_image_id(directory: Path, digest: str, candidate: int, occupie
         return candidate
 
 
-def ensure_kitty_image_path(path: Path, data: bytes) -> None:
+def create_kitty_transfer_path(directory: Path, image_id: int, digest: str, data: bytes) -> Path:
+    fd, raw_path = tempfile.mkstemp(
+        prefix=f"{image_id:06x}-",
+        suffix=f"-{digest}.png",
+        dir=directory,
+    )
+    path = Path(raw_path)
     try:
-        if path.read_bytes() == data:
-            return
-    except OSError:
-        pass
-    path.write_bytes(data)
+        with os.fdopen(fd, "wb") as transfer:
+            transfer.write(data)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return path
 
 
 def kitty_protocol_image_path(data: bytes, columns: int, rows: int) -> tuple[Path, int]:
@@ -410,8 +418,7 @@ def kitty_protocol_image_path(data: bytes, columns: int, rows: int) -> tuple[Pat
                 reserved_id,
                 set(KITTY_SESSION_IMAGE_IDS.values()) - {reserved_id},
             )
-            path = directory / f"{reserved_id:06x}-{digest}.png"
-            ensure_kitty_image_path(path, data)
+            path = create_kitty_transfer_path(directory, reserved_id, digest, data)
             prune_artwork_cache(protected_path=path)
             return path, reserved_id
 
@@ -432,8 +439,7 @@ def kitty_protocol_image_path(data: bytes, columns: int, rows: int) -> tuple[Pat
                     image_id,
                     set(entries) - {image_id} | set(KITTY_SESSION_IMAGE_IDS.values()),
                 )
-                path = directory / f"{image_id:06x}-{digest}.png"
-                ensure_kitty_image_path(path, data)
+                path = create_kitty_transfer_path(directory, image_id, digest, data)
                 KITTY_SESSION_IMAGE_IDS[digest] = image_id
                 prune_artwork_cache(protected_path=path)
                 return path, image_id
@@ -445,8 +451,7 @@ def kitty_protocol_image_path(data: bytes, columns: int, rows: int) -> tuple[Pat
             image_id,
             set(entries) | set(KITTY_SESSION_IMAGE_IDS.values()),
         )
-        path = directory / f"{image_id:06x}-{digest}.png"
-        path.write_bytes(data)
+        path = create_kitty_transfer_path(directory, image_id, digest, data)
         KITTY_SESSION_IMAGE_IDS[digest] = image_id
         prune_artwork_cache(protected_path=path)
         return path, image_id

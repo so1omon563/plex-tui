@@ -301,28 +301,30 @@ def test_kitty_cache_does_not_reuse_pruned_session_image_id(tmp_path, monkeypatc
     assert restored.image_id == first.image_id
 
 
-def test_kitty_cache_rewrites_file_removed_before_read(tmp_path, monkeypatch):
+def test_kitty_cache_recreates_transfer_removed_before_read(tmp_path, monkeypatch):
     monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
     monkeypatch.setattr(artwork, "KITTY_SESSION_IMAGE_IDS", {})
     data = b"image"
-    path, image_id = artwork.kitty_protocol_image_path(data, 2, 2)
-    read_bytes = Path.read_bytes
-    removed = False
-
-    def remove_before_read(candidate):
-        nonlocal removed
-        if candidate == path and not removed:
-            removed = True
-            candidate.unlink()
-            raise FileNotFoundError(candidate)
-        return read_bytes(candidate)
-
-    monkeypatch.setattr(Path, "read_bytes", remove_before_read)
-
+    first, first_id = artwork.kitty_protocol_image_path(data, 2, 2)
+    first.unlink()
     restored, restored_id = artwork.kitty_protocol_image_path(data, 2, 2)
 
-    assert restored_id == image_id
+    assert restored_id == first_id
+    assert restored != first
     assert restored.read_bytes() == data
+
+
+def test_kitty_cache_uses_unique_paths_for_queued_transfers(tmp_path, monkeypatch):
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(artwork, "KITTY_SESSION_IMAGE_IDS", {})
+    data = b"image"
+    first, first_id = artwork.kitty_protocol_image_path(data, 2, 2)
+    second, second_id = artwork.kitty_protocol_image_path(data, 2, 2)
+
+    assert second_id == first_id
+    assert second != first
+    assert first.read_bytes() == data
+    assert second.read_bytes() == data
 
 
 def test_protocol_renderer_status_explains_explicit_kitty_force(monkeypatch):
@@ -430,5 +432,5 @@ def test_prune_artwork_cache_continues_after_entry_disappears(tmp_path, monkeypa
 
     prune_artwork_cache(limit_bytes=0)
 
-    assert vanished.exists()
+    assert stat(vanished).st_size == 3
     assert not remaining.exists()
