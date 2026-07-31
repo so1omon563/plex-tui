@@ -127,6 +127,7 @@ def navigation_work(method: Callable[..., Any]) -> Callable[..., Worker[Any]]:
 
     @wraps(method)
     def start(self: PlexTuiApp, *args: object, **kwargs: object) -> Worker[Any]:
+        self.invalidate_navigation_results()
         worker = start_worker(self, *args, **kwargs)
         self.navigation_worker = worker
         return worker
@@ -1642,6 +1643,8 @@ class PlexTuiApp(App[None]):
 
     def invalidate_navigation_results(self) -> None:
         self.navigation_worker = None
+        self.search_token += 1
+        self.workers.cancel_group(self, "search")
 
     @work(thread=True, exclusive=True)
     def refresh_current_browse_state(
@@ -3261,18 +3264,28 @@ class PlexTuiApp(App[None]):
     @navigation_work
     def open_media_version_picker(self, media: MediaItem) -> None:
         self.post_message(StatusChanged("Loading media versions..."))
+
+        def origin_is_current() -> bool:
+            selected = self.selected_media()
+            return selected is not None and selected.key == media.key
+
         try:
             choices = media_version_choices(media.raw)
         except Exception as exc:
-            self.call_navigation_from_thread(self.show_error, str(exc))
+            message = str(exc)
+
+            def show_error_if_current() -> None:
+                if origin_is_current():
+                    self.show_error(message)
+
+            self.call_navigation_from_thread(show_error_if_current)
             return
         if len(choices) < 2:
             self.call_navigation_from_thread(self.set_status, "Selected media has only one version")
             return
 
         def update() -> None:
-            selected = self.selected_media()
-            if selected is None or selected.key != media.key:
+            if not origin_is_current():
                 return
             self.picker_visible = True
             self.settings_visible = False
@@ -3321,15 +3334,25 @@ class PlexTuiApp(App[None]):
     @navigation_work
     def open_stream_picker(self, media: MediaItem, stream_type: str) -> None:
         self.post_message(StatusChanged(f"Loading {stream_type} tracks..."))
+
+        def origin_is_current() -> bool:
+            selected = self.selected_media()
+            return selected is not None and selected.key == media.key
+
         try:
             choices = subtitle_choices(media.raw) if stream_type == "subtitle" else audio_choices(media.raw)
         except Exception as exc:
-            self.call_navigation_from_thread(self.show_error, str(exc))
+            message = str(exc)
+
+            def show_error_if_current() -> None:
+                if origin_is_current():
+                    self.show_error(message)
+
+            self.call_navigation_from_thread(show_error_if_current)
             return
 
         def update() -> None:
-            selected = self.selected_media()
-            if selected is None or selected.key != media.key:
+            if not origin_is_current():
                 return
             current_choice = self.current_stream_choice(media.raw, choices, stream_type)
             current_index = selected_stream_index(choices, current_choice)
@@ -3399,16 +3422,26 @@ class PlexTuiApp(App[None]):
         if self.service is None:
             return
         media = items[0]
+        expected_keys = {item.key for item in items}
+
+        def origin_is_current() -> bool:
+            return {item.key for item in self.playlist_action_items()} == expected_keys
+
         self.post_message(StatusChanged("Loading playlists..."))
         try:
             playlists = self.service.playlists()
         except Exception as exc:
-            self.call_navigation_from_thread(self.show_error, f"failed to load playlists: {exc}")
+            message = f"failed to load playlists: {exc}"
+
+            def show_error_if_current() -> None:
+                if origin_is_current():
+                    self.show_error(message)
+
+            self.call_navigation_from_thread(show_error_if_current)
             return
 
         def update() -> None:
-            selected_keys = {item.key for item in self.playlist_action_items()}
-            if selected_keys != {item.key for item in items}:
+            if not origin_is_current():
                 return
             self.picker_visible = True
             self.playlist_picker_visible = True
@@ -4039,8 +4072,6 @@ class PlexTuiApp(App[None]):
         self.invalidate_navigation_results()
         search = self.query_one("#search", Input)
         if search.display:
-            self.search_token += 1
-            self.workers.cancel_group(self, "search")
             search.value = ""
             search.display = False
             input_mode = self.input_mode
@@ -4066,8 +4097,6 @@ class PlexTuiApp(App[None]):
             return
 
         if self.search_return_state is not None:
-            self.search_token += 1
-            self.workers.cancel_group(self, "search")
             state = self.search_return_state
             self.search_return_state = None
             if any(candidate is state for candidate in self.browsing_stack):
