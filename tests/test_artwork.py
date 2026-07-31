@@ -251,6 +251,30 @@ def test_protocol_renderer_transmits_kitty_file_reference(tmp_path, monkeypatch)
     assert base64.b64encode(image_path.read_bytes()).decode("ascii") not in command
 
 
+def test_kitty_cache_resolves_short_id_collisions(tmp_path, monkeypatch):
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(artwork, "kitty_image_id", lambda data, columns, rows: 7)
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: None)
+
+    buffers = []
+    for color in ("#ff0000", "#0000ff"):
+        buffer = BytesIO()
+        Image.new("RGB", (4, 4), color).save(buffer, format="PNG")
+        buffers.append(buffer.getvalue())
+
+    first = render_kitty_artwork(buffers[0], width=2, max_height=2, transmit=True)
+    second = render_kitty_artwork(buffers[1], width=2, max_height=2, transmit=True)
+
+    paths = []
+    for rendered in (first, second):
+        payload = rendered.commands[0].split(";", 1)[1].removesuffix("\033\\")
+        paths.append(Path(base64.b64decode(payload).decode("utf-8")))
+    assert first.image_id == 7
+    assert second.image_id == 8
+    assert paths[0] != paths[1]
+    assert paths[0].read_bytes() != paths[1].read_bytes()
+
+
 def test_protocol_renderer_status_explains_explicit_kitty_force(monkeypatch):
     monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
     monkeypatch.delenv("KITTY_PID", raising=False)
@@ -299,3 +323,25 @@ def test_prune_artwork_cache_removes_oldest_files(tmp_path, monkeypatch):
 
     assert not old.exists()
     assert new.exists()
+
+
+def test_prune_artwork_cache_bounds_kitty_files_without_deleting_protected_file(tmp_path, monkeypatch):
+    cache_dir = tmp_path / "cache"
+    artwork_dir = cache_dir / "artwork"
+    kitty_dir = cache_dir / "kitty"
+    artwork_dir.mkdir(parents=True)
+    kitty_dir.mkdir()
+    source = artwork_dir / "source.img"
+    derived = kitty_dir / "000001-digest.png"
+    source.write_bytes(b"source")
+    derived.write_bytes(b"derived")
+    monkeypatch.setattr(artwork, "cache_path", lambda: cache_dir)
+
+    prune_artwork_cache(limit_bytes=0, protected_path=derived)
+
+    assert not source.exists()
+    assert derived.exists()
+
+    prune_artwork_cache(limit_bytes=0)
+
+    assert not derived.exists()
