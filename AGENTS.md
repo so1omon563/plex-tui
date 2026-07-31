@@ -263,6 +263,9 @@ GitHub CLI notes:
 Never commit real Plex tokens, account tokens, debug logs, or local config files.
 Use `config.example.toml` for examples. Logs should redact tokens; preserve that
 behavior when changing playback or request diagnostics.
+On POSIX, keep the app config directory owner-only (`0700`) and config,
+debug-log, and rotated debug-log files owner-only (`0600`), including when
+repairing existing files.
 Use `SECURITY.md` for vulnerability reporting policy and keep it aligned with
 token handling, packaging, and release automation changes.
 

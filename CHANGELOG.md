@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Restricted Plex config and debug-log files to the current user and repaired
+  overly broad existing POSIX permissions when those files are used.
+
 ## 0.17.1 - 2026-07-24
 
 - Added a `V` Play Version picker for movies and episodes with multiple Plex
