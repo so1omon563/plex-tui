@@ -188,6 +188,108 @@ def test_playback_can_start_from_beginning_instead_of_resuming():
     assert not hasattr(item, "kwargs")
 
 
+def test_direct_playback_merges_all_split_media_parts():
+    class EmbeddedSubtitle:
+        key = None
+
+    class SplitPart(Part):
+        def __init__(self, key):
+            self.key = key
+
+        def subtitleStreams(self):
+            return [EmbeddedSubtitle()]
+
+        def audioStreams(self):
+            return []
+
+    class VersionMedia:
+        def __init__(self, *parts):
+            self.parts = list(parts)
+
+    class SplitItem(Item):
+        def __init__(self):
+            self.media = [
+                VersionMedia(
+                    SplitPart("/library/parts/1/cd1.mkv"),
+                    SplitPart("/library/parts/2/cd2.mkv"),
+                ),
+                VersionMedia(Part()),
+            ]
+
+        def iterParts(self):
+            return [part for media in self.media for part in media.parts]
+
+        def getStreamURL(self, **kwargs):
+            raise AssertionError("split direct playback should not request a transcode URL")
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        handle = play_with_mpv(SplitItem())
+
+    args = popen.call_args.args[0]
+    assert "--merge-files" in args
+    assert "--start=65.000" in args
+    assert args[-2:] == [
+        "http://plex/library/parts/1/cd1.mkv",
+        "http://plex/library/parts/2/cd2.mkv",
+    ]
+    assert not any(arg.startswith("--sub-file=") for arg in args)
+    assert handle.monitor.base_offset == 0
+    with patch("plextui.player.mpv_get_property", return_value=72.5):
+        assert handle.monitor.current_time_ms() == 72_500
+
+
+def test_multipart_external_subtitles_are_rejected_before_launch():
+    class SplitItem(Item):
+        def iterParts(self):
+            return [Part(), Part()]
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.subprocess.Popen") as popen,
+        pytest.raises(PlayerError, match="does not support external subtitle files"),
+    ):
+        play_with_mpv(SplitItem())
+
+    popen.assert_not_called()
+
+
+def test_multipart_transcode_is_rejected_before_launch():
+    class SplitItem(Item):
+        def iterParts(self):
+            return [Part(), Part()]
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.subprocess.Popen") as popen,
+        pytest.raises(PlayerError, match="not supported in transcode mode"),
+    ):
+        play_with_mpv(SplitItem(), playback_mode="transcode")
+
+    popen.assert_not_called()
+
+
+def test_multipart_playback_rejects_an_unaddressable_part_before_launch():
+    class MissingPart(Part):
+        key = None
+
+    class SplitItem(Item):
+        def iterParts(self):
+            return [Part(), MissingPart()]
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.subprocess.Popen") as popen,
+        pytest.raises(PlayerError, match="direct access to every Plex media part"),
+    ):
+        play_with_mpv(SplitItem())
+
+    popen.assert_not_called()
+
+
 def test_media_version_picker_labels_and_plays_selected_part():
     class VersionPart(Part):
         def __init__(self, part_id, key, filename, audio, subtitle):
@@ -257,6 +359,16 @@ def test_media_version_picker_labels_and_plays_selected_part():
     assert [choice.part_id for choice in choices] == ["25020", "25033"]
     assert choices[1].label == "480p · 1.8 Mbps · MKV · New SDTV.mkv"
 
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        play_with_mpv(item)
+
+    assert popen.call_args.args[0][-1] == "http://plex/library/parts/25020/old.mkv"
+    assert "--merge-files" not in popen.call_args.args[0]
+
     old_part = item.media[0].parts[0]
     with (
         patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
@@ -291,6 +403,53 @@ def test_media_version_picker_labels_and_plays_selected_part():
     assert item.stream_calls[-1]["partIndex"] == 0
     assert item.stream_calls[-1]["audioStreamID"] == 84
     assert item.stream_calls[-1]["subtitleStreamID"] == 2
+
+
+def test_selected_media_version_keeps_all_split_parts():
+    class VersionPart(Part):
+        def __init__(self, part_id, key):
+            self.id = part_id
+            self.key = key
+
+        def subtitleStreams(self):
+            return []
+
+        def audioStreams(self):
+            return []
+
+    class VersionMedia:
+        def __init__(self, *parts):
+            self.parts = list(parts)
+
+    class MultiVersionItem(Item):
+        def __init__(self):
+            self.media = [
+                VersionMedia(VersionPart(10, "/library/parts/10/other.mkv")),
+                VersionMedia(
+                    VersionPart(20, "/library/parts/20/cd1.mkv"),
+                    VersionPart(21, "/library/parts/21/cd2.mkv"),
+                ),
+            ]
+
+        def iterParts(self):
+            return [part for media in self.media for part in media.parts]
+
+    item = MultiVersionItem()
+
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()) as popen,
+    ):
+        play_with_mpv(item, version_part_id="20")
+
+    args = popen.call_args.args[0]
+    assert "--merge-files" in args
+    assert args[-2:] == [
+        "http://plex/library/parts/20/cd1.mkv",
+        "http://plex/library/parts/21/cd2.mkv",
+    ]
+    assert "http://plex/library/parts/10/other.mkv" not in args
 
 
 def test_media_version_playback_requires_successful_metadata_reload():
