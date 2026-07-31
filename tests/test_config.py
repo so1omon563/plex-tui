@@ -527,6 +527,19 @@ def test_environment_connection_override_keeps_unverifiable_legacy_preferences_d
     assert loaded.current_hidden_library_keys == ()
     assert loaded.current_library_order_keys == ()
 
+    verified_override = config.AppConfig(
+        **{**loaded.__dict__, "server_identifier": "server-b", "theme": "textual-light"}
+    )
+    config.save_config(verified_override)
+    monkeypatch.delenv("PLEX_TUI_BASE_URL")
+    reloaded = config.load_config()
+
+    assert reloaded.server_identifier == "server-b"
+    assert reloaded.hidden_library_keys_server_identifier == config.UNOWNED_LIBRARY_PREFERENCES
+    assert reloaded.library_order_keys_server_identifier == config.UNOWNED_LIBRARY_PREFERENCES
+    assert reloaded.current_hidden_library_keys == ()
+    assert reloaded.current_library_order_keys == ()
+
 
 def test_library_preferences_round_trip_for_multiple_servers(tmp_path, monkeypatch):
     config_file = tmp_path / "config.toml"

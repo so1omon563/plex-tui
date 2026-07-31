@@ -33,6 +33,7 @@ DISCOVER_MEDIA_TYPES = {"movies_shows", "movie", "show"}
 DEBUG_LOG_MAX_BYTES = 1_048_576
 DEBUG_LOG_BACKUP_SUFFIX = ".1"
 DEBUG_LOG_TRUNCATION_MARKER = b"...[truncated]\n"
+UNOWNED_LIBRARY_PREFERENCES = "__unowned__"
 _DEBUG_LOG_LOCK = threading.Lock()
 
 
@@ -252,13 +253,21 @@ def load_config() -> AppConfig:
     library_order_keys_by_server = parse_library_keys_by_server(
         data.get("library_order_keys_by_server", ""), "library_order_keys_by_server"
     )
-    if hidden_library_keys_server_identifier and hidden_library_keys:
+    if (
+        hidden_library_keys_server_identifier
+        and hidden_library_keys_server_identifier != UNOWNED_LIBRARY_PREFERENCES
+        and hidden_library_keys
+    ):
         hidden_library_keys_by_server = replace_server_library_keys(
             hidden_library_keys_by_server,
             hidden_library_keys_server_identifier,
             hidden_library_keys,
         )
-    if library_order_keys_server_identifier and library_order_keys:
+    if (
+        library_order_keys_server_identifier
+        and library_order_keys_server_identifier != UNOWNED_LIBRARY_PREFERENCES
+        and library_order_keys
+    ):
         library_order_keys_by_server = replace_server_library_keys(
             library_order_keys_by_server,
             library_order_keys_server_identifier,
@@ -331,18 +340,28 @@ def save_config(config: AppConfig) -> None:
         lines.append(f'active_profile_title = "{_toml_escape(config.active_profile_title)}"')
     if config.server_identifier:
         lines.append(f'server_identifier = "{_toml_escape(config.server_identifier)}"')
-    if config.hidden_library_keys_server_identifier:
+    hidden_library_keys_owner = config.hidden_library_keys_server_identifier
+    if config.hidden_library_keys and not hidden_library_keys_owner:
+        hidden_library_keys_owner = UNOWNED_LIBRARY_PREFERENCES
+    if hidden_library_keys_owner:
         lines.append(
             "hidden_library_keys_server_identifier = "
-            f'"{_toml_escape(config.hidden_library_keys_server_identifier)}"'
+            f'"{_toml_escape(hidden_library_keys_owner)}"'
         )
-    if config.library_order_keys_server_identifier:
+    library_order_keys_owner = config.library_order_keys_server_identifier
+    if config.library_order_keys and not library_order_keys_owner:
+        library_order_keys_owner = UNOWNED_LIBRARY_PREFERENCES
+    if library_order_keys_owner:
         lines.append(
             "library_order_keys_server_identifier = "
-            f'"{_toml_escape(config.library_order_keys_server_identifier)}"'
+            f'"{_toml_escape(library_order_keys_owner)}"'
         )
     hidden_library_keys_by_server = config.hidden_library_keys_by_server
-    if config.hidden_library_keys_server_identifier and config.hidden_library_keys:
+    if (
+        config.hidden_library_keys_server_identifier
+        and config.hidden_library_keys_server_identifier != UNOWNED_LIBRARY_PREFERENCES
+        and config.hidden_library_keys
+    ):
         hidden_library_keys_by_server = replace_server_library_keys(
             hidden_library_keys_by_server,
             config.hidden_library_keys_server_identifier,
@@ -352,7 +371,11 @@ def save_config(config: AppConfig) -> None:
         value = serialize_library_keys_by_server(hidden_library_keys_by_server)
         lines.append(f'hidden_library_keys_by_server = "{_toml_escape(value)}"')
     library_order_keys_by_server = config.library_order_keys_by_server
-    if config.library_order_keys_server_identifier and config.library_order_keys:
+    if (
+        config.library_order_keys_server_identifier
+        and config.library_order_keys_server_identifier != UNOWNED_LIBRARY_PREFERENCES
+        and config.library_order_keys
+    ):
         library_order_keys_by_server = replace_server_library_keys(
             library_order_keys_by_server,
             config.library_order_keys_server_identifier,
