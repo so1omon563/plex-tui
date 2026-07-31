@@ -54,7 +54,7 @@ class Version:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd(), help="repository root")
-    parser.add_argument("--bump", choices=["patch", "minor", "major"], default="patch", help="semver bump from latest tag")
+    parser.add_argument("--bump", choices=["patch", "minor", "major"], help="semver bump from latest tag")
     parser.add_argument("--version", help="explicit X.Y.Z version to stage")
     parser.add_argument("--date", default=dt.date.today().isoformat(), help="release date in YYYY-MM-DD format")
     parser.add_argument("--no-fetch", action="store_true", help="use local tags without fetching origin first")
@@ -73,7 +73,7 @@ class ReleaseStageError(RuntimeError):
     pass
 
 
-def stage_release(root: Path, bump: str, explicit_version: str | None, release_date: str, *, fetch_tags: bool) -> None:
+def stage_release(root: Path, bump: str | None, explicit_version: str | None, release_date: str, *, fetch_tags: bool) -> None:
     validate_release_date(release_date)
     ensure_clean_worktree(root)
     if fetch_tags:
@@ -83,7 +83,17 @@ def stage_release(root: Path, bump: str, explicit_version: str | None, release_d
     if latest is None:
         raise ReleaseStageError("no semver tags found; expected tags like v0.3.31")
 
-    version = Version.parse(explicit_version) if explicit_version else latest.bump(bump)
+    if explicit_version:
+        version = Version.parse(explicit_version)
+        inferred_bump = single_bump_kind(latest, version)
+        if bump is not None and bump != inferred_bump:
+            raise ReleaseStageError(
+                f"target version {version} requires #{inferred_bump}, not #{bump}"
+            )
+        bump = inferred_bump
+    else:
+        bump = bump or "patch"
+        version = latest.bump(bump)
     if version <= latest:
         raise ReleaseStageError(f"target version {version} must be newer than latest tag v{latest}")
     if tag_exists(root, version):
@@ -100,6 +110,15 @@ def stage_release(root: Path, bump: str, explicit_version: str | None, release_d
 
     print(f"staged release {version}")
     print(f"PR title: Prepare release {version} #{bump} #release")
+
+
+def single_bump_kind(current: Version, target: Version) -> str:
+    for kind in ("patch", "minor", "major"):
+        if current.bump(kind) == target:
+            return kind
+    raise ReleaseStageError(
+        f"target version {target} is not one supported patch, minor, or major bump from v{current}"
+    )
 
 
 def validate_release_date(value: str) -> None:

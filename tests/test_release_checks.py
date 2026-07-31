@@ -231,6 +231,58 @@ def test_stage_release_updates_version_files_and_moves_changelog(tmp_path):
     )
 
 
+@pytest.mark.parametrize(
+    ("version", "marker"),
+    [
+        ("0.2.2", "#patch"),
+        ("0.3.0", "#minor"),
+        ("1.0.0", "#major"),
+    ],
+)
+def test_stage_release_infers_marker_for_explicit_version(tmp_path, capsys, version, marker):
+    write_release_fixture(tmp_path)
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## Unreleased\n\n- Ready to release.\n\n"
+        "## 0.2.1 - 2026-06-11\n\n- Previous entry.\n",
+        encoding="utf-8",
+    )
+    init_git_fixture(tmp_path, "v0.2.1")
+
+    stage_release.stage_release(tmp_path, None, version, "2026-06-15", fetch_tags=False)
+
+    assert check_release.read_pyproject_version(tmp_path / "pyproject.toml") == version
+    assert f"PR title: Prepare release {version} {marker} #release" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("bump", "version", "message"),
+    [
+        ("patch", "0.3.0", "requires #minor, not #patch"),
+        (None, "0.2.3", "not one supported patch, minor, or major bump"),
+    ],
+)
+def test_stage_release_rejects_misaligned_explicit_version_before_editing(
+    tmp_path,
+    bump,
+    version,
+    message,
+):
+    write_release_fixture(tmp_path)
+    init_git_fixture(tmp_path, "v0.2.1")
+
+    with pytest.raises(stage_release.ReleaseStageError, match=message):
+        stage_release.stage_release(
+            tmp_path,
+            bump,
+            version,
+            "2026-06-15",
+            fetch_tags=False,
+        )
+
+    assert check_release.read_pyproject_version(tmp_path / "pyproject.toml") == "0.2.1"
+    assert check_release.read_init_version(tmp_path / "src/plextui/__init__.py") == "0.2.1"
+
+
 def test_stage_release_requires_unreleased_changelog_entries(tmp_path):
     write_release_fixture(tmp_path)
     (tmp_path / "CHANGELOG.md").write_text(
