@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Returned concise text or JSON errors when CLI status and diagnostics cannot
+  parse the config file.
 - Kept delayed post-playback refreshes from replacing another library's rows.
 - Restricted Plex config and debug-log files to the current user and repaired
   overly broad existing POSIX permissions when those files are used.

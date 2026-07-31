@@ -156,6 +156,8 @@ selection must resolve the chosen Plex part after metadata reload and must not
 silently fall back to another file.
 Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
+CLI status and diagnostics must report config-load failures without tracebacks;
+JSON modes must always emit parseable error objects.
 
 ## Testing Guidelines
 
