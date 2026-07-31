@@ -2127,15 +2127,6 @@ class PlexTuiApp(App[None]):
                 f"title={media.title!r} kind={media.kind!r} key={media.key!r} "
                 f"items={len(page.items)} total={page.total} playable=0",
             )
-        if not page.items:
-            self.call_navigation_from_thread(
-                self.show_empty_state,
-                media.title,
-                "No child items",
-                "Go back and choose another item.",
-            )
-            return
-
         def update() -> None:
             source = "playlist" if media.kind == "playlist" else "library"
             if page.has_more:
@@ -4209,15 +4200,6 @@ class PlexTuiApp(App[None]):
         except Exception as exc:
             self.call_navigation_from_thread(self.show_error, str(exc))
             return
-        if not children:
-            self.call_navigation_from_thread(
-                self.show_empty_state,
-                context.title,
-                "No child items",
-                "Go back and choose another item.",
-            )
-            return
-
         def update() -> None:
             state = BrowseState(context.title, children, self.selected_library, context_media=context, source="library")
             self.browsing_stack.append(state)
@@ -7247,6 +7229,8 @@ def empty_state_message(state: BrowseState) -> str:
         return "No guide programs found"
     if state.context_media is not None and state.context_media.kind == "playlist":
         return "Playlist is empty"
+    if state.context_media is not None:
+        return "No child items"
     return "No items found"
 
 
@@ -7261,6 +7245,8 @@ def empty_state_action(state: BrowseState) -> str:
         return "Try this channel again later; Plex may not have guide data for it."
     if state.context_media is not None and state.context_media.kind == "playlist":
         return "Use P on playable media to add items."
+    if state.context_media is not None:
+        return "Go back and choose another item."
     return "Go back or choose another library view."
 
 
