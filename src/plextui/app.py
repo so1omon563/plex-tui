@@ -3946,9 +3946,17 @@ class PlexTuiApp(App[None]):
         if self.service is None:
             return
         scope = "all libraries" if global_search else "current library"
-        self.post_message(StatusChanged(f"Searching {scope} for {query}..."))
         title = f"Global search: {query}" if global_search else f"Search: {query}"
-        self.call_from_thread(self.show_loading_state, title, f"Searching {scope}.")
+
+        def show_search_loading() -> None:
+            if self.search_was_cancelled(token):
+                return
+            self.post_message(StatusChanged(f"Searching {scope} for {query}..."))
+            self.show_loading_state(title, f"Searching {scope}.")
+
+        self.call_from_thread(show_search_loading)
+        if self.search_was_cancelled(token):
+            return
         started = time.perf_counter()
         try:
             library = None if global_search else self.selected_library

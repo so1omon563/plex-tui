@@ -1246,6 +1246,10 @@ def test_clearing_live_search_cancels_slow_result():
     asyncio.run(run_clearing_live_search_cancels_slow_result_check())
 
 
+def test_clearing_live_search_before_loading_skips_stale_loading():
+    asyncio.run(run_clearing_live_search_before_loading_check())
+
+
 def test_newer_navigation_cancels_slow_fuzzy_search_result():
     asyncio.run(run_newer_navigation_cancels_slow_fuzzy_search_result_check())
 
@@ -3068,6 +3072,53 @@ async def run_clearing_live_search_cancels_slow_result_check():
         assert [state.title for state in app.browsing_stack] == ["Movies"]
         assert statuses == cleared_statuses
         assert statuses[-1] == "Movies: 1 of 2 items loaded"
+
+
+async def run_clearing_live_search_before_loading_check():
+    before_loading = threading.Event()
+    release_loading = threading.Event()
+    source_item = MediaItem("Current", "", "movie", "current", True, Raw())
+    service = FakePagedService(MediaPage([], start=0, total=0))
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        library = LibraryItem("Movies", "1", "movie", object())
+        source = BrowseState("Movies", [source_item], library, next_start=1, total=2)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        app.selected_library = library
+        app.input_mode = "search"
+        app.search_return_state = source
+        app.browsing_stack = [source]
+        call_from_thread = app.call_from_thread
+
+        def block_before_loading(callback, *args, **kwargs):
+            if getattr(callback, "__name__", "") == "show_search_loading":
+                before_loading.set()
+                release_loading.wait(timeout=10)
+            return call_from_thread(callback, *args, **kwargs)
+
+        app.call_from_thread = block_before_loading
+        shown_loading = []
+        search = SimpleNamespace(id="search")
+        with patch.object(app, "show_loading_state", side_effect=lambda *args: shown_loading.append(args)):
+            app.on_input_changed(SimpleNamespace(input=search, value="late"))
+            try:
+                for _ in range(50):
+                    if before_loading.is_set():
+                        break
+                    await asyncio.sleep(0.1)
+                assert before_loading.is_set()
+
+                app.on_input_changed(SimpleNamespace(input=search, value=""))
+                release_loading.set()
+                await asyncio.sleep(0.5)
+            finally:
+                release_loading.set()
+
+        assert shown_loading == []
+        assert service.search_calls == []
+        assert app.current_browse_state() is source
 
 
 async def run_newer_navigation_cancels_slow_fuzzy_search_result_check():
