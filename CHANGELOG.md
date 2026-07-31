@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Scoped paged current-view search to its active library and reported
+  incomplete non-library views as unavailable instead of querying a stale
+  sidebar library.
 - Invalidated in-flight live searches when their query is cleared so delayed
   results cannot reopen the cleared search.
 - Prevented invalid artwork responses from poisoning the persistent image cache.

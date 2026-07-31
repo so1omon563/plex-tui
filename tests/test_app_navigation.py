@@ -525,13 +525,14 @@ def test_current_view_search_uses_fuzzy_loaded_items():
 def test_current_library_search_queries_plex_when_library_is_not_fully_loaded():
     app = PlexTuiApp()
     library = LibraryItem("TV Shows", "2", "show", object())
+    stale_library = LibraryItem("Movies", "1", "movie", object())
     gantz = MediaItem("Gantz", "TV Show", "gantz", "show-1", False, Raw())
     service = FakePagedService(MediaPage([gantz], start=0, total=1))
     shown_states = []
     statuses = []
     app.config = AppConfig("http://plex", "token", "client-id")
     app.service = service
-    app.selected_library = library
+    app.selected_library = stale_library
     app.browsing_stack = [
         BrowseState(
             "TV Shows",
@@ -560,6 +561,34 @@ def test_current_library_search_queries_plex_when_library_is_not_fully_loaded():
     assert statuses == [
         "Searching current library for gantz...",
         "Search: gantz: 1 items",
+    ]
+
+
+@pytest.mark.parametrize("source", ["livetv", "vod", "continue_watching"])
+def test_incomplete_non_library_search_does_not_query_stale_library(source):
+    app = PlexTuiApp()
+    stale_library = LibraryItem("Movies", "1", "movie", object())
+    service = FakePagedService(MediaPage([], start=0, total=0))
+    statuses = []
+    app.config = AppConfig("http://plex", "token", "client-id")
+    app.service = service
+    app.selected_library = stale_library
+    app.browsing_stack = [
+        BrowseState(
+            "Active source",
+            [MediaItem("Loaded", "", "movie", "1", True, Raw())],
+            source=source,
+            next_start=1,
+            total=2,
+        )
+    ]
+    app.post_message = lambda message: statuses.append(message.text)
+
+    PlexTuiApp.run_search.__wrapped__(app, "missing")
+
+    assert service.search_calls == []
+    assert statuses == [
+        "Current-view search is unavailable for Active source; load all items to search locally."
     ]
 
 

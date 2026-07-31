@@ -3945,6 +3945,20 @@ class PlexTuiApp(App[None]):
 
         if self.service is None:
             return
+        library = None
+        if not global_search:
+            if local_source is None:
+                library = self.selected_library
+            elif local_source.source == "library" or local_source.source.startswith("library:"):
+                library = local_source.selected_library
+            if library is None:
+                source_title = local_source.title if local_source is not None else "the current view"
+                self.post_message(
+                    StatusChanged(
+                        f"Current-view search is unavailable for {source_title}; load all items to search locally."
+                    )
+                )
+                return
         scope = "all libraries" if global_search else "current library"
         title = f"Global search: {query}" if global_search else f"Search: {query}"
 
@@ -3959,7 +3973,6 @@ class PlexTuiApp(App[None]):
             return
         started = time.perf_counter()
         try:
-            library = None if global_search else self.selected_library
             page = self.service.search_page(query, library, 0, self.config.page_size)
         except Exception as exc:
             message = str(exc)
@@ -3987,7 +4000,7 @@ class PlexTuiApp(App[None]):
             state = BrowseState(
                 title,
                 page.items,
-                None if global_search else self.selected_library,
+                library,
                 search=True,
                 search_query=query,
                 global_search=global_search,
@@ -4059,7 +4072,7 @@ class PlexTuiApp(App[None]):
 
     def fuzzy_search_source(self) -> BrowseState | None:
         for state in reversed(self.browsing_stack):
-            if not state.search and state.items:
+            if not state.search:
                 return state
         return None
 
