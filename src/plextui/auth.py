@@ -3,8 +3,10 @@ from __future__ import annotations
 import ipaddress
 import webbrowser
 from dataclasses import dataclass, replace
+from http.client import IncompleteRead
 from urllib.parse import SplitResult, urlencode, urlparse
 from urllib.request import Request, urlopen
+from xml.etree import ElementTree
 
 from plexapi.myplex import MyPlexAccount, MyPlexPinLogin, MyPlexResource
 
@@ -57,6 +59,10 @@ class ServerChoice:
         if self.is_plex_direct:
             return "plex.direct"
         return "remote"
+
+    @property
+    def resource_identifier(self) -> str:
+        return str(getattr(self.resource, "clientIdentifier", "") or "")
 
     @property
     def row_label(self) -> str:
@@ -155,6 +161,7 @@ def save_server_choice(config: AppConfig, account_token: str, choice: ServerChoi
         token=choice.resource.accessToken,
         account_token=account_token,
         home_account_token=account_token,
+        server_identifier=choice.resource_identifier,
     )
     save_config(saved)
     return saved
@@ -206,7 +213,10 @@ def switch_profile(config: AppConfig, choice: ProfileChoice, pin: str = "") -> A
         if "server" in str(resource.provides)
     ])
     if server_choices:
-        selected = matching_server_choice(server_choices, config.base_url) or sorted(server_choices, key=lambda c: c.sort_key)[0]
+        selected = matching_server_choice(server_choices, config.base_url, config.server_identifier)
+    else:
+        selected = None
+    if selected is not None:
         saved = replace(
             config,
             base_url=selected.uri,
@@ -214,8 +224,14 @@ def switch_profile(config: AppConfig, choice: ProfileChoice, pin: str = "") -> A
             account_token=account_token,
             home_account_token=home_token,
             active_profile_title=profile_title(account),
+            server_identifier=selected.resource_identifier,
         )
-    elif config.base_url and plex_root_responds(config.base_url, account_token, timeout=5):
+    elif config.base_url and plex_root_responds(
+        config.base_url,
+        account_token,
+        timeout=5,
+        server_identifier=config.server_identifier,
+    ):
         saved = replace(
             config,
             token=account_token,
@@ -224,16 +240,26 @@ def switch_profile(config: AppConfig, choice: ProfileChoice, pin: str = "") -> A
             active_profile_title=profile_title(account),
         )
     else:
-        raise RuntimeError("No reachable Plex server connections found for this profile")
+        raise RuntimeError(
+            "The saved Plex server is not reachable for this profile; "
+            "relogin to choose a server explicitly"
+        )
     save_config(saved)
     return saved
 
 
-def matching_server_choice(choices: list[ServerChoice], base_url: str) -> ServerChoice | None:
+def matching_server_choice(
+    choices: list[ServerChoice],
+    base_url: str,
+    resource_identifier: str = "",
+) -> ServerChoice | None:
     target = base_url.rstrip("/")
     for choice in choices:
         if choice.uri.rstrip("/") == target:
             return choice
+    if resource_identifier:
+        matches = [choice for choice in choices if choice.resource_identifier == resource_identifier]
+        return min(matches, key=lambda choice: choice.sort_key) if matches else None
     return None
 
 
@@ -273,20 +299,35 @@ def reachable_resource_urls(resource: MyPlexResource, timeout: int) -> list[str]
     except Exception:
         return reachable_advertised_urls(resource, timeout)
 
+    resource_identifier = str(getattr(resource, "clientIdentifier", "") or "")
+    server_identifier = str(getattr(server, "machineIdentifier", "") or "")
+    if resource_identifier and server_identifier != resource_identifier:
+        return reachable_advertised_urls(resource, timeout)
     uri = str(getattr(server, "_baseurl", "") or getattr(server, "baseurl", "") or "").rstrip("/")
     return [uri] if uri else reachable_advertised_urls(resource, timeout)
 
 
 def reachable_advertised_urls(resource: MyPlexResource, timeout: int) -> list[str]:
     reachable = []
+    server_identifier = str(getattr(resource, "clientIdentifier", "") or "")
     for uri in resource.preferred_connections():
         normalized = uri.rstrip("/")
-        if normalized and plex_root_responds(normalized, resource.accessToken, timeout):
+        if normalized and plex_root_responds(
+            normalized,
+            resource.accessToken,
+            timeout,
+            server_identifier=server_identifier,
+        ):
             reachable.append(normalized)
     return reachable
 
 
-def plex_root_responds(uri: str, token: str, timeout: int) -> bool:
+def plex_root_responds(
+    uri: str,
+    token: str,
+    timeout: int,
+    server_identifier: str = "",
+) -> bool:
     url = f"{uri}{'&' if '?' in uri else '?'}{urlencode({'X-Plex-Token': token})}"
     request = Request(url, headers={"X-Plex-Token": token})
     try:
@@ -294,11 +335,23 @@ def plex_root_responds(uri: str, token: str, timeout: int) -> bool:
             status = response.status
             text = response.read(4096).decode("utf-8", errors="replace")
             headers = response.headers
-    except OSError:
+    except (OSError, IncompleteRead):
         return False
     if status not in {200, 201, 204}:
         return False
-    return "MediaContainer" in text or headers.get("X-Plex-Protocol") == "1.0"
+    if "MediaContainer" not in text and headers.get("X-Plex-Protocol") != "1.0":
+        return False
+    if not server_identifier:
+        return True
+    try:
+        parser = ElementTree.XMLPullParser(events=("start",))
+        parser.feed(text)
+        root = next(element for _event, element in parser.read_events())
+    except ElementTree.ParseError:
+        return False
+    except StopIteration:
+        return False
+    return root.attrib.get("machineIdentifier", "") == server_identifier
 
 
 def plex_headers(config: AppConfig) -> dict[str, str]:
