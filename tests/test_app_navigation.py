@@ -414,6 +414,10 @@ def test_open_paged_child_view_can_load_next_page():
     asyncio.run(run_paged_child_view_check())
 
 
+def test_empty_child_back_returns_to_parent():
+    asyncio.run(run_empty_child_back_returns_to_parent_check())
+
+
 def test_initial_library_uses_configured_page_size():
     asyncio.run(run_initial_library_page_size_check())
 
@@ -2838,6 +2842,57 @@ async def run_paged_child_view_check():
         assert [item.title for item in state.items] == ["First", "Second"]
         assert state.next_start == 2
         assert not state.has_more
+
+
+async def run_empty_child_back_returns_to_parent_check():
+    started = threading.Event()
+    release = threading.Event()
+
+    class EmptyChildService(FakePagedService):
+        def children_page(self, item: MediaItem, start: int, size: int) -> MediaPage:
+            self.children_calls.append((item.key, size))
+            started.set()
+            release.wait(timeout=10)
+            return MediaPage([], start=start, total=0)
+
+    app = PlexTuiApp()
+    empty_season = MediaItem("Empty Season", "", "season", "season-1", False, Raw())
+    show = MediaItem("Show", "", "show", "show-1", False, Raw())
+    service = EmptyChildService(MediaPage([], start=0, total=0))
+
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = service
+        tv_state = BrowseState("TV", [show], source="library")
+        show_state = BrowseState("Show", [empty_season], context_media=show, source="library")
+        app.browsing_stack = [tv_state, show_state]
+        app.show_browse_state(show_state)
+
+        worker = app.open_media(empty_season)
+        for _ in range(30):
+            if started.is_set():
+                break
+            await pilot.pause(0.1)
+        assert app.navigation_worker is worker
+        release.set()
+        await asyncio.wait_for(worker.wait(), timeout=20)
+        await pilot.pause(0.2)
+
+        rows = list(app.query_one("#media").children)
+        assert app.query_one("#media-title").content == "Empty Season"
+        assert app.current_browse_state() is app.browsing_stack[-1]
+        assert app.current_browse_state().title == "Empty Season"
+        assert [state.title for state in app.browsing_stack] == ["TV", "Show", "Empty Season"]
+        assert isinstance(rows[0], EmptyStateRow)
+        assert rows[0].label_text.strip() == "No child items"
+
+        await pilot.press("escape")
+        await pilot.pause(0.2)
+
+        assert app.query_one("#media-title").content == "Show"
+        assert app.current_browse_state() is show_state
+        assert [state.title for state in app.browsing_stack] == ["TV", "Show"]
 
 
 async def run_newer_navigation_discards_slow_child_result_check():

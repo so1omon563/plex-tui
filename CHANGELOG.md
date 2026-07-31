@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Prevented invalid artwork responses from poisoning the persistent image cache.
+- Preserved immediate-parent Back navigation after opening an empty child.
 - Routed hosted Live TV guide pagination through the guide service.
 - Isolated online VOD metadata reloads from the shared Plex provider connection.
 - Cleared stale managed-profile labels after choosing a server during relogin.

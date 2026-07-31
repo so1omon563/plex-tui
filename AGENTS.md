@@ -181,6 +181,8 @@ invalid existing entries are evicted so later requests can retry. Cache
 validation, eviction, and publication share a per-key cross-process lock.
 Background detail and artwork refreshes must preserve contextual action hints
 and only repaint the still-selected media item.
+Empty child views must retain their own `BrowseState` so Back returns to the
+immediate parent instead of skipping a level.
 
 ## Testing Guidelines
 
