@@ -291,12 +291,38 @@ def test_kitty_cache_does_not_reuse_pruned_session_image_id(tmp_path, monkeypatc
     first = render_kitty_artwork(buffers[0], width=2, max_height=2, transmit=True)
     payload = first.commands[0].split(";", 1)[1].removesuffix("\033\\")
     Path(base64.b64decode(payload).decode("utf-8")).unlink()
+    artwork.KITTY_SESSION_IMAGE_IDS.clear()
     second = render_kitty_artwork(buffers[1], width=2, max_height=2, transmit=True)
+    artwork.KITTY_SESSION_IMAGE_IDS.clear()
     restored = render_kitty_artwork(buffers[0], width=2, max_height=2, transmit=True)
 
     assert first.image_id == 7
     assert second.image_id == 8
     assert restored.image_id == first.image_id
+
+
+def test_kitty_cache_rewrites_file_removed_before_read(tmp_path, monkeypatch):
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(artwork, "KITTY_SESSION_IMAGE_IDS", {})
+    data = b"image"
+    path, image_id = artwork.kitty_protocol_image_path(data, 2, 2)
+    read_bytes = Path.read_bytes
+    removed = False
+
+    def remove_before_read(candidate):
+        nonlocal removed
+        if candidate == path and not removed:
+            removed = True
+            candidate.unlink()
+            raise FileNotFoundError(candidate)
+        return read_bytes(candidate)
+
+    monkeypatch.setattr(Path, "read_bytes", remove_before_read)
+
+    restored, restored_id = artwork.kitty_protocol_image_path(data, 2, 2)
+
+    assert restored_id == image_id
+    assert restored.read_bytes() == data
 
 
 def test_protocol_renderer_status_explains_explicit_kitty_force(monkeypatch):
@@ -383,3 +409,26 @@ def test_prune_artwork_cache_keeps_pending_kitty_file(tmp_path, monkeypatch):
     prune_artwork_cache(limit_bytes=0)
 
     assert pending.exists()
+
+
+def test_prune_artwork_cache_continues_after_entry_disappears(tmp_path, monkeypatch):
+    artwork_dir = tmp_path / "artwork"
+    artwork_dir.mkdir()
+    vanished = artwork_dir / "vanished.img"
+    remaining = artwork_dir / "remaining.img"
+    vanished.write_bytes(b"old")
+    remaining.write_bytes(b"new")
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    stat = Path.stat
+
+    def missing_stat(path, *args, **kwargs):
+        if path == vanished:
+            raise FileNotFoundError(path)
+        return stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", missing_stat)
+
+    prune_artwork_cache(limit_bytes=0)
+
+    assert vanished.exists()
+    assert not remaining.exists()

@@ -171,15 +171,17 @@ def prune_artwork_cache(
         for directory in (cache_path() / "artwork", kitty_directory):
             if not directory.exists():
                 continue
-            try:
-                for path in directory.iterdir():
+            for path in directory.iterdir():
+                try:
+                    if directory == kitty_directory and path.name.startswith(".id-"):
+                        continue
                     if not path.is_file():
                         continue
                     stat = path.stat()
                     files.append((stat.st_mtime, stat.st_size, path))
                     total += stat.st_size
-            except OSError:
-                continue
+                except OSError:
+                    continue
         if total <= limit_bytes:
             return
         for modified, size, path in sorted(files):
@@ -355,6 +357,46 @@ def kitty_graphics_file_commands(path: Path, image_id: int, columns: int, rows: 
     return [f"\033_Ga=T,t=t,f=100,q=2{placement};{payload}\033\\"]
 
 
+def reserve_kitty_image_id(directory: Path, digest: str, candidate: int, occupied: set[int]) -> int:
+    # ponytail: reservations are tiny and persistent; prune them when terminal lifecycle tracking exists.
+    for marker in directory.glob(".id-*"):
+        try:
+            if marker.read_text() == digest:
+                return int(marker.name.removeprefix(".id-"), 16)
+        except (OSError, ValueError):
+            continue
+
+    while True:
+        if candidate in occupied:
+            candidate = candidate % 0xFFFFFF + 1
+            continue
+        marker = directory / f".id-{candidate:06x}"
+        try:
+            fd = os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            try:
+                if marker.read_text() == digest:
+                    return candidate
+            except OSError:
+                pass
+            candidate = candidate % 0xFFFFFF + 1
+            continue
+        try:
+            os.write(fd, digest.encode("ascii"))
+        finally:
+            os.close(fd)
+        return candidate
+
+
+def ensure_kitty_image_path(path: Path, data: bytes) -> None:
+    try:
+        if path.read_bytes() == data:
+            return
+    except OSError:
+        pass
+    path.write_bytes(data)
+
+
 def kitty_protocol_image_path(data: bytes, columns: int, rows: int) -> tuple[Path, int]:
     digest = kitty_image_digest(data, columns, rows)
     with KITTY_TRANSMIT_LOCK:
@@ -362,9 +404,14 @@ def kitty_protocol_image_path(data: bytes, columns: int, rows: int) -> tuple[Pat
         directory.mkdir(parents=True, exist_ok=True)
         reserved_id = KITTY_SESSION_IMAGE_IDS.get(digest)
         if reserved_id is not None:
+            reserved_id = reserve_kitty_image_id(
+                directory,
+                digest,
+                reserved_id,
+                set(KITTY_SESSION_IMAGE_IDS.values()) - {reserved_id},
+            )
             path = directory / f"{reserved_id:06x}-{digest}.png"
-            if not path.exists() or path.read_bytes() != data:
-                path.write_bytes(data)
+            ensure_kitty_image_path(path, data)
             prune_artwork_cache(protected_path=path)
             return path, reserved_id
 
@@ -379,17 +426,25 @@ def kitty_protocol_image_path(data: bytes, columns: int, rows: int) -> tuple[Pat
         for image_id, paths in entries.items():
             matching = [path for path in paths if path.stem.endswith(f"-{digest}")]
             if len(paths) == 1 and matching:
-                path = matching[0]
-                if path.read_bytes() != data:
-                    path.write_bytes(data)
+                image_id = reserve_kitty_image_id(
+                    directory,
+                    digest,
+                    image_id,
+                    set(entries) - {image_id} | set(KITTY_SESSION_IMAGE_IDS.values()),
+                )
+                path = directory / f"{image_id:06x}-{digest}.png"
+                ensure_kitty_image_path(path, data)
                 KITTY_SESSION_IMAGE_IDS[digest] = image_id
                 prune_artwork_cache(protected_path=path)
                 return path, image_id
 
         image_id = kitty_image_id(data, columns, rows)
-        reserved_ids = set(KITTY_SESSION_IMAGE_IDS.values())
-        while image_id in entries or image_id in reserved_ids:
-            image_id = image_id % 0xFFFFFF + 1
+        image_id = reserve_kitty_image_id(
+            directory,
+            digest,
+            image_id,
+            set(entries) | set(KITTY_SESSION_IMAGE_IDS.values()),
+        )
         path = directory / f"{image_id:06x}-{digest}.png"
         path.write_bytes(data)
         KITTY_SESSION_IMAGE_IDS[digest] = image_id
