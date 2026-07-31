@@ -8,6 +8,8 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
@@ -287,14 +289,17 @@ def render_kitty_artwork(data: bytes, width: int = 28, max_height: int = 20, tra
     image_data = buffer.getvalue()
     if transmit:
         with KITTY_TRANSMIT_LOCK:
-            image_path, image_id = kitty_protocol_image_path(image_data, columns, rows)
-            commands = kitty_graphics_file_commands(
-                image_path,
-                image_id=image_id,
-                columns=columns,
-                rows=rows,
-            )
-            emit_kitty_graphics_commands(commands)
+            directory = cache_path() / "kitty"
+            directory.mkdir(parents=True, exist_ok=True)
+            with kitty_terminal_transaction(directory):
+                image_path, image_id = kitty_protocol_image_path(image_data, columns, rows)
+                commands = kitty_graphics_file_commands(
+                    image_path,
+                    image_id=image_id,
+                    columns=columns,
+                    rows=rows,
+                )
+                emit_kitty_graphics_commands(commands)
     else:
         image_id = kitty_image_id(image_data, columns, rows)
         commands = kitty_graphics_commands(
@@ -359,6 +364,17 @@ def kitty_graphics_file_commands(path: Path, image_id: int, columns: int, rows: 
     payload = base64.b64encode(str(path).encode("utf-8")).decode("ascii")
     placement = f",i={image_id},U=1,c={max(1, columns)},r={max(1, rows)}"
     return [f"\033_Ga=T,t=t,f=100,q=2{placement};{payload}\033\\"]
+
+
+@contextmanager
+def kitty_terminal_transaction(directory: Path) -> Iterator[None]:
+    lock_fd = os.open(directory / ".ids.transmit.lock", os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(lock_fd) as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def reserve_kitty_image_id(directory: Path, digest: str, candidate: int, occupied: set[int]) -> int:

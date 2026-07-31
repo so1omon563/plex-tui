@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import os
+from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 
@@ -347,6 +348,34 @@ def test_kitty_id_reservations_retire_oldest_at_limit(tmp_path, monkeypatch):
         ".id-000002",
         ".id-000003",
     ]
+
+
+def test_kitty_transmit_holds_cross_process_lock_through_emit(tmp_path, monkeypatch):
+    events = []
+
+    @contextmanager
+    def transaction(directory):
+        assert directory == tmp_path / "kitty"
+        events.append("lock")
+        try:
+            yield
+        finally:
+            events.append("unlock")
+
+    def reserve(data, columns, rows):
+        events.append("reserve")
+        return tmp_path / "transfer.png", 7
+
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(artwork, "kitty_terminal_transaction", transaction)
+    monkeypatch.setattr(artwork, "kitty_protocol_image_path", reserve)
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: events.append("emit"))
+    buffer = BytesIO()
+    Image.new("RGB", (4, 4), "#00ff00").save(buffer, format="PNG")
+
+    render_kitty_artwork(buffer.getvalue(), width=2, max_height=2, transmit=True)
+
+    assert events == ["lock", "reserve", "emit", "unlock"]
 
 
 def test_protocol_renderer_status_explains_explicit_kitty_force(monkeypatch):
