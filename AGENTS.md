@@ -155,6 +155,11 @@ default playback actions and use `V` for explicit version selection. Version
 selection must resolve the chosen Plex part after metadata reload and must not
 silently fall back to another file.
 
+Async view-opening workers must apply UI results through the shared navigation
+identity guard. Newer navigation, overlays, and Back actions invalidate older
+results, and media pickers must also verify that their originating selection is
+still current.
+
 ## Testing Guidelines
 
 Tests use `pytest`. Add focused unit tests for helper logic and app navigation

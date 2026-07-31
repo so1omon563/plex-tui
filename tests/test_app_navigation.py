@@ -1148,6 +1148,18 @@ def test_media_version_picker_plays_selected_file():
     asyncio.run(run_media_version_picker_check())
 
 
+def test_newer_navigation_discards_slow_child_result():
+    asyncio.run(run_newer_navigation_discards_slow_child_result_check())
+
+
+def test_media_version_picker_discards_result_after_selection_changes():
+    asyncio.run(run_media_version_picker_discards_stale_selection_check())
+
+
+def test_stream_picker_discards_result_after_selection_changes():
+    asyncio.run(run_stream_picker_discards_stale_selection_check())
+
+
 def test_quick_preference_actions_update_config():
     asyncio.run(run_quick_preference_action_check())
 
@@ -2662,6 +2674,54 @@ async def run_paged_child_view_check():
         assert [item.title for item in state.items] == ["First", "Second"]
         assert state.next_start == 2
         assert not state.has_more
+
+
+async def run_newer_navigation_discards_slow_child_result_check():
+    started = threading.Event()
+    release = threading.Event()
+    container = MediaItem("Slow folder", "", "folder", "folder", False, Raw())
+    stale_child = MediaItem("Stale child", "", "movie", "stale", True, Raw())
+    current = MediaItem("Current", "", "movie", "current", True, Raw())
+
+    class BlockingNavigationService:
+        def children_page(self, item: MediaItem, start: int, size: int) -> MediaPage:
+            started.set()
+            release.wait(timeout=10)
+            return MediaPage([stale_child], start=0, total=1)
+
+        def continue_watching_page(self, start: int, size: int) -> MediaPage:
+            return MediaPage([current], start=0, total=1)
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.service = BlockingNavigationService()
+
+        with (
+            patch.object(app, "show_loading_state"),
+            patch.object(app, "show_browse_state"),
+            patch.object(app, "focus_media_browser"),
+            patch.object(app, "set_status"),
+        ):
+            app.open_media(container)
+            for _ in range(50):
+                if started.is_set():
+                    break
+                await pilot.pause(0.1)
+            assert started.is_set()
+
+            app.open_continue_watching()
+            for _ in range(50):
+                if app.browsing_stack and app.browsing_stack[-1].title == "Continue Watching":
+                    break
+                await pilot.pause(0.1)
+            assert app.browsing_stack and app.browsing_stack[-1].title == "Continue Watching"
+            release.set()
+            await asyncio.sleep(0.5)
+
+        assert [state.title for state in app.browsing_stack] == ["Continue Watching"]
+        assert [item.title for item in app.browsing_stack[-1].items] == ["Current"]
 
 
 async def run_load_more_media_preserve_selection_check():
@@ -4656,6 +4716,81 @@ async def run_media_version_picker_check():
             app.choose_media_version(rows[1])
 
         play.assert_called_once_with(item, resume=False, version_part_id="20")
+        assert not app.picker_visible
+
+
+async def run_media_version_picker_discards_stale_selection_check():
+    started = threading.Event()
+    release = threading.Event()
+    first = MediaItem("First", "", "movie", "1", True, Raw())
+    second = MediaItem("Second", "", "movie", "2", True, Raw())
+    choices = [
+        MediaVersionChoice("10", "480p · Old.mkv"),
+        MediaVersionChoice("20", "1080p · New.mkv"),
+    ]
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.browsing_stack = [BrowseState("Movies", [first, second])]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        def blocked_choices(raw: object) -> list[MediaVersionChoice]:
+            started.set()
+            release.wait(timeout=10)
+            return choices
+
+        with patch("plextui.app.media_version_choices", side_effect=blocked_choices):
+            worker = app.open_media_version_picker(first)
+            for _ in range(50):
+                if started.is_set():
+                    break
+                await pilot.pause(0.1)
+            assert started.is_set()
+            app.query_one("#media", ListView).index = 1
+            await pilot.pause(0.2)
+            release.set()
+            await asyncio.wait_for(worker.wait(), timeout=20)
+            await pilot.pause(0.2)
+
+        assert app.selected_media() is second
+        assert not app.picker_visible
+
+
+async def run_stream_picker_discards_stale_selection_check():
+    started = threading.Event()
+    release = threading.Event()
+    first = MediaItem("First", "", "movie", "1", True, Raw())
+    second = MediaItem("Second", "", "movie", "2", True, Raw())
+    choices = [StreamChoice(1, "English")]
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(1.0)
+        app.config = AppConfig("http://plex", "token", "client-id")
+        app.browsing_stack = [BrowseState("Movies", [first, second])]
+        app.show_browse_state(app.browsing_stack[-1])
+        await pilot.pause(0.2)
+
+        def blocked_choices(raw: object) -> list[StreamChoice]:
+            started.set()
+            release.wait(timeout=10)
+            return choices
+
+        with patch("plextui.app.subtitle_choices", side_effect=blocked_choices):
+            worker = app.open_stream_picker(first, "subtitle")
+            for _ in range(50):
+                if started.is_set():
+                    break
+                await pilot.pause(0.1)
+            assert started.is_set()
+            app.query_one("#media", ListView).index = 1
+            await pilot.pause(0.2)
+            release.set()
+            await asyncio.wait_for(worker.wait(), timeout=20)
+            await pilot.pause(0.2)
+
+        assert app.selected_media() is second
         assert not app.picker_visible
 
 

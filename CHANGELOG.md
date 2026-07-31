@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Discarded stale async browse and picker results after newer navigation,
+  selection changes, overlays, or Back actions.
+
 ## 0.17.1 - 2026-07-24
 
 - Added a `V` Play Version picker for movies and episodes with multiple Plex
