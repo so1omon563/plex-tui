@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.17.26 - 2026-08-03
+
 - Restored native artwork in Ghostty by using the Kitty protocol's regular-file
   transfer mode for app-managed cache files.
 - Isolated async navigation workers from unrelated exclusive background
