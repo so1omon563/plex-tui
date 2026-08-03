@@ -180,6 +180,8 @@ pickers must also verify that their originating selection is still current.
 Kitty derived images must use verified full-content cache identities, resolve
 short image-ID collisions across concurrent app processes, retain pending
 terminal transfers, and share the bounded artwork cache policy.
+App-cache image references must use the Kitty protocol's regular-file transfer
+mode; temporary-file mode is reserved for compliant system temp paths.
 Source artwork must decode successfully before atomic cache publication;
 invalid existing entries are evicted so later requests can retry. Cache
 validation, eviction, and publication share a per-key cross-process lock.

@@ -277,7 +277,7 @@ def test_render_protocol_artwork_uses_unicode_placeholders_when_kitty_is_detecte
     rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=2, max_height=2)
 
     assert isinstance(rendered, KittyImage)
-    assert rendered.commands[0].startswith("\033_Ga=T,t=t,f=100,q=2,i=")
+    assert rendered.commands[0].startswith("\033_Ga=T,t=f,f=100,q=2,i=")
     assert ",U=1,c=2,r=2;" in rendered.commands[0]
     assert rendered.plain.count(KITTY_PLACEHOLDER) == 4
     assert transmitted == list(rendered.commands)
@@ -396,7 +396,7 @@ def test_protocol_renderer_transmits_kitty_file_reference(tmp_path, monkeypatch)
     assert isinstance(rendered, KittyImage)
     assert transmitted == list(rendered.commands)
     command = transmitted[0]
-    assert ",t=t," in command
+    assert ",t=f," in command
     payload = command.split(";", 1)[1].removesuffix("\033\\")
     image_path = Path(base64.b64decode(payload).decode("utf-8"))
     assert image_path.exists()
