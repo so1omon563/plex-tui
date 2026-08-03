@@ -423,7 +423,7 @@ def kitty_graphics_commands(
 def kitty_graphics_file_commands(path: Path, image_id: int, columns: int, rows: int) -> list[str]:
     payload = base64.b64encode(str(path).encode("utf-8")).decode("ascii")
     placement = f",i={image_id},U=1,c={max(1, columns)},r={max(1, rows)}"
-    return [f"\033_Ga=T,t=t,f=100,q=2{placement};{payload}\033\\"]
+    return [f"\033_Ga=T,t=f,f=100,q=2{placement};{payload}\033\\"]
 
 
 @contextmanager

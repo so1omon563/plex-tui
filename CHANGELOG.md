@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Restored native artwork in Ghostty by using the Kitty protocol's regular-file
+  transfer mode for app-managed cache files.
+- Isolated async navigation workers from unrelated exclusive background
+  refreshes so pickers and child views are not cancelled mid-open.
+
 ## 0.17.24 - 2026-07-31
 
 - Scoped paged current-view search to its active library and reported
