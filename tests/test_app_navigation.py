@@ -5294,6 +5294,7 @@ async def run_add_to_playlist_create_check():
 
         worker = app.action_add_to_playlist()
         assert worker is not None
+        assert worker.group == "navigation"
         await asyncio.wait_for(worker.wait(), timeout=20)
         rows = await wait_for_playlist_rows(app, pilot)
         assert any(isinstance(row, PlaylistCreateRow) for row in rows)

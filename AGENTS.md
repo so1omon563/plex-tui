@@ -177,6 +177,8 @@ Async view-opening workers must apply UI results through the shared navigation
 identity guard. Newer navigation, overlays, and Back actions invalidate older
 results, clearing a live-search query cancels its older search work, and media
 pickers must also verify that their originating selection is still current.
+Navigation workers use a dedicated worker group so unrelated exclusive
+background refreshes cannot cancel them.
 Kitty derived images must use verified full-content cache identities, resolve
 short image-ID collisions across concurrent app processes, retain pending
 terminal transfers, and share the bounded artwork cache policy.

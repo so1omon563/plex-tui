@@ -126,7 +126,7 @@ LIVE_TV_GUIDE_UNAVAILABLE_ROW = "No guide data"
 
 
 def navigation_work(method: Callable[..., Any]) -> Callable[..., Worker[Any]]:
-    start_worker = work(thread=True)(method)
+    start_worker = work(thread=True, group="navigation")(method)
 
     @wraps(method)
     def start(self: PlexTuiApp, *args: object, **kwargs: object) -> Worker[Any]:
