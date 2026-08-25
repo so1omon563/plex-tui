@@ -145,6 +145,15 @@ def test_playback_exit_status_describes_process_state():
     )
 
 
+def test_playback_exit_status_waits_for_progress_sync():
+    monitor = SimpleNamespace(finished=False)
+    player = SimpleNamespace(title="Movie", process=SimpleNamespace(poll=lambda: 0), monitor=monitor)
+
+    assert playback_exit_status(player) is None
+    monitor.finished = True
+    assert playback_exit_status(player) == "Playback ended: Movie"
+
+
 def test_continue_watching_playback_selection_preserves_user_selection():
     played = MediaItem(
         "Episode 1",

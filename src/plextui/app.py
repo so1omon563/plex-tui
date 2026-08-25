@@ -4677,6 +4677,7 @@ class PlexTuiApp(App[None]):
                     version_part_id=version_part_id,
                 )
                 player.process.wait()
+                player.monitor.wait(5.0)
                 return player
         except SuspendNotSupported as exc:
             raise PlayerError("terminal playback is not supported in this environment") from exc
@@ -8064,6 +8065,9 @@ def effective_stream_preference_rows(raw: object, config: AppConfig) -> list[tup
 def playback_exit_status(player: PlayerHandle, debug_path: object | None = None) -> str | None:
     returncode = player.process.poll()
     if returncode is None:
+        return None
+    monitor = getattr(player, "monitor", None)
+    if monitor is not None and not monitor.finished:
         return None
     if returncode == 0:
         return f"Playback ended: {player.title}"

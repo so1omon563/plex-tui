@@ -22,6 +22,7 @@ from .config import write_debug_log
 
 MPV_IPC_TIMEOUT_SECONDS = 1.0
 MPV_IPC_MAX_MESSAGE_BYTES = 65_536
+PLAYBACK_COMPLETION_TOLERANCE_MS = 5_000
 
 
 class PlayerError(RuntimeError):
@@ -287,6 +288,7 @@ class ProgressMonitor:
         self.last_ms = start_offset
         self.base_offset = base_offset
         self._stop = threading.Event()
+        self._finished = threading.Event()
         self._thread = threading.Thread(target=self._run, name="plex-tui-progress", daemon=True)
 
     def start(self) -> None:
@@ -295,6 +297,13 @@ class ProgressMonitor:
     def stop(self) -> None:
         self._stop.set()
         self.report("stopped")
+
+    @property
+    def finished(self) -> bool:
+        return self._finished.is_set()
+
+    def wait(self, timeout: float | None = None) -> bool:
+        return self._finished.wait(timeout)
 
     def _run(self) -> None:
         deadline = time.time() + 5
@@ -318,7 +327,9 @@ class ProgressMonitor:
             if ms is not None:
                 self.last_ms = ms
             self.report("stopped")
+            self.mark_watched_if_complete()
         cleanup_socket(self.socket_path)
+        self._finished.set()
 
     def current_time_ms(self) -> int | None:
         value = mpv_get_property(self.socket_path, "time-pos")
@@ -335,6 +346,18 @@ class ProgressMonitor:
         try:
             self.item.updateProgress(self.last_ms, state=state)
             self.item.updateTimeline(self.last_ms, state=state)
+        except Exception:
+            return
+
+    def mark_watched_if_complete(self) -> None:
+        try:
+            duration = int(getattr(self.item, "duration", 0) or 0)
+            if (
+                self.process.poll() == 0
+                and duration > 0
+                and self.last_ms + PLAYBACK_COMPLETION_TOLERANCE_MS >= duration
+            ):
+                self.item.markWatched()
         except Exception:
             return
 

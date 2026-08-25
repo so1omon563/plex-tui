@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Marked naturally completed mpv movies and episodes watched in Plex instead of
+  leaving their last sampled position at 99% in Continue Watching.
+
 ## 0.17.26 - 2026-08-03
 
 - Restored native artwork in Ghostty by using the Kitty protocol's regular-file
