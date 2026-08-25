@@ -4605,11 +4605,14 @@ class PlexTuiApp(App[None]):
                 self.show_playback_error(error)
             return
         if self.player is not None and self.config.playback_display == "terminal":
-            status = playback_exit_status(self.player, debug_log_path()) or f"Finished terminal playback for {media.title}"
+            self.invalidate_grid_artwork()
+            status = playback_exit_status(self.player, debug_log_path())
+            if status is None:
+                self.set_status(f"Finishing playback sync for {media.title}")
+                return
             self.player = None
             self.active_playback_media = None
             self.clear_playback_footer()
-            self.invalidate_grid_artwork()
             self.refresh_current_browse_state(selected_key=media.key, played_media=media)
             self.show_media_details(media)
             self.set_status(status)
@@ -4677,7 +4680,6 @@ class PlexTuiApp(App[None]):
                     version_part_id=version_part_id,
                 )
                 player.process.wait()
-                player.monitor.wait(5.0)
                 return player
         except SuspendNotSupported as exc:
             raise PlayerError("terminal playback is not supported in this environment") from exc
@@ -4709,7 +4711,11 @@ class PlexTuiApp(App[None]):
             self.clear_playback_footer()
             return
         if not self.player.active:
-            self.set_status(playback_exit_status(self.player, debug_log_path()) or "Nothing is playing")
+            status = playback_exit_status(self.player, debug_log_path())
+            if status is None:
+                self.set_status(f"Finishing playback sync for {self.player.title}")
+                return
+            self.set_status(status)
             played_media = self.active_playback_media
             selected = self.selected_media()
             self.refresh_current_browse_state(
@@ -4740,7 +4746,11 @@ class PlexTuiApp(App[None]):
             self.clear_playback_footer()
             return None
         if not self.player.active:
-            self.set_status(playback_exit_status(self.player, debug_log_path()) or "Nothing is playing")
+            status = playback_exit_status(self.player, debug_log_path())
+            if status is None:
+                self.set_status(f"Finishing playback sync for {self.player.title}")
+                return None
+            self.set_status(status)
             played_media = self.active_playback_media
             selected = self.selected_media()
             self.player = None
