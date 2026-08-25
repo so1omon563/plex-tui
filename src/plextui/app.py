@@ -4408,7 +4408,7 @@ class PlexTuiApp(App[None]):
             name="continue-watching-removal-status",
         )
 
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="watched")
     def toggle_watched_state(self, media: MediaItem) -> None:
         if self.current_browse_state_source() == "continue_watching":
             media = self.resolve_continue_watching_watched_media(media)
@@ -4467,7 +4467,7 @@ class PlexTuiApp(App[None]):
         label = "watched" if watched else "unwatched"
         self.set_status(f"Marked {media.title} {label}")
 
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="watched")
     def refresh_continue_watching_after_watched(self, media: MediaItem) -> None:
         if self.service is None:
             self.call_from_thread(self.set_status, f"Marked {media.title} watched")

@@ -2196,7 +2196,8 @@ async def run_on_plex_live_entrypoint_check():
         assert service.hosted_live_tv_calls == []
         assert app.browsing_stack[-1].title == "Live TV on Plex"
         assert [item.title for item in app.browsing_stack[-1].items] == ["All Channels", "News"]
-        assert app.query_one("#media").highlighted_child.media.title == "All Channels"
+        selected = await wait_for_selected_title(app, pilot, "All Channels", attempts=80)
+        assert selected is not None
         assert app.query_one("#media").display
         assert not app.query_one("#media-grid-scroll").display
 
