@@ -358,9 +358,7 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
     )
 
     rendered = render_details(details, AppConfig("http://plex", "token", "client-id"), raw=raw)
-    config = AppConfig("http://plex", "token", "client-id")
-
-    row_label = media_row(media, config).label_text
+    row_label = media_row(media).label_text
     assert row_label.startswith("▶ Stories by AMC")
     assert "\n" not in row_label
     assert "Now Showing" in row_label
@@ -369,7 +367,7 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
     assert "Now Showing" in rendered
     assert "Next:" in rendered
     assert "Up Next" in rendered
-    plain = media_row(replace(media, raw=SimpleNamespace(call_sign="AMCP", is_hd=True, protocol="hls")), config).label_text
+    plain = media_row(replace(media, raw=SimpleNamespace(call_sign="AMCP", is_hd=True, protocol="hls"))).label_text
     assert "Now:" not in plain
     assert "Next:" not in plain
     assert "\n" not in plain
@@ -382,7 +380,7 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
             grid_key="grid-1",
             guide_status=LIVE_TV_GUIDE_LOADING,
         ),
-    ), config).label_text
+    )).label_text
     assert LIVE_TV_GUIDE_LOADING_ROW in loading
     assert "\n" not in loading
     unavailable = media_row(replace(
@@ -394,7 +392,7 @@ def test_live_tv_channel_now_next_enrichment_is_compact_and_optional():
             grid_key="grid-1",
             guide_status=LIVE_TV_GUIDE_UNAVAILABLE,
         ),
-    ), config).label_text
+    )).label_text
     assert LIVE_TV_GUIDE_UNAVAILABLE_ROW in unavailable
     assert "\n" not in unavailable
 
@@ -425,8 +423,8 @@ def test_live_tv_category_filter_uses_channel_ids():
     )
 
     assert live_tv_all_channels_item().subtitle == ""
-    assert media_row(live_tv_all_channels_item(), AppConfig("http://plex", "token", "client-id")).label_text == "› All Channels"
-    assert media_row(category, AppConfig("http://plex", "token", "client-id")).label_text == "› News · 2 channels"
+    assert media_row(live_tv_all_channels_item()).label_text == "› All Channels"
+    assert media_row(category).label_text == "› News · 2 channels"
     assert live_tv_category_channel_ids(live_tv_all_channels_item()) == ()
     assert live_tv_category_channel_ids(category) == ("channel-1", "channel-2")
     assert "Live TV Category\n2 channels" in rendered
@@ -2235,14 +2233,7 @@ def test_media_rows_returns_list_rows():
         MediaItem(f"Movie {index}", "2024", "movie", str(index), True, object(), artwork_path="/thumb")
         for index in range(5)
     ]
-    config = AppConfig(
-        base_url="http://plex",
-        token="token",
-        client_identifier="client-id",
-        media_view="grid",
-    )
-
-    rows, selected_row = media_rows(items, config, selected_index=3)
+    rows, selected_row = media_rows(items, selected_index=3)
 
     assert len(rows) == 5
     assert selected_row == 3

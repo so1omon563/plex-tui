@@ -2025,7 +2025,7 @@ class PlexTuiApp(App[None]):
         if state.source != "livetv" or not state.items or self.media_grid_visible():
             return
         selected_index = selected_media_index(state.items, selected_key)
-        rows, selected_row_index = media_rows(state.items, self.config, selected_index, self.bulk_selected_keys)
+        rows, selected_row_index = media_rows(state.items, selected_index, self.bulk_selected_keys)
         rows.append(LoadMoreRow(len(state.items), state.total, source=state.source, loading=True))
         if selected_key is None:
             selected_row_index = len(rows) - 1
@@ -2225,7 +2225,7 @@ class PlexTuiApp(App[None]):
                     self.call_later(self.apply_pending_media_status)
             else:
                 self.show_media_list()
-                rows, selected_row_index = media_rows(state.items, self.config, selected_index, self.bulk_selected_keys)
+                rows, selected_row_index = media_rows(state.items, selected_index, self.bulk_selected_keys)
                 if state.has_more:
                     rows.append(LoadMoreRow(len(state.items), state.total, source=state.source))
                 self.replace_media_rows(
@@ -3120,71 +3120,40 @@ class PlexTuiApp(App[None]):
             if self.update_preferences(mpv_window_size=""):
                 self.refresh_settings_after_change(action, "mpv window size", mpv_window_size_value(self.config))
             return
-        if action == "increase_page_size":
-            if self.update_numeric_preference("page_size", 10, MIN_PAGE_SIZE, MAX_PAGE_SIZE):
-                self.set_status(f"Page size: {self.config.page_size}")
-            return
-        if action == "decrease_page_size":
-            if self.update_numeric_preference("page_size", -10, MIN_PAGE_SIZE, MAX_PAGE_SIZE):
-                self.set_status(f"Page size: {self.config.page_size}")
-            return
-        if action == "reset_page_size":
-            if self.update_preferences(page_size=DEFAULT_PAGE_SIZE):
-                self.refresh_settings_after_change(action, "Page size", str(self.config.page_size))
-            return
-        if action == "set_page_size":
-            self.prompt_numeric_setting(
-                "page_size",
-                "Page size",
-                self.config.page_size,
-                MIN_PAGE_SIZE,
-                MAX_PAGE_SIZE,
-                DEFAULT_PAGE_SIZE,
-            )
-            return
-        if action == "increase_auto_load_threshold":
-            if self.update_numeric_preference("auto_load_threshold", 5, MIN_AUTO_LOAD_THRESHOLD, MAX_AUTO_LOAD_THRESHOLD):
-                self.set_status(f"Auto-load threshold: {self.config.auto_load_threshold}")
-            return
-        if action == "decrease_auto_load_threshold":
-            if self.update_numeric_preference("auto_load_threshold", -5, MIN_AUTO_LOAD_THRESHOLD, MAX_AUTO_LOAD_THRESHOLD):
-                self.set_status(f"Auto-load threshold: {self.config.auto_load_threshold}")
-            return
-        if action == "reset_auto_load_threshold":
-            if self.update_preferences(auto_load_threshold=DEFAULT_AUTO_LOAD_THRESHOLD):
-                self.refresh_settings_after_change(action, "Auto-load threshold", str(self.config.auto_load_threshold))
-            return
-        if action == "set_auto_load_threshold":
-            self.prompt_numeric_setting(
-                "auto_load_threshold",
-                "Auto-load threshold",
-                self.config.auto_load_threshold,
-                MIN_AUTO_LOAD_THRESHOLD,
-                MAX_AUTO_LOAD_THRESHOLD,
-                DEFAULT_AUTO_LOAD_THRESHOLD,
-            )
-            return
-        if action == "increase_grid_prefetch_pages":
-            if self.update_numeric_preference("grid_prefetch_pages", 1, MIN_GRID_PREFETCH_PAGES, MAX_GRID_PREFETCH_PAGES):
-                self.set_status(f"Grid prefetch pages: {self.config.grid_prefetch_pages}")
-            return
-        if action == "decrease_grid_prefetch_pages":
-            if self.update_numeric_preference("grid_prefetch_pages", -1, MIN_GRID_PREFETCH_PAGES, MAX_GRID_PREFETCH_PAGES):
-                self.set_status(f"Grid prefetch pages: {self.config.grid_prefetch_pages}")
-            return
-        if action == "reset_grid_prefetch_pages":
-            if self.update_preferences(grid_prefetch_pages=DEFAULT_GRID_PREFETCH_PAGES):
-                self.refresh_settings_after_change(action, "Grid prefetch pages", str(self.config.grid_prefetch_pages))
-            return
-        if action == "set_grid_prefetch_pages":
-            self.prompt_numeric_setting(
-                "grid_prefetch_pages",
-                "Grid prefetch pages",
-                self.config.grid_prefetch_pages,
-                MIN_GRID_PREFETCH_PAGES,
-                MAX_GRID_PREFETCH_PAGES,
-                DEFAULT_GRID_PREFETCH_PAGES,
-            )
+        operation, _, setting_name = action.partition("_")
+        spec = None
+        if operation in {"increase", "decrease", "reset", "set"}:
+            try:
+                spec = numeric_setting_spec(setting_name)
+            except KeyError:
+                pass
+        if spec is not None:
+            label = numeric_setting_label(setting_name)
+            if operation in {"increase", "decrease"}:
+                direction = 1 if operation == "increase" else -1
+                if self.update_numeric_preference(
+                    setting_name,
+                    direction * int(spec["step"]),
+                    int(spec["minimum"]),
+                    int(spec["maximum"]),
+                ):
+                    self.set_status(f"{label}: {getattr(self.config, setting_name)}")
+            elif operation == "reset":
+                if self.update_preferences(**{setting_name: int(spec["default"])}):
+                    self.refresh_settings_after_change(
+                        action,
+                        label,
+                        str(getattr(self.config, setting_name)),
+                    )
+            else:
+                self.prompt_numeric_setting(
+                    setting_name,
+                    str(spec["label"]),
+                    int(getattr(self.config, setting_name)),
+                    int(spec["minimum"]),
+                    int(spec["maximum"]),
+                    int(spec["default"]),
+                )
             return
         if action == "show_debug_log":
             path = debug_log_path()
@@ -5423,21 +5392,19 @@ def render_playlist_target_details(playlist: MediaItem, media: MediaItem | list[
 def playlist_items_label(items: list[MediaItem]) -> str:
     if len(items) == 1:
         return items[0].title
-    label = "item" if len(items) == 1 else "items"
-    return f"{len(items)} selected {label}"
+    return f"{len(items)} selected items"
 
 
 def media_rows(
     items: list[MediaItem],
-    config: AppConfig,
     selected_index: int,
     bulk_selected_keys: set[str] | None = None,
 ) -> tuple[list[ListItem], int]:
     selected_keys = bulk_selected_keys or set()
-    return [media_row(item, config, item.key in selected_keys) for item in items], selected_index
+    return [media_row(item, item.key in selected_keys) for item in items], selected_index
 
 
-def media_row(item: MediaItem, config: AppConfig, bulk_selected: bool = False) -> MediaRow:
+def media_row(item: MediaItem, bulk_selected: bool = False) -> MediaRow:
     return MediaRow(item, bulk_selected=bulk_selected)
 
 
@@ -6850,24 +6817,11 @@ def settings_action_kind(action: str) -> str:
         return "show"
     if action.startswith("artwork_renderer_") or action.startswith("subtitle_"):
         return "set"
-    if action in {"reload", "relogin"}:
-        return "run"
     return "run"
 
 
 def settings_action_badge(action_kind: str) -> str:
-    badges = {
-        "confirm": "confirm",
-        "input": "edit",
-        "step": "step",
-        "reset": "reset",
-        "toggle": "toggle",
-        "cycle": "cycle",
-        "show": "show",
-        "set": "set",
-        "run": "run",
-    }
-    return badges.get(action_kind, action_kind)
+    return "edit" if action_kind == "input" else action_kind
 
 
 def render_settings_row_details(
