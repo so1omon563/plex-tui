@@ -927,6 +927,46 @@ def test_progress_monitor_adds_base_offset_to_transcode_time():
         assert monitor.current_time_ms() == 77500
 
 
+@pytest.mark.parametrize(("reason", "watched"), [("eof", 1), ("quit", 0)])
+def test_progress_monitor_only_marks_end_file_eof_watched(tmp_path, reason, watched):
+    class CompletedItem(Item):
+        watched = 0
+
+        def markWatched(self):
+            self.watched += 1
+
+    class CompletedProc:
+        polls = 0
+
+        def poll(self):
+            self.polls += 1
+            return None if self.polls == 1 else 0
+
+    socket_path = tmp_path / "mpv.sock"
+    socket_path.touch()
+    item = CompletedItem()
+    monitor = ProgressMonitor(item, CompletedProc(), socket_path, 0)
+    event_socket = MagicMock()
+    event = json.dumps({"event": "end-file", "reason": reason}).encode() + b"\n"
+    split = len(event) // 2
+    event_socket.recv.side_effect = [
+        event[:split],
+        event[split:],
+        socket.timeout(),
+    ]
+
+    with (
+        patch("plextui.player.socket.socket", return_value=event_socket),
+        patch("plextui.player.mpv_get_property", return_value=599.0),
+        patch("plextui.player.time.sleep"),
+    ):
+        monitor._run()
+
+    assert item.watched == watched
+    assert item.progress == (599_000, "stopped")
+    assert monitor.finished
+
+
 def test_plex_stream_offset_converts_milliseconds_to_seconds():
     assert plex_stream_offset(65_999) == 65
     assert plex_stream_offset(-1) == 0

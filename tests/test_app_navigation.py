@@ -4571,6 +4571,23 @@ async def run_playback_controls_check():
         assert seek.call_args_list[1].args == (player, 30)
         assert app.query_one("#status").content == "Seeked Movie +30s"
 
+        pending = SimpleNamespace(
+            title="Movie",
+            process=SimpleNamespace(poll=lambda: 0),
+            active=False,
+            monitor=SimpleNamespace(finished=False),
+        )
+        app.player = pending
+        with patch.object(app, "refresh_current_browse_state") as refresh:
+            app.action_toggle_playback_pause()
+            assert app.player is pending
+            assert app.query_one("#status").content == "Finishing playback sync for Movie"
+            refresh.assert_not_called()
+
+            app.action_stop_playback()
+            assert app.player is pending
+            refresh.assert_not_called()
+
 
 async def run_playback_starts_from_beginning_check():
     class ResumableRaw(Raw):
@@ -4821,17 +4838,28 @@ async def run_terminal_playback_exit_invalidates_grid_artwork_check():
         grid.artwork = {item.key: object()}
         await pilot.pause(0.2)
 
-        player = SimpleNamespace(title="Movie", process=SimpleNamespace(poll=lambda: 0))
+        player = SimpleNamespace(
+            title="Movie",
+            process=SimpleNamespace(poll=lambda: 0),
+            monitor=SimpleNamespace(finished=False),
+        )
         with (
             patch.object(app, "play_terminal_media", return_value=player),
-            patch.object(app, "refresh_current_browse_state"),
+            patch.object(app, "refresh_current_browse_state") as refresh,
             patch.object(app, "show_media_details"),
         ):
             app.action_play_selected()
-        await pilot.pause(0.2)
+            await pilot.pause(0.2)
+
+            assert app.player is player
+            refresh.assert_not_called()
+            player.monitor.finished = True
+            app.check_player_status()
+            await pilot.pause(0.2)
 
         assert app.rendered_grid_artwork_cache == {}
         assert grid.artwork == {}
+        refresh.assert_called_once()
 
 
 class WatchStateRaw(Raw):

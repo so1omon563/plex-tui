@@ -287,6 +287,9 @@ class ProgressMonitor:
         self.last_ms = start_offset
         self.base_offset = base_offset
         self._stop = threading.Event()
+        self._finished = threading.Event()
+        self._event_buffer = b""
+        self._reached_eof = False
         self._thread = threading.Thread(target=self._run, name="plex-tui-progress", daemon=True)
 
     def start(self) -> None:
@@ -296,29 +299,83 @@ class ProgressMonitor:
         self._stop.set()
         self.report("stopped")
 
+    @property
+    def finished(self) -> bool:
+        return self._finished.is_set()
+
     def _run(self) -> None:
         deadline = time.time() + 5
-        while time.time() < deadline and not self.socket_path.exists() and self.process.poll() is None:
+        event_socket = self._connect_event_socket(deadline)
+        try:
+            self.report("playing")
+            last_report = 0.0
+            while not self._stop.is_set() and self.process.poll() is None:
+                self._read_events(event_socket)
+                ms = self.current_time_ms()
+                if ms is not None:
+                    self.last_ms = ms
+                now = time.time()
+                if self.last_ms and now - last_report >= 10:
+                    self.report("playing")
+                    last_report = now
+                time.sleep(2)
+
+            if not self._stop.is_set():
+                self._read_events(event_socket)
+                ms = self.current_time_ms()
+                if ms is not None:
+                    self.last_ms = ms
+                self.report("stopped")
+                if self._reached_eof:
+                    try:
+                        self.item.markWatched()
+                    except Exception:
+                        pass
+        finally:
+            if event_socket is not None:
+                event_socket.close()
+            cleanup_socket(self.socket_path)
+            self._finished.set()
+
+    def _connect_event_socket(self, deadline: float) -> socket.socket | None:
+        while time.time() < deadline and self.process.poll() is None:
+            if self.socket_path.exists():
+                event_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                try:
+                    event_socket.settimeout(0.1)
+                    event_socket.connect(str(self.socket_path))
+                    return event_socket
+                except OSError:
+                    event_socket.close()
             time.sleep(0.1)
+        return None
 
-        self.report("playing")
-        last_report = 0.0
-        while not self._stop.is_set() and self.process.poll() is None:
-            ms = self.current_time_ms()
-            if ms is not None:
-                self.last_ms = ms
-            now = time.time()
-            if self.last_ms and now - last_report >= 10:
-                self.report("playing")
-                last_report = now
-            time.sleep(2)
-
-        if not self._stop.is_set():
-            ms = self.current_time_ms()
-            if ms is not None:
-                self.last_ms = ms
-            self.report("stopped")
-        cleanup_socket(self.socket_path)
+    def _read_events(self, event_socket: socket.socket | None) -> None:
+        if event_socket is None:
+            return
+        while True:
+            try:
+                chunk = event_socket.recv(4096)
+            except (OSError, socket.timeout):
+                return
+            if not chunk:
+                return
+            self._event_buffer += chunk
+            if len(self._event_buffer) > MPV_IPC_MAX_MESSAGE_BYTES:
+                self._event_buffer = b""
+                return
+            while b"\n" in self._event_buffer:
+                line, self._event_buffer = self._event_buffer.split(b"\n", 1)
+                try:
+                    event = json.loads(line)
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                if (
+                    isinstance(event, dict)
+                    and event.get("event") == "end-file"
+                    and event.get("reason") == "eof"
+                ):
+                    self._reached_eof = True
 
     def current_time_ms(self) -> int | None:
         value = mpv_get_property(self.socket_path, "time-pos")
@@ -337,7 +394,6 @@ class ProgressMonitor:
             self.item.updateTimeline(self.last_ms, state=state)
         except Exception:
             return
-
 
 def mpv_get_property(socket_path: Path, property_name: str) -> Any:
     response = mpv_command(socket_path, ["get_property", property_name])
