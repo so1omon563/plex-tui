@@ -109,16 +109,6 @@ async def wait_for_status(app: PlexTuiApp, pilot: object, expected: str, attempt
     return status
 
 
-async def wait_for_browse_titles(app: PlexTuiApp, pilot: object, expected: list[str], attempts: int = 20) -> list[str]:
-    titles = [item.title for item in app.browsing_stack[-1].items] if app.browsing_stack else []
-    for _ in range(attempts):
-        if titles == expected:
-            return titles
-        await pilot.pause(0.1)
-        titles = [item.title for item in app.browsing_stack[-1].items] if app.browsing_stack else []
-    return titles
-
-
 async def wait_for_availability_rows(app: PlexTuiApp, pilot: object, attempts: int = 20) -> list[AvailabilityRow]:
     rows = [row for row in app.query_one("#media").children if isinstance(row, AvailabilityRow)]
     for _ in range(attempts):
@@ -136,7 +126,11 @@ async def wait_for_playlist_rows(app: PlexTuiApp, pilot: object, attempts: int =
             return rows
         await pilot.pause(0.1)
         rows = list(app.query_one("#media").children)
-    return rows
+    raise AssertionError(
+        "playlist rows did not appear: "
+        f"rows={rows!r}, status={str(app.query_one('#status').content)!r}, "
+        f"picker_visible={app.picker_visible!r}"
+    )
 
 
 async def wait_for_playlist_target_rows(app: PlexTuiApp, pilot: object, attempts: int = 80) -> list[object]:
@@ -155,6 +149,27 @@ async def wait_for_calls(calls: list[object], pilot: object, attempts: int = 20)
             return calls
         await pilot.pause(0.1)
     return calls
+
+
+async def wait_for_sidebar_row(app: PlexTuiApp, pilot: object, row_type: type, attempts: int = 20) -> object:
+    for _ in range(attempts):
+        rows = list(app.query_one("#libraries").children)
+        matching = next((row for row in rows if isinstance(row, row_type)), None)
+        if matching is not None:
+            return matching
+        await pilot.pause(0.1)
+    raise AssertionError(f"sidebar row did not appear: {row_type.__name__}")
+
+
+async def release_fake_service_after_loading(app: PlexTuiApp, pilot: object, service: object) -> None:
+    for _ in range(20):
+        rows = list(app.query_one("#media").children)
+        if service.blocked_call_started.is_set() and any(isinstance(row, EmptyStateRow) for row in rows):
+            service.release_blocked_call.set()
+            return
+        await pilot.pause(0.1)
+    service.release_blocked_call.set()
+    raise AssertionError(f"loading state did not settle for {service.blocked_call!r}")
 
 
 async def wait_for_playlist_result(
@@ -1768,7 +1783,16 @@ def test_overlapping_server_loads_keep_service_config_worker_local(monkeypatch):
 
 
 async def run_playlists_entrypoint_check():
-    service = PlaylistService()
+    started = threading.Event()
+    release = threading.Event()
+
+    class BlockingPlaylistService(PlaylistService):
+        def playlists(self):
+            started.set()
+            release.wait(timeout=5)
+            return super().playlists()
+
+    service = BlockingPlaylistService()
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
@@ -1778,14 +1802,21 @@ async def run_playlists_entrypoint_check():
         await pilot.pause(0.2)
 
         app.open_playlists()
-        for _ in range(80):
-            if app.browsing_stack and app.browsing_stack[-1].source == "playlists":
+        loading_ready = False
+        for _ in range(20):
+            rows = list(app.query_one("#media").children)
+            if started.is_set() and any(isinstance(row, EmptyStateRow) for row in rows):
+                loading_ready = True
                 break
             await pilot.pause(0.1)
+        release.set()
+        assert loading_ready
+        selected = await wait_for_selected_title(app, pilot, "Favorites", attempts=80)
 
         assert app.browsing_stack[-1].title == "Playlists"
         assert [item.title for item in app.browsing_stack[-1].items] == ["Favorites"]
         assert app.query_one("#media-title").content == "Playlists"
+        assert selected is app.browsing_stack[-1].items[0]
 
 
 async def run_discover_entrypoint_check(monkeypatch):
@@ -1793,6 +1824,7 @@ async def run_discover_entrypoint_check(monkeypatch):
     monkeypatch.setattr(app_module.webbrowser, "open", lambda url: opened_urls.append(url) or True)
     item = MediaItem("The Matrix", "1 provider: Plex · Free", "movie", "discover-1", False, DiscoverRaw())
     service = FakePagedService(MediaPage([item], start=0, total=1))
+    service.blocked_call = "discover_page"
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
@@ -1801,7 +1833,7 @@ async def run_discover_entrypoint_check(monkeypatch):
         app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
-        await pilot.pause(0.2)
+        await wait_for_sidebar_row(app, pilot, DiscoverRow)
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("enter")
@@ -1814,6 +1846,7 @@ async def run_discover_entrypoint_check(monkeypatch):
 
         search.value = "matrix"
         await pilot.press("enter")
+        await release_fake_service_after_loading(app, pilot, service)
         for _ in range(80):
             if app.browsing_stack and app.browsing_stack[-1].source == "discover":
                 break
@@ -1889,6 +1922,7 @@ async def run_discover_provider_picker_check(monkeypatch):
         MultiProviderDiscoverRaw(),
     )
     service = FakePagedService(MediaPage([item], start=0, total=1))
+    service.blocked_call = "discover_page"
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
@@ -1897,7 +1931,7 @@ async def run_discover_provider_picker_check(monkeypatch):
         app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
-        await pilot.pause(0.2)
+        await wait_for_sidebar_row(app, pilot, DiscoverRow)
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("enter")
@@ -1905,6 +1939,7 @@ async def run_discover_provider_picker_check(monkeypatch):
 
         app.query_one("#search").value = "matrix"
         await pilot.press("enter")
+        await release_fake_service_after_loading(app, pilot, service)
         for _ in range(80):
             if app.browsing_stack and app.browsing_stack[-1].source == "discover":
                 break
@@ -1931,6 +1966,7 @@ async def run_discover_without_availability_check(monkeypatch):
     monkeypatch.setattr(app_module.webbrowser, "open", opened_urls.append)
     item = MediaItem("The Matrix", "", "movie", "discover-1", False, NoAvailabilityDiscoverRaw())
     service = FakePagedService(MediaPage([item], start=0, total=1))
+    service.blocked_call = "discover_page"
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
@@ -1939,7 +1975,7 @@ async def run_discover_without_availability_check(monkeypatch):
         app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
-        await pilot.pause(0.2)
+        await wait_for_sidebar_row(app, pilot, DiscoverRow)
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("enter")
@@ -1947,6 +1983,7 @@ async def run_discover_without_availability_check(monkeypatch):
 
         app.query_one("#search").value = "matrix"
         await pilot.press("enter")
+        await release_fake_service_after_loading(app, pilot, service)
         for _ in range(80):
             if app.browsing_stack and app.browsing_stack[-1].source == "discover":
                 break
@@ -2123,6 +2160,7 @@ async def run_discover_vod_entrypoint_check():
 async def run_on_plex_live_entrypoint_check():
     channel = MediaItem("Live One", "ONE  HD  HLS", "livetv", "channel-1", True, Raw())
     service = FakePagedService(MediaPage([channel], start=0, total=1))
+    service.blocked_call = "hosted_live_tv_categories"
     service.hosted_live_tv_categories_result = [
         MediaItem("News", "Live TV Category", "livetv_category", "livetv-category:News", False, SimpleNamespace(channel_ids=("channel-1",)))
     ]
@@ -2142,12 +2180,13 @@ async def run_on_plex_live_entrypoint_check():
         app.populate_libraries([LibraryItem("Movies", "1", "movie", object())])
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
-        await pilot.pause(0.2)
+        await wait_for_sidebar_row(app, pilot, OnPlexLiveRow)
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("enter")
+        await release_fake_service_after_loading(app, pilot, service)
         for _ in range(80):
             if app.browsing_stack and app.browsing_stack[-1].source == "livetv_categories":
                 break
@@ -2165,6 +2204,7 @@ async def run_on_plex_live_entrypoint_check():
 async def run_on_plex_live_empty_categories_check():
     channel = MediaItem("Live One", "ONE  HD  HLS", "livetv", "channel-1", True, Raw())
     service = FakePagedService(MediaPage([channel], start=0, total=1))
+    service.blocked_call = "hosted_live_tv_categories"
     app = PlexTuiApp()
     async with app.run_test() as pilot:
         await pilot.pause(1.0)
@@ -2172,6 +2212,7 @@ async def run_on_plex_live_empty_categories_check():
         app.service = service
 
         app.open_hosted_live_tv()
+        await release_fake_service_after_loading(app, pilot, service)
         for _ in range(80):
             if app.browsing_stack and app.browsing_stack[-1].source == "livetv":
                 break
@@ -2489,16 +2530,26 @@ class FakePagedService:
         self.children_calls = []
         self.media_from_key_calls = []
         self.children_by_key: dict[str, list[MediaItem]] = {}
+        self.blocked_call = ""
+        self.blocked_call_started = threading.Event()
+        self.release_blocked_call = threading.Event()
+
+    def wait_if_blocked(self, call: str) -> None:
+        if self.blocked_call == call:
+            self.blocked_call_started.set()
+            self.release_blocked_call.wait(timeout=5)
 
     def library_page(self, library: LibraryItem, start: int, size: int) -> MediaPage:
         self.calls.append((library, start, size))
         return self.page
 
     def library_entry_page(self, library: LibraryItem, entry: str, start: int, size: int) -> MediaPage:
+        self.wait_if_blocked("library_entry_page")
         self.entry_calls.append((library, entry, start, size))
         return self.page
 
     def search_page(self, query: str, library: LibraryItem | None, start: int, size: int) -> MediaPage:
+        self.wait_if_blocked("search_page")
         self.search_calls.append((query, library, start, size))
         return self.page
 
@@ -2511,6 +2562,7 @@ class FakePagedService:
         return self.media_by_key.get(key)
 
     def discover_page(self, query: str, start: int, size: int, media_type: str = "movies_shows") -> MediaPage:
+        self.wait_if_blocked("discover_page")
         self.discover_calls.append((query, start, size, media_type))
         return self.page
 
@@ -2519,6 +2571,7 @@ class FakePagedService:
         return self.page
 
     def hosted_live_tv_categories(self) -> list[MediaItem]:
+        self.wait_if_blocked("hosted_live_tv_categories")
         self.hosted_live_tv_categories_calls += 1
         return self.hosted_live_tv_categories_result
 
@@ -2546,6 +2599,7 @@ class FakePagedService:
         return self.children_by_key.get(item.key, [])
 
     def children_page(self, item: MediaItem, start: int, size: int) -> MediaPage:
+        self.wait_if_blocked("children_page")
         self.children_calls.append((item.key, size))
         items = self.children_by_key.get(item.key, [])
         return MediaPage(items if start == 0 else [], start=start, total=len(items))
@@ -2603,13 +2657,16 @@ async def run_initial_library_page_size_check():
         library = LibraryItem("Movies", "1", "movie", object())
         page = MediaPage([MediaItem("First", "", "movie", "1", True, Raw())], start=0, total=1)
         service = FakePagedService(page)
+        service.blocked_call = "library_entry_page"
         app.config = AppConfig("http://plex", "token", "client-id", page_size=45)
         app.service = service
 
         app.open_library_entry(library)
-        await pilot.pause(0.5)
+        await release_fake_service_after_loading(app, pilot, service)
+        selected = await wait_for_selected_title(app, pilot, "First")
 
         assert service.entry_calls == [(library, "library", 0, 45)]
+        assert selected is page.items[0]
 
 
 async def run_library_menu_check():
@@ -2641,21 +2698,23 @@ async def run_sidebar_library_selection_opens_default_library_check():
         await pilot.pause(1.0)
         page = MediaPage([MediaItem("First", "", "movie", "1", True, Raw())], start=0, total=1)
         service = FakePagedService(page)
+        service.blocked_call = "library_entry_page"
         app.config = AppConfig("http://plex", "token", "client-id")
         app.service = service
         library = LibraryItem("Movies", "1", "movie", object())
         app.populate_libraries([library])
         libraries_view = app.query_one("#libraries")
         libraries_view.focus()
-        await pilot.pause(0.2)
+        await wait_for_sidebar_row(app, pilot, LibraryRow)
         await pilot.press("down")
         await pilot.press("down")
         await pilot.press("enter")
-        await pilot.pause(0.5)
+        await release_fake_service_after_loading(app, pilot, service)
+        selected = await wait_for_selected_title(app, pilot, "First")
 
         assert service.entry_calls == [(library, "library", 0, 40)]
         assert app.browsing_stack[-1].title == "Movies"
-        assert app.query_one("#media").highlighted_child.media.title == "First"
+        assert selected is page.items[0]
 
 
 async def run_sidebar_library_space_menu_check():
@@ -2822,14 +2881,17 @@ async def run_initial_search_page_size_check():
         library = LibraryItem("Movies", "1", "movie", object())
         page = MediaPage([MediaItem("First", "", "movie", "1", True, Raw())], start=0, total=1)
         service = FakePagedService(page)
+        service.blocked_call = "search_page"
         app.config = AppConfig("http://plex", "token", "client-id", page_size=55)
         app.service = service
         app.selected_library = library
 
         app.run_search("first")
-        await pilot.pause(0.5)
+        await release_fake_service_after_loading(app, pilot, service)
+        selected = await wait_for_selected_title(app, pilot, "First")
 
         assert service.search_calls == [("first", library, 0, 55)]
+        assert selected is page.items[0]
 
 
 async def run_load_more_media_check():
@@ -3015,6 +3077,7 @@ async def run_paged_child_view_check():
 
     class PagedChildService(FakePagedService):
         def children_page(self, item: MediaItem, start: int, size: int) -> MediaPage:
+            self.wait_if_blocked("children_page")
             self.children_calls.append((item.key, start, size))
             return MediaPage([first] if start == 0 else [second], start=start, total=2)
 
@@ -3022,10 +3085,12 @@ async def run_paged_child_view_check():
         await pilot.pause(1.0)
         app.config = AppConfig("http://plex", "token", "client-id", page_size=25)
         service = PagedChildService(MediaPage([], start=0, total=0))
+        service.blocked_call = "children_page"
         app.service = service
         app.suppress_auto_load = True
 
         app.open_media(container)
+        await release_fake_service_after_loading(app, pilot, service)
         for _ in range(30):
             if app.browsing_stack:
                 break
@@ -4906,7 +4971,6 @@ async def run_toggle_watched_marks_unwatched_check():
 
         worker = app.action_toggle_watched()
         assert worker is not None
-        await asyncio.wait_for(worker.wait(), timeout=20)
         row, selected, status = await wait_for_watched_update(
             app,
             pilot,
@@ -5034,7 +5098,6 @@ async def run_playback_refresh_selects_next_continue_watching_episode_check():
 
         worker = app.refresh_current_browse_state(selected_key=current.key, played_media=current)
         assert worker is not None
-        await asyncio.wait_for(worker.wait(), timeout=20)
 
         selected = await wait_for_selected_title(app, pilot, "Episode 2", attempts=80)
 
@@ -5066,9 +5129,9 @@ async def run_playback_refresh_keeps_live_tv_guide_date_check():
 
         worker = app.refresh_current_browse_state(selected_key=program.key, played_media=program)
         assert worker is not None
-        await asyncio.wait_for(worker.wait(), timeout=20)
+        guide_dates = await wait_for_calls(service.hosted_live_tv_guide_dates, pilot, attempts=80)
 
-        assert service.hosted_live_tv_guide_dates == [date(2026, 7, 30)]
+        assert guide_dates == [date(2026, 7, 30)]
 
 
 async def run_playback_refresh_ignores_replaced_library_state_check():
@@ -5197,7 +5260,6 @@ async def run_toggle_watched_marks_watched_check():
 
         worker = app.action_toggle_watched()
         assert worker is not None
-        await asyncio.wait_for(worker.wait(), timeout=20)
         row, selected, status = await wait_for_watched_update(
             app,
             pilot,
@@ -5290,12 +5352,10 @@ async def run_add_to_playlist_existing_check():
 
         worker = app.action_add_to_playlist()
         assert worker is not None
-        await asyncio.wait_for(worker.wait(), timeout=20)
         rows = await wait_for_playlist_target_rows(app, pilot)
         target = next(row for row in rows if isinstance(row, PlaylistTargetRow))
         worker = app.choose_playlist_target(target.playlist)
         assert worker is not None
-        await asyncio.wait_for(worker.wait(), timeout=20)
         add_calls, status = await wait_for_playlist_result(
             app,
             pilot,
@@ -5318,17 +5378,16 @@ async def run_add_to_playlist_create_check():
         app.config = AppConfig("http://plex", "token", "client-id")
         app.service = service
         app.show_media("Movies", [item])
-        await pilot.pause(0.2)
+        selected = await wait_for_selected_title(app, pilot, "Movie")
+        assert selected is item
 
         worker = app.action_add_to_playlist()
         assert worker is not None
         assert worker.group == "navigation"
-        await asyncio.wait_for(worker.wait(), timeout=20)
         rows = await wait_for_playlist_rows(app, pilot)
         assert any(isinstance(row, PlaylistCreateRow) for row in rows)
         worker = app.save_playlist_name_input("Weekend")
         assert worker is not None
-        await asyncio.wait_for(worker.wait(), timeout=20)
         create_calls, status = await wait_for_playlist_result(
             app,
             pilot,
@@ -5403,12 +5462,10 @@ async def run_bulk_add_to_playlist_check():
         await pilot.pause(0.2)
         worker = app.action_add_to_playlist()
         assert worker is not None
-        await asyncio.wait_for(worker.wait(), timeout=20)
         rows = await wait_for_playlist_target_rows(app, pilot)
         target = next(row for row in rows if isinstance(row, PlaylistTargetRow))
         worker = app.choose_playlist_target(target.playlist)
         assert worker is not None
-        await asyncio.wait_for(worker.wait(), timeout=20)
         add_calls, status = await wait_for_playlist_result(
             app,
             pilot,
@@ -5469,11 +5526,10 @@ async def run_rename_playlist_check():
         app.action_rename_playlist()
         worker = app.save_playlist_rename_input("Road Trip")
         assert worker is not None
-        await asyncio.wait_for(worker.wait(), timeout=20)
+        status = await wait_for_status(app, pilot, "Renamed playlist to Road Trip")
 
         assert service.rename_calls == [("Favorites", "Road Trip")]
         assert [item.title for item in app.browsing_stack[-1].items] == ["Road Trip"]
-        status = await wait_for_status(app, pilot, "Renamed playlist to Road Trip")
         assert status == "Renamed playlist to Road Trip"
 
 
@@ -5492,11 +5548,10 @@ async def run_delete_playlist_check():
         assert app.pending_confirmation_action == "delete_playlist:playlist-1"
         worker = app.action_delete_playlist()
         assert worker is not None
-        await asyncio.wait_for(worker.wait(), timeout=20)
+        status = await wait_for_status(app, pilot, "Deleted playlist Favorites")
 
         assert service.delete_calls == ["Favorites"]
         assert app.browsing_stack[-1].items == []
-        status = await wait_for_status(app, pilot, "Deleted playlist Favorites")
         assert status == "Deleted playlist Favorites"
 
 
@@ -5559,14 +5614,13 @@ async def run_media_version_picker_check():
 
         with patch("plextui.app.media_version_choices", return_value=choices):
             worker = app.open_media_version_picker(item)
-            await asyncio.wait_for(worker.wait(), timeout=20)
-
-        rows = []
-        for _ in range(20):
-            rows = [row for row in app.query_one("#media").children if isinstance(row, MediaVersionRow)]
-            if len(rows) == 2:
-                break
-            await pilot.pause(0.1)
+            assert worker is not None
+            rows = []
+            for _ in range(20):
+                rows = [row for row in app.query_one("#media").children if isinstance(row, MediaVersionRow)]
+                if len(rows) == 2:
+                    break
+                await pilot.pause(0.1)
         assert [row.choice.part_id for row in rows] == ["10", "20"]
         assert app.picker_visible
 

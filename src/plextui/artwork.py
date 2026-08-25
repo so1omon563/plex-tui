@@ -305,8 +305,6 @@ def protocol_renderer_status(renderer: str) -> str:
         return "Kitty native images via Unicode placeholders"
     if renderer == "auto":
         return "Block art; Kitty-compatible terminal not detected"
-    if renderer == "kitty":
-        return "Kitty native images via Unicode placeholders"
     return "Block art"
 
 

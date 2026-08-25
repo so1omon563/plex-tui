@@ -112,7 +112,6 @@ GRID_DENSITY_SPECS = {
 GRID_DETAIL_REFRESH_DELAY = 0.65
 LIST_DETAIL_REFRESH_DELAY = 0.35
 DETAIL_ARTWORK_REFRESH_DELAY = 0.55
-PLAYBACK_CONTROL_HINT = "plex-tui focused: c pause, z -10s, . +30s, x stop"
 PLAYLIST_REMOVE_HINT = "Playlist: Backspace/Delete removes from this playlist"
 GRID_PREFETCH_WORKERS = 3
 DETAIL_SUMMARY_WIDTH = 38
@@ -349,12 +348,6 @@ class MediaGrid(Static):
         selected = self.selected_media
         if selected is not None:
             self.post_message(self.Highlighted(selected))
-
-    def set_selected_key(self, selected_key: str) -> None:
-        for index, item in enumerate(self.items):
-            if item.key == selected_key:
-                self.set_selected_index(index)
-                return
 
     def set_selected_index(self, selected_index: int) -> None:
         if not self.items:
@@ -743,8 +736,6 @@ class PlexTuiApp(App[None]):
     help_visible: bool
     settings_visible: bool
     picker_visible: bool
-    selected_subtitle: StreamChoice | None
-    selected_audio: StreamChoice | None
     picker_media_key: str | None
     pending_media_status: str | None
     bulk_selected_keys: set[str]
@@ -803,8 +794,6 @@ class PlexTuiApp(App[None]):
         self.settings_visible = False
         self.picker_visible = False
         self.playlist_picker_visible = False
-        self.selected_subtitle = None
-        self.selected_audio = None
         self.picker_media_key = None
         self.pending_media_status = None
         self.playlist_picker_item = None
@@ -1263,8 +1252,6 @@ class PlexTuiApp(App[None]):
         def reconnect() -> None:
             self.pending_profile_choice = None
             self.settings_visible = False
-            self.selected_audio = None
-            self.selected_subtitle = None
             self.detail_cache = {}
             self.set_status(f"Switched to {choice.title}. Reconnecting...")
             self.load_server()
@@ -2998,8 +2985,6 @@ class PlexTuiApp(App[None]):
             return
         if action == "relogin":
             self.settings_visible = False
-            self.selected_audio = None
-            self.selected_subtitle = None
             self.begin_login()
             return
         if action == "switch_profile":
@@ -3008,8 +2993,6 @@ class PlexTuiApp(App[None]):
             return
         if action == "clear_tracks":
             self.pending_confirmation_action = ""
-            self.selected_audio = None
-            self.selected_subtitle = None
             if not self.update_preferences(
                 preferred_audio_language="",
                 preferred_subtitle_language="",
@@ -3454,10 +3437,8 @@ class PlexTuiApp(App[None]):
         live_updated = self.apply_live_stream_choice(choice, stream_type)
         active_unchanged = bool(self.player is not None and self.player.active and not live_updated)
         if stream_type == "subtitle":
-            self.selected_subtitle = None
             status = f"Subtitle preference: {choice.label}"
         elif stream_type == "audio":
-            self.selected_audio = None
             status = f"Audio preference: {choice.label}"
         else:
             status = f"Stream preference: {choice.label}"
@@ -5525,21 +5506,6 @@ def live_tv_program_title(program: object | None) -> str:
     return str(getattr(program, "title", "") or "")
 
 
-def live_tv_program_time_progress(program: object | None) -> str:
-    if program is None:
-        return ""
-    time_label = "-".join(
-        value
-        for value in (
-            live_tv_timestamp(getattr(program, "begins_at", 0)),
-            live_tv_timestamp(getattr(program, "ends_at", 0)),
-        )
-        if value
-    )
-    progress = live_tv_program_progress_label(program)
-    return " ".join(value for value in (time_label, progress) if value)
-
-
 def live_tv_program_compact_time_progress(program: object | None) -> str:
     if program is None:
         return ""
@@ -5677,20 +5643,6 @@ def live_tv_subtitle_bits(media: MediaItem) -> list[str]:
         for bit in media.subtitle.replace(" · ", "  ").split("  ")
         if bit.strip()
     ]
-
-
-def live_tv_subtitle_time(bits: list[str]) -> str:
-    for bit in bits:
-        if ":" in bit:
-            return bit
-    return ""
-
-
-def live_tv_subtitle_resolution(bits: list[str]) -> str:
-    for bit in reversed(bits):
-        if bit.isdigit():
-            return bit
-    return ""
 
 
 def live_tv_int(value: object) -> int:
