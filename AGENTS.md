@@ -181,6 +181,8 @@ results, clearing a live-search query cancels its older search work, and media
 pickers must also verify that their originating selection is still current.
 Navigation workers use a dedicated worker group so unrelated exclusive
 background refreshes cannot cancel them.
+Watched-state updates and their Continue Watching refresh use a dedicated
+worker group so background detail refreshes cannot cancel them.
 Kitty derived images must use verified full-content cache identities, resolve
 short image-ID collisions across concurrent app processes, retain pending
 terminal transfers, and share the bounded artwork cache policy.

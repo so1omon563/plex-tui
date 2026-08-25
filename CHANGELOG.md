@@ -4,6 +4,7 @@
 
 - Marked naturally completed mpv movies and episodes watched in Plex instead of
   leaving their last sampled position at 99% in Continue Watching.
+- Prevented background detail refreshes from cancelling watched-state updates.
 
 ## 0.17.26 - 2026-08-03
 
