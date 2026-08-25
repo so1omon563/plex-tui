@@ -3532,9 +3532,6 @@ class PlexTuiApp(App[None]):
             return
         self.call_from_thread(self.finish_playlist_add, updated_playlist, items)
 
-    def add_item_to_playlist(self, playlist: MediaItem, item: MediaItem) -> object | None:
-        return self.add_items_to_playlist(playlist, [item])
-
     def prompt_playlist_name(self) -> None:
         items = self.playlist_picker_items or ([self.playlist_picker_item] if self.playlist_picker_item is not None else [])
         if not items:
@@ -3694,9 +3691,6 @@ class PlexTuiApp(App[None]):
             self.call_from_thread(self.show_error, f"failed to create playlist: {exc}")
             return
         self.call_from_thread(self.finish_playlist_add, playlist, items, created=True)
-
-    def create_playlist_from_item(self, title: str, item: MediaItem) -> object | None:
-        return self.create_playlist_from_items(title, [item])
 
     def finish_playlist_add(self, playlist: MediaItem, items: list[MediaItem], created: bool = False) -> None:
         item_label = playlist_items_label(items)
@@ -4329,9 +4323,6 @@ class PlexTuiApp(App[None]):
             return
         self.set_status(f"Removing {media.title} from Continue Watching...")
         self.remove_continue_watching_item(media)
-
-    def remove_playlist_item(self, playlist: MediaItem, media: MediaItem) -> None:
-        self.remove_playlist_items(playlist, [media])
 
     @work(thread=True, exclusive=True)
     def remove_playlist_items(self, playlist: MediaItem, items: list[MediaItem]) -> None:

@@ -15,7 +15,7 @@ import pytest
 
 from plextui.player import (
     _log_mpv_stderr,
-    direct_play_url,
+    direct_play_urls,
     full_metadata,
     is_drm_vod_stream,
     media_version_choices,
@@ -565,9 +565,9 @@ def test_online_metadata_direct_url_uses_vod_provider_host():
         def iterParts(self):
             return [OnlinePart()]
 
-    assert direct_play_url(OnlineItem()) == (
+    assert direct_play_urls(OnlineItem()) == [
         "https://vod.provider.plex.tv/library/parts/provider-hls.m3u8?X-Plex-Token=token"
-    )
+    ]
 
 
 def test_online_metadata_full_metadata_fetches_from_vod_provider_and_restores_server():

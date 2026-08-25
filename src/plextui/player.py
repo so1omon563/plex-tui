@@ -606,11 +606,6 @@ def external_subtitle_urls(item: Any, selected_subtitle: Any = None) -> list[str
     return urls
 
 
-def direct_play_url(item: Any, selected_subtitle: Any = None) -> str | None:
-    urls = direct_play_urls(item)
-    return urls[0] if urls else None
-
-
 def direct_play_urls(item: Any) -> list[str]:
     urls: list[str] = []
     for part in media_parts(item):
@@ -671,11 +666,6 @@ def media_version_label(media: Any, part: Any) -> str:
     if filename:
         values.append(filename)
     return " · ".join(values) or f"Media part {getattr(part, 'id', '')}"
-
-
-def scoped_media_version(item: Any, part_id: str) -> Any:
-    scoped, _media_index, _part_index = selected_media_version(item, part_id)
-    return scoped
 
 
 def selected_media_version(item: Any, part_id: str) -> tuple[Any, int, int]:
