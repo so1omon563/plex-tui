@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added an upstream Nix flake for direct Linux installs while retaining PyPI,
+  Homebrew, and AUR distribution.
+
 ## 0.17.29 - 2026-08-24
 
 - Marked naturally completed mpv movies and episodes watched in Plex instead of

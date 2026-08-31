@@ -1,8 +1,8 @@
 # Packaging
 
-plex-tui is distributed through PyPI, a Homebrew tap, and the Arch AUR. The
-source repository remains the canonical place for versioning, release notes,
-and validation.
+plex-tui is distributed through PyPI, a Homebrew tap, the Arch AUR, and an
+upstream Nix flake. The source repository remains the canonical place for
+versioning, release notes, and validation.
 
 ## Supported Channels
 
@@ -97,6 +97,21 @@ Validation is handled by `.github/workflows/aur.yml`, which runs inside
 - `makepkg --clean --syncdeps --noconfirm --check`
 - `.SRCINFO` is in sync with `PKGBUILD`
 - `namcap PKGBUILD ./*.pkg.tar.*`
+
+### Nix
+
+The repository flake supports `aarch64-linux` and `x86_64-linux` directly from
+GitHub:
+
+```bash
+nix run github:so1omon563/plex-tui
+nix profile install github:so1omon563/plex-tui
+```
+
+`flake.nix` reads the app version from `pyproject.toml`, installs the Python
+dependencies through nixpkgs, and places `mpv` on the packaged command's runtime
+path. CI builds the locked default package on Linux. Refresh `flake.lock` when
+the pinned nixpkgs revision needs to move.
 
 ## Release Maintenance
 

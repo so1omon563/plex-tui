@@ -13,6 +13,7 @@ coverage.xml
 htmlcov/
 dist/
 build/
+result
 *.egg-info/
 .env
 .env.*
