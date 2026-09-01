@@ -81,8 +81,9 @@ Before finishing a task:
 There are currently no child AGENTS.md files. This root file owns the top-level
 contracts for these durable areas:
 
-- `.github/workflows/`: CI, version bumping, release, PyPI, Homebrew, and AUR
-  automation. Keep workflow changes aligned with release checks and actionlint.
+- `.github/workflows/`: CI, version bumping, release, PyPI, Homebrew, AUR, and
+  Nix automation. Keep workflow changes aligned with release checks and
+  actionlint.
   Homebrew bottle publishing should stay pinned to macOS 15 unless package
   coverage is deliberately moved to a different supported bottle target.
 - `src/plextui/`: Python/Textual app source, Plex API mapping, artwork,
@@ -93,8 +94,9 @@ contracts for these durable areas:
   release staging, and post-release automation.
 - `packaging/`: Homebrew and AUR notes plus source AUR metadata.
 - `docs/`: research notes and README visual assets.
-- Root docs and config examples: README, DESIGN, PACKAGING, RELEASE, ROADMAP,
-  CHANGELOG, SECURITY, Makefile, pyproject, and `config.example.toml`.
+- Root packaging and docs: `flake.nix`, `flake.lock`, README, DESIGN, PACKAGING,
+  RELEASE, ROADMAP, CHANGELOG, SECURITY, Makefile, pyproject, and
+  `config.example.toml`.
 
 Add child AGENTS.md files only when a subtree needs local rules that would make
 this root rail too broad.
@@ -110,9 +112,11 @@ through `mpv`.
   - `player.py`: `mpv` launch, stream selection, and playback diagnostics.
   - `config.py`, `auth.py`, `artwork.py`, `models.py`: supporting modules.
 - `tests/`: pytest suite, split by app helpers/navigation and service modules.
-- `.github/workflows/`: CI plus PyPI/TestPyPI/AUR validation workflows.
+- `.github/workflows/`: CI plus PyPI/TestPyPI/AUR/Nix validation workflows.
 - `packaging/`: Homebrew and AUR maintenance notes; `packaging/aur/` contains
   the source copy of `PKGBUILD` and `.SRCINFO`.
+- `flake.nix` and `flake.lock`: reproducible direct Nix packaging for supported
+  Linux systems.
 - `README.md`, `CONTRIBUTING.md`, `PACKAGING.md`, `RELEASE.md`, `ROADMAP.md`:
   user, contributor, and release docs.
 - `config.example.toml`: example user configuration.

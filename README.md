@@ -114,6 +114,23 @@ plex-tui --smoke
 
 Any AUR helper can be used; `paru` is only an example.
 
+### Nix
+
+Run without installing:
+
+```bash
+nix run github:so1omon563/plex-tui
+```
+
+Or install it into your Nix profile:
+
+```bash
+nix profile install github:so1omon563/plex-tui
+plex-tui --smoke
+```
+
+The Nix package includes `mpv` in the app's runtime path.
+
 ### From GitHub
 
 ```bash
