@@ -9,6 +9,7 @@ import pytest
 from plextui.app import BrowseState, PlexTuiApp
 from plextui.config import AppConfig
 from plextui.models import LibraryItem, MediaItem
+from plextui.player import PlayerError
 from plextui.plex_service import MediaPage
 
 
@@ -275,3 +276,20 @@ def test_live_stream_picker_scopes_choices_to_active_version(app, monkeypatch, p
         choices.assert_called_once_with(selected.raw, version_part_id="part-2")
     else:
         choices.assert_called_once_with(selected.raw)
+
+
+def test_missing_version_does_not_leave_previous_player_untracked(app, monkeypatch):
+    selected = media("selected")
+    previous = SimpleNamespace(active=True)
+    app.player = previous
+    app.active_playback_media = media("previous")
+    stop = Mock()
+    monkeypatch.setattr("plextui.app.stop_mpv", stop)
+    monkeypatch.setattr("plextui.app.preferred_audio_choice", Mock(side_effect=PlayerError("version unavailable")))
+    monkeypatch.setattr(app, "clear_playback_footer", Mock())
+    monkeypatch.setattr(app, "show_playback_error", Mock())
+    app.play_media(selected, resume=False, confirm_start_over=False, version_part_id="missing")
+    stop.assert_called_once_with(previous)
+    assert app.player is None
+    assert app.active_playback_media is None
+    app.show_playback_error.assert_called_once_with("version unavailable")
