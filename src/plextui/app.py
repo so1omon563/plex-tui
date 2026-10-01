@@ -756,6 +756,7 @@ class PlexTuiApp(App[None]):
     server_load_token: int
     applying_config_theme: bool
     detail_refresh_token: int
+    navigation_token: int
     navigation_worker: Worker[Any] | None
     detail_refresh_timer: Timer | None
     detail_artwork_timer: Timer | None
@@ -815,6 +816,7 @@ class PlexTuiApp(App[None]):
         self.server_load_token = 0
         self.applying_config_theme = False
         self.detail_refresh_token = 0
+        self.navigation_token = 0
         self.navigation_worker = None
         self.detail_refresh_timer = None
         self.detail_artwork_timer = None
@@ -1661,7 +1663,21 @@ class PlexTuiApp(App[None]):
 
     def invalidate_navigation_results(self) -> None:
         self.navigation_worker = None
+        self.navigation_token += 1
         self.invalidate_search_results()
+
+    def call_browse_from_thread(
+        self, state: BrowseState | None, token: int, callback: Callable[..., Any], *args: object,
+    ) -> None:
+        def apply() -> None:
+            if (
+                self.current_browse_state() is state
+                and self.navigation_token == token
+                and not self.browse_overlay_visible()
+            ):
+                callback(*args)
+
+        self.call_from_thread(apply)
 
     def invalidate_search_results(self) -> None:
         self.search_token += 1
@@ -4282,7 +4298,7 @@ class PlexTuiApp(App[None]):
         target_watched, _ = watched_state_action(media.raw)
         target = "watched" if target_watched else "unwatched"
         self.set_status(f"Marking {media.title} {target}...")
-        return self.toggle_watched_state(media)
+        return self.toggle_watched_state(media, self.current_browse_state(), self.navigation_token)
 
     def action_remove_continue_watching(self) -> None:
         media = self.selected_media()
@@ -4384,18 +4400,18 @@ class PlexTuiApp(App[None]):
         )
 
     @work(thread=True, exclusive=True, group="watched")
-    def toggle_watched_state(self, media: MediaItem) -> None:
-        if self.current_browse_state_source() == "continue_watching":
+    def toggle_watched_state(self, media: MediaItem, state: BrowseState | None, token: int) -> None:
+        if state is not None and state.source == "continue_watching":
             media = self.resolve_continue_watching_watched_media(media)
         target_watched, method = watched_state_action(media.raw)
         if not callable(method):
-            self.call_from_thread(self.set_status, "Selected item does not support watched state changes")
+            self.call_browse_from_thread(state, token, self.set_status, "Selected item does not support watched state changes")
             return
         try:
             result = method()
             updated_raw = result or media.raw
         except Exception as exc:
-            self.call_from_thread(self.show_error, f"failed to update watched state: {exc}")
+            self.call_browse_from_thread(state, token, self.show_error, f"failed to update watched state: {exc}")
             return
         reload_method = getattr(updated_raw, "reload", None)
         if callable(reload_method):
@@ -4404,7 +4420,7 @@ class PlexTuiApp(App[None]):
             except Exception:
                 pass
         updated_media = replace(media, raw=updated_raw)
-        self.call_from_thread(self.apply_watched_state, updated_media, target_watched)
+        self.call_browse_from_thread(state, token, self.apply_watched_state, updated_media, target_watched)
 
     def resolve_continue_watching_watched_media(self, media: MediaItem) -> MediaItem:
         resolve_media = getattr(self.service, "media_from_key", None)
@@ -4421,7 +4437,7 @@ class PlexTuiApp(App[None]):
     def apply_watched_state(self, media: MediaItem, watched: bool) -> None:
         self.detail_cache.pop(media.key, None)
         if watched and self.current_browse_state_source() == "continue_watching":
-            self.refresh_continue_watching_after_watched(media)
+            self.refresh_continue_watching_after_watched(media, self.current_browse_state(), self.navigation_token)
             return
         selected = self.selected_media()
         selected_key = selected.key if selected is not None else media.key
@@ -4443,16 +4459,18 @@ class PlexTuiApp(App[None]):
         self.set_status(f"Marked {media.title} {label}")
 
     @work(thread=True, exclusive=True, group="watched")
-    def refresh_continue_watching_after_watched(self, media: MediaItem) -> None:
+    def refresh_continue_watching_after_watched(self, media: MediaItem, state: BrowseState, token: int) -> None:
+        if state is None or state.source != "continue_watching":
+            return
         if self.service is None:
-            self.call_from_thread(self.set_status, f"Marked {media.title} watched")
+            self.call_browse_from_thread(state, token, self.set_status, f"Marked {media.title} watched")
             return
         try:
             page = self.service.continue_watching_page(0, self.config.page_size)
         except Exception as exc:
-            self.call_from_thread(self.show_error, f"failed to refresh Continue Watching: {exc}")
+            self.call_browse_from_thread(state, token, self.show_error, f"failed to refresh Continue Watching: {exc}")
             return
-        self.call_from_thread(self.apply_continue_watching_refresh, media.title, page)
+        self.call_browse_from_thread(state, token, self.apply_continue_watching_refresh, media.title, page)
 
     def apply_continue_watching_refresh(self, title: str, page: MediaPage) -> None:
         state = BrowseState(
@@ -4463,11 +4481,10 @@ class PlexTuiApp(App[None]):
             total=page.total,
         )
         self.browsing_stack = [state]
-        self.show_browse_state(state)
-        self.focus_media_browser()
         status = f"Marked {title} watched"
+        self.show_browse_state(state, status_after_refresh=status)
+        self.focus_media_browser()
         self.set_status(status)
-        self.set_timer(0.05, lambda: self.set_status(status), name="continue-watching-watched-status")
 
     def refresh_visible_media_item(self, media: MediaItem) -> None:
         if self.media_grid_visible():

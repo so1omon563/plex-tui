@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Discarded late watched-state and Continue Watching refresh results after
+  navigation, Back, or opening an overlay.
 - Prevented delayed playlist removals from hiding shared media in another
   playlist or decrementing counts more than once.
 - Kept delayed playlist renames attached to the original playlist and preserved

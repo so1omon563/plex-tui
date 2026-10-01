@@ -168,3 +168,58 @@ def test_playlist_removal_does_not_decrement_twice(app):
     app.apply_playlist_removal(playlist, [removed])
     assert state.items == [remaining]
     assert state.total == 1
+
+
+@pytest.mark.parametrize("destination", ["library", "new_continue_watching", "settings", "back", "unchanged"])
+@pytest.mark.parametrize("error", [False, True])
+def test_watched_refresh_respects_navigation_identity(app, destination, error):
+    watched, fresh = media("watched"), media("fresh")
+    original = BrowseState("Continue Watching", [watched], source="continue_watching", next_start=1, total=1)
+    app.browsing_stack = [original]
+    newer = BrowseState("New view", [media("other")], source=(
+        "continue_watching" if destination == "new_continue_watching" else "library:library"
+    ))
+
+    def navigate():
+        if destination == "unchanged":
+            return
+        app.invalidate_navigation_results()
+        if destination in {"library", "new_continue_watching"}:
+            app.browsing_stack = [newer]
+        elif destination == "settings":
+            app.settings_visible = True
+        # Back can return to the identical state object; its older result is stale.
+
+    delayed_result(app, PlexTuiApp.refresh_continue_watching_after_watched, "continue_watching_page",
+                   MediaPage([fresh], start=0, total=1), navigate, watched, original, app.navigation_token, error=error)
+    if destination == "unchanged":
+        if error:
+            app.show_error.assert_called_once()
+        else:
+            assert app.current_browse_state().items == [fresh]
+            app.show_browse_state.assert_called_once()
+    else:
+        assert app.current_browse_state() is (newer if destination in {"library", "new_continue_watching"} else original)
+        app.show_browse_state.assert_not_called()
+        app.focus_media_browser.assert_not_called()
+        app.show_error.assert_not_called()
+
+
+def test_delayed_watched_mutation_does_not_refresh_a_new_view(app, monkeypatch):
+    watched = media("watched")
+    watched.raw.markWatched = lambda: app.service.mark_watched()
+    original = BrowseState("Continue Watching", [watched], source="continue_watching")
+    newer = BrowseState("Continue Watching", [media("other")], source="continue_watching")
+    app.browsing_stack = [original]
+    refresh = Mock()
+    monkeypatch.setattr(app, "refresh_continue_watching_after_watched", refresh)
+
+    def navigate():
+        app.invalidate_navigation_results()
+        app.browsing_stack = [newer]
+
+    delayed_result(app, PlexTuiApp.toggle_watched_state, "mark_watched", watched.raw,
+                   navigate, watched, original, app.navigation_token)
+    assert app.current_browse_state() is newer
+    refresh.assert_not_called()
+    app.show_browse_state.assert_not_called()
