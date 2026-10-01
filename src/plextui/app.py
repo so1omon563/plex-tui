@@ -161,6 +161,7 @@ class BrowseState:
     context_media: MediaItem | None = None
     discover_media_type: str = "movies_shows"
     guide_date: date | None = None
+    page_revision: int = 0
 
     @property
     def has_more(self) -> bool:
@@ -1697,6 +1698,7 @@ class PlexTuiApp(App[None]):
         source = state.source
         if source == "fuzzy_search":
             return
+        page_revision = state.page_revision
         loaded_count = max(state.next_start, len(state.items), self.config.page_size)
         try:
             if source == "discover":
@@ -1817,18 +1819,20 @@ class PlexTuiApp(App[None]):
             message = f"failed to refresh media browser: {exc}"
 
             def show_refresh_error() -> None:
-                if self.current_browse_state() is state and not self.browse_overlay_visible():
+                if (self.current_browse_state() is state and state.page_revision == page_revision
+                        and not self.browse_overlay_visible()):
                     self.show_error(message)
 
             self.call_from_thread(show_refresh_error)
             return
 
         def apply() -> None:
-            if self.current_browse_state() is not state:
+            if self.current_browse_state() is not state or state.page_revision != page_revision:
                 return
             state.items = items
             state.next_start = next_start
             state.total = total
+            state.page_revision += 1
             if self.browse_overlay_visible():
                 return
             target_key = selected_key
@@ -1948,6 +1952,7 @@ class PlexTuiApp(App[None]):
         if not state.has_more:
             self.call_from_thread(self.set_status, "No more items to load")
             return
+        page_revision = state.page_revision
         self.loading_more = True
         self.post_message(StatusChanged(load_more_status(state)))
         self.call_from_thread(self.show_load_more_feedback, state, selected_key)
@@ -1997,8 +2002,15 @@ class PlexTuiApp(App[None]):
             else:
                 page = self.service.library_page(state.selected_library, state.next_start, self.config.page_size)
         except Exception as exc:
-            self.loading_more = False
-            self.call_from_thread(self.show_error, str(exc))
+            message = str(exc)
+
+            def show_page_error() -> None:
+                self.loading_more = False
+                if (self.current_browse_state() is state and state.page_revision == page_revision
+                        and not self.browse_overlay_visible()):
+                    self.show_error(message)
+
+            self.call_from_thread(show_page_error)
             return
         write_performance_log(
             "load_more_page",
@@ -2007,7 +2019,7 @@ class PlexTuiApp(App[None]):
         )
 
         def update() -> None:
-            if not self.browsing_stack or self.browsing_stack[-1] is not state:
+            if self.current_browse_state() is not state or state.page_revision != page_revision:
                 self.loading_more = False
                 return
             page_items = (
@@ -2019,6 +2031,7 @@ class PlexTuiApp(App[None]):
             state.items.extend(page_items)
             state.next_start = page.next_start
             state.total = page.total
+            state.page_revision += 1
             self.loading_more = False
             self.suppress_auto_load = True
             target_key = selected_key or first_new_key
@@ -3681,6 +3694,7 @@ class PlexTuiApp(App[None]):
             if state is not None:
                 state.items = [item for item in state.items if item.key != playlist.key]
                 state.total = max(0, state.total - 1) if state.total else len(state.items)
+                state.page_revision += 1
                 self.show_browse_state(state)
                 self.focus_media_browser()
         self.set_status(status)
@@ -4366,6 +4380,7 @@ class PlexTuiApp(App[None]):
             if state.total is not None:
                 state.total = max(0, state.total - removed_count)
             state.next_start = max(0, state.next_start - removed_count)
+            state.page_revision += 1
         if current_index is None or self.browse_overlay_visible():
             return
         state = current
@@ -4404,6 +4419,7 @@ class PlexTuiApp(App[None]):
         state.next_start = max(0, state.next_start - removed_count)
         if state.total is not None:
             state.total = max(0, state.total - removed_count)
+        state.page_revision += 1
         if self.browse_overlay_visible():
             return
         next_index = min(index, len(state.items) - 1)

@@ -15,6 +15,8 @@
   the user's current playlist, selection, or open rename prompt.
 - Kept Settings, Help, and pickers open when post-playback refreshes finish,
   while refreshing the underlying browse data for the return to browsing.
+- Prevented concurrent browse refreshes and page loads from discarding newly
+  loaded pages, restoring removed entries, or applying stale page offsets.
 - Scoped audio and subtitle selection to the played media version and its first
   part, preventing missing tracks from selecting invalid mpv track numbers.
 - Escaped control characters in saved configuration strings so profile names

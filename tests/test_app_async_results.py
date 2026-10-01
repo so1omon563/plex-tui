@@ -88,6 +88,76 @@ def test_playback_refresh_still_repaints_current_browse_view(app):
     app.focus_media_browser.assert_called_once()
 
 
+@pytest.mark.parametrize("mutation", ["load_more", "remove"])
+@pytest.mark.parametrize("error", [False, True])
+def test_playback_refresh_preserves_concurrent_browse_changes(app, mutation, error):
+    first, second = media("first"), media("second")
+    state = BrowseState("Continue Watching", [first], source="continue_watching", next_start=1, total=2)
+    app.browsing_stack = [state]
+    app.config = replace(app.config, page_size=1)
+
+    def mutate():
+        if mutation == "load_more":
+            app.service = SimpleNamespace(continue_watching_page=lambda start, size: MediaPage(
+                [second], start=start, total=2,
+            ))
+            PlexTuiApp.load_more_media.__wrapped__(app)
+        else:
+            app.apply_continue_watching_removal(first)
+        app.show_browse_state.reset_mock()
+        app.focus_media_browser.reset_mock()
+
+    delayed_result(app, PlexTuiApp.refresh_current_browse_state, "continue_watching_page",
+                   MediaPage([first], start=0, total=2), mutate, error=error)
+    assert state.items == ([first, second] if mutation == "load_more" else [])
+    assert state.next_start == (2 if mutation == "load_more" else 0)
+    assert state.total == (2 if mutation == "load_more" else 1)
+    app.show_browse_state.assert_not_called()
+    app.focus_media_browser.assert_not_called()
+    app.show_error.assert_not_called()
+
+
+def test_playback_refresh_does_not_restore_removed_playlist_items(app):
+    playlist, first, second = media("playlist", "playlist"), media("first"), media("second")
+    state = BrowseState("Playlist", [first, second], source="playlist", context_media=playlist,
+                        next_start=2, total=2)
+    app.browsing_stack = [state]
+    delayed_result(app, PlexTuiApp.refresh_current_browse_state, "children", [first, second],
+                   lambda: app.apply_playlist_removal(playlist, [first]))
+    assert state.items == [second]
+    assert state.next_start == state.total == 1
+
+
+@pytest.mark.parametrize("mutation", ["refresh", "remove"])
+@pytest.mark.parametrize("error", [False, True])
+def test_paging_rejects_results_after_concurrent_browse_changes(app, mutation, error):
+    first, second, fresh = media("first"), media("second"), media("fresh")
+    state = BrowseState("Continue Watching", [first], source="continue_watching", next_start=1, total=2)
+    app.browsing_stack = [state]
+    app.config = replace(app.config, page_size=1)
+
+    def mutate():
+        if mutation == "refresh":
+            app.service = SimpleNamespace(continue_watching_page=lambda start, size: MediaPage(
+                [fresh], start=0, total=1,
+            ))
+            PlexTuiApp.refresh_current_browse_state.__wrapped__(app)
+        else:
+            app.apply_continue_watching_removal(first)
+        app.show_browse_state.reset_mock()
+        app.focus_media_browser.reset_mock()
+
+    delayed_result(app, PlexTuiApp.load_more_media, "continue_watching_page",
+                   MediaPage([second], start=1, total=2), mutate, error=error)
+    assert state.items == ([fresh] if mutation == "refresh" else [])
+    assert state.next_start == (1 if mutation == "refresh" else 0)
+    assert state.total == 1
+    assert not app.loading_more
+    app.show_browse_state.assert_not_called()
+    app.focus_media_browser.assert_not_called()
+    app.show_error.assert_not_called()
+
+
 @pytest.mark.parametrize("destination", ["other_playlist", "settings", "new_rename"])
 def test_delayed_playlist_rename_preserves_current_context(app, destination):
     a, b = media("Playlist A", "playlist"), media("Playlist B", "playlist")

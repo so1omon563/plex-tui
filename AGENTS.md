@@ -170,6 +170,9 @@ Apply asynchronous browse refresh results only when their originating
 Post-playback refreshes may update that state's data under an overlay, but must
 not repaint the browser, take focus, or replace the overlay with a late error.
 These refreshes use their own worker group so detail work cannot cancel them.
+Browse refreshes and page loads retain the state's page revision and discard
+late results or errors after another refresh, page load, or removal changes its
+membership or offsets. Metadata enrichment alone does not invalidate paging.
 Route hosted Live TV guide paging through `hosted_live_tv_guide_page` with the
 originating channel context; guide states must not fall through to libraries.
 Hosted Plex Live TV pages, categories, counts, and pagination must expose only
