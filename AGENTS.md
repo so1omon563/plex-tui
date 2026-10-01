@@ -320,6 +320,8 @@ debug-log, and rotated debug-log files owner-only (`0600`), including when
 repairing existing files.
 Persist Plex server `clientIdentifier` values so profile switches survive URL
 changes and never fall back silently to another server.
+When an identity is saved, it takes precedence over an exact URL match to a
+different server; URL-only matching is reserved for legacy unowned connections.
 Store hidden-library and library-order section keys per Plex server and apply
 them only when their saved identity matches the connected server.
 Use `SECURITY.md` for vulnerability reporting policy and keep it aligned with

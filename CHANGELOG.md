@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Kept profile switches on the saved Plex server when another server reuses its
+  previous connection URL.
 - Added an upstream Nix flake for direct Linux installs while retaining PyPI,
   Homebrew, and AUR distribution.
 

@@ -10,6 +10,7 @@ from plextui.auth import (
     LoginSession,
     ProfileChoice,
     ServerChoice,
+    matching_server_choice,
     plex_headers,
     plex_root_responds,
     profile_choices,
@@ -389,7 +390,7 @@ def test_switch_profile_keeps_server_identity_when_url_changes(monkeypatch):
     assert saved["config"] == switched
 
 
-def test_switch_profile_prefers_exact_configured_url_over_stale_identifier(monkeypatch):
+def test_switch_profile_keeps_saved_identity_when_another_server_reuses_url(monkeypatch):
     users = [FakeUser("Kid", 2)]
     profile_account = FakeAccount(
         [
@@ -428,9 +429,25 @@ def test_switch_profile_prefers_exact_configured_url_over_stale_identifier(monke
         ProfileChoice("Kid", "2", False, False, users[0]),
     )
 
-    assert switched.base_url == "https://current.example:32400"
-    assert switched.token == "current-token"
-    assert switched.server_identifier == "current-server"
+    assert switched.base_url == "https://former.example:32400"
+    assert switched.token == "former-token"
+    assert switched.server_identifier == "saved-server"
+
+
+def test_server_choice_rejects_reused_url_unless_identity_is_unknown():
+    resource = FakeResource("Other Plex", "other-token", [], identifier="other-server")
+    choice = ServerChoice("Other Plex", "http://reused:32400", "owned", resource)
+
+    assert matching_server_choice([choice], choice.uri, "saved-server") is None
+    assert matching_server_choice([choice], choice.uri) is choice
+
+
+def test_server_choice_preserves_exact_url_within_saved_identity():
+    resource = FakeResource("Plex", "token", [], identifier="saved-server")
+    local = ServerChoice("Plex", "http://127.0.0.1:32400", "owned", resource)
+    configured = ServerChoice("Plex", "https://remote.example:32400", "owned", resource)
+
+    assert matching_server_choice([local, configured], configured.uri, "saved-server") is configured
 
 
 def test_switch_profile_does_not_fall_back_to_another_server(monkeypatch):
