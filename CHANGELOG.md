@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.17.31 - 2026-10-01
+
 - Corrected Continue Watching pagination after removals so the next unloaded
   item is not skipped, and kept Load more available after removing the last
   loaded item.
