@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Kept delayed playlist renames attached to the original playlist and preserved
+  the user's current playlist, selection, or open rename prompt.
 - Kept Settings, Help, and pickers open when post-playback refreshes finish,
   while refreshing the underlying browse data for the return to browsing.
 - Scoped audio and subtitle selection to the played media version and its first

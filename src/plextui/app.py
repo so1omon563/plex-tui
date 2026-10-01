@@ -1642,7 +1642,7 @@ class PlexTuiApp(App[None]):
         return state.source if state is not None else ""
 
     def browse_overlay_visible(self) -> bool:
-        return any(getattr(self, name, False) for name in (
+        return bool(getattr(self, "input_mode", "")) or any(getattr(self, name, False) for name in (
             "help_visible", "settings_visible", "picker_visible", "playlist_picker_visible",
         ))
 
@@ -3593,19 +3593,24 @@ class PlexTuiApp(App[None]):
         self.call_from_thread(self.apply_playlist_rename, playlist, renamed)
 
     def apply_playlist_rename(self, old_playlist: MediaItem, renamed: MediaItem) -> None:
-        self.playlist_picker_item = None
-        self.replace_playlist_reference(old_playlist.key, renamed)
-        status = f"Renamed playlist to {renamed.title}"
         state = self.current_browse_state()
-        selected_key = renamed.key
-        if state is not None:
-            if is_playlist_browse_state(state):
-                state.title = renamed.title
-                state.context_media = renamed
-            self.show_browse_state(state, selected_key=selected_key)
-            self.focus_media_browser()
+        selected = self.selected_media()
+        affected = state is not None and (
+            any(item.key == old_playlist.key for item in state.items)
+            or (state.context_media is not None and state.context_media.key == old_playlist.key)
+        )
+        if self.input_mode != "playlist_rename" and (
+            self.playlist_picker_item is not None and self.playlist_picker_item.key == old_playlist.key
+        ):
+            self.playlist_picker_item = None
+        self.replace_playlist_reference(old_playlist.key, renamed)
+        if not affected or self.browse_overlay_visible():
+            return
+        status = f"Renamed playlist to {renamed.title}"
+        selected_key = selected.key if selected is not None else renamed.key
+        self.show_browse_state(state, selected_key=selected_key, status_after_refresh=status)
+        self.focus_media_browser()
         self.set_status(status)
-        self.set_timer(0.2, lambda: self.set_status(status), name="playlist-rename-status")
 
     def action_delete_playlist(self) -> None:
         playlist = self.playlist_action_target()
@@ -3656,6 +3661,8 @@ class PlexTuiApp(App[None]):
             state.items = [playlist if item.key == playlist_key else item for item in state.items]
             if state.context_media is not None and state.context_media.key == playlist_key:
                 state.context_media = playlist
+                if is_playlist_browse_state(state):
+                    state.title = playlist.title
 
     @work(thread=True, exclusive=True, group="playlist")
     def create_playlist_from_items(self, title: str, items: list[MediaItem]) -> None:

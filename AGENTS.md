@@ -208,6 +208,8 @@ immediate parent instead of skipping a level.
 Current-view search must derive its backend and context from the active
 `BrowseState`; incomplete non-library sources must not fall back to a selected
 sidebar library.
+Playlist rename results update references by playlist key, including retained
+parent views, without retargeting a different playlist or replacing an overlay.
 
 ## Testing Guidelines
 

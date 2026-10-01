@@ -85,3 +85,51 @@ def test_playback_refresh_still_repaints_current_browse_view(app):
     assert state.items == [fresh]
     app.show_browse_state.assert_called_once_with(state, selected_key=None)
     app.focus_media_browser.assert_called_once()
+
+
+@pytest.mark.parametrize("destination", ["other_playlist", "settings", "new_rename"])
+def test_delayed_playlist_rename_preserves_current_context(app, destination):
+    a, b = media("Playlist A", "playlist"), media("Playlist B", "playlist")
+    shared = media("shared")
+    parent = BrowseState("Playlists", [a, b], source="playlists", total=2)
+    original = BrowseState(a.title, [shared], source="playlist", context_media=a, total=1)
+    newer = BrowseState(b.title, [shared, media("b-only")], source="playlist", context_media=b, total=2)
+    app.browsing_stack = [parent, original]
+    app.playlist_picker_item = a
+    renamed = replace(a, title="Renamed A")
+
+    def navigate():
+        if destination == "other_playlist":
+            app.browsing_stack.append(newer)
+        else:
+            app.settings_visible = destination == "settings"
+            if destination == "new_rename":
+                app.playlist_picker_item = b
+                app.input_mode = "playlist_rename"
+
+    delayed_result(app, PlexTuiApp.rename_playlist, "rename_playlist", renamed, navigate, a, renamed.title)
+    assert parent.items == [renamed, b]
+    assert original.context_media is renamed
+    assert original.title == renamed.title
+    if destination == "other_playlist":
+        assert app.playlist_action_target() is b
+        assert newer.title == b.title
+        assert newer.items == [shared, media("b-only")]
+    elif destination == "new_rename":
+        assert app.playlist_picker_item is b
+    app.show_browse_state.assert_not_called()
+    app.focus_media_browser.assert_not_called()
+
+
+def test_current_playlist_rename_preserves_selected_media(app):
+    playlist = media("Playlist", "playlist")
+    selected = media("selected")
+    state = BrowseState(playlist.title, [selected], source="playlist", context_media=playlist, total=1)
+    app.browsing_stack = [state]
+    renamed = replace(playlist, title="Renamed")
+    app.apply_playlist_rename(playlist, renamed)
+    assert app.playlist_action_target() is renamed
+    assert state.title == renamed.title
+    app.show_browse_state.assert_called_once_with(
+        state, selected_key=selected.key, status_after_refresh="Renamed playlist to Renamed",
+    )
