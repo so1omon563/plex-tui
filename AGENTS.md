@@ -210,6 +210,9 @@ Current-view search must derive its backend and context from the active
 sidebar library.
 Playlist rename results update references by playlist key, including retained
 parent views, without retargeting a different playlist or replacing an overlay.
+Playlist removals likewise update only states for the mutated playlist and
+adjust counts for entries actually removed. Playlist mutations use a dedicated
+worker group so detail refreshes cannot cancel them.
 
 ## Testing Guidelines
 

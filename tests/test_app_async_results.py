@@ -133,3 +133,38 @@ def test_current_playlist_rename_preserves_selected_media(app):
     app.show_browse_state.assert_called_once_with(
         state, selected_key=selected.key, status_after_refresh="Renamed playlist to Renamed",
     )
+
+
+@pytest.mark.parametrize("destination", ["other_playlist", "settings"])
+def test_delayed_playlist_removal_updates_only_its_playlist(app, destination):
+    a, b = media("Playlist A", "playlist"), media("Playlist B", "playlist")
+    shared, remaining = media("shared"), media("remaining")
+    original = BrowseState(a.title, [shared, remaining], source="playlist", context_media=a, total=2)
+    newer = BrowseState(b.title, [shared, remaining], source="playlist", context_media=b, total=2)
+    app.browsing_stack = [original]
+
+    def navigate():
+        if destination == "other_playlist":
+            app.browsing_stack.append(newer)
+        else:
+            app.settings_visible = True
+
+    delayed_result(app, PlexTuiApp.remove_playlist_items, "remove_items_from_playlist",
+                   None, navigate, a, [shared])
+    assert original.items == [remaining]
+    assert original.total == 1
+    assert newer.items == [shared, remaining]
+    assert newer.total == 2
+    app.show_browse_state.assert_not_called()
+    app.focus_media_browser.assert_not_called()
+
+
+def test_playlist_removal_does_not_decrement_twice(app):
+    playlist = media("Playlist", "playlist")
+    removed, remaining = media("removed"), media("remaining")
+    state = BrowseState(playlist.title, [removed, remaining], source="playlist", context_media=playlist, total=2)
+    app.browsing_stack = [state]
+    app.apply_playlist_removal(playlist, [removed])
+    app.apply_playlist_removal(playlist, [removed])
+    assert state.items == [remaining]
+    assert state.total == 1

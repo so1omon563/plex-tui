@@ -4307,7 +4307,7 @@ class PlexTuiApp(App[None]):
         self.set_status(f"Removing {media.title} from Continue Watching...")
         self.remove_continue_watching_item(media)
 
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="playlist")
     def remove_playlist_items(self, playlist: MediaItem, items: list[MediaItem]) -> None:
         if self.service is None:
             return
@@ -4321,30 +4321,31 @@ class PlexTuiApp(App[None]):
     def apply_playlist_removal(self, playlist: MediaItem, items: list[MediaItem]) -> None:
         removed_keys = {item.key for item in items}
         item_label = playlist_items_label(items)
-        if not self.browsing_stack or self.browsing_stack[-1].source != "playlist":
-            self.set_status(f"Removed {item_label} from {playlist.title}")
+        current = self.current_browse_state()
+        current_index = None
+        for state in self.browsing_stack:
+            if state.source != "playlist" or state.context_media is None or state.context_media.key != playlist.key:
+                continue
+            remaining = [item for item in state.items if item.key not in removed_keys]
+            removed_count = len(state.items) - len(remaining)
+            if not removed_count:
+                continue
+            if state is current:
+                current_index = selected_media_index(state.items, items[0].key)
+            state.items = remaining
+            if state.total is not None:
+                state.total = max(0, state.total - removed_count)
+            state.next_start = max(0, state.next_start - removed_count)
+        if current_index is None or self.browse_overlay_visible():
             return
-        state = self.browsing_stack[-1]
-        first_removed_key = items[0].key if items else ""
-        index = selected_media_index(state.items, first_removed_key)
-        state.items = [item for item in state.items if item.key not in removed_keys]
+        state = current
         self.bulk_selected_keys.difference_update(removed_keys)
-        state.total = max(0, state.total - len(removed_keys)) if state.total else len(state.items)
-        if not state.items:
-            self.show_browse_state(state)
-            self.show_detail_text("No items")
-            self.set_status(f"Removed {item_label} from {playlist.title}")
-            return
-        next_index = min(index, len(state.items) - 1)
-        self.show_browse_state(state, selected_key=state.items[next_index].key)
-        self.focus_media_browser()
+        next_index = min(current_index, len(state.items) - 1)
+        selected_key = state.items[next_index].key if state.items else None
         status = f"Removed {item_label} from {playlist.title}"
+        self.show_browse_state(state, selected_key=selected_key, status_after_refresh=status)
+        self.focus_media_browser()
         self.set_status(status)
-        self.set_timer(
-            0.2,
-            lambda: self.set_status(status),
-            name="playlist-removal-status",
-        )
 
     @work(thread=True, exclusive=True)
     def remove_continue_watching_item(self, media: MediaItem) -> None:

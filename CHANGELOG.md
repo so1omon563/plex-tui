@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Prevented delayed playlist removals from hiding shared media in another
+  playlist or decrementing counts more than once.
 - Kept delayed playlist renames attached to the original playlist and preserved
   the user's current playlist, selection, or open rename prompt.
 - Kept Settings, Help, and pickers open when post-playback refreshes finish,
