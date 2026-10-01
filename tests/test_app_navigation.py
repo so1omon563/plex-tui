@@ -1416,6 +1416,39 @@ def test_remove_continue_watching_removes_selected_item():
     asyncio.run(run_remove_continue_watching_check())
 
 
+def test_removing_last_loaded_continue_watching_item_keeps_load_more():
+    asyncio.run(run_removing_last_loaded_continue_watching_item_keeps_load_more_check())
+
+
+async def run_removing_last_loaded_continue_watching_item_keeps_load_more_check():
+    removed = MediaItem("Removed", "", "movie", "removed", True, Raw())
+    next_item = MediaItem("Next", "", "movie", "next", True, Raw())
+    calls = []
+
+    class Service:
+        def continue_watching_page(self, start, size):
+            calls.append(start)
+            return MediaPage([next_item], start=start, total=1)
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        app.service = Service()
+        state = BrowseState("Continue Watching", [removed], source="continue_watching", next_start=1, total=2)
+        app.browsing_stack = [state]
+        app.suppress_auto_load = True
+        app.show_browse_state(state)
+        await pilot.pause(0.2)
+        app.apply_continue_watching_removal(removed)
+        await pilot.pause(0.2)
+        assert isinstance(app.query_one("#media", ListView).highlighted_child, LoadMoreRow)
+        worker = app.load_more_media()
+        await asyncio.wait_for(worker.wait(), 5)
+        await pilot.pause(0.2)
+        assert calls == [0]
+        assert state.items == [next_item]
+        assert app.selected_media().key == next_item.key
+
+
 def test_remove_continue_watching_requires_continue_watching_view():
     asyncio.run(run_remove_continue_watching_requires_view_check())
 

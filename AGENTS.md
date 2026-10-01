@@ -195,6 +195,9 @@ Watched-state updates and their Continue Watching refresh use a dedicated
 worker group so background detail refreshes cannot cancel them.
 Their UI callbacks must retain both the originating browse state and navigation
 generation, so leaving and returning to the same state still invalidates old work.
+Continue Watching removals decrement the page offset and known total only for
+loaded entries actually removed. Empty paged views with remaining results must
+keep a Load more action. Removal workers are isolated from detail refreshes.
 Kitty derived images must use verified full-content cache identities, resolve
 short image-ID collisions across concurrent app processes, retain pending
 terminal transfers, and share the bounded artwork cache policy.

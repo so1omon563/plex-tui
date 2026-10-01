@@ -223,3 +223,39 @@ def test_delayed_watched_mutation_does_not_refresh_a_new_view(app, monkeypatch):
     assert app.current_browse_state() is newer
     refresh.assert_not_called()
     app.show_browse_state.assert_not_called()
+
+
+@pytest.mark.parametrize("loaded", [1, 3])
+@pytest.mark.parametrize("known_total", [True, False])
+def test_continue_watching_removal_keeps_pagination_contiguous(app, loaded, known_total):
+    all_items = [media(str(index)) for index in range(6)]
+    state = BrowseState("Continue Watching", all_items[:loaded], source="continue_watching",
+                        next_start=loaded, total=6 if known_total else None)
+    app.browsing_stack = [state]
+    app.config = replace(app.config, page_size=3)
+    app.service = SimpleNamespace(continue_watching_page=lambda start, size: MediaPage(
+        all_items[start:start + size], start=start, total=len(all_items),
+    ))
+    removed = all_items.pop(0)
+    app.apply_continue_watching_removal(removed)
+    assert state.next_start == loaded - 1
+    assert state.total == (5 if known_total else None)
+    app.apply_continue_watching_removal(removed)
+    assert state.next_start == loaded - 1
+    assert state.total == (5 if known_total else None)
+    if known_total:
+        PlexTuiApp.load_more_media.__wrapped__(app)
+        assert state.items == all_items[:loaded - 1 + 3]
+    else:
+        assert state.items == all_items[:loaded - 1]
+
+
+def test_repeated_continue_watching_removals_adjust_offset(app):
+    items = [media(str(index)) for index in range(3)]
+    state = BrowseState("Continue Watching", list(items), source="continue_watching", next_start=3, total=6)
+    app.browsing_stack = [state]
+    app.apply_continue_watching_removal(items[0])
+    app.apply_continue_watching_removal(items[1])
+    assert state.items == [items[2]]
+    assert state.next_start == 1
+    assert state.total == 4

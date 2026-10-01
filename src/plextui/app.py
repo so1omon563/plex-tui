@@ -2263,6 +2263,10 @@ class PlexTuiApp(App[None]):
                 started,
                 f"title={state.title!r} view={media_view} items={len(state.items)} selected={selected_index}",
             )
+        elif state.has_more:
+            self.show_media_list()
+            self.replace_media_rows([LoadMoreRow(0, state.total, source=state.source)], selected_index=0)
+            self.show_detail_text("Load the next page of items.")
         else:
             self.show_empty_state(
                 state.title,
@@ -4363,7 +4367,7 @@ class PlexTuiApp(App[None]):
         self.focus_media_browser()
         self.set_status(status)
 
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="continue-watching-removal")
     def remove_continue_watching_item(self, media: MediaItem) -> None:
         method = getattr(media.raw, "removeFromContinueWatching", None)
         if not callable(method):
@@ -4382,22 +4386,22 @@ class PlexTuiApp(App[None]):
             return
         state = self.browsing_stack[-1]
         index = selected_media_index(state.items, media.key)
-        state.items = [item for item in state.items if item.key != media.key]
-        state.total = max(0, state.total - 1) if state.total else len(state.items)
-        if not state.items:
-            self.show_browse_state(state)
-            self.show_detail_text("No items")
-            self.set_status(f"Removed {media.title} from Continue Watching")
+        remaining = [item for item in state.items if item.key != media.key]
+        removed_count = len(state.items) - len(remaining)
+        if not removed_count:
+            return
+        state.items = remaining
+        state.next_start = max(0, state.next_start - removed_count)
+        if state.total is not None:
+            state.total = max(0, state.total - removed_count)
+        if self.browse_overlay_visible():
             return
         next_index = min(index, len(state.items) - 1)
-        self.show_browse_state(state, selected_key=state.items[next_index].key)
+        selected_key = state.items[next_index].key if state.items else None
+        status = f"Removed {media.title} from Continue Watching"
+        self.show_browse_state(state, selected_key=selected_key, status_after_refresh=status)
         self.focus_media_browser()
-        self.set_status(f"Removed {media.title} from Continue Watching")
-        self.set_timer(
-            0.05,
-            lambda: self.set_status(f"Removed {media.title} from Continue Watching"),
-            name="continue-watching-removal-status",
-        )
+        self.set_status(status)
 
     @work(thread=True, exclusive=True, group="watched")
     def toggle_watched_state(self, media: MediaItem, state: BrowseState | None, token: int) -> None:

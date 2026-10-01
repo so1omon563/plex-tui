@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Corrected Continue Watching pagination after removals so the next unloaded
+  item is not skipped, and kept Load more available after removing the last
+  loaded item.
 - Discarded late watched-state and Continue Watching refresh results after
   navigation, Back, or opening an overlay.
 - Prevented delayed playlist removals from hiding shared media in another
