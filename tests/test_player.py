@@ -1198,6 +1198,7 @@ def test_track_choices_only_use_the_first_file_of_the_played_version(multipart):
         handle = play_with_mpv(item, audio_choice=StreamChoice(20, "English", english),
                                subtitle_choice=StreamChoice(20, "English", english))
     assert "http://plex/parts/1.mkv" in handle.command
+    assert handle.version_part_id == "1"
     assert not any(arg.startswith(("--aid=", "--sid=")) for arg in handle.command)
     if not multipart:
         assert "http://plex/parts/2.mkv" not in handle.command
@@ -1208,9 +1209,11 @@ def test_track_choices_only_use_the_first_file_of_the_played_version(multipart):
 def test_live_track_switch_uses_the_launched_version_metadata():
     japanese = SimpleNamespace(id=10, languageCode="jpn", key=None)
     english = SimpleNamespace(id=20, languageCode="eng", key=None)
-    part = SimpleNamespace(audioStreams=lambda: [english], subtitleStreams=lambda: [english])
-    playing = SimpleNamespace(media=[SimpleNamespace(parts=[part])])
-    handle = SimpleNamespace(active=True, socket_path=Path("/tmp/socket"), monitor=SimpleNamespace(item=playing))
+    part = SimpleNamespace(id=2, audioStreams=lambda: [english], subtitleStreams=lambda: [english])
+    other = SimpleNamespace(id=1, audioStreams=lambda: [japanese], subtitleStreams=lambda: [japanese])
+    playing = SimpleNamespace(media=[SimpleNamespace(parts=[other]), SimpleNamespace(parts=[part])])
+    handle = SimpleNamespace(active=True, socket_path=Path("/tmp/socket"),
+                             monitor=SimpleNamespace(item=playing), version_part_id="2")
     with patch("plextui.player.mpv_set_property", return_value=True) as set_property:
         assert not switch_mpv_stream(handle, Item(), StreamChoice(10, "Japanese", japanese), "audio")
         set_property.assert_not_called()

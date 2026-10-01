@@ -163,6 +163,8 @@ multipart modes must fail clearly before launching mpv.
 Track choices and mpv track numbers belong to the first part of the launched
 media version; later versions and split parts must not add phantom tracks.
 Live track changes use the metadata retained by the active playback monitor.
+Retain the launched part ID on the playback handle so live pickers and track
+changes keep that version even if later metadata reloads reorder the versions.
 Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
 Post-playback refreshes may update that state's data under an overlay, but must

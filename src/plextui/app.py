@@ -3390,7 +3390,17 @@ class PlexTuiApp(App[None]):
             return selected is not None and selected.key == media.key
 
         try:
-            choices = subtitle_choices(media.raw) if stream_type == "subtitle" else audio_choices(media.raw)
+            choice_loader = subtitle_choices if stream_type == "subtitle" else audio_choices
+            version_part_id = None
+            if (
+                self.player is not None and self.player.active
+                and self.active_playback_media is not None and self.active_playback_media.key == media.key
+            ):
+                version_part_id = getattr(self.player, "version_part_id", None)
+            choices = (
+                choice_loader(media.raw, version_part_id=version_part_id)
+                if version_part_id is not None else choice_loader(media.raw)
+            )
         except Exception as exc:
             message = str(exc)
 

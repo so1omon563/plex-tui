@@ -38,6 +38,7 @@ class PlayerHandle:
     command: list[str]
     monitor: "ProgressMonitor"
     process: subprocess.Popen[bytes]
+    version_part_id: str | None = None
 
     @property
     def active(self) -> bool:
@@ -236,6 +237,7 @@ def play_with_mpv(
         command=command,
         monitor=monitor,
         process=process,
+        version_part_id=(str(getattr(playback_parts[0], "id", "") or "") or None) if playback_parts else None,
     )
 
 
@@ -766,6 +768,9 @@ def switch_mpv_stream(
     # Use the metadata scoped at launch, including an explicitly selected version.
     playing_item = getattr(getattr(handle, "monitor", None), "item", None)
     item = playing_item if playing_item is not None else full_metadata(item)
+    version_part_id = getattr(handle, "version_part_id", None)
+    if version_part_id is not None:
+        item, _, _ = selected_media_version(item, version_part_id)
     if stream_type == "subtitle":
         if choice.stream_id == 0:
             return mpv_set_property(handle.socket_path, "sid", "no")

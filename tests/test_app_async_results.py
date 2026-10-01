@@ -259,3 +259,19 @@ def test_repeated_continue_watching_removals_adjust_offset(app):
     assert state.items == [items[2]]
     assert state.next_start == 1
     assert state.total == 4
+
+
+@pytest.mark.parametrize("playing_selected", [False, True])
+def test_live_stream_picker_scopes_choices_to_active_version(app, monkeypatch, playing_selected):
+    selected = media("selected")
+    app.browsing_stack = [BrowseState("Movies", [selected])]
+    app.player = SimpleNamespace(active=True, version_part_id="part-2")
+    app.active_playback_media = selected if playing_selected else media("other")
+    app.call_navigation_from_thread = Mock()
+    choices = Mock(return_value=[])
+    monkeypatch.setattr("plextui.app.audio_choices", choices)
+    PlexTuiApp.open_stream_picker.__wrapped__(app, selected, "audio")
+    if playing_selected:
+        choices.assert_called_once_with(selected.raw, version_part_id="part-2")
+    else:
+        choices.assert_called_once_with(selected.raw)
