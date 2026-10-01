@@ -318,6 +318,8 @@ behavior when changing playback or request diagnostics.
 On POSIX, keep the app config directory owner-only (`0700`) and config,
 debug-log, and rotated debug-log files owner-only (`0600`), including when
 repairing existing files.
+Saved configuration strings must round-trip TOML control characters, quotes,
+backslashes, and Unicode without introducing literal forbidden characters.
 Persist Plex server `clientIdentifier` values so profile switches survive URL
 changes and never fall back silently to another server.
 When an identity is saved, it takes precedence over an exact URL match to a

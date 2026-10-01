@@ -19,6 +19,18 @@ def test_config_and_debug_paths_share_platformdirs_base(monkeypatch):
     assert config.debug_log_path() == Path("/tmp/plex-tui/debug.log")
 
 
+@pytest.mark.parametrize("character", [*(chr(n) for n in range(32)), "\x7f", '"', "\\", "雪", "🎬"])
+def test_config_strings_round_trip_control_characters(tmp_path, monkeypatch, character):
+    monkeypatch.setattr(config, "config_path", lambda: tmp_path / "config.toml")
+    for key in ("PLEX_TUI_BASE_URL", "PLEX_TUI_TOKEN"):
+        monkeypatch.delenv(key, raising=False)
+    saved = config.AppConfig("http://plex", "placeholder-token", "client", active_profile_title=f"Before{character}After")
+
+    config.save_config(saved)
+
+    assert config.load_config() == saved
+
+
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permission modes")
 def test_config_permissions_are_owner_only_and_repaired(tmp_path, monkeypatch):
     config_file = tmp_path / "config" / "config.toml"

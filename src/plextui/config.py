@@ -530,7 +530,8 @@ def bool_value(value: str, default: bool, name: str) -> bool:
 
 
 def _toml_escape(value: str) -> str:
-    return value.replace("\\", "\\\\").replace('"', '\\"')
+    # JSON's string escapes are valid TOML; TOML also requires escaping DEL.
+    return json.dumps(value, ensure_ascii=False)[1:-1].replace("\x7f", "\\u007f")
 
 
 def write_debug_log(message: str) -> None:

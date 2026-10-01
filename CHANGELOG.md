@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Escaped control characters in saved configuration strings so profile names
+  and preferences cannot produce unreadable TOML.
 - Kept profile switches on the saved Plex server when another server reuses its
   previous connection URL.
 - Added an upstream Nix flake for direct Linux installs while retaining PyPI,
