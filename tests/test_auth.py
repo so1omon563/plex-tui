@@ -141,6 +141,7 @@ def test_plex_headers_use_package_version():
 
 
 def test_login_wait_uses_reachable_resource_connection(monkeypatch):
+    monkeypatch.setattr("plextui.auth.plex_root_responds", lambda *args, **kwargs: False)
     resources = [
         FakeResource(
             "My Plex",
@@ -176,6 +177,7 @@ def test_login_wait_uses_reachable_resource_connection(monkeypatch):
 
 
 def test_login_wait_fails_when_no_resource_connections_are_reachable(monkeypatch):
+    monkeypatch.setattr("plextui.auth.plex_root_responds", lambda *args, **kwargs: False)
     resources = [
         FakeResource("My Plex", "server-token", ["http://192.168.0.13:32400"]),
     ]
