@@ -9,6 +9,7 @@ import threading
 import time
 from os import terminal_size
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -1168,6 +1169,53 @@ def test_preferred_choices_match_stream_language():
     assert disabled is not None
     assert disabled.stream_id == 0
     assert auto is None
+
+
+@pytest.mark.parametrize("multipart", [False, True])
+def test_track_choices_only_use_the_first_file_of_the_played_version(multipart):
+    japanese = SimpleNamespace(id=10, languageCode="jpn", key=None)
+    english = SimpleNamespace(id=20, languageCode="eng", key=None)
+
+    def part(part_id, stream):
+        return SimpleNamespace(
+            id=part_id, key=f"/parts/{part_id}.mkv", _server=Server(),
+            audioStreams=lambda: [stream], subtitleStreams=lambda: [stream],
+        )
+
+    first, second = part(1, japanese), part(2, english)
+    item = Item()
+    item.media = ([SimpleNamespace(parts=[first, second])] if multipart else
+                  [SimpleNamespace(parts=[first]), SimpleNamespace(parts=[second])])
+    item.iterParts = lambda: [first, second]
+    assert preferred_audio_choice(item, "eng") is None
+    assert preferred_subtitle_choice(item, "eng", "preferred") is None
+    with (
+        patch("plextui.player.shutil.which", return_value="/usr/bin/mpv"),
+        patch("plextui.player.ProgressMonitor.start"),
+        patch("plextui.player.subprocess.Popen", return_value=Proc()),
+    ):
+        # Stale choices from another version/part must not select phantom tracks.
+        handle = play_with_mpv(item, audio_choice=StreamChoice(20, "English", english),
+                               subtitle_choice=StreamChoice(20, "English", english))
+    assert "http://plex/parts/1.mkv" in handle.command
+    assert not any(arg.startswith(("--aid=", "--sid=")) for arg in handle.command)
+    if not multipart:
+        assert "http://plex/parts/2.mkv" not in handle.command
+        assert preferred_audio_choice(item, "eng", version_part_id="2").stream_id == 20
+        assert preferred_subtitle_choice(item, "eng", "preferred", version_part_id="2").stream_id == 20
+
+
+def test_live_track_switch_uses_the_launched_version_metadata():
+    japanese = SimpleNamespace(id=10, languageCode="jpn", key=None)
+    english = SimpleNamespace(id=20, languageCode="eng", key=None)
+    part = SimpleNamespace(audioStreams=lambda: [english], subtitleStreams=lambda: [english])
+    playing = SimpleNamespace(media=[SimpleNamespace(parts=[part])])
+    handle = SimpleNamespace(active=True, socket_path=Path("/tmp/socket"), monitor=SimpleNamespace(item=playing))
+    with patch("plextui.player.mpv_set_property", return_value=True) as set_property:
+        assert not switch_mpv_stream(handle, Item(), StreamChoice(10, "Japanese", japanese), "audio")
+        set_property.assert_not_called()
+        assert switch_mpv_stream(handle, Item(), StreamChoice(20, "English", english), "audio")
+        set_property.assert_called_once_with(handle.socket_path, "aid", 1)
 
 
 def test_sanitize_command_redacts_token_urls():

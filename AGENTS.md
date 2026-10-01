@@ -160,6 +160,9 @@ selection must resolve the chosen Plex part after metadata reload and must not
 silently fall back to another file. Direct playback must keep every ordered
 part of the selected media version in one continuous timeline; unsupported
 multipart modes must fail clearly before launching mpv.
+Track choices and mpv track numbers belong to the first part of the launched
+media version; later versions and split parts must not add phantom tracks.
+Live track changes use the metadata retained by the active playback monitor.
 Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
 Route hosted Live TV guide paging through `hosted_live_tv_guide_page` with the

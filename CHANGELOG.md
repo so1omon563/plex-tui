@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Scoped audio and subtitle selection to the played media version and its first
+  part, preventing missing tracks from selecting invalid mpv track numbers.
 - Escaped control characters in saved configuration strings so profile names
   and preferences cannot produce unreadable TOML.
 - Kept profile switches on the saved Plex server when another server reuses its

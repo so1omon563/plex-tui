@@ -763,17 +763,20 @@ def switch_mpv_stream(
 ) -> bool:
     if not handle.active:
         return False
+    # Use the metadata scoped at launch, including an explicitly selected version.
+    playing_item = getattr(getattr(handle, "monitor", None), "item", None)
+    item = playing_item if playing_item is not None else full_metadata(item)
     if stream_type == "subtitle":
         if choice.stream_id == 0:
             return mpv_set_property(handle.socket_path, "sid", "no")
         if choice.stream_id is None:
             return mpv_set_property(handle.socket_path, "sid", "auto")
-        track_id = mpv_track_id(subtitle_streams(full_metadata(item)), choice.stream)
+        track_id = mpv_track_id(subtitle_streams(item), resolve_subtitle_choice(item, choice))
         if track_id is None:
             return False
         return mpv_set_property(handle.socket_path, "sid", track_id)
     if stream_type == "audio":
-        track_id = mpv_track_id(audio_streams(full_metadata(item)), choice.stream)
+        track_id = mpv_track_id(audio_streams(item), resolve_audio_choice(item, choice))
         if track_id is None:
             return False
         return mpv_set_property(handle.socket_path, "aid", track_id)
@@ -798,10 +801,8 @@ def preferred_subtitle_streams(streams: list[Any]) -> list[Any]:
 
 
 def subtitle_streams(item: Any) -> list[Any]:
-    streams: list[Any] = []
-    for part in iter_parts(item):
-        streams.extend(part.subtitleStreams())
-    return streams
+    parts = media_parts(item)
+    return list(parts[0].subtitleStreams()) if parts else []
 
 
 def active_subtitle_count(item: Any, selected_subtitle: Any = None) -> int:
@@ -813,21 +814,23 @@ def active_subtitle_count(item: Any, selected_subtitle: Any = None) -> int:
 
 
 def audio_streams(item: Any) -> list[Any]:
-    streams: list[Any] = []
-    for part in iter_parts(item):
-        streams.extend(part.audioStreams())
-    return streams
+    parts = media_parts(item)
+    return list(parts[0].audioStreams()) if parts else []
 
 
-def subtitle_choices(item: Any) -> list[StreamChoice]:
+def subtitle_choices(item: Any, version_part_id: str | None = None) -> list[StreamChoice]:
     item = full_metadata(item)
+    if version_part_id is not None:
+        item, _, _ = selected_media_version(item, version_part_id)
     choices = [StreamChoice(None, "Auto (Plex/default)"), StreamChoice(0, "None (disable subtitles)")]
     choices.extend(StreamChoice(getattr(stream, "id", None), stream_label(stream), stream) for stream in subtitle_streams(item))
     return choices
 
 
-def audio_choices(item: Any) -> list[StreamChoice]:
+def audio_choices(item: Any, version_part_id: str | None = None) -> list[StreamChoice]:
     item = full_metadata(item)
+    if version_part_id is not None:
+        item, _, _ = selected_media_version(item, version_part_id)
     return [StreamChoice(getattr(stream, "id", None), stream_label(stream), stream) for stream in audio_streams(item)]
 
 
@@ -850,16 +853,20 @@ def stream_label(stream: Any) -> str:
     return f"{label} ({suffix})" if suffix else str(label)
 
 
-def preferred_audio_choice(item: Any, preferred_language: str) -> StreamChoice | None:
-    return preferred_stream_choice(audio_choices(item), preferred_language)
+def preferred_audio_choice(
+    item: Any, preferred_language: str, version_part_id: str | None = None,
+) -> StreamChoice | None:
+    return preferred_stream_choice(audio_choices(item, version_part_id), preferred_language)
 
 
-def preferred_subtitle_choice(item: Any, preferred_language: str, subtitle_mode: str) -> StreamChoice | None:
+def preferred_subtitle_choice(
+    item: Any, preferred_language: str, subtitle_mode: str, version_part_id: str | None = None,
+) -> StreamChoice | None:
     if subtitle_mode == "none":
         return StreamChoice(0, "None (disable subtitles)")
     if subtitle_mode != "preferred" or not preferred_language:
         return None
-    return preferred_stream_choice(subtitle_choices(item), preferred_language)
+    return preferred_stream_choice(subtitle_choices(item, version_part_id), preferred_language)
 
 
 def preferred_stream_choice(choices: list[StreamChoice], preferred_language: str) -> StreamChoice | None:

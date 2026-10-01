@@ -4503,13 +4503,16 @@ class PlexTuiApp(App[None]):
         if resume and not resume_offset_ms(media.raw):
             self.set_status("No resume position for selected media; press p to play from the beginning")
             return
-        subtitle_choice = preferred_subtitle_choice(
-            media.raw,
-            self.config.preferred_subtitle_language,
-            self.config.subtitle_mode,
-        )
-        audio_choice = preferred_audio_choice(media.raw, self.config.preferred_audio_language)
         try:
+            subtitle_choice = preferred_subtitle_choice(
+                media.raw,
+                self.config.preferred_subtitle_language,
+                self.config.subtitle_mode,
+                version_part_id=version_part_id,
+            )
+            audio_choice = preferred_audio_choice(
+                media.raw, self.config.preferred_audio_language, version_part_id=version_part_id,
+            )
             stop_mpv(self.player)
             self.player = None
             self.active_playback_media = media
