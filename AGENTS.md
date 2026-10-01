@@ -165,6 +165,9 @@ media version; later versions and split parts must not add phantom tracks.
 Live track changes use the metadata retained by the active playback monitor.
 Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
+Post-playback refreshes may update that state's data under an overlay, but must
+not repaint the browser, take focus, or replace the overlay with a late error.
+These refreshes use their own worker group so detail work cannot cancel them.
 Route hosted Live TV guide paging through `hosted_live_tv_guide_page` with the
 originating channel context; guide states must not fall through to libraries.
 Hosted Plex Live TV pages, categories, counts, and pagination must expose only

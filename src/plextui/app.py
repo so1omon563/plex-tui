@@ -1641,6 +1641,11 @@ class PlexTuiApp(App[None]):
         state = self.current_browse_state()
         return state.source if state is not None else ""
 
+    def browse_overlay_visible(self) -> bool:
+        return any(getattr(self, name, False) for name in (
+            "help_visible", "settings_visible", "picker_visible", "playlist_picker_visible",
+        ))
+
     def call_navigation_from_thread(self, callback: Callable[..., Any], *args: object) -> None:
         worker = get_current_worker()
         self.call_from_thread(self.apply_navigation_result, worker, callback, args)
@@ -1662,7 +1667,7 @@ class PlexTuiApp(App[None]):
         self.search_token += 1
         self.workers.cancel_group(self, "search")
 
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="browse-refresh")
     def refresh_current_browse_state(
         self,
         selected_key: str | None = None,
@@ -1796,7 +1801,7 @@ class PlexTuiApp(App[None]):
             message = f"failed to refresh media browser: {exc}"
 
             def show_refresh_error() -> None:
-                if self.current_browse_state() is state:
+                if self.current_browse_state() is state and not self.browse_overlay_visible():
                     self.show_error(message)
 
             self.call_from_thread(show_refresh_error)
@@ -1808,6 +1813,8 @@ class PlexTuiApp(App[None]):
             state.items = items
             state.next_start = next_start
             state.total = total
+            if self.browse_overlay_visible():
+                return
             target_key = selected_key
             if source == "continue_watching":
                 target_key = continue_watching_playback_selection(played_media, items, selected_key)
