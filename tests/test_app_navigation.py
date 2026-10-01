@@ -1313,6 +1313,57 @@ def test_playback_refresh_ignores_replaced_library_state():
     asyncio.run(run_playback_refresh_ignores_replaced_library_state_check())
 
 
+@pytest.mark.parametrize("overlay", ["settings", "help", "resume", "audio"])
+def test_playback_refresh_preserves_overlay_until_back(overlay):
+    asyncio.run(run_playback_refresh_preserves_overlay_until_back_check(overlay))
+
+
+async def run_playback_refresh_preserves_overlay_until_back_check(overlay):
+    started, release = threading.Event(), threading.Event()
+    original = MediaItem("Original", "", "movie", "old", True, Raw())
+    fresh = MediaItem("Refreshed", "", "movie", "fresh", True, Raw())
+
+    class Service:
+        def continue_watching_page(self, start, size):
+            started.set()
+            assert release.wait(10)
+            return MediaPage([fresh], start=0, total=1)
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        app.service = Service()
+        state = BrowseState("Continue Watching", [original], source="continue_watching", next_start=1, total=1)
+        app.browsing_stack = [state]
+        app.show_browse_state(state)
+        await pilot.pause(0.2)
+        worker = app.refresh_current_browse_state()
+        try:
+            assert await asyncio.to_thread(started.wait, 3)
+            if overlay == "settings":
+                app.action_show_settings()
+            elif overlay == "help":
+                app.action_show_help()
+            elif overlay == "resume":
+                app.show_resume_picker(original)
+            else:
+                with patch("plextui.app.audio_choices", return_value=[StreamChoice(1, "English")]):
+                    picker = app.open_stream_picker(original, "audio")
+                    await asyncio.wait_for(picker.wait(), 5)
+            await pilot.pause(0.2)
+            rows = list(app.query_one("#media", ListView).children)
+            focus = app.focused
+        finally:
+            release.set()
+        await asyncio.wait_for(worker.wait(), 5)
+        await pilot.pause(0.2)
+        assert state.items == [fresh]
+        assert list(app.query_one("#media", ListView).children) == rows
+        assert app.focused is focus
+        app.action_back_or_clear()
+        await pilot.pause(0.2)
+        assert app.selected_media().key == fresh.key
+
+
 def test_open_parent_context_from_continue_watching_episode():
     asyncio.run(run_open_parent_context_from_continue_watching_episode_check())
 
@@ -1363,6 +1414,38 @@ def test_delete_playlist_removes_current_playlist():
 
 def test_remove_continue_watching_removes_selected_item():
     asyncio.run(run_remove_continue_watching_check())
+
+
+def test_removing_last_loaded_continue_watching_item_keeps_load_more():
+    asyncio.run(run_removing_last_loaded_continue_watching_item_keeps_load_more_check())
+
+
+async def run_removing_last_loaded_continue_watching_item_keeps_load_more_check():
+    removed = MediaItem("Removed", "", "movie", "removed", True, Raw())
+    next_item = MediaItem("Next", "", "movie", "next", True, Raw())
+    calls = []
+
+    class Service:
+        def continue_watching_page(self, start, size):
+            calls.append(start)
+            return MediaPage([next_item], start=start, total=1)
+
+    app = PlexTuiApp()
+    async with app.run_test() as pilot:
+        app.service = Service()
+        state = BrowseState("Continue Watching", [removed], source="continue_watching", next_start=1, total=2)
+        app.browsing_stack = [state]
+        app.suppress_auto_load = True
+        app.show_browse_state(state)
+        await pilot.pause(0.2)
+        app.apply_continue_watching_removal(removed)
+        await pilot.pause(0.2)
+        assert isinstance(app.query_one("#media", ListView).highlighted_child, LoadMoreRow)
+        app.load_more_media()
+        selected = await wait_for_selected_title(app, pilot, next_item.title)
+        assert calls == [0]
+        assert state.items == [next_item]
+        assert selected is not None and selected.key == next_item.key
 
 
 def test_remove_continue_watching_requires_continue_watching_view():

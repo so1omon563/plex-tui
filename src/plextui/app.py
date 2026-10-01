@@ -161,6 +161,7 @@ class BrowseState:
     context_media: MediaItem | None = None
     discover_media_type: str = "movies_shows"
     guide_date: date | None = None
+    page_revision: int = 0
 
     @property
     def has_more(self) -> bool:
@@ -756,6 +757,7 @@ class PlexTuiApp(App[None]):
     server_load_token: int
     applying_config_theme: bool
     detail_refresh_token: int
+    navigation_token: int
     navigation_worker: Worker[Any] | None
     detail_refresh_timer: Timer | None
     detail_artwork_timer: Timer | None
@@ -815,6 +817,7 @@ class PlexTuiApp(App[None]):
         self.server_load_token = 0
         self.applying_config_theme = False
         self.detail_refresh_token = 0
+        self.navigation_token = 0
         self.navigation_worker = None
         self.detail_refresh_timer = None
         self.detail_artwork_timer = None
@@ -1641,6 +1644,11 @@ class PlexTuiApp(App[None]):
         state = self.current_browse_state()
         return state.source if state is not None else ""
 
+    def browse_overlay_visible(self) -> bool:
+        return bool(getattr(self, "input_mode", "")) or any(getattr(self, name, False) for name in (
+            "help_visible", "settings_visible", "picker_visible", "playlist_picker_visible",
+        ))
+
     def call_navigation_from_thread(self, callback: Callable[..., Any], *args: object) -> None:
         worker = get_current_worker()
         self.call_from_thread(self.apply_navigation_result, worker, callback, args)
@@ -1656,13 +1664,27 @@ class PlexTuiApp(App[None]):
 
     def invalidate_navigation_results(self) -> None:
         self.navigation_worker = None
+        self.navigation_token += 1
         self.invalidate_search_results()
+
+    def call_browse_from_thread(
+        self, state: BrowseState | None, token: int, callback: Callable[..., Any], *args: object,
+    ) -> None:
+        def apply() -> None:
+            if (
+                self.current_browse_state() is state
+                and self.navigation_token == token
+                and not self.browse_overlay_visible()
+            ):
+                callback(*args)
+
+        self.call_from_thread(apply)
 
     def invalidate_search_results(self) -> None:
         self.search_token += 1
         self.workers.cancel_group(self, "search")
 
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="browse-refresh")
     def refresh_current_browse_state(
         self,
         selected_key: str | None = None,
@@ -1676,6 +1698,7 @@ class PlexTuiApp(App[None]):
         source = state.source
         if source == "fuzzy_search":
             return
+        page_revision = state.page_revision
         loaded_count = max(state.next_start, len(state.items), self.config.page_size)
         try:
             if source == "discover":
@@ -1796,18 +1819,22 @@ class PlexTuiApp(App[None]):
             message = f"failed to refresh media browser: {exc}"
 
             def show_refresh_error() -> None:
-                if self.current_browse_state() is state:
+                if (self.current_browse_state() is state and state.page_revision == page_revision
+                        and not self.browse_overlay_visible()):
                     self.show_error(message)
 
             self.call_from_thread(show_refresh_error)
             return
 
         def apply() -> None:
-            if self.current_browse_state() is not state:
+            if self.current_browse_state() is not state or state.page_revision != page_revision:
                 return
             state.items = items
             state.next_start = next_start
             state.total = total
+            state.page_revision += 1
+            if self.browse_overlay_visible():
+                return
             target_key = selected_key
             if source == "continue_watching":
                 target_key = continue_watching_playback_selection(played_media, items, selected_key)
@@ -1925,6 +1952,7 @@ class PlexTuiApp(App[None]):
         if not state.has_more:
             self.call_from_thread(self.set_status, "No more items to load")
             return
+        page_revision = state.page_revision
         self.loading_more = True
         self.post_message(StatusChanged(load_more_status(state)))
         self.call_from_thread(self.show_load_more_feedback, state, selected_key)
@@ -1974,8 +2002,15 @@ class PlexTuiApp(App[None]):
             else:
                 page = self.service.library_page(state.selected_library, state.next_start, self.config.page_size)
         except Exception as exc:
-            self.loading_more = False
-            self.call_from_thread(self.show_error, str(exc))
+            message = str(exc)
+
+            def show_page_error() -> None:
+                self.loading_more = False
+                if (self.current_browse_state() is state and state.page_revision == page_revision
+                        and not self.browse_overlay_visible()):
+                    self.show_error(message)
+
+            self.call_from_thread(show_page_error)
             return
         write_performance_log(
             "load_more_page",
@@ -1984,7 +2019,7 @@ class PlexTuiApp(App[None]):
         )
 
         def update() -> None:
-            if not self.browsing_stack or self.browsing_stack[-1] is not state:
+            if self.current_browse_state() is not state or state.page_revision != page_revision:
                 self.loading_more = False
                 return
             page_items = (
@@ -1996,6 +2031,7 @@ class PlexTuiApp(App[None]):
             state.items.extend(page_items)
             state.next_start = page.next_start
             state.total = page.total
+            state.page_revision += 1
             self.loading_more = False
             self.suppress_auto_load = True
             target_key = selected_key or first_new_key
@@ -2240,6 +2276,10 @@ class PlexTuiApp(App[None]):
                 started,
                 f"title={state.title!r} view={media_view} items={len(state.items)} selected={selected_index}",
             )
+        elif state.has_more:
+            self.show_media_list()
+            self.replace_media_rows([LoadMoreRow(0, state.total, source=state.source)], selected_index=0)
+            self.show_detail_text("Load the next page of items.")
         else:
             self.show_empty_state(
                 state.title,
@@ -3363,7 +3403,17 @@ class PlexTuiApp(App[None]):
             return selected is not None and selected.key == media.key
 
         try:
-            choices = subtitle_choices(media.raw) if stream_type == "subtitle" else audio_choices(media.raw)
+            choice_loader = subtitle_choices if stream_type == "subtitle" else audio_choices
+            version_part_id = None
+            if (
+                self.player is not None and self.player.active
+                and self.active_playback_media is not None and self.active_playback_media.key == media.key
+            ):
+                version_part_id = getattr(self.player, "version_part_id", None)
+            choices = (
+                choice_loader(media.raw, version_part_id=version_part_id)
+                if version_part_id is not None else choice_loader(media.raw)
+            )
         except Exception as exc:
             message = str(exc)
 
@@ -3586,19 +3636,24 @@ class PlexTuiApp(App[None]):
         self.call_from_thread(self.apply_playlist_rename, playlist, renamed)
 
     def apply_playlist_rename(self, old_playlist: MediaItem, renamed: MediaItem) -> None:
-        self.playlist_picker_item = None
-        self.replace_playlist_reference(old_playlist.key, renamed)
-        status = f"Renamed playlist to {renamed.title}"
         state = self.current_browse_state()
-        selected_key = renamed.key
-        if state is not None:
-            if is_playlist_browse_state(state):
-                state.title = renamed.title
-                state.context_media = renamed
-            self.show_browse_state(state, selected_key=selected_key)
-            self.focus_media_browser()
+        selected = self.selected_media()
+        affected = state is not None and (
+            any(item.key == old_playlist.key for item in state.items)
+            or (state.context_media is not None and state.context_media.key == old_playlist.key)
+        )
+        if self.input_mode != "playlist_rename" and (
+            self.playlist_picker_item is not None and self.playlist_picker_item.key == old_playlist.key
+        ):
+            self.playlist_picker_item = None
+        self.replace_playlist_reference(old_playlist.key, renamed)
+        if not affected or self.browse_overlay_visible():
+            return
+        status = f"Renamed playlist to {renamed.title}"
+        selected_key = selected.key if selected is not None else renamed.key
+        self.show_browse_state(state, selected_key=selected_key, status_after_refresh=status)
+        self.focus_media_browser()
         self.set_status(status)
-        self.set_timer(0.2, lambda: self.set_status(status), name="playlist-rename-status")
 
     def action_delete_playlist(self) -> None:
         playlist = self.playlist_action_target()
@@ -3639,6 +3694,7 @@ class PlexTuiApp(App[None]):
             if state is not None:
                 state.items = [item for item in state.items if item.key != playlist.key]
                 state.total = max(0, state.total - 1) if state.total else len(state.items)
+                state.page_revision += 1
                 self.show_browse_state(state)
                 self.focus_media_browser()
         self.set_status(status)
@@ -3649,6 +3705,8 @@ class PlexTuiApp(App[None]):
             state.items = [playlist if item.key == playlist_key else item for item in state.items]
             if state.context_media is not None and state.context_media.key == playlist_key:
                 state.context_media = playlist
+                if is_playlist_browse_state(state):
+                    state.title = playlist.title
 
     @work(thread=True, exclusive=True, group="playlist")
     def create_playlist_from_items(self, title: str, items: list[MediaItem]) -> None:
@@ -4268,7 +4326,7 @@ class PlexTuiApp(App[None]):
         target_watched, _ = watched_state_action(media.raw)
         target = "watched" if target_watched else "unwatched"
         self.set_status(f"Marking {media.title} {target}...")
-        return self.toggle_watched_state(media)
+        return self.toggle_watched_state(media, self.current_browse_state(), self.navigation_token)
 
     def action_remove_continue_watching(self) -> None:
         media = self.selected_media()
@@ -4293,7 +4351,7 @@ class PlexTuiApp(App[None]):
         self.set_status(f"Removing {media.title} from Continue Watching...")
         self.remove_continue_watching_item(media)
 
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="playlist")
     def remove_playlist_items(self, playlist: MediaItem, items: list[MediaItem]) -> None:
         if self.service is None:
             return
@@ -4307,32 +4365,34 @@ class PlexTuiApp(App[None]):
     def apply_playlist_removal(self, playlist: MediaItem, items: list[MediaItem]) -> None:
         removed_keys = {item.key for item in items}
         item_label = playlist_items_label(items)
-        if not self.browsing_stack or self.browsing_stack[-1].source != "playlist":
-            self.set_status(f"Removed {item_label} from {playlist.title}")
+        current = self.current_browse_state()
+        current_index = None
+        for state in self.browsing_stack:
+            if state.source != "playlist" or state.context_media is None or state.context_media.key != playlist.key:
+                continue
+            remaining = [item for item in state.items if item.key not in removed_keys]
+            removed_count = len(state.items) - len(remaining)
+            if not removed_count:
+                continue
+            if state is current:
+                current_index = selected_media_index(state.items, items[0].key)
+            state.items = remaining
+            if state.total is not None:
+                state.total = max(0, state.total - removed_count)
+            state.next_start = max(0, state.next_start - removed_count)
+            state.page_revision += 1
+        if current_index is None or self.browse_overlay_visible():
             return
-        state = self.browsing_stack[-1]
-        first_removed_key = items[0].key if items else ""
-        index = selected_media_index(state.items, first_removed_key)
-        state.items = [item for item in state.items if item.key not in removed_keys]
+        state = current
         self.bulk_selected_keys.difference_update(removed_keys)
-        state.total = max(0, state.total - len(removed_keys)) if state.total else len(state.items)
-        if not state.items:
-            self.show_browse_state(state)
-            self.show_detail_text("No items")
-            self.set_status(f"Removed {item_label} from {playlist.title}")
-            return
-        next_index = min(index, len(state.items) - 1)
-        self.show_browse_state(state, selected_key=state.items[next_index].key)
-        self.focus_media_browser()
+        next_index = min(current_index, len(state.items) - 1)
+        selected_key = state.items[next_index].key if state.items else None
         status = f"Removed {item_label} from {playlist.title}"
+        self.show_browse_state(state, selected_key=selected_key, status_after_refresh=status)
+        self.focus_media_browser()
         self.set_status(status)
-        self.set_timer(
-            0.2,
-            lambda: self.set_status(status),
-            name="playlist-removal-status",
-        )
 
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="continue-watching-removal")
     def remove_continue_watching_item(self, media: MediaItem) -> None:
         method = getattr(media.raw, "removeFromContinueWatching", None)
         if not callable(method):
@@ -4351,36 +4411,37 @@ class PlexTuiApp(App[None]):
             return
         state = self.browsing_stack[-1]
         index = selected_media_index(state.items, media.key)
-        state.items = [item for item in state.items if item.key != media.key]
-        state.total = max(0, state.total - 1) if state.total else len(state.items)
-        if not state.items:
-            self.show_browse_state(state)
-            self.show_detail_text("No items")
-            self.set_status(f"Removed {media.title} from Continue Watching")
+        remaining = [item for item in state.items if item.key != media.key]
+        removed_count = len(state.items) - len(remaining)
+        if not removed_count:
+            return
+        state.items = remaining
+        state.next_start = max(0, state.next_start - removed_count)
+        if state.total is not None:
+            state.total = max(0, state.total - removed_count)
+        state.page_revision += 1
+        if self.browse_overlay_visible():
             return
         next_index = min(index, len(state.items) - 1)
-        self.show_browse_state(state, selected_key=state.items[next_index].key)
+        selected_key = state.items[next_index].key if state.items else None
+        status = f"Removed {media.title} from Continue Watching"
+        self.show_browse_state(state, selected_key=selected_key, status_after_refresh=status)
         self.focus_media_browser()
-        self.set_status(f"Removed {media.title} from Continue Watching")
-        self.set_timer(
-            0.05,
-            lambda: self.set_status(f"Removed {media.title} from Continue Watching"),
-            name="continue-watching-removal-status",
-        )
+        self.set_status(status)
 
     @work(thread=True, exclusive=True, group="watched")
-    def toggle_watched_state(self, media: MediaItem) -> None:
-        if self.current_browse_state_source() == "continue_watching":
+    def toggle_watched_state(self, media: MediaItem, state: BrowseState | None, token: int) -> None:
+        if state is not None and state.source == "continue_watching":
             media = self.resolve_continue_watching_watched_media(media)
         target_watched, method = watched_state_action(media.raw)
         if not callable(method):
-            self.call_from_thread(self.set_status, "Selected item does not support watched state changes")
+            self.call_browse_from_thread(state, token, self.set_status, "Selected item does not support watched state changes")
             return
         try:
             result = method()
             updated_raw = result or media.raw
         except Exception as exc:
-            self.call_from_thread(self.show_error, f"failed to update watched state: {exc}")
+            self.call_browse_from_thread(state, token, self.show_error, f"failed to update watched state: {exc}")
             return
         reload_method = getattr(updated_raw, "reload", None)
         if callable(reload_method):
@@ -4389,7 +4450,7 @@ class PlexTuiApp(App[None]):
             except Exception:
                 pass
         updated_media = replace(media, raw=updated_raw)
-        self.call_from_thread(self.apply_watched_state, updated_media, target_watched)
+        self.call_browse_from_thread(state, token, self.apply_watched_state, updated_media, target_watched)
 
     def resolve_continue_watching_watched_media(self, media: MediaItem) -> MediaItem:
         resolve_media = getattr(self.service, "media_from_key", None)
@@ -4406,7 +4467,7 @@ class PlexTuiApp(App[None]):
     def apply_watched_state(self, media: MediaItem, watched: bool) -> None:
         self.detail_cache.pop(media.key, None)
         if watched and self.current_browse_state_source() == "continue_watching":
-            self.refresh_continue_watching_after_watched(media)
+            self.refresh_continue_watching_after_watched(media, self.current_browse_state(), self.navigation_token)
             return
         selected = self.selected_media()
         selected_key = selected.key if selected is not None else media.key
@@ -4428,16 +4489,18 @@ class PlexTuiApp(App[None]):
         self.set_status(f"Marked {media.title} {label}")
 
     @work(thread=True, exclusive=True, group="watched")
-    def refresh_continue_watching_after_watched(self, media: MediaItem) -> None:
+    def refresh_continue_watching_after_watched(self, media: MediaItem, state: BrowseState, token: int) -> None:
+        if state is None or state.source != "continue_watching":
+            return
         if self.service is None:
-            self.call_from_thread(self.set_status, f"Marked {media.title} watched")
+            self.call_browse_from_thread(state, token, self.set_status, f"Marked {media.title} watched")
             return
         try:
             page = self.service.continue_watching_page(0, self.config.page_size)
         except Exception as exc:
-            self.call_from_thread(self.show_error, f"failed to refresh Continue Watching: {exc}")
+            self.call_browse_from_thread(state, token, self.show_error, f"failed to refresh Continue Watching: {exc}")
             return
-        self.call_from_thread(self.apply_continue_watching_refresh, media.title, page)
+        self.call_browse_from_thread(state, token, self.apply_continue_watching_refresh, media.title, page)
 
     def apply_continue_watching_refresh(self, title: str, page: MediaPage) -> None:
         state = BrowseState(
@@ -4448,11 +4511,10 @@ class PlexTuiApp(App[None]):
             total=page.total,
         )
         self.browsing_stack = [state]
-        self.show_browse_state(state)
-        self.focus_media_browser()
         status = f"Marked {title} watched"
+        self.show_browse_state(state, status_after_refresh=status)
+        self.focus_media_browser()
         self.set_status(status)
-        self.set_timer(0.05, lambda: self.set_status(status), name="continue-watching-watched-status")
 
     def refresh_visible_media_item(self, media: MediaItem) -> None:
         if self.media_grid_visible():
@@ -4503,16 +4565,19 @@ class PlexTuiApp(App[None]):
         if resume and not resume_offset_ms(media.raw):
             self.set_status("No resume position for selected media; press p to play from the beginning")
             return
-        subtitle_choice = preferred_subtitle_choice(
-            media.raw,
-            self.config.preferred_subtitle_language,
-            self.config.subtitle_mode,
-        )
-        audio_choice = preferred_audio_choice(media.raw, self.config.preferred_audio_language)
         try:
             stop_mpv(self.player)
             self.player = None
             self.active_playback_media = media
+            subtitle_choice = preferred_subtitle_choice(
+                media.raw,
+                self.config.preferred_subtitle_language,
+                self.config.subtitle_mode,
+                version_part_id=version_part_id,
+            )
+            audio_choice = preferred_audio_choice(
+                media.raw, self.config.preferred_audio_language, version_part_id=version_part_id,
+            )
             if self.config.playback_display == "terminal":
                 self.player = self.play_terminal_media(
                     media,

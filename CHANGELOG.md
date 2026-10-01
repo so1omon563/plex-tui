@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## 0.17.31 - 2026-10-01
+
+- Corrected Continue Watching pagination after removals so the next unloaded
+  item is not skipped, and kept Load more available after removing the last
+  loaded item.
+- Discarded late watched-state and Continue Watching refresh results after
+  navigation, Back, or opening an overlay.
+- Prevented delayed playlist removals from hiding shared media in another
+  playlist or decrementing counts more than once.
+- Kept delayed playlist renames attached to the original playlist and preserved
+  the user's current playlist, selection, or open rename prompt.
+- Kept Settings, Help, and pickers open when post-playback refreshes finish,
+  while refreshing the underlying browse data for the return to browsing.
+- Prevented concurrent browse refreshes and page loads from discarding newly
+  loaded pages, restoring removed entries, or applying stale page offsets.
+- Scoped audio and subtitle selection to the played media version and its first
+  part, preventing missing tracks from selecting invalid mpv track numbers.
+- Escaped control characters in saved configuration strings so profile names
+  and preferences cannot produce unreadable TOML.
+- Kept profile switches on the saved Plex server when another server reuses its
+  previous connection URL.
 - Added an upstream Nix flake for direct Linux installs while retaining PyPI,
   Homebrew, and AUR distribution.
 

@@ -254,13 +254,14 @@ def matching_server_choice(
     base_url: str,
     resource_identifier: str = "",
 ) -> ServerChoice | None:
+    if resource_identifier:
+        choices = [choice for choice in choices if choice.resource_identifier == resource_identifier]
     target = base_url.rstrip("/")
     for choice in choices:
         if choice.uri.rstrip("/") == target:
             return choice
     if resource_identifier:
-        matches = [choice for choice in choices if choice.resource_identifier == resource_identifier]
-        return min(matches, key=lambda choice: choice.sort_key) if matches else None
+        return min(choices, key=lambda choice: choice.sort_key) if choices else None
     return None
 
 

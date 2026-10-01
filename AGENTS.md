@@ -160,8 +160,19 @@ selection must resolve the chosen Plex part after metadata reload and must not
 silently fall back to another file. Direct playback must keep every ordered
 part of the selected media version in one continuous timeline; unsupported
 multipart modes must fail clearly before launching mpv.
+Track choices and mpv track numbers belong to the first part of the launched
+media version; later versions and split parts must not add phantom tracks.
+Live track changes use the metadata retained by the active playback monitor.
+Retain the launched part ID on the playback handle so live pickers and track
+changes keep that version even if later metadata reloads reorder the versions.
 Apply asynchronous browse refresh results only when their originating
 `BrowseState` object is still current; source labels are not unique identities.
+Post-playback refreshes may update that state's data under an overlay, but must
+not repaint the browser, take focus, or replace the overlay with a late error.
+These refreshes use their own worker group so detail work cannot cancel them.
+Browse refreshes and page loads retain the state's page revision and discard
+late results or errors after another refresh, page load, or removal changes its
+membership or offsets. Metadata enrichment alone does not invalidate paging.
 Route hosted Live TV guide paging through `hosted_live_tv_guide_page` with the
 originating channel context; guide states must not fall through to libraries.
 Hosted Plex Live TV pages, categories, counts, and pagination must expose only
@@ -187,6 +198,11 @@ Navigation workers use a dedicated worker group so unrelated exclusive
 background refreshes cannot cancel them.
 Watched-state updates and their Continue Watching refresh use a dedicated
 worker group so background detail refreshes cannot cancel them.
+Their UI callbacks must retain both the originating browse state and navigation
+generation, so leaving and returning to the same state still invalidates old work.
+Continue Watching removals decrement the page offset and known total only for
+loaded entries actually removed. Empty paged views with remaining results must
+keep a Load more action. Removal workers are isolated from detail refreshes.
 Kitty derived images must use verified full-content cache identities, resolve
 short image-ID collisions across concurrent app processes, retain pending
 terminal transfers, and share the bounded artwork cache policy.
@@ -202,6 +218,11 @@ immediate parent instead of skipping a level.
 Current-view search must derive its backend and context from the active
 `BrowseState`; incomplete non-library sources must not fall back to a selected
 sidebar library.
+Playlist rename results update references by playlist key, including retained
+parent views, without retargeting a different playlist or replacing an overlay.
+Playlist removals likewise update only states for the mutated playlist and
+adjust counts for entries actually removed. Playlist mutations use a dedicated
+worker group so detail refreshes cannot cancel them.
 
 ## Testing Guidelines
 
@@ -318,8 +339,12 @@ behavior when changing playback or request diagnostics.
 On POSIX, keep the app config directory owner-only (`0700`) and config,
 debug-log, and rotated debug-log files owner-only (`0600`), including when
 repairing existing files.
+Saved configuration strings must round-trip TOML control characters, quotes,
+backslashes, and Unicode without introducing literal forbidden characters.
 Persist Plex server `clientIdentifier` values so profile switches survive URL
 changes and never fall back silently to another server.
+When an identity is saved, it takes precedence over an exact URL match to a
+different server; URL-only matching is reserved for legacy unowned connections.
 Store hidden-library and library-order section keys per Plex server and apply
 them only when their saved identity matches the connected server.
 Use `SECURITY.md` for vulnerability reporting policy and keep it aligned with
