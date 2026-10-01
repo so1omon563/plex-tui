@@ -1441,12 +1441,11 @@ async def run_removing_last_loaded_continue_watching_item_keeps_load_more_check(
         app.apply_continue_watching_removal(removed)
         await pilot.pause(0.2)
         assert isinstance(app.query_one("#media", ListView).highlighted_child, LoadMoreRow)
-        worker = app.load_more_media()
-        await asyncio.wait_for(worker.wait(), 5)
-        await pilot.pause(0.2)
+        app.load_more_media()
+        selected = await wait_for_selected_title(app, pilot, next_item.title)
         assert calls == [0]
         assert state.items == [next_item]
-        assert app.selected_media().key == next_item.key
+        assert selected is not None and selected.key == next_item.key
 
 
 def test_remove_continue_watching_requires_continue_watching_view():
