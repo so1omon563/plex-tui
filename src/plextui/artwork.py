@@ -4,6 +4,7 @@ import base64
 import fcntl
 import hashlib
 import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -11,6 +12,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -293,6 +295,10 @@ def render_protocol_artwork(data: bytes, renderer: str, width: int = 28, max_hei
 
 def resolve_protocol_renderer(renderer: str) -> str:
     if renderer == "kitty":
+        if terminal_multiplexer() == "tmux" and not tmux_passthrough_enabled(
+            os.environ.get("TMUX", ""), os.environ.get("TMUX_PANE", "")
+        ):
+            return "block"
         return "kitty"
     if renderer == "auto" and kitty_graphics_supported():
         return "kitty"
@@ -301,6 +307,17 @@ def resolve_protocol_renderer(renderer: str) -> str:
 
 def protocol_renderer_status(renderer: str) -> str:
     resolved = resolve_protocol_renderer(renderer)
+    multiplexer = terminal_multiplexer()
+    if renderer in {"auto", "kitty"} and multiplexer == "tmux":
+        if renderer == "auto":
+            return "Block art in tmux; select Kitty with a compatible outer terminal and allow-passthrough enabled"
+        if resolved == "block":
+            return "Block art; tmux passthrough unavailable. Enable allow-passthrough and restart plex-tui"
+        return "Kitty native images via tmux passthrough; requires a compatible outer terminal"
+    if renderer in {"auto", "kitty"} and multiplexer == "herdr":
+        if renderer == "auto":
+            return "Block art in Herdr; select Kitty with a compatible outer terminal and Herdr graphics enabled"
+        return "Kitty native images via Herdr; requires a compatible outer terminal and Herdr graphics enabled"
     if resolved == "kitty":
         return "Kitty native images via Unicode placeholders"
     if renderer == "auto":
@@ -309,7 +326,36 @@ def protocol_renderer_status(renderer: str) -> str:
 
 
 def kitty_graphics_supported() -> bool:
-    return kitty_terminal_detected() or ghostty_terminal_detected()
+    return not terminal_multiplexer() and (kitty_terminal_detected() or ghostty_terminal_detected())
+
+
+def terminal_multiplexer() -> str:
+    term_program = os.environ.get("TERM_PROGRAM", "").lower()
+    term = os.environ.get("TERM", "").lower()
+    if os.environ.get("TMUX") or term_program == "tmux" or term == "tmux" or term.startswith("tmux-"):
+        return "tmux"
+    if os.environ.get("HERDR_PANE_ID") or term_program == "herdr":
+        return "herdr"
+    return ""
+
+
+@lru_cache(maxsize=1)
+def tmux_passthrough_enabled(tmux: str, pane: str) -> bool:
+    # Query only this pane's server. Cache the result to keep subprocesses out of
+    # repeated artwork renders; restart plex-tui after changing the tmux option.
+    if not tmux or not pane:
+        return False
+    socket = tmux.rsplit(",", 2)[0]
+    try:
+        value = subprocess.check_output(
+            ["tmux", "-S", socket, "show-options", "-p", "-v", "-t", pane, "allow-passthrough"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=0.5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return value.strip() in {"on", "all"}
 
 
 def kitty_terminal_detected() -> bool:
@@ -334,6 +380,7 @@ def kitty_environment_status() -> str:
         f"TERM_PROGRAM_VERSION={os.environ.get('TERM_PROGRAM_VERSION', '')!r}",
         f"TERM={os.environ.get('TERM', '')!r}",
         f"COLORTERM={os.environ.get('COLORTERM', '')!r}",
+        f"multiplexer={terminal_multiplexer()!r}",
     ]
     return ",".join(fields)
 
@@ -546,6 +593,8 @@ def kitty_protocol_image_path(data: bytes, columns: int, rows: int) -> tuple[Pat
 def emit_kitty_graphics_commands(commands: list[str]) -> None:
     with KITTY_TRANSMIT_LOCK:
         for command in commands:
+            if terminal_multiplexer() == "tmux":
+                command = "\033Ptmux;" + command.replace("\033", "\033\033") + "\033\\"
             emit_kitty_graphics_payload(command.encode("ascii"))
 
 

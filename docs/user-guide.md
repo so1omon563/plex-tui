@@ -217,6 +217,21 @@ for Plex objects that are not posters.
   Kitty-compatible environment variables.
 - `artwork_renderer = "kitty"` explicitly tries the Kitty graphics protocol in
   other compatible terminals.
+- In tmux and Herdr, Auto keeps portable block art. Select **Kitty** in Settings
+  only with a Kitty/Ghostty-compatible outer terminal. Settings shows both the
+  saved choice and the effective renderer.
+- In a local tmux session, explicit Kitty wraps image commands in tmux's
+  passthrough envelope. Enable `set -g allow-passthrough on` in your tmux
+  configuration and reload it before starting plex-tui. The current pane's
+  effective option must be `on` or `all`; pane overrides still apply. If that
+  setting is disabled or cannot be checked, plex-tui uses block art. Restart
+  plex-tui after changing the option because the check is cached.
+- Herdr receives standard Kitty commands without tmux wrapping. Use a current
+  Herdr version with graphics enabled (`kitty_graphics = true` under
+  `[terminal]` in Herdr's configuration) and a compatible attached outer
+  terminal. Auto remains block art because the pane identity alone does not
+  establish the attached client's graphics support. Use Block if the client
+  does not render native images.
 - iTerm2 and WezTerm use block artwork. Their inline image protocols are not
   supported in plex-tui because they do not compose reliably inside Textual's
   retained full-screen layout. Full graphical artwork requires Kitty or Ghostty.

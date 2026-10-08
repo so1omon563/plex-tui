@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import os
+import subprocess
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
@@ -27,6 +28,125 @@ from plextui.artwork import (
     write_all,
 )
 from plextui.config import AppConfig
+
+
+@pytest.fixture(autouse=True)
+def isolated_terminal_environment(monkeypatch):
+    for name in ("TMUX", "TMUX_PANE", "HERDR_PANE_ID", "TERM", "TERM_PROGRAM", "KITTY_WINDOW_ID", "KITTY_PID"):
+        monkeypatch.delenv(name, raising=False)
+    artwork.tmux_passthrough_enabled.cache_clear()
+    yield
+    artwork.tmux_passthrough_enabled.cache_clear()
+
+
+@pytest.mark.parametrize("multiplexer", ["tmux", "herdr"])
+@pytest.mark.parametrize("renderer", ["auto", "block"])
+def test_muxer_auto_and_block_ignore_inherited_outer_terminal(monkeypatch, multiplexer, renderer):
+    monkeypatch.setenv("TERM_PROGRAM", "ghostty")
+    monkeypatch.setenv("TERM", "xterm-kitty")
+    monkeypatch.setenv("KITTY_WINDOW_ID", "1")
+    monkeypatch.setenv("TMUX" if multiplexer == "tmux" else "HERDR_PANE_ID", "probe")
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_payload", lambda _: pytest.fail("must not transmit"))
+
+    assert artwork.resolve_protocol_renderer(renderer) == "block"
+    assert render_protocol_artwork(b"not decoded for block fallback", renderer) is None
+
+
+@pytest.mark.parametrize("value, enabled", [("on\n", True), ("all\n", True), ("off\n", False), ("", False)])
+def test_tmux_passthrough_queries_only_current_pane_and_caches_result(monkeypatch, value, enabled):
+    calls = []
+    def query(command, **kwargs):
+        calls.append((command, kwargs))
+        return value
+    monkeypatch.setattr(artwork.subprocess, "check_output", query)
+
+    for _ in range(2):
+        assert artwork.tmux_passthrough_enabled("/tmp/probe,comma.sock,12,0", "%3") is enabled
+    assert len(calls) == 1
+    assert calls[0][0] == ["tmux", "-S", "/tmp/probe,comma.sock", "show-options", "-p", "-v", "-t", "%3", "allow-passthrough"]
+    assert calls[0][1]["timeout"] == 0.5
+
+
+@pytest.mark.parametrize("error", [FileNotFoundError(), subprocess.CalledProcessError(1, "tmux"), subprocess.TimeoutExpired("tmux", 0.5)])
+def test_explicit_kitty_falls_back_when_tmux_query_fails(monkeypatch, error):
+    monkeypatch.setenv("TMUX", "/tmp/probe.sock,12,0")
+    monkeypatch.setenv("TMUX_PANE", "%3")
+    def query(*args, **kwargs):
+        raise error
+    monkeypatch.setattr(artwork.subprocess, "check_output", query)
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_payload", lambda _: pytest.fail("must not transmit"))
+
+    assert render_protocol_artwork(b"not decoded for block fallback", "kitty") is None
+    assert "tmux passthrough unavailable" in protocol_renderer_status("kitty")
+
+
+@pytest.mark.parametrize("environment", [{"TERM_PROGRAM": "tmux"}, {"TERM": "tmux-256color"}, {"TMUX": "/tmp/probe.sock,12,0"}])
+def test_tmux_without_current_server_and_pane_does_not_query_default_server(monkeypatch, environment):
+    for key, value in environment.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(artwork.subprocess, "check_output", lambda *a, **kw: pytest.fail("no target pane"))
+
+    assert artwork.resolve_protocol_renderer("kitty") == "block"
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_explicit_kitty_in_tmux_respects_passthrough(tmp_path, monkeypatch, enabled):
+    monkeypatch.setenv("TMUX", "/tmp/probe.sock,12,0")
+    monkeypatch.setenv("TMUX_PANE", "%3")
+    monkeypatch.setattr(artwork.subprocess, "check_output", lambda *a, **kw: "on" if enabled else "off")
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    payloads = []
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_payload", payloads.append)
+    buffer = BytesIO()
+    Image.new("RGB", (2, 4), "red").save(buffer, format="PNG")
+
+    rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=2, max_height=2)
+
+    if enabled:
+        assert isinstance(rendered, KittyImage)
+        assert len(payloads) == 1
+        assert payloads[0] == b"\x1bPtmux;" + rendered.commands[0].encode().replace(b"\x1b", b"\x1b\x1b") + b"\x1b\\"
+        assert ",t=f," in rendered.commands[0]
+        assert ",U=1," in rendered.commands[0]
+        assert "tmux passthrough" in protocol_renderer_status("kitty")
+    else:
+        assert rendered is None
+        assert payloads == []
+        assert "restart plex-tui" in protocol_renderer_status("kitty")
+
+
+def test_tmux_wraps_each_chunk_and_deletion_command(monkeypatch):
+    monkeypatch.setenv("TMUX", "/tmp/probe.sock,12,0")
+    monkeypatch.setattr(artwork, "KITTY_PAYLOAD_CHUNK_SIZE", 8)
+    payloads = []
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_payload", payloads.append)
+    commands = kitty_graphics_commands("a" * 20, image_id=42, columns=2, rows=2)
+    commands.append("\x1b_Ga=d,d=I,i=42,q=2\x1b\\")
+
+    artwork.emit_kitty_graphics_commands(commands)
+
+    assert len(payloads) == 4
+    for payload, command in zip(payloads, commands):
+        assert payload.startswith(b"\x1bPtmux;") and payload.endswith(b"\x1b\\")
+        assert payload[7:-2].replace(b"\x1b\x1b", b"\x1b") == command.encode()
+
+
+def test_herdr_keeps_explicit_native_commands_and_conservative_auto(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERM_PROGRAM", "herdr")
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    payloads = []
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_payload", payloads.append)
+    buffer = BytesIO()
+    Image.new("RGB", (2, 4), "red").save(buffer, format="PNG")
+
+    rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=2, max_height=2)
+
+    assert isinstance(rendered, KittyImage)
+    assert payloads == [command.encode() for command in rendered.commands]
+    assert artwork.resolve_protocol_renderer("auto") == "block"
+    assert "Herdr graphics enabled" in protocol_renderer_status("auto")
+    assert "via Herdr" in protocol_renderer_status("kitty")
 
 
 class RawServer:

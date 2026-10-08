@@ -80,6 +80,9 @@ client_identifier = "plex-tui-your-stable-client-id"
 # only in detected Kitty/Ghostty-compatible terminals, otherwise it falls back
 # to block art. iTerm2 and WezTerm use block artwork; full graphical artwork
 # requires Kitty or Ghostty.
+# Auto stays on block art in tmux and Herdr. Explicit Kitty in tmux requires
+# allow-passthrough on (restart plex-tui after changing it); otherwise block art
+# is used. Herdr requires a compatible outer terminal and graphics enabled.
 # artwork_renderer = "block"
 # detail_artwork_mode can be "list_only", "on", or "off".
 # detail_artwork_mode = "list_only"
