@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Wrapped explicit Kitty artwork commands for tmux passthrough and fall back to
+  block art when the current pane's passthrough setting is disabled or cannot
+  be checked. Auto mode keeps block art in tmux and Herdr even when outer
+  terminal identity variables are inherited.
+- Show the effective artwork renderer and tmux/Herdr requirements in Settings.
+
 ## 0.17.31 - 2026-10-01
 
 - Corrected Continue Watching pagination after removals so the next unloaded

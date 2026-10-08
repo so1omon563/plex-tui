@@ -7036,7 +7036,10 @@ def settings_action_current_value(action: str, config: AppConfig) -> str:
     if action == "cycle_detail_artwork":
         return f"Current details artwork: {detail_artwork_mode_value(config)}"
     if action.startswith("artwork_renderer_") or action == "cycle_artwork_renderer":
-        return f"Current artwork renderer: {artwork_renderer_value(config)}"
+        return (
+            f"Current artwork renderer: {artwork_renderer_value(config)}\n"
+            f"Renderer status: {protocol_renderer_status(config.artwork_renderer)}"
+        )
     if action == "toggle_media_view":
         return f"Current media view: {media_view_value(config)}"
     if action == "toggle_show_playlists":

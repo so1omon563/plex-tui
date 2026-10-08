@@ -1299,6 +1299,18 @@ def test_settings_row_details_describe_action_types():
     assert "does not change on Enter" in value_details
 
 
+def test_artwork_settings_explain_effective_renderer_in_tmux(monkeypatch):
+    monkeypatch.setenv("TERM_PROGRAM", "tmux")
+    monkeypatch.delenv("TMUX", raising=False)
+    config = AppConfig("http://plex", "token", "client", artwork_renderer="kitty")
+    row = next(row for row in settings_rows(config) if getattr(row, "action", "") == "cycle_artwork_renderer")
+
+    rendered = render_settings_row_details(row, config)
+
+    assert "Current artwork renderer: Kitty" in rendered
+    assert "Block art; tmux passthrough unavailable" in rendered
+
+
 def test_settings_change_details_show_saved_value_and_next_controls():
     config = AppConfig("http://plex", "token", "client", grid_density="large")
 

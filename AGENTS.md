@@ -208,6 +208,13 @@ short image-ID collisions across concurrent app processes, retain pending
 terminal transfers, and share the bounded artwork cache policy.
 App-cache image references must use the Kitty protocol's regular-file transfer
 mode; temporary-file mode is reserved for compliant system temp paths.
+Artwork Auto mode stays on block art in tmux and Herdr, including when outer
+terminal identity variables are inherited. Explicit Kitty mode in tmux checks
+the current pane's allow-passthrough option with a bounded, cached query and
+falls back to block art when it cannot confirm support. Wrap every Kitty
+command, including deletion and chunk continuations, in tmux's DCS envelope.
+Herdr receives raw Kitty commands. Settings must show the effective renderer
+and explain multiplexer requirements or fallback.
 Source artwork must decode successfully before atomic cache publication;
 invalid existing entries are evicted so later requests can retry. Cache
 validation, eviction, and publication share a per-key cross-process lock.
