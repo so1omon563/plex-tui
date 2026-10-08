@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.17.33 - 2026-10-08
+
 - Reload cached Kitty posters after their terminal image IDs are retired,
   preventing blank or incorrect artwork during long browsing sessions.
 - Wrapped explicit Kitty artwork commands for tmux passthrough and fall back to
