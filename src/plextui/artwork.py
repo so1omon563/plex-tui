@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
+from uuid import uuid4
 from weakref import WeakValueDictionary
 
 from PIL import Image, ImageOps
@@ -60,6 +61,8 @@ class KittyImage:
     columns: int
     left_padding: int = 0
     right_padding: int = 0
+    reservation_path: Path | None = None
+    reservation: str = ""
 
     @property
     def plain(self) -> str:
@@ -95,6 +98,25 @@ class KittyImage:
         del console, options
         width = self.left_padding + self.columns + self.right_padding
         return Measurement(width, width)
+
+
+def cached_artwork_is_current(artwork: object) -> bool:
+    """Validate retained Kitty IDs and count cache reuse toward their LRU age."""
+    if artwork is None:
+        return False
+    if not isinstance(artwork, KittyImage) or artwork.reservation_path is None:
+        return True
+    marker = artwork.reservation_path
+    with KITTY_TRANSMIT_LOCK:
+        try:
+            with (marker.parent / ".ids.lock").open("rb") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                if marker.read_text() != artwork.reservation:
+                    return False
+                os.utime(marker, None)
+                return True
+        except (OSError, UnicodeError):
+            return False
 
 
 def fetch_artwork(raw: Any, path: str, config: AppConfig, width: int | None = None, height: int | None = None) -> bytes:
@@ -392,6 +414,8 @@ def render_kitty_artwork(data: bytes, width: int = 28, max_height: int = 20, tra
     buffer = BytesIO()
     image.save(buffer, format="PNG")
     image_data = buffer.getvalue()
+    reservation_path = None
+    reservation = ""
     if transmit:
         with KITTY_TRANSMIT_LOCK:
             directory = cache_path() / "kitty"
@@ -405,6 +429,8 @@ def render_kitty_artwork(data: bytes, width: int = 28, max_height: int = 20, tra
                     rows=rows,
                 )
                 emit_kitty_graphics_commands(commands)
+                reservation_path = directory / f".id-{image_id:06x}"
+                reservation = reservation_path.read_text()
     else:
         image_id = kitty_image_id(image_data, columns, rows)
         commands = kitty_graphics_commands(
@@ -418,6 +444,8 @@ def render_kitty_artwork(data: bytes, width: int = 28, max_height: int = 20, tra
         lines=tuple(kitty_placeholder_lines(image_id, columns, rows)),
         image_id=image_id,
         columns=columns,
+        reservation_path=reservation_path,
+        reservation=reservation,
     )
 
 
@@ -489,7 +517,7 @@ def reserve_kitty_image_id(directory: Path, digest: str, candidate: int, occupie
         markers = list(directory.glob(".id-*"))
         for marker in markers:
             try:
-                if marker.read_text() == digest:
+                if marker.read_text().partition("\n")[0] == digest:
                     marker.touch()
                     return int(marker.name.removeprefix(".id-"), 16)
             except (OSError, ValueError):
@@ -515,7 +543,8 @@ def reserve_kitty_image_id(directory: Path, digest: str, candidate: int, occupie
         marker = directory / f".id-{candidate:06x}"
         marker_fd = os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         try:
-            os.write(marker_fd, digest.encode("ascii"))
+            # A new generation also invalidates cached copies of the same digest.
+            os.write(marker_fd, f"{digest}\n{uuid4().hex}".encode("ascii"))
         finally:
             os.close(marker_fd)
         return candidate
