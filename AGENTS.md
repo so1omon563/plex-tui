@@ -206,6 +206,9 @@ keep a Load more action. Removal workers are isolated from detail refreshes.
 Kitty derived images must use verified full-content cache identities, resolve
 short image-ID collisions across concurrent app processes, retain pending
 terminal transfers, and share the bounded artwork cache policy.
+Cached Kitty renderables must validate their reservation generation before
+reuse and refresh its LRU age. Retired entries must load and transmit again;
+partially hydrated grid pages still need prefetch for missing artwork.
 App-cache image references must use the Kitty protocol's regular-file transfer
 mode; temporary-file mode is reserved for compliant system temp paths.
 Artwork Auto mode stays on block art in tmux and Herdr, including when outer

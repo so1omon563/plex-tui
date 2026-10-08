@@ -36,6 +36,7 @@ from . import __version__
 from .artwork import (
     KittyImage,
     artwork_is_cached,
+    cached_artwork_is_current,
     fetch_artwork,
     kitty_pixel_size,
     protocol_renderer_status,
@@ -391,6 +392,9 @@ class MediaGrid(Static):
         selected_key = selected.key if selected is not None else self.items[0].key
         visible_items = self.visible_page_items()
         visible_keys = {item.key for item in visible_items}
+        for key in visible_keys:
+            if not cached_artwork_is_current(self.artwork.get(key)):
+                self.artwork.pop(key, None)
         loaded_count = len(visible_keys.intersection(self.artwork))
         poster_count = sum(1 for item in visible_items if item.artwork_path)
         started = time.perf_counter()
@@ -2521,7 +2525,7 @@ class PlexTuiApp(App[None]):
             if include_card_artwork:
                 card_cache_key = grid_artwork_cache_key(full_item, self.config)
                 card_artwork = self.rendered_grid_artwork_cache.get(card_cache_key)
-                if card_artwork is not None:
+                if cached_artwork_is_current(card_artwork):
                     card_cache_hit = True
                 else:
                     card_width, card_height = card_artwork_fetch_size(self.config)
@@ -2854,7 +2858,7 @@ class PlexTuiApp(App[None]):
             for item in prefetch_items:
                 cache_key = grid_artwork_cache_key(item, self.config)
                 artwork = self.rendered_grid_artwork_cache.get(cache_key)
-                if artwork is None:
+                if not cached_artwork_is_current(artwork):
                     pending_items.append(item)
                     continue
                 rendered_cache_hits += 1
@@ -2923,10 +2927,13 @@ class PlexTuiApp(App[None]):
             return False
         artwork_by_key = {}
         for item in items:
-            if not item.artwork_path or item.key in grid.artwork:
+            if not item.artwork_path:
                 continue
+            if cached_artwork_is_current(grid.artwork.get(item.key)):
+                continue
+            grid.artwork.pop(item.key, None)
             artwork = self.rendered_grid_artwork_cache.get(grid_artwork_cache_key(item, self.config))
-            if artwork is not None:
+            if cached_artwork_is_current(artwork):
                 artwork_by_key[item.key] = artwork
         if artwork_by_key:
             grid.artwork.update(artwork_by_key)
@@ -2934,7 +2941,6 @@ class PlexTuiApp(App[None]):
             if visible_keys.intersection(artwork_by_key):
                 grid.refresh_grid()
             write_artwork_performance_log("grid_artwork_hydrated", time.perf_counter(), f"items={len(artwork_by_key)}")
-            return True
         return not any(item.artwork_path and item.key not in grid.artwork for item in items)
 
     def apply_grid_artworks(self, artwork_by_key: dict[str, object]) -> None:

@@ -44,6 +44,7 @@ from plextui.app import (
 )
 from textual.widgets import ListView
 from plextui.auth import ProfileChoice
+from plextui.artwork import KittyImage
 from plextui.config import MAX_PAGE_SIZE, AppConfig
 from plextui.models import LibraryItem, MediaItem
 from plextui.player import MediaVersionChoice, PlayerError, StreamChoice
@@ -914,6 +915,68 @@ def test_grid_prefetch_reuses_rendered_artwork_cache():
     assert not app.active_grid_prefetch_pages
 
 
+@pytest.fixture
+def retired_kitty_artwork(tmp_path):
+    marker = tmp_path / ".id-000007"
+    (tmp_path / ".ids.lock").touch()
+    marker.write_text("another-image\nnew-generation")
+    return KittyImage((), (), 7, 1, reservation_path=marker, reservation="old-image\nold-generation")
+
+
+def test_grid_prefetch_renders_retired_kitty_cache_entry_again(retired_kitty_artwork):
+    app = PlexTuiApp()
+    app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+    item = MediaItem("Movie", "", "movie", "1", True, Raw(), artwork_path="/thumb")
+    cache_key = grid_artwork_cache_key(item, app.config)
+    app.rendered_grid_artwork_cache = {cache_key: retired_kitty_artwork}
+    app.active_grid_prefetch_pages = {("1",)}
+    app.prefetched_grid_pages = set()
+    app.pending_grid_prefetches = []
+    app.call_from_thread = lambda callback, *args: callback(*args)
+    app.apply_grid_artwork = lambda *args: None
+    app.apply_grid_artworks = lambda *args: None
+    app.render_grid_prefetch_item = lambda *args: (item, "fresh-art", 0.0, 0.0)
+
+    PlexTuiApp.prefetch_grid_items.__wrapped__(app, [item], ("1",), "current")
+
+    assert app.rendered_grid_artwork_cache[cache_key] == "fresh-art"
+    assert ("1",) in app.prefetched_grid_pages
+
+
+def test_grid_revisit_refetches_retired_artwork_on_partially_cached_page(retired_kitty_artwork, monkeypatch):
+    app = PlexTuiApp()
+    app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
+    items = [MediaItem(f"Movie {key}", "", "movie", key, True, Raw(), artwork_path=f"/thumb/{key}") for key in ("1", "2")]
+    grid = MediaGrid()
+    grid.config = app.config
+    grid.items = items
+    grid.artwork = {"1": retired_kitty_artwork}
+    app.rendered_grid_artwork_cache = {
+        grid_artwork_cache_key(items[0], app.config): retired_kitty_artwork,
+        grid_artwork_cache_key(items[1], app.config): "valid-art",
+    }
+    messages = []
+    monkeypatch.setattr(grid, "post_message", messages.append)
+
+    grid.refresh_grid()
+
+    assert "1" not in grid.artwork
+    assert any(isinstance(message, MediaGrid.NeedsArtwork) for message in messages)
+    assert not app.hydrate_grid_artwork_from_cache(grid, items)
+    assert grid.artwork == {"2": "valid-art"}
+    page_key = grid_page_key(items)
+    app.prefetched_grid_pages = {page_key}
+    app.active_grid_prefetch_pages = set()
+    app.apply_cached_grid_artwork = lambda items: app.hydrate_grid_artwork_from_cache(grid, items)
+    scheduled = []
+    app.prefetch_grid_items = lambda *args: scheduled.append(args)
+
+    app.start_grid_prefetch(items, "current")
+
+    assert page_key not in app.prefetched_grid_pages
+    assert scheduled and scheduled[0][1] == page_key
+
+
 def test_detail_artwork_fetches_resized_detail_and_card_artwork(monkeypatch):
     app = PlexTuiApp()
     app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
@@ -981,12 +1044,15 @@ def test_detail_artwork_fetches_higher_resolution_for_kitty(monkeypatch):
     assert app.rendered_grid_artwork_cache[grid_artwork_cache_key(full_item, app.config)] == "card-art"
 
 
-def test_detail_artwork_reuses_rendered_grid_card_cache(monkeypatch):
+@pytest.mark.parametrize("retired", [False, True])
+def test_detail_artwork_reuses_only_current_grid_card_cache(monkeypatch, retired_kitty_artwork, retired):
     app = PlexTuiApp()
     app.config = AppConfig("http://plex", "token", "client-id", media_view="grid")
     app.detail_refresh_token = 1
     full_item = MediaItem("Movie", "", "movie", "1", True, Raw(), artwork_path="/thumb")
-    app.rendered_grid_artwork_cache = {grid_artwork_cache_key(full_item, app.config): "cached-card"}
+    app.rendered_grid_artwork_cache = {
+        grid_artwork_cache_key(full_item, app.config): retired_kitty_artwork if retired else "cached-card",
+    }
     details = SimpleNamespace(artwork_path="/thumb")
     requested_sizes = []
 
@@ -1009,8 +1075,8 @@ def test_detail_artwork_reuses_rendered_grid_card_cache(monkeypatch):
         include_card_artwork=True,
     )
 
-    assert requested_sizes == [(30, 40)]
-    assert app.rendered_grid_artwork_cache[grid_artwork_cache_key(full_item, app.config)] == "cached-card"
+    assert requested_sizes == ([(30, 40), card_artwork_fetch_size(app.config)] if retired else [(30, 40)])
+    assert app.rendered_grid_artwork_cache[grid_artwork_cache_key(full_item, app.config)] == ("card-art" if retired else "cached-card")
 
 
 @pytest.mark.parametrize(

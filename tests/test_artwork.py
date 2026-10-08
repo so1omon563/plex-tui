@@ -636,6 +636,7 @@ def test_kitty_transmit_holds_cross_process_lock_through_emit(tmp_path, monkeypa
 
     def reserve(data, columns, rows):
         events.append("reserve")
+        (tmp_path / "kitty" / ".id-000007").write_text("reserved")
         return tmp_path / "transfer.png", 7
 
     monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
@@ -648,6 +649,76 @@ def test_kitty_transmit_holds_cross_process_lock_through_emit(tmp_path, monkeypa
     render_kitty_artwork(buffer.getvalue(), width=2, max_height=2, transmit=True)
 
     assert events == ["lock", "reserve", "emit", "unlock"]
+
+
+@pytest.mark.parametrize("restored_color", ["blue", "red"])
+def test_cached_kitty_image_expires_when_id_is_reused(tmp_path, monkeypatch, restored_color):
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(artwork, "KITTY_SESSION_IMAGE_IDS", {})
+    monkeypatch.setattr(artwork, "KITTY_IMAGE_RESERVATION_LIMIT", 1)
+    monkeypatch.setattr(artwork, "kitty_image_id", lambda *args: 7)
+    commands = []
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", commands.extend)
+
+    def render(color):
+        buffer = BytesIO()
+        Image.new("RGB", (4, 4), color).save(buffer, format="PNG")
+        return render_kitty_artwork(buffer.getvalue(), width=2, max_height=2, transmit=True)
+
+    first = render("red")
+    assert artwork.cached_artwork_is_current(first)
+    render("green")
+    # Another process may restore the original digest, but our terminal lost it.
+    artwork.KITTY_SESSION_IMAGE_IDS.clear()
+    restored = render(restored_color)
+
+    assert first.image_id == restored.image_id == 7
+    assert not artwork.cached_artwork_is_current(first.padded(1, 1))
+    assert artwork.cached_artwork_is_current(restored)
+    assert len(list((tmp_path / "kitty").glob(".id-*"))) == 1
+    assert sum("a=T,t=f," in command for command in commands) == 3
+
+
+def test_cached_kitty_reuse_keeps_recent_image_at_reservation_limit(tmp_path, monkeypatch):
+    monkeypatch.setattr(artwork, "KITTY_IMAGE_RESERVATION_LIMIT", 2)
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", lambda commands: None)
+    artwork.reserve_kitty_image_id(tmp_path, "first", 1, set())
+    artwork.reserve_kitty_image_id(tmp_path, "second", 2, set())
+    first_marker = tmp_path / ".id-000001"
+    image = KittyImage((), (), 1, 1, reservation_path=first_marker, reservation=first_marker.read_text())
+    os.utime(first_marker, (1, 1))
+    os.utime(tmp_path / ".id-000002", (2, 2))
+
+    assert artwork.cached_artwork_is_current(image)
+    artwork.reserve_kitty_image_id(tmp_path, "third", 3, set())
+
+    assert first_marker.exists()
+    assert not (tmp_path / ".id-000002").exists()
+    first_marker.unlink()
+    assert not artwork.cached_artwork_is_current(image)
+
+
+def test_kitty_reservation_accepts_existing_digest_only_markers(tmp_path):
+    marker = tmp_path / ".id-000007"
+    marker.write_text("existing-digest")
+    assert artwork.reserve_kitty_image_id(tmp_path, "existing-digest", 8, set()) == 7
+
+
+def test_kitty_id_retirement_at_production_limit(tmp_path, monkeypatch):
+    deleted = []
+    monkeypatch.setattr(artwork, "emit_kitty_graphics_commands", deleted.extend)
+    monkeypatch.setattr(artwork, "KITTY_SESSION_IMAGE_IDS", {})
+    assert artwork.KITTY_IMAGE_RESERVATION_LIMIT == 4096
+    for image_id in range(1, 4097):
+        (tmp_path / f".id-{image_id:06x}").write_text(f"{image_id:064x}")
+    os.utime(tmp_path / ".id-000001", (1, 1))
+
+    image_id = artwork.reserve_kitty_image_id(tmp_path, "new-digest", 1, {1})
+
+    assert image_id == 1
+    assert len(list(tmp_path.glob(".id-*"))) == 4096
+    assert deleted == ["\033_Ga=d,d=I,i=1,q=2;\033\\"]
+    assert (tmp_path / ".id-000001").read_text().startswith("new-digest\n")
 
 
 def test_protocol_renderer_status_explains_explicit_kitty_force(monkeypatch):
@@ -734,6 +805,21 @@ def test_prune_artwork_cache_keeps_pending_kitty_file(tmp_path, monkeypatch):
     prune_artwork_cache(limit_bytes=0)
 
     assert pending.exists()
+
+
+@pytest.mark.parametrize("age, retained", [(59.9, True), (60.1, False)])
+def test_kitty_transfer_retention_boundary_under_cache_pressure(tmp_path, monkeypatch, age, retained):
+    kitty_dir = tmp_path / "kitty"
+    kitty_dir.mkdir()
+    transfer = kitty_dir / "000001-digest.png"
+    transfer.write_bytes(b"pending")
+    os.utime(transfer, (1000 - age, 1000 - age))
+    monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
+    monkeypatch.setattr(artwork.time, "time", lambda: 1000)
+
+    prune_artwork_cache(limit_bytes=0)
+
+    assert transfer.exists() is retained
 
 
 def test_prune_artwork_cache_continues_after_entry_disappears(tmp_path, monkeypatch):
