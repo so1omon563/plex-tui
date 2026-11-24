@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Honor inherited tmux passthrough settings for Kitty artwork, including pane overrides.
+
 ## 0.17.33 - 2026-10-08
 
 - Reload cached Kitty posters after their terminal image IDs are retired,
