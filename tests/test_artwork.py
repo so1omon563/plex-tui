@@ -447,6 +447,32 @@ def test_kitty_graphics_emits_each_command_boundary(monkeypatch):
     assert payloads == [b"first", b"second"]
 
 
+@pytest.mark.parametrize("ssh_marker", ["SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"])
+@pytest.mark.parametrize("multiplexer", ["", "tmux", "herdr"])
+@pytest.mark.parametrize("renderer", ["auto", "kitty"])
+def test_ssh_cards_and_settings_use_block_art(monkeypatch, ssh_marker, multiplexer, renderer):
+    monkeypatch.setenv(ssh_marker, "present")
+    monkeypatch.setenv("TERM_PROGRAM", "ghostty")
+    if multiplexer == "tmux":
+        monkeypatch.setenv("TMUX", "/tmp/probe.sock,12,0")
+        monkeypatch.setenv("TMUX_PANE", "%3")
+    elif multiplexer == "herdr":
+        monkeypatch.setenv("HERDR_PANE_ID", "1")
+    monkeypatch.setattr(artwork.subprocess, "check_output", lambda *a, **kw: pytest.fail("unexpected tmux probe"))
+    monkeypatch.setattr(artwork, "render_kitty_artwork", lambda *a, **kw: pytest.fail("unexpected Kitty render"))
+    config = AppConfig(base_url="", token="", client_identifier="", artwork_renderer=renderer)
+    buffer = BytesIO()
+    Image.new("RGB", (2, 4), "red").save(buffer, format="PNG")
+
+    card = render_card_artwork(buffer.getvalue(), config)
+    assert isinstance(card, Group)
+    assert "▀" in card.renderables[0].plain
+    status = settings_action_current_value("cycle_artwork_renderer", config)
+    assert f"Current artwork renderer: {renderer.title()}" in status
+    assert "Block art" in status and "SSH" in status
+    assert config.artwork_renderer == renderer
+
+
 def test_auto_protocol_renderer_requires_kitty_terminal(monkeypatch):
     monkeypatch.delenv("KITTY_WINDOW_ID", raising=False)
     monkeypatch.delenv("KITTY_PID", raising=False)

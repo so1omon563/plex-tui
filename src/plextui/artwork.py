@@ -316,6 +316,8 @@ def render_protocol_artwork(data: bytes, renderer: str, width: int = 28, max_hei
 
 
 def resolve_protocol_renderer(renderer: str) -> str:
+    if ssh_session_detected():
+        return "block"
     if renderer == "kitty":
         if terminal_multiplexer() == "tmux" and not tmux_passthrough_enabled(
             os.environ.get("TMUX", ""), os.environ.get("TMUX_PANE", "")
@@ -328,6 +330,8 @@ def resolve_protocol_renderer(renderer: str) -> str:
 
 
 def protocol_renderer_status(renderer: str) -> str:
+    if renderer in {"auto", "kitty"} and ssh_session_detected():
+        return "Block art over SSH. Kitty file transfers require the terminal to read the artwork cache on the remote host."
     resolved = resolve_protocol_renderer(renderer)
     multiplexer = terminal_multiplexer()
     if renderer in {"auto", "kitty"} and multiplexer == "tmux":
@@ -345,6 +349,10 @@ def protocol_renderer_status(renderer: str) -> str:
     if renderer == "auto":
         return "Block art; Kitty-compatible terminal not detected"
     return "Block art"
+
+
+def ssh_session_detected() -> bool:
+    return any(os.environ.get(name) for name in ("SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"))
 
 
 def kitty_graphics_supported() -> bool:
