@@ -370,7 +370,7 @@ def tmux_passthrough_enabled(tmux: str, pane: str) -> bool:
     socket = tmux.rsplit(",", 2)[0]
     try:
         value = subprocess.check_output(
-            ["tmux", "-S", socket, "show-options", "-p", "-v", "-t", pane, "allow-passthrough"],
+            ["tmux", "-S", socket, "show-options", "-A", "-p", "-v", "-t", pane, "allow-passthrough"],
             stderr=subprocess.DEVNULL,
             text=True,
             timeout=0.5,
