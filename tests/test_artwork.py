@@ -34,8 +34,6 @@ from plextui.config import AppConfig
 
 @pytest.fixture(autouse=True)
 def isolated_terminal_environment(monkeypatch):
-    for name in ("SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"):
-        monkeypatch.delenv(name, raising=False)
     for name in ("TMUX", "TMUX_PANE", "HERDR_PANE_ID", "TERM", "TERM_PROGRAM", "KITTY_WINDOW_ID", "KITTY_PID"):
         monkeypatch.delenv(name, raising=False)
     artwork.tmux_passthrough_enabled.cache_clear()
