@@ -65,7 +65,7 @@ def test_tmux_passthrough_queries_only_current_pane_and_caches_result(monkeypatc
     for _ in range(2):
         assert artwork.tmux_passthrough_enabled("/tmp/probe,comma.sock,12,0", "%3") is enabled
     assert len(calls) == 1
-    assert calls[0][0] == ["tmux", "-S", "/tmp/probe,comma.sock", "show-options", "-p", "-v", "-t", "%3", "allow-passthrough"]
+    assert calls[0][0] == ["tmux", "-S", "/tmp/probe,comma.sock", "show-options", "-A", "-p", "-v", "-t", "%3", "allow-passthrough"]
     assert calls[0][1]["timeout"] == 0.5
 
 
@@ -91,30 +91,38 @@ def test_tmux_without_current_server_and_pane_does_not_query_default_server(monk
     assert artwork.resolve_protocol_renderer("kitty") == "block"
 
 
-@pytest.mark.parametrize("enabled", [False, True])
-def test_explicit_kitty_in_tmux_respects_passthrough(tmp_path, monkeypatch, enabled):
+@pytest.mark.parametrize("pane_value", [None, "off"])
+def test_explicit_kitty_in_tmux_inherits_passthrough_unless_overridden(tmp_path, monkeypatch, pane_value):
     monkeypatch.setenv("TMUX", "/tmp/probe.sock,12,0")
     monkeypatch.setenv("TMUX_PANE", "%3")
-    monkeypatch.setattr(artwork.subprocess, "check_output", lambda *a, **kw: "on" if enabled else "off")
+
+    def query(command, **kwargs):
+        if pane_value is not None:
+            return pane_value
+        return "on" if "-A" in command else ""
+
+    monkeypatch.setattr(artwork.subprocess, "check_output", query)
     monkeypatch.setattr(artwork, "cache_path", lambda: tmp_path)
     payloads = []
     monkeypatch.setattr(artwork, "emit_kitty_graphics_payload", payloads.append)
     buffer = BytesIO()
     Image.new("RGB", (2, 4), "red").save(buffer, format="PNG")
 
-    rendered = render_protocol_artwork(buffer.getvalue(), "kitty", width=2, max_height=2)
+    config = AppConfig(base_url="", token="", client_identifier="", artwork_renderer="kitty")
+    rendered = render_card_artwork(buffer.getvalue(), config)
+    status = settings_action_current_value("cycle_artwork_renderer", config)
 
-    if enabled:
+    if pane_value is None:
         assert isinstance(rendered, KittyImage)
         assert len(payloads) == 1
         assert payloads[0] == b"\x1bPtmux;" + rendered.commands[0].encode().replace(b"\x1b", b"\x1b\x1b") + b"\x1b\\"
         assert ",t=f," in rendered.commands[0]
         assert ",U=1," in rendered.commands[0]
-        assert "tmux passthrough" in protocol_renderer_status("kitty")
+        assert "Kitty native images via tmux passthrough" in status
     else:
-        assert rendered is None
+        assert isinstance(rendered, Group)
         assert payloads == []
-        assert "restart plex-tui" in protocol_renderer_status("kitty")
+        assert "Block art" in status and "restart plex-tui" in status
 
 
 def test_tmux_wraps_each_chunk_and_deletion_command(monkeypatch):
