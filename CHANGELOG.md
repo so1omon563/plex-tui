@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.17.36 - 2026-11-24
+
 - Honor inherited tmux passthrough settings for Kitty artwork, including pane overrides.
 - Use portable block artwork over SSH for both Auto and Kitty, and show the fallback in Settings.
 
