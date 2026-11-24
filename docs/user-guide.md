@@ -212,12 +212,15 @@ for Plex objects that are not posters.
 
 - Default mode renders portable colored block art, so it works in ordinary
   terminals without native image support.
-- In Kitty and Ghostty, `artwork_renderer = "auto"` renders native terminal
+- In local Kitty and Ghostty sessions, `artwork_renderer = "auto"` renders native terminal
   images through Kitty Unicode placeholders when the terminal identity matches
   Kitty-compatible environment variables.
 - `artwork_renderer = "kitty"` explicitly tries the Kitty graphics protocol in
   other compatible terminals.
-- In tmux and Herdr, Auto keeps portable block art. Select **Kitty** in Settings
+- In recognized SSH sessions, Auto and Kitty both use portable block art,
+  including inside tmux and Herdr. The image cache lives on the remote host.
+  Settings shows the SSH fallback and keeps your saved renderer choice.
+- In local tmux and Herdr sessions, Auto keeps portable block art. Select **Kitty** in Settings
   only with a Kitty/Ghostty-compatible outer terminal. Settings shows both the
   saved choice and the effective renderer.
 - In a local tmux session, explicit Kitty wraps image commands in tmux's

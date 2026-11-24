@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Use portable block artwork over SSH for both Auto and Kitty, and show the fallback in Settings.
+
 ## 0.17.33 - 2026-10-08
 
 - Reload cached Kitty posters after their terminal image IDs are retired,

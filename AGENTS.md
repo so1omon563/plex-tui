@@ -218,6 +218,9 @@ falls back to block art when it cannot confirm support. Wrap every Kitty
 command, including deletion and chunk continuations, in tmux's DCS envelope.
 Herdr receives raw Kitty commands. Settings must show the effective renderer
 and explain multiplexer requirements or fallback.
+When SSH_CONNECTION, SSH_CLIENT, or SSH_TTY is nonempty, Auto and explicit
+Kitty use block art even inside multiplexers. Settings explains the SSH
+fallback and preserves the saved renderer choice.
 Source artwork must decode successfully before atomic cache publication;
 invalid existing entries are evicted so later requests can retry. Cache
 validation, eviction, and publication share a per-key cross-process lock.
